@@ -1148,3 +1148,91 @@ button:disabled {
     max-height: 460px;
   }
 }
+
+.spatial-memory-panel {
+  background: radial-gradient(circle at 30% -20%, rgba(37, 99, 235, 0.22), rgba(8, 14, 28, 0.95));
+  border-color: rgba(62, 182, 255, 0.38);
+  color: #d8e9ff;
+}
+
+.sgm-neon-stage {
+  border: 1px solid rgba(72, 200, 255, 0.45);
+  border-radius: 12px;
+  margin: 10px 0;
+  min-height: 200px;
+  overflow: hidden;
+  position: relative;
+}
+
+.sgm-grid {
+  background-image:
+    linear-gradient(rgba(54, 199, 255, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(54, 199, 255, 0.16) 1px, transparent 1px);
+  background-size: 34px 34px;
+  inset: 0;
+  opacity: 0.82;
+  position: absolute;
+}
+
+.sgm-next-gesture {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  inset: 0;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.sgm-icon {
+  align-items: center;
+  background: rgba(17, 27, 50, 0.72);
+  border: 1px solid rgba(96, 199, 255, 0.66);
+  border-radius: 16px;
+  box-shadow: 0 0 24px rgba(62, 211, 255, 0.28);
+  display: flex;
+  font-size: 3.1rem;
+  height: 90px;
+  justify-content: center;
+  width: 90px;
+}
+
+.sgm-icon.muted {
+  opacity: 0.55;
+}
+
+.sgm-sequence-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sgm-step-token {
+  background: rgba(11, 20, 36, 0.72);
+  border: 1px solid rgba(86, 135, 200, 0.52);
+  border-radius: 8px;
+  color: #a7d1ff;
+  display: flex;
+  font-size: 1.15rem;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+.sgm-step-token.active {
+  border-color: rgba(124, 232, 255, 0.95);
+  box-shadow: 0 0 16px rgba(86, 218, 255, 0.38);
+}
+
+.sgm-step-token.done {
+  opacity: 0.58;
+}
+
+.sgm-feedback {
+  margin-top: 10px;
+}
+
+.sgm-history-grid {
+  margin-top: 10px;
+}
