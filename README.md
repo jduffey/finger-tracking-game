@@ -35,7 +35,9 @@ Open the local URL printed by Vite (typically `http://localhost:5173`) in Chrome
 - File name format is `YYYY-MM-DD-HH-MM-SS.log`.
 - Browser runtime events (tracking frames, calibration, pinch transitions, game state transitions, lifecycle events, console messages, and unhandled errors) are streamed into that file for troubleshooting.
 - `logs/` is git-ignored.
-- If TFJS/WebGL returns repeated invalid landmarks or no-hand streaks, the app can automatically reinitialize tracking and fall back to MediaPipe runtime / TFJS CPU (logged in detail).
+- Tracking now starts with MediaPipe runtime first (for more stable hand coordinates on this machine), then can probe TFJS as a fallback path if needed.
+- If repeated invalid landmarks or long no-hand streaks occur, the app auto-recovers runtime/backend and logs each attempt in detail.
+- Hand-detected status uses a short grace window to avoid flickering off on single dropped frames.
 
 ## How It Works
 

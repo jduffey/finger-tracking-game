@@ -36,8 +36,9 @@ const PINCH_DEBOUNCE_MS = 250;
 const CURSOR_ALPHA = 0.35;
 const CALIBRATION_SAMPLE_FRAMES = 10;
 const INVALID_LANDMARK_RECOVERY_THRESHOLD = 45;
-const NO_HAND_RECOVERY_THRESHOLD = 120;
-const MEDIAPIPE_FALLBACK_RECOVERY_ATTEMPT = 2;
+const NO_HAND_RECOVERY_THRESHOLD = 300;
+const HAND_DETECTION_GRACE_MS = 1600;
+const INITIAL_TRACKING_RUNTIME = "mediapipe";
 
 export default function App() {
   const appLog = useMemo(() => createScopedLogger("app"), []);
@@ -52,8 +53,8 @@ export default function App() {
   const [cameraError, setCameraError] = useState("");
   const [modelReady, setModelReady] = useState(false);
   const [modelError, setModelError] = useState("");
-  const [activeBackend, setActiveBackend] = useState("webgl");
-  const [activeRuntime, setActiveRuntime] = useState("tfjs");
+  const [activeBackend, setActiveBackend] = useState("n/a");
+  const [activeRuntime, setActiveRuntime] = useState(INITIAL_TRACKING_RUNTIME);
 
   const [handDetected, setHandDetected] = useState(false);
   const [pinchActive, setPinchActive] = useState(false);
@@ -106,6 +107,8 @@ export default function App() {
   const debugRef = useRef(debugEnabled);
 
   const handDetectedRef = useRef(false);
+  const lastValidHandTimestampRef = useRef(0);
+  const handGraceFrameCounterRef = useRef(0);
   const pinchStateRef = useRef(false);
   const lastPinchClickRef = useRef(0);
   const lastFrameTimeRef = useRef(0);
@@ -402,26 +405,46 @@ export default function App() {
 
     const initModel = async () => {
       try {
+        const preferredConfig =
+          INITIAL_TRACKING_RUNTIME === "mediapipe"
+            ? { runtime: "mediapipe", modelType: "full", maxHands: 1 }
+            : { runtime: "tfjs", backend: "webgl", modelType: "full", maxHands: 1 };
+
         appLog.info("Initializing hand-tracking detector", {
-          requestedRuntime: "tfjs",
-          requestedBackend: "webgl",
-          requestedModelType: "full",
-          requestedMaxHands: 1,
+          requestedRuntime: preferredConfig.runtime,
+          requestedBackend: preferredConfig.backend ?? "n/a",
+          requestedModelType: preferredConfig.modelType,
+          requestedMaxHands: preferredConfig.maxHands,
         });
-        const detector = await initHandTracking({
-          runtime: "tfjs",
-          backend: "webgl",
-          modelType: "full",
-          maxHands: 1,
-        });
+
+        let detector = null;
+        try {
+          detector = await initHandTracking(preferredConfig);
+        } catch (error) {
+          if (preferredConfig.runtime !== "mediapipe") {
+            throw error;
+          }
+
+          appLog.warn("Preferred MediaPipe init failed; retrying TFJS WebGL", { error });
+          detector = await initHandTracking({
+            runtime: "tfjs",
+            backend: "webgl",
+            modelType: "full",
+            maxHands: 1,
+          });
+        }
+
         if (cancelled) {
           appLog.warn("Model initialized after cancellation; disposing detector");
           detector?.dispose?.();
           return;
         }
         detectorRef.current = detector;
-        setActiveBackend(getCurrentBackend() || "webgl");
-        setActiveRuntime(getCurrentRuntime() || "tfjs");
+        const runtime = getCurrentRuntime() || preferredConfig.runtime;
+        const backend =
+          getCurrentBackend() || (runtime === "mediapipe" ? "n/a" : preferredConfig.backend || "webgl");
+        setActiveRuntime(runtime);
+        setActiveBackend(backend);
         appLog.info("Hand-tracking detector is ready");
         setModelReady(true);
       } catch (error) {
@@ -557,16 +580,37 @@ export default function App() {
     };
   }, [appLog, phase]);
 
-  function getRecoveryConfig(attempt) {
+  function getRecoveryConfig(attempt, reason) {
+    const currentRuntime = getCurrentRuntime() || activeRuntime;
+    const currentBackend = getCurrentBackend() || activeBackend;
+
+    // Keep MediaPipe as the sticky runtime once it has been reached.
+    if (currentRuntime === "mediapipe") {
+      // Periodically probe TFJS in case a device/runtime combination recovers.
+      if (attempt % 4 === 0) {
+        return { runtime: "tfjs", backend: "webgl", modelType: "full", maxHands: 1 };
+      }
+      return { runtime: "mediapipe", modelType: "full", maxHands: 1 };
+    }
+
+    // TFJS invalid-keypoint corruption should switch straight to MediaPipe.
+    if (reason === "continuous_invalid_landmarks") {
+      return { runtime: "mediapipe", modelType: "full", maxHands: 1 };
+    }
+
     if (attempt === 1) {
-      return { runtime: "tfjs", backend: "webgl", modelType: "full", maxHands: 1 };
+      return {
+        runtime: "tfjs",
+        backend: currentBackend === "cpu" ? "cpu" : "webgl",
+        modelType: "full",
+        maxHands: 1,
+      };
     }
-    if (attempt === MEDIAPIPE_FALLBACK_RECOVERY_ATTEMPT) {
+
+    if (attempt === 2) {
       return { runtime: "mediapipe", modelType: "full", maxHands: 1 };
     }
-    if (attempt >= MEDIAPIPE_FALLBACK_RECOVERY_ATTEMPT + 2) {
-      return { runtime: "mediapipe", modelType: "full", maxHands: 1 };
-    }
+
     return { runtime: "tfjs", backend: "cpu", modelType: "full", maxHands: 1 };
   }
 
@@ -578,7 +622,7 @@ export default function App() {
     recoveringDetectorRef.current = true;
     detectorRecoveryAttemptsRef.current += 1;
     const attempt = detectorRecoveryAttemptsRef.current;
-    const requestedConfig = getRecoveryConfig(attempt);
+    const requestedConfig = getRecoveryConfig(attempt, reason);
 
     appLog.warn("Attempting detector recovery", {
       attempt,
@@ -1004,6 +1048,27 @@ export default function App() {
     });
 
     if (!hand) {
+      const millisSinceLastValidHand =
+        lastValidHandTimestampRef.current > 0
+          ? timestamp - lastValidHandTimestampRef.current
+          : Number.POSITIVE_INFINITY;
+      const withinGraceWindow = millisSinceLastValidHand <= HAND_DETECTION_GRACE_MS;
+
+      if (withinGraceWindow) {
+        handGraceFrameCounterRef.current += 1;
+        if (handGraceFrameCounterRef.current === 1 || handGraceFrameCounterRef.current % 30 === 0) {
+          appLog.debug("Holding hand-detected state during brief no-hand gap", {
+            frameId,
+            graceFrames: handGraceFrameCounterRef.current,
+            millisSinceLastValidHand,
+          });
+        }
+        drawCameraOverlay(null);
+        updateGame(timestamp);
+        return;
+      }
+
+      handGraceFrameCounterRef.current = 0;
       if (isCalibratingRef.current && calibrationSampleRef.current) {
         calibrationSampleRef.current = null;
         setCalibrationSampleFrames(0);
@@ -1032,6 +1097,8 @@ export default function App() {
       setHandDetected(true);
       appLog.debug("Hand detection flag switched to true", { frameId });
     }
+    lastValidHandTimestampRef.current = timestamp;
+    handGraceFrameCounterRef.current = 0;
 
     const shouldUseTransform = Boolean(transformRef.current) && !isCalibratingRef.current;
     const mappedPoint = shouldUseTransform
@@ -1215,7 +1282,13 @@ export default function App() {
           invalidLandmarkStreakRef.current = 0;
         }
 
-        if (detectionMeta.reason === "no_hands") {
+        const millisSinceLastValidHand =
+          lastValidHandTimestampRef.current > 0
+            ? timestamp - lastValidHandTimestampRef.current
+            : Number.POSITIVE_INFINITY;
+        const withinHandGraceWindow = millisSinceLastValidHand <= HAND_DETECTION_GRACE_MS;
+
+        if (detectionMeta.reason === "no_hands" && !withinHandGraceWindow) {
           noHandStreakRef.current += 1;
           if (noHandStreakRef.current === NO_HAND_RECOVERY_THRESHOLD) {
             appLog.warn("No hands detected for extended period; attempting recovery", {
@@ -1228,6 +1301,7 @@ export default function App() {
           appLog.info("No-hand streak ended", {
             noHandStreak: noHandStreakRef.current,
             detectionMeta,
+            withinHandGraceWindow,
           });
           noHandStreakRef.current = 0;
         }
