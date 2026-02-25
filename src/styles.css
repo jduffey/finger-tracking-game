@@ -347,6 +347,44 @@ body {
   z-index: 3;
 }
 
+.flight-panel {
+  min-height: 0;
+}
+
+.flight-stage {
+  background: #050a16;
+  border: 1px solid #25364f;
+  border-radius: 12px;
+  flex: 1 1 auto;
+  margin-top: 8px;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.flight-canvas {
+  display: block;
+  height: 100%;
+  min-height: 360px;
+  width: 100%;
+}
+
+.flight-hud {
+  background: rgba(7, 13, 24, 0.72);
+  border: 1px solid rgba(93, 143, 235, 0.34);
+  border-radius: 10px;
+  bottom: 10px;
+  color: #d8f2ff;
+  display: grid;
+  font-size: 0.82rem;
+  gap: 6px 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  left: 10px;
+  max-width: calc(100% - 20px);
+  padding: 8px 10px;
+  position: absolute;
+}
+
 .button-row {
   display: flex;
   flex-wrap: wrap;
@@ -532,5 +570,13 @@ button:disabled {
 
   .game-board {
     width: 100%;
+  }
+
+  .flight-canvas {
+    min-height: 300px;
+  }
+
+  .flight-hud {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

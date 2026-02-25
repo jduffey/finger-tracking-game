@@ -31,6 +31,7 @@ import { createScopedLogger } from "./logger";
 const PHASES = {
   CALIBRATION: "CALIBRATION",
   SANDBOX: "SANDBOX",
+  FLIGHT: "FLIGHT",
   GAME: "GAME",
 };
 
@@ -80,9 +81,39 @@ const SANDBOX_MATERIAL_COLORS = {
   steel: ["#91a2b8", "#7d8fa8"],
   rubber: ["#ef4444", "#f97316"],
 };
+const FLIGHT_FINGER_ORDER = ["thumb", "index", "middle", "ring", "pinky"];
+const FLIGHT_BASELINE_SAMPLE_TARGET = 34;
+const FLIGHT_FORWARD_SPEED = 310;
+const FLIGHT_STEER_ACCEL = 560;
+const FLIGHT_DRAG_PER_60FPS = 0.9;
+const FLIGHT_MAX_SHIP_OFFSET_X = 170;
+const FLIGHT_MAX_SHIP_OFFSET_Y = 120;
+const FLIGHT_STAR_COUNT = 170;
+const FLIGHT_RING_COUNT = 7;
+const FLIGHT_NEAR_Z = 26;
+const FLIGHT_FAR_Z = 1480;
+const FLIGHT_WORLD_HALF_WIDTH = 520;
+const FLIGHT_WORLD_HALF_HEIGHT = 320;
+const FLIGHT_HUD_UPDATE_MS = 90;
+const FLIGHT_ROLL_WEIGHTS = [-2, -1, 0, 1, 2];
 
 function clampValue(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function lerpValue(start, end, alpha) {
+  return start + (end - start) * alpha;
+}
+
+function wrapAngleDelta(value) {
+  let next = value;
+  while (next > Math.PI) {
+    next -= Math.PI * 2;
+  }
+  while (next < -Math.PI) {
+    next += Math.PI * 2;
+  }
+  return next;
 }
 
 function roundMetric(value, digits = 4) {
@@ -297,6 +328,95 @@ function doBlocksOverlap(a, b, padding = 0) {
   );
 }
 
+function createEmptyFlightBaseline() {
+  return {
+    ready: false,
+    sampleCount: 0,
+    centroid: { u: 0.5, v: 0.5 },
+    principalAngle: 0,
+    openness: 0.2,
+    tips: FLIGHT_FINGER_ORDER.map(() => ({ u: 0.5, v: 0.5 })),
+  };
+}
+
+function computeFiveFingerPose(fingerTips) {
+  if (!fingerTips || typeof fingerTips !== "object") {
+    return null;
+  }
+
+  const points = [];
+  for (const fingerName of FLIGHT_FINGER_ORDER) {
+    const tip = fingerTips[fingerName];
+    if (!tip || !Number.isFinite(tip.u) || !Number.isFinite(tip.v)) {
+      return null;
+    }
+    points.push({ u: tip.u, v: tip.v });
+  }
+
+  const centroid = points.reduce(
+    (accumulator, point) => {
+      accumulator.u += point.u;
+      accumulator.v += point.v;
+      return accumulator;
+    },
+    { u: 0, v: 0 },
+  );
+  centroid.u /= points.length;
+  centroid.v /= points.length;
+
+  let covarianceXX = 0;
+  let covarianceYY = 0;
+  let covarianceXY = 0;
+  let openness = 0;
+  for (const point of points) {
+    const du = point.u - centroid.u;
+    const dv = point.v - centroid.v;
+    covarianceXX += du * du;
+    covarianceYY += dv * dv;
+    covarianceXY += du * dv;
+    openness += Math.hypot(du, dv);
+  }
+
+  covarianceXX /= points.length;
+  covarianceYY /= points.length;
+  covarianceXY /= points.length;
+  openness /= points.length;
+  const principalAngle = 0.5 * Math.atan2(2 * covarianceXY, covarianceXX - covarianceYY);
+
+  return {
+    points,
+    centroid,
+    openness,
+    principalAngle,
+  };
+}
+
+function createFlightStars() {
+  const stars = [];
+  for (let index = 0; index < FLIGHT_STAR_COUNT; index += 1) {
+    stars.push({
+      x: randomBetween(-FLIGHT_WORLD_HALF_WIDTH, FLIGHT_WORLD_HALF_WIDTH),
+      y: randomBetween(-FLIGHT_WORLD_HALF_HEIGHT, FLIGHT_WORLD_HALF_HEIGHT),
+      z: randomBetween(FLIGHT_NEAR_Z * 2.4, FLIGHT_FAR_Z),
+    });
+  }
+  return stars;
+}
+
+function createFlightRings() {
+  const rings = [];
+  const spacing = (FLIGHT_FAR_Z - 280) / Math.max(1, FLIGHT_RING_COUNT);
+  for (let index = 0; index < FLIGHT_RING_COUNT; index += 1) {
+    rings.push({
+      x: randomBetween(-170, 170),
+      y: randomBetween(-108, 108),
+      z: 280 + index * spacing + randomBetween(-90, 90),
+      radius: randomBetween(34, 66),
+    });
+  }
+  return rings;
+}
+
 function createSandboxBlocks(stageWidth, stageHeight) {
   const safeWidth = Math.max(320, stageWidth);
   const safeHeight = Math.max(240, stageHeight);
@@ -430,6 +550,15 @@ export default function App() {
   });
   const [sandboxBlocks, setSandboxBlocks] = useState([]);
   const [sandboxGrabbedBlockId, setSandboxGrabbedBlockId] = useState(null);
+  const [flightHud, setFlightHud] = useState({
+    yaw: 0,
+    pitch: 0,
+    roll: 0,
+    confidence: 0,
+    baselineReady: false,
+    baselineSamples: 0,
+    distance: 0,
+  });
 
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(Math.ceil(GAME_DURATION_MS / 1000));
@@ -443,6 +572,8 @@ export default function App() {
   const boardRef = useRef(null);
   const inputTestStageRef = useRef(null);
   const sandboxStageRef = useRef(null);
+  const flightStageRef = useRef(null);
+  const flightCanvasRef = useRef(null);
   const inputTestCellRefs = useRef([]);
 
   const detectorRef = useRef(null);
@@ -489,6 +620,31 @@ export default function App() {
   const sandboxGrabVelocityRef = useRef({ vx: 0, vy: 0 });
   const sandboxGrabLastPositionRef = useRef({ x: 0, y: 0, timestamp: 0 });
   const sandboxLastTickRef = useRef(0);
+  const flightStateRef = useRef({
+    initialized: false,
+    lastTimestamp: 0,
+    shipX: 0,
+    shipY: 0,
+    shipVx: 0,
+    shipVy: 0,
+    roll: 0,
+    pitch: 0,
+    yaw: 0,
+    distance: 0,
+    stars: [],
+    rings: [],
+  });
+  const flightControlRef = useRef({
+    yaw: 0,
+    pitch: 0,
+    roll: 0,
+    confidence: 0,
+    hasControl: false,
+    lastUpdate: 0,
+  });
+  const flightBaselineRef = useRef(createEmptyFlightBaseline());
+  const flightBaselineSamplesRef = useRef([]);
+  const flightHudLastUpdateRef = useRef(0);
 
   const holesRef = useRef(holes);
   const hitZonesRef = useRef([]);
@@ -507,7 +663,9 @@ export default function App() {
   const isCalibrationLayoutPhase =
     phase === PHASES.CALIBRATION || phase === PHASES.SANDBOX;
   const cameraPanelTitle =
-    phase === PHASES.GAME
+    phase === PHASES.FLIGHT
+      ? "Camera + Flight Controls"
+      : phase === PHASES.GAME
       ? "Camera + Tracking"
       : phase === PHASES.SANDBOX
         ? "Camera + Sandbox Controls"
@@ -554,6 +712,28 @@ export default function App() {
     sandboxGrabOffsetRef.current = { x: 0, y: 0 };
     sandboxGrabVelocityRef.current = { vx: 0, vy: 0 };
     sandboxGrabLastPositionRef.current = { x: 0, y: 0, timestamp: 0 };
+    if (phase !== PHASES.FLIGHT) {
+      flightControlRef.current = {
+        yaw: 0,
+        pitch: 0,
+        roll: 0,
+        confidence: 0,
+        hasControl: false,
+        lastUpdate: 0,
+      };
+      flightBaselineRef.current = createEmptyFlightBaseline();
+      flightBaselineSamplesRef.current = [];
+      flightHudLastUpdateRef.current = 0;
+      setFlightHud({
+        yaw: 0,
+        pitch: 0,
+        roll: 0,
+        confidence: 0,
+        baselineReady: false,
+        baselineSamples: 0,
+        distance: 0,
+      });
+    }
   }, [phase]);
 
   useEffect(() => {
@@ -618,6 +798,13 @@ export default function App() {
       grabbedBlockId: sandboxGrabbedBlockId,
     });
   }, [appLog, phase, sandboxBlocks.length, sandboxGrabbedBlockId]);
+
+  useEffect(() => {
+    appLog.debug("Flight HUD state changed", {
+      phase,
+      flightHud,
+    });
+  }, [appLog, phase, flightHud]);
 
   useEffect(() => {
     appLog.debug("Calibration input test state changed", {
@@ -1184,6 +1371,66 @@ export default function App() {
     };
   }, [appLog, phase]);
 
+  useEffect(() => {
+    if (phase !== PHASES.FLIGHT) {
+      return undefined;
+    }
+    const stage = flightStageRef.current;
+    const canvas = flightCanvasRef.current;
+    if (!stage || !canvas) {
+      appLog.debug("Skipping flight stage observer because stage/canvas ref is unavailable", {
+        hasStage: Boolean(stage),
+        hasCanvas: Boolean(canvas),
+      });
+      return undefined;
+    }
+
+    let rafId = 0;
+    const syncCanvasSizeAndReset = () => {
+      const rect = stage.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width));
+      const height = Math.max(1, Math.round(rect.height));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+        appLog.info("Synced flight canvas dimensions", { width, height });
+      }
+      resetFlightSession("flight_stage_resize_or_open");
+    };
+    const scheduleSync = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        syncCanvasSizeAndReset();
+      });
+    };
+
+    scheduleSync();
+
+    if (!window.ResizeObserver) {
+      window.addEventListener("resize", scheduleSync);
+      return () => {
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+        }
+        window.removeEventListener("resize", scheduleSync);
+      };
+    }
+
+    const observer = new ResizeObserver(scheduleSync);
+    observer.observe(stage);
+    window.addEventListener("resize", scheduleSync);
+    return () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+      observer.disconnect();
+      window.removeEventListener("resize", scheduleSync);
+    };
+  }, [appLog, phase]);
+
   function getRecoveryConfig(attempt, reason) {
     const currentRuntime = getCurrentRuntime() || activeRuntime;
     const currentBackend = getCurrentBackend() || activeBackend;
@@ -1702,6 +1949,496 @@ export default function App() {
     setSandboxBlocks(blocks);
   }
 
+  function publishFlightHud(timestamp) {
+    if (timestamp - flightHudLastUpdateRef.current < FLIGHT_HUD_UPDATE_MS) {
+      return;
+    }
+    flightHudLastUpdateRef.current = timestamp;
+    const baseline = flightBaselineRef.current;
+    const control = flightControlRef.current;
+    const state = flightStateRef.current;
+    const nextHud = {
+      yaw: roundMetric(control.yaw, 3) ?? 0,
+      pitch: roundMetric(control.pitch, 3) ?? 0,
+      roll: roundMetric(control.roll, 3) ?? 0,
+      confidence: roundMetric(control.confidence, 3) ?? 0,
+      baselineReady: baseline.ready,
+      baselineSamples: baseline.sampleCount,
+      distance: roundMetric(state.distance, 1) ?? 0,
+    };
+    setFlightHud((previous) => {
+      if (
+        previous.yaw === nextHud.yaw &&
+        previous.pitch === nextHud.pitch &&
+        previous.roll === nextHud.roll &&
+        previous.confidence === nextHud.confidence &&
+        previous.baselineReady === nextHud.baselineReady &&
+        previous.baselineSamples === nextHud.baselineSamples &&
+        previous.distance === nextHud.distance
+      ) {
+        return previous;
+      }
+      return nextHud;
+    });
+  }
+
+  function resetFlightSession(reason = "manual_reset") {
+    flightStateRef.current = {
+      initialized: true,
+      lastTimestamp: 0,
+      shipX: 0,
+      shipY: 0,
+      shipVx: 0,
+      shipVy: 0,
+      roll: 0,
+      pitch: 0,
+      yaw: 0,
+      distance: 0,
+      stars: createFlightStars(),
+      rings: createFlightRings(),
+    };
+    flightControlRef.current = {
+      yaw: 0,
+      pitch: 0,
+      roll: 0,
+      confidence: 0,
+      hasControl: false,
+      lastUpdate: 0,
+    };
+    flightBaselineRef.current = createEmptyFlightBaseline();
+    flightBaselineSamplesRef.current = [];
+    flightHudLastUpdateRef.current = 0;
+    setFlightHud({
+      yaw: 0,
+      pitch: 0,
+      roll: 0,
+      confidence: 0,
+      baselineReady: false,
+      baselineSamples: 0,
+      distance: 0,
+    });
+    appLog.info("Flight session reset", {
+      reason,
+      starCount: flightStateRef.current.stars.length,
+      ringCount: flightStateRef.current.rings.length,
+    });
+  }
+
+  function resetFlightNeutral(reason = "manual_reset") {
+    flightControlRef.current = {
+      yaw: 0,
+      pitch: 0,
+      roll: 0,
+      confidence: 0,
+      hasControl: false,
+      lastUpdate: 0,
+    };
+    flightBaselineRef.current = createEmptyFlightBaseline();
+    flightBaselineSamplesRef.current = [];
+    flightHudLastUpdateRef.current = 0;
+    setCalibrationMessage(
+      "Flight neutral reset. Hold all five fingertips visible to recapture your center pose.",
+    );
+    appLog.info("Flight neutral reset", { reason });
+  }
+
+  function startFlightSession() {
+    appLog.info("Flight session start requested", {
+      hasTransform: Boolean(transformRef.current),
+      currentPhase: phaseRef.current,
+      cameraReady,
+      modelReady,
+    });
+    stopGameSession();
+    resetArcCalibrationSession("start_flight");
+    setIsCalibrating(false);
+    isCalibratingRef.current = false;
+    calibrationSampleRef.current = null;
+    setCalibrationSampleFrames(0);
+    setPhase(PHASES.FLIGHT);
+    phaseRef.current = PHASES.FLIGHT;
+    setCalibrationMessage(
+      "Flight mode active. Hold all five fingertips visible to capture neutral orientation.",
+    );
+    requestAnimationFrame(() => resetFlightSession("start_flight"));
+  }
+
+  function returnFromFlightSession() {
+    appLog.info("Returning from flight mode to calibration input test");
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
+  function updateFlightControlFromTips(mappedFingerTips, timestamp, frameId) {
+    if (phaseRef.current !== PHASES.FLIGHT) {
+      return;
+    }
+
+    const control = flightControlRef.current;
+    const baseline = flightBaselineRef.current;
+    const pose = computeFiveFingerPose(mappedFingerTips);
+    if (!pose) {
+      control.yaw = lerpValue(control.yaw, 0, 0.08);
+      control.pitch = lerpValue(control.pitch, 0, 0.08);
+      control.roll = lerpValue(control.roll, 0, 0.08);
+      control.confidence = lerpValue(control.confidence, 0, 0.12);
+      control.hasControl = false;
+      control.lastUpdate = timestamp;
+      publishFlightHud(timestamp);
+      if (!baseline.ready && frameId % 45 === 0) {
+        setCalibrationMessage(
+          "Flight neutral capture paused: keep all five fingertips visible in frame.",
+        );
+      }
+      return;
+    }
+
+    if (!baseline.ready) {
+      flightBaselineSamplesRef.current.push(pose);
+      if (flightBaselineSamplesRef.current.length > FLIGHT_BASELINE_SAMPLE_TARGET) {
+        flightBaselineSamplesRef.current.shift();
+      }
+      baseline.sampleCount = flightBaselineSamplesRef.current.length;
+      flightBaselineRef.current = { ...baseline };
+
+      const progress = Math.round(
+        (flightBaselineSamplesRef.current.length / FLIGHT_BASELINE_SAMPLE_TARGET) * 100,
+      );
+      if (frameId % 8 === 0) {
+        setCalibrationMessage(
+          `Capturing flight neutral pose: ${progress}% (${flightBaselineSamplesRef.current.length}/${FLIGHT_BASELINE_SAMPLE_TARGET}). Keep fingertips visible and steady.`,
+        );
+      }
+
+      if (flightBaselineSamplesRef.current.length >= FLIGHT_BASELINE_SAMPLE_TARGET) {
+        const samples = flightBaselineSamplesRef.current;
+        const tipSums = FLIGHT_FINGER_ORDER.map(() => ({ u: 0, v: 0 }));
+        let centroidUSum = 0;
+        let centroidVSum = 0;
+        let opennessSum = 0;
+        let angleSinSum = 0;
+        let angleCosSum = 0;
+        for (const sample of samples) {
+          centroidUSum += sample.centroid.u;
+          centroidVSum += sample.centroid.v;
+          opennessSum += sample.openness;
+          angleSinSum += Math.sin(sample.principalAngle);
+          angleCosSum += Math.cos(sample.principalAngle);
+          sample.points.forEach((point, pointIndex) => {
+            tipSums[pointIndex].u += point.u;
+            tipSums[pointIndex].v += point.v;
+          });
+        }
+        const nextBaseline = {
+          ready: true,
+          sampleCount: samples.length,
+          centroid: {
+            u: centroidUSum / samples.length,
+            v: centroidVSum / samples.length,
+          },
+          principalAngle: Math.atan2(angleSinSum / samples.length, angleCosSum / samples.length),
+          openness: opennessSum / samples.length,
+          tips: tipSums.map((sum) => ({
+            u: sum.u / samples.length,
+            v: sum.v / samples.length,
+          })),
+        };
+        flightBaselineRef.current = nextBaseline;
+        flightBaselineSamplesRef.current = [];
+        setCalibrationMessage(
+          "Flight neutral captured. Move your hand to steer the ship using all five fingertips.",
+        );
+        appLog.info("Flight baseline captured", {
+          frameId,
+          baseline: nextBaseline,
+        });
+      }
+
+      control.yaw = lerpValue(control.yaw, 0, 0.18);
+      control.pitch = lerpValue(control.pitch, 0, 0.18);
+      control.roll = lerpValue(control.roll, 0, 0.18);
+      control.confidence = lerpValue(control.confidence, 0.2, 0.2);
+      control.hasControl = false;
+      control.lastUpdate = timestamp;
+      publishFlightHud(timestamp);
+      return;
+    }
+
+    const baselineAngleDelta = wrapAngleDelta(pose.principalAngle - baseline.principalAngle);
+    const rollFromAngle = clampValue((-baselineAngleDelta) / 0.75, -1, 1);
+    const fingerRollNumerator = pose.points.reduce((accumulator, point, pointIndex) => {
+      const baselinePoint = baseline.tips[pointIndex];
+      const weight = FLIGHT_ROLL_WEIGHTS[pointIndex] ?? 0;
+      return accumulator + weight * (baselinePoint.v - point.v);
+    }, 0);
+    const rollFromFingers = clampValue(fingerRollNumerator / 1.44, -1, 1);
+    const opennessRatio = pose.openness / Math.max(0.0001, baseline.openness);
+    const opennessGain = clampValue((opennessRatio - 0.52) / 0.52, 0.45, 1.22);
+
+    const yawTarget = clampValue(
+      ((pose.centroid.u - baseline.centroid.u) / 0.2) * opennessGain,
+      -1,
+      1,
+    );
+    const pitchTarget = clampValue(
+      ((baseline.centroid.v - pose.centroid.v) / 0.2) * opennessGain,
+      -1,
+      1,
+    );
+    const rollTarget = clampValue(rollFromAngle * 0.66 + rollFromFingers * 0.34, -1, 1);
+
+    control.yaw = lerpValue(control.yaw, yawTarget, 0.24);
+    control.pitch = lerpValue(control.pitch, pitchTarget, 0.24);
+    control.roll = lerpValue(control.roll, rollTarget, 0.24);
+    const opennessConfidence = clampValue(
+      1 - Math.abs(opennessRatio - 1) * 0.42,
+      0.25,
+      1,
+    );
+    control.confidence = lerpValue(control.confidence, opennessConfidence, 0.22);
+    control.hasControl = true;
+    control.lastUpdate = timestamp;
+    if (frameId % 18 === 0) {
+      appLog.debug("Flight control update from five fingertips", {
+        frameId,
+        yawTarget: roundMetric(yawTarget, 4),
+        pitchTarget: roundMetric(pitchTarget, 4),
+        rollTarget: roundMetric(rollTarget, 4),
+        rollFromAngle: roundMetric(rollFromAngle, 4),
+        rollFromFingers: roundMetric(rollFromFingers, 4),
+        opennessRatio: roundMetric(opennessRatio, 4),
+        centroid: {
+          u: roundMetric(pose.centroid.u, 4),
+          v: roundMetric(pose.centroid.v, 4),
+        },
+      });
+    }
+    publishFlightHud(timestamp);
+  }
+
+  function drawFlightScene() {
+    const stage = flightStageRef.current;
+    const canvas = flightCanvasRef.current;
+    if (!stage || !canvas) {
+      return;
+    }
+    const rect = stage.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width));
+    const height = Math.max(1, Math.round(rect.height));
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+
+    const state = flightStateRef.current;
+    const control = flightControlRef.current;
+    ctx.clearRect(0, 0, width, height);
+    const sky = ctx.createLinearGradient(0, 0, 0, height);
+    sky.addColorStop(0, "#050a16");
+    sky.addColorStop(0.52, "#081327");
+    sky.addColorStop(1, "#0f1f2f");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.globalAlpha = 0.32;
+    ctx.fillStyle = "#3161ff";
+    ctx.beginPath();
+    ctx.arc(width * 0.24, height * 0.16, Math.max(40, width * 0.16), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#4ad8ff";
+    ctx.beginPath();
+    ctx.arc(width * 0.78, height * 0.26, Math.max(34, width * 0.12), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    const centerX = width * 0.5;
+    const centerY = height * 0.42;
+    const fov = Math.min(width, height) * 1.06;
+    const cameraX = state.shipX * 0.66;
+    const cameraY = state.shipY * 0.6;
+
+    ctx.strokeStyle = "rgba(74, 126, 220, 0.24)";
+    ctx.lineWidth = 1.2;
+    for (let lane = -3; lane <= 3; lane += 1) {
+      const farDepth = FLIGHT_FAR_Z;
+      const nearDepth = 260;
+      const xNear = centerX + ((lane * 112 - cameraX) * fov) / nearDepth;
+      const yNear = centerY + ((136 - cameraY) * fov) / nearDepth;
+      const xFar = centerX + ((lane * 420 - cameraX) * fov) / farDepth;
+      const yFar = centerY + ((-210 - cameraY) * fov) / farDepth;
+      ctx.beginPath();
+      ctx.moveTo(xNear, yNear);
+      ctx.lineTo(xFar, yFar);
+      ctx.stroke();
+    }
+
+    for (const star of state.stars) {
+      const depth = Math.max(FLIGHT_NEAR_Z, star.z);
+      const projectedX = centerX + ((star.x - cameraX) * fov) / depth;
+      const projectedY = centerY + ((star.y - cameraY) * fov) / depth;
+      if (
+        projectedX < -12 ||
+        projectedX > width + 12 ||
+        projectedY < -12 ||
+        projectedY > height + 12
+      ) {
+        continue;
+      }
+      const size = clampValue(0.8 + 200 / depth, 0.8, 3.4);
+      const alpha = clampValue(1.1 - depth / FLIGHT_FAR_Z, 0.16, 0.95);
+      ctx.fillStyle = `rgba(214, 231, 255, ${alpha})`;
+      ctx.fillRect(projectedX - size * 0.5, projectedY - size * 0.5, size, size);
+    }
+
+    const sortedRings = [...state.rings].sort((a, b) => b.z - a.z);
+    for (const ring of sortedRings) {
+      const depth = Math.max(FLIGHT_NEAR_Z, ring.z);
+      const projectedX = centerX + ((ring.x - state.shipX * 0.92) * fov) / depth;
+      const projectedY = centerY + ((ring.y - state.shipY * 0.92) * fov) / depth;
+      const projectedRadius = (ring.radius * fov) / depth;
+      if (projectedRadius < 2) {
+        continue;
+      }
+      const alpha = clampValue(1 - depth / FLIGHT_FAR_Z, 0.18, 0.84);
+      ctx.lineWidth = clampValue((ring.radius / depth) * 150, 1.2, 5.4);
+      ctx.strokeStyle = `rgba(80, 221, 255, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(projectedX, projectedY, projectedRadius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = "rgba(170, 225, 255, 0.48)";
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    ctx.moveTo(centerX - 16, centerY);
+    ctx.lineTo(centerX + 16, centerY);
+    ctx.moveTo(centerX, centerY - 12);
+    ctx.lineTo(centerX, centerY + 12);
+    ctx.stroke();
+
+    const shipX = width * 0.5 + state.shipX * 0.68;
+    const shipY = height * 0.79 + state.shipY * 0.4;
+    const shipScale = clampValue(Math.min(width, height) / 420, 0.72, 1.34);
+    ctx.save();
+    ctx.translate(shipX, shipY);
+    ctx.rotate(state.roll * 0.9);
+    ctx.scale(shipScale, shipScale);
+
+    const thrusterLength = 22 + Math.abs(control.pitch) * 16;
+    ctx.strokeStyle = "rgba(125, 219, 255, 0.74)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(-10, 16);
+    ctx.lineTo(-10, 16 + thrusterLength);
+    ctx.moveTo(10, 16);
+    ctx.lineTo(10, 16 + thrusterLength);
+    ctx.stroke();
+
+    ctx.fillStyle = "#cad8f0";
+    ctx.beginPath();
+    ctx.moveTo(0, -40);
+    ctx.lineTo(18, 2);
+    ctx.lineTo(12, 24);
+    ctx.lineTo(-12, 24);
+    ctx.lineTo(-18, 2);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#8ea2c2";
+    ctx.beginPath();
+    ctx.moveTo(-54, 10);
+    ctx.lineTo(-14, -2);
+    ctx.lineTo(-8, 20);
+    ctx.lineTo(-50, 30);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(54, 10);
+    ctx.lineTo(14, -2);
+    ctx.lineTo(8, 20);
+    ctx.lineTo(50, 30);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#59ccff";
+    ctx.beginPath();
+    ctx.moveTo(0, -26);
+    ctx.lineTo(8, -10);
+    ctx.lineTo(-8, -10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function updateFlightSimulation(timestamp) {
+    if (phaseRef.current !== PHASES.FLIGHT) {
+      return;
+    }
+
+    const state = flightStateRef.current;
+    if (!state.initialized) {
+      resetFlightSession("auto_init");
+      return;
+    }
+
+    const dtSeconds = clampValue(
+      (timestamp - (state.lastTimestamp || timestamp)) / 1000,
+      0.001,
+      SANDBOX_MAX_STEP_SECONDS,
+    );
+    state.lastTimestamp = timestamp;
+    const control = flightControlRef.current;
+    const drag = Math.pow(FLIGHT_DRAG_PER_60FPS, dtSeconds * 60);
+
+    state.shipVx = (state.shipVx + control.yaw * FLIGHT_STEER_ACCEL * dtSeconds) * drag;
+    state.shipVy = (state.shipVy + control.pitch * FLIGHT_STEER_ACCEL * dtSeconds) * drag;
+    state.shipX = clampValue(
+      state.shipX + state.shipVx * dtSeconds,
+      -FLIGHT_MAX_SHIP_OFFSET_X,
+      FLIGHT_MAX_SHIP_OFFSET_X,
+    );
+    state.shipY = clampValue(
+      state.shipY + state.shipVy * dtSeconds,
+      -FLIGHT_MAX_SHIP_OFFSET_Y,
+      FLIGHT_MAX_SHIP_OFFSET_Y,
+    );
+    const targetRoll = control.roll * 0.92 + control.yaw * 0.36;
+    const targetPitch = control.pitch * 0.6;
+    const targetYaw = control.yaw * 0.62;
+    state.roll = lerpValue(state.roll, targetRoll, 0.13);
+    state.pitch = lerpValue(state.pitch, targetPitch, 0.13);
+    state.yaw = lerpValue(state.yaw, targetYaw, 0.13);
+    state.distance += FLIGHT_FORWARD_SPEED * dtSeconds;
+
+    for (const star of state.stars) {
+      star.z -= FLIGHT_FORWARD_SPEED * dtSeconds * (1 + Math.abs(control.pitch) * 0.14);
+      if (star.z < FLIGHT_NEAR_Z) {
+        star.z = FLIGHT_FAR_Z;
+        star.x = randomBetween(-FLIGHT_WORLD_HALF_WIDTH, FLIGHT_WORLD_HALF_WIDTH);
+        star.y = randomBetween(-FLIGHT_WORLD_HALF_HEIGHT, FLIGHT_WORLD_HALF_HEIGHT);
+      }
+    }
+
+    for (const ring of state.rings) {
+      ring.z -= FLIGHT_FORWARD_SPEED * dtSeconds;
+      if (ring.z < FLIGHT_NEAR_Z) {
+        ring.z = FLIGHT_FAR_Z + randomBetween(120, 380);
+        ring.x = randomBetween(-180, 180);
+        ring.y = randomBetween(-116, 116);
+        ring.radius = randomBetween(34, 66);
+      }
+    }
+
+    drawFlightScene();
+    publishFlightHud(timestamp);
+  }
+
   function getHoveredInputTestCellIndex(pointerPoint) {
     if (!pointerPoint) {
       return -1;
@@ -1885,13 +2622,13 @@ export default function App() {
     transformRef.current = solved;
     saveCalibration(solved);
     setHasSavedCalibration(true);
-    setCalibrationMessage("Lazy arc calibration complete. Launching game.");
+    setCalibrationMessage("Lazy arc calibration complete. Launching flight mode.");
     appLog.info("Lazy-arc calibration solved successfully", {
       reason,
       sampleCount: captured.length,
       model: solved,
     });
-    startGameSession();
+    startFlightSession();
   }
 
   function finalizeCalibrationSample() {
@@ -1971,11 +2708,11 @@ export default function App() {
       setHasSavedCalibration(true);
       setIsCalibrating(false);
       isCalibratingRef.current = false;
-      setCalibrationMessage("Calibration complete. Launching game.");
+      setCalibrationMessage("Calibration complete. Launching flight mode.");
       appLog.info("Calibration solved successfully", {
         transform: solved,
       });
-      startGameSession();
+      startFlightSession();
       return;
     }
 
@@ -2485,7 +3222,9 @@ export default function App() {
           });
         }
         drawCameraOverlay(null);
+        updateFlightControlFromTips(null, timestamp, frameId);
         updateSandboxPhysics(timestamp, cursorRef.current, false, false);
+        updateFlightSimulation(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -2517,7 +3256,9 @@ export default function App() {
       }
       updateCalibrationInputTestHoverState(cursorRef.current, false, frameId);
       drawCameraOverlay(null);
+      updateFlightControlFromTips(null, timestamp, frameId);
       updateSandboxPhysics(timestamp, cursorRef.current, false, false);
+      updateFlightSimulation(timestamp);
       updateGame(timestamp);
       return;
     }
@@ -2557,6 +3298,7 @@ export default function App() {
           : { u: hand.thumbTip.u, v: hand.thumbTip.v };
     const mappedPointerTip = mappedThumbTip;
     updateTrackingExtentsWithHand(hand, frameId, timestamp, visibleBounds);
+    updateFlightControlFromTips(mappedFingerTips, timestamp, frameId);
 
     if (isArcCalibratingRef.current) {
       if (arcCalibrationStartRef.current === 0) {
@@ -2747,6 +3489,7 @@ export default function App() {
 
     updateSandboxPhysics(timestamp, smoothed, true, pinchStateRef.current);
     drawCameraOverlay(hand);
+    updateFlightSimulation(timestamp);
     updateGame(timestamp);
   }
 
@@ -2781,6 +3524,8 @@ export default function App() {
             timestamp,
           });
         }
+        updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
+        updateFlightSimulation(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -2793,6 +3538,8 @@ export default function App() {
             skipCount: recoveryFrameSkipCounterRef.current,
           });
         }
+        updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
+        updateFlightSimulation(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -2806,6 +3553,8 @@ export default function App() {
           hasVideo: Boolean(video),
           readyState: video?.readyState ?? null,
         });
+        updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
+        updateFlightSimulation(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -2873,6 +3622,8 @@ export default function App() {
         }
       } catch (error) {
         appLog.error("Frame inference failed", { error });
+        updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
+        updateFlightSimulation(timestamp);
         updateGame(timestamp);
       } finally {
         inferenceBusyRef.current = false;
@@ -2928,7 +3679,7 @@ export default function App() {
           {cameraError && <p className="error-text">{cameraError}</p>}
           {modelError && <p className="error-text">{modelError}</p>}
 
-          {(phase === PHASES.CALIBRATION || phase === PHASES.SANDBOX) && (
+          {(phase === PHASES.CALIBRATION || phase === PHASES.SANDBOX || phase === PHASES.FLIGHT) && (
             <>
               <p className="small-text">{calibrationMessage}</p>
               {phase === PHASES.CALIBRATION ? (
@@ -2938,12 +3689,20 @@ export default function App() {
                     : `Captured points: ${calibrationPairsCount}/${calibrationTargets.length}${
                         isCalibrating
                           ? ` | Sampling: ${calibrationSampleFrames}/${CALIBRATION_SAMPLE_FRAMES}`
-                          : ""
+                        : ""
                       }`}
+                </p>
+              ) : phase === PHASES.SANDBOX ? (
+                <p className="small-text">
+                  Pinch over a block to grab it. Keep pinching to drag, then release to fling.
                 </p>
               ) : (
                 <p className="small-text">
-                  Pinch over a block to grab it. Keep pinching to drag, then release to fling.
+                  Steering uses all five fingertips. Neutral baseline:{" "}
+                  {flightHud.baselineReady
+                    ? "locked"
+                    : `${flightHud.baselineSamples}/${FLIGHT_BASELINE_SAMPLE_TARGET}`}
+                  .
                 </p>
               )}
 
@@ -2966,9 +3725,17 @@ export default function App() {
                         ? "Restart Lazy Arc Calibration"
                         : "Start Lazy Arc Calibration"}
                     </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={startFlightSession}
+                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
+                    >
+                      Launch Flight Game
+                    </button>
                     {hasSavedCalibration && !isCalibrating && !isArcCalibrating && (
                       <button className="secondary" onClick={startGameSession}>
-                        Use Saved Calibration
+                        Start Whack-a-Mole
                       </button>
                     )}
                     <button
@@ -2987,7 +3754,7 @@ export default function App() {
                       Reset Input Test
                     </button>
                   </>
-                ) : (
+                ) : phase === PHASES.SANDBOX ? (
                   <>
                     <button onClick={returnToCalibrationInputTest}>Back to Input Test</button>
                     <button
@@ -2999,9 +3766,30 @@ export default function App() {
                     </button>
                     {hasSavedCalibration && (
                       <button className="secondary" onClick={startGameSession}>
-                        Start Game
+                        Start Whack-a-Mole
                       </button>
                     )}
+                    <button className="secondary" onClick={startFlightSession}>
+                      Launch Flight Game
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={returnFromFlightSession}>Back to Input Test</button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={() => resetFlightNeutral("manual_button")}
+                    >
+                      Re-center Hand Pose
+                    </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={() => resetFlightSession("manual_button")}
+                    >
+                      Reset Flight Scene
+                    </button>
                   </>
                 )}
               </div>
@@ -3117,6 +3905,40 @@ export default function App() {
               {pinchActive ? "active" : "idle"}
             </p>
           </section>
+        ) : phase === PHASES.FLIGHT ? (
+          <section className="card panel flight-panel">
+            <h2>Star Flight</h2>
+            <p className="small-text">
+              Third-person flight at constant speed. Move all five fingertips to steer.
+            </p>
+            <p className="small-text">
+              Shift hand left/right for yaw, up/down for pitch, and rotate hand for roll.
+            </p>
+
+            <div className="flight-stage" ref={flightStageRef}>
+              <canvas className="flight-canvas" ref={flightCanvasRef} />
+              <div className="flight-hud">
+                <span>Yaw: {(flightHud.yaw * 100).toFixed(0)}%</span>
+                <span>Pitch: {(flightHud.pitch * 100).toFixed(0)}%</span>
+                <span>Roll: {(flightHud.roll * 100).toFixed(0)}%</span>
+                <span>Control: {(flightHud.confidence * 100).toFixed(0)}%</span>
+                <span>
+                  Neutral:{" "}
+                  {flightHud.baselineReady
+                    ? "locked"
+                    : `${flightHud.baselineSamples}/${FLIGHT_BASELINE_SAMPLE_TARGET}`}
+                </span>
+                <span>Distance: {flightHud.distance.toFixed(0)} u</span>
+              </div>
+            </div>
+
+            <div className="button-row">
+              <button onClick={startFlightSession}>Restart Flight</button>
+              <button className="secondary" onClick={startGameSession}>
+                Switch to Whack-a-Mole
+              </button>
+            </div>
+          </section>
         ) : (
           <section className="card panel">
             <h2>Whack-a-Mole</h2>
@@ -3138,6 +3960,9 @@ export default function App() {
             <div className="button-row">
               <button onClick={startGameSession}>
                 {gameRunning ? "Restart Game" : "Start Game"}
+              </button>
+              <button className="secondary" onClick={startFlightSession}>
+                Launch Flight Game
               </button>
               <button className="secondary" onClick={handleRecalibrate}>
                 Recalibrate
