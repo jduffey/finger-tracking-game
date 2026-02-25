@@ -34,6 +34,7 @@ import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from ".
 import { createScopedLogger } from "./logger";
 import MinorityReportLab from "./components/MinorityReportLab";
 import BodyPoseLab from "./components/BodyPoseLab";
+import GestureArtLab from "./components/GestureArtLab";
 import { createGestureEngine } from "./gestures/gestureEngine";
 import {
   ALL_GESTURE_IDS,
@@ -49,6 +50,7 @@ const PHASES = {
   RUNNER: "RUNNER",
   BODY_POSE: "BODY_POSE",
   MINORITY_REPORT_LAB: "MINORITY_REPORT_LAB",
+  GESTURE_ART_LAB: "GESTURE_ART_LAB",
   GAME: "GAME",
 };
 
@@ -912,6 +914,7 @@ export default function App() {
     personalizationRef.current.getSampleCounts(),
   );
   const [labTrainingState, setLabTrainingState] = useState(createInitialLabTrainingState);
+  const [gestureArtHands, setGestureArtHands] = useState([]);
   const [poseModelReady, setPoseModelReady] = useState(false);
   const [poseModelError, setPoseModelError] = useState("");
   const [poseStatus, setPoseStatus] = useState(createEmptyPoseStatus);
@@ -1086,7 +1089,8 @@ export default function App() {
     phase === PHASES.FLIGHT ||
     phase === PHASES.RUNNER ||
     phase === PHASES.BODY_POSE ||
-    phase === PHASES.MINORITY_REPORT_LAB;
+    phase === PHASES.MINORITY_REPORT_LAB ||
+    phase === PHASES.GESTURE_ART_LAB;
   const cameraPanelTitle =
     phase === PHASES.FLIGHT
       ? "Camera + Flight Controls"
@@ -1096,6 +1100,8 @@ export default function App() {
       ? "Camera + Body Pose Highlight"
       : phase === PHASES.MINORITY_REPORT_LAB
       ? "Camera + Minority Report Controls"
+      : phase === PHASES.GESTURE_ART_LAB
+      ? "Camera + Gesture Art Controls"
       : phase === PHASES.GAME
       ? "Camera + Tracking"
       : phase === PHASES.SANDBOX
@@ -1120,6 +1126,12 @@ export default function App() {
   useEffect(() => {
     appLog.info("Phase changed", { phase });
   }, [appLog, phase]);
+
+  useEffect(() => {
+    if (phase !== PHASES.GESTURE_ART_LAB) {
+      setGestureArtHands([]);
+    }
+  }, [phase]);
 
   useEffect(() => {
     if (phase === PHASES.CALIBRATION) {
@@ -3223,6 +3235,34 @@ export default function App() {
           }
         : previous,
     );
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
+  function startGestureArtLab() {
+    appLog.info("Gesture Art Lab start requested", {
+      currentPhase: phaseRef.current,
+      cameraReady,
+      modelReady,
+    });
+    stopGameSession();
+    resetArcCalibrationSession("start_gesture_art_lab");
+    setIsCalibrating(false);
+    isCalibratingRef.current = false;
+    calibrationSampleRef.current = null;
+    setCalibrationSampleFrames(0);
+    setGestureArtHands([]);
+    setPhase(PHASES.GESTURE_ART_LAB);
+    phaseRef.current = PHASES.GESTURE_ART_LAB;
+    setCalibrationMessage(
+      "Gesture Art Lab active. One hand draws particles, two hands warp the entire field.",
+    );
+  }
+
+  function returnFromGestureArtLab() {
+    appLog.info("Returning from Gesture Art Lab to calibration input test");
+    setGestureArtHands([]);
     setPhase(PHASES.CALIBRATION);
     phaseRef.current = PHASES.CALIBRATION;
     setCalibrationMessage("Back on Calibration Input Test.");
@@ -5364,6 +5404,9 @@ export default function App() {
           const primaryHand = stableHands[0] ?? null;
           processTrackingFrame(primaryHand, timestamp);
           processMinorityReportFrame(stableHands, timestamp);
+          if (phaseRef.current === PHASES.GESTURE_ART_LAB) {
+            setGestureArtHands(stableHands);
+          }
           if (phaseRef.current === PHASES.MINORITY_REPORT_LAB) {
             drawCameraOverlayHands(stableHands, {
               showSkeleton: labShowSkeletonRef.current,
@@ -5434,6 +5477,8 @@ export default function App() {
               ? "Body mode: keep head, shoulders, elbows, and wrists in view."
               : phase === PHASES.MINORITY_REPORT_LAB
               ? "In lab mode, index tips drive pointers; active pinch uses thumb-index midpoint."
+              : phase === PHASES.GESTURE_ART_LAB
+              ? "Index fingertip controls the primary art attractor in real time."
               : "Use your THUMB tip as the pointer."}
           </p>
           <p className="help-text">
@@ -5443,6 +5488,8 @@ export default function App() {
               ? "No pinch input needed; pose keypoints are highlighted directly."
               : phase === PHASES.MINORITY_REPORT_LAB
               ? "Pinch to grab/release. Swipes/push/circle and two-hand gestures trigger lab actions."
+              : phase === PHASES.GESTURE_ART_LAB
+              ? "One hand draws, two hands warp, circle clears, and push toggles freeze."
               : 'Pinch (thumb + index) to "click".'}
           </p>
 
@@ -5466,7 +5513,8 @@ export default function App() {
             phase === PHASES.FLIGHT ||
             phase === PHASES.BODY_POSE ||
             phase === PHASES.RUNNER ||
-            phase === PHASES.MINORITY_REPORT_LAB) && (
+            phase === PHASES.MINORITY_REPORT_LAB ||
+            phase === PHASES.GESTURE_ART_LAB) && (
             <>
               <p className="small-text">{calibrationMessage}</p>
               {phase === PHASES.CALIBRATION ? (
@@ -5500,6 +5548,11 @@ export default function App() {
                 <p className="small-text">
                   Multi-hand mode active: one-hand pinch grabs panels, two-hand pinch transforms
                   the stage, and gestures fire to the event log.
+                </p>
+              ) : phase === PHASES.GESTURE_ART_LAB ? (
+                <p className="small-text">
+                  Continuous mapping mode: index attractor, pinch thickness, openness palette,
+                  wrist hue, velocity emission, and two-hand warp controls.
                 </p>
               ) : (
                 <p className="small-text">
@@ -5558,6 +5611,14 @@ export default function App() {
                     >
                       Open Minority Report Lab
                     </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={startGestureArtLab}
+                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
+                    >
+                      Open Gesture Art Lab
+                    </button>
                     {hasSavedCalibration && !isCalibrating && !isArcCalibrating && (
                       <button className="secondary" onClick={startGameSession}>
                         Start Whack-a-Mole
@@ -5606,6 +5667,9 @@ export default function App() {
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Open Gesture Art Lab
+                    </button>
                   </>
                 ) : phase === PHASES.FLIGHT ? (
                   <>
@@ -5633,6 +5697,9 @@ export default function App() {
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Open Gesture Art Lab
+                    </button>
                   </>
                 ) : phase === PHASES.BODY_POSE ? (
                   <>
@@ -5648,6 +5715,25 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
+                    </button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Open Gesture Art Lab
+                    </button>
+                  </>
+                ) : phase === PHASES.GESTURE_ART_LAB ? (
+                  <>
+                    <button onClick={returnFromGestureArtLab}>Back to Input Test</button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Restart Gesture Art Lab
+                    </button>
+                    <button className="secondary" onClick={startMinorityReportLab}>
+                      Switch to Minority Report Lab
+                    </button>
+                    <button className="secondary" onClick={startRunnerSession}>
+                      Switch to Runner
+                    </button>
+                    <button className="secondary" onClick={startFlightSession}>
+                      Switch to Flight
                     </button>
                   </>
                 ) : phase === PHASES.RUNNER ? (
@@ -5668,6 +5754,9 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
+                    </button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Open Gesture Art Lab
                     </button>
                   </>
                 ) : (
@@ -5901,6 +5990,8 @@ export default function App() {
             onImportSamples={importLabSamples}
             onClearEventLog={clearLabEventLog}
           />
+        ) : phase === PHASES.GESTURE_ART_LAB ? (
+          <GestureArtLab hands={gestureArtHands} fps={fps} handDetected={handDetected} />
         ) : (
           <section className="card panel">
             <h2>Whack-a-Mole</h2>
@@ -5934,6 +6025,9 @@ export default function App() {
               </button>
               <button className="secondary" onClick={startMinorityReportLab}>
                 Open Minority Report Lab
+              </button>
+              <button className="secondary" onClick={startGestureArtLab}>
+                Open Gesture Art Lab
               </button>
               <button className="secondary" onClick={handleRecalibrate}>
                 Recalibrate
@@ -5970,7 +6064,7 @@ export default function App() {
         )}
       </div>
 
-      {phase !== PHASES.MINORITY_REPORT_LAB && phase !== PHASES.BODY_POSE && (
+      {phase !== PHASES.MINORITY_REPORT_LAB && phase !== PHASES.BODY_POSE && phase !== PHASES.GESTURE_ART_LAB && (
         <>
           <div
             className={`tracked-cursor ${handDetected ? "" : "paused"}`}
