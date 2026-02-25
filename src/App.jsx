@@ -115,6 +115,43 @@ const RUNNER_COIN_RESPAWN_MIN_Z = 860;
 const RUNNER_COIN_RESPAWN_MAX_Z = 1880;
 const RUNNER_HUD_UPDATE_MS = 90;
 const RUNNER_LANE_SMOOTH_ALPHA = 0.19;
+const RUNNER_COIN_COLOR_STEPS = [
+  {
+    maxDepthT: 0.2,
+    fill: "#9aa3af",
+    stroke: "#6d7784",
+    glowInner: "rgba(233, 238, 245, 0.88)",
+    glowOuter: "rgba(182, 192, 204, 0.07)",
+  },
+  {
+    maxDepthT: 0.4,
+    fill: "#73e48a",
+    stroke: "#2d9c54",
+    glowInner: "rgba(190, 255, 205, 0.9)",
+    glowOuter: "rgba(91, 197, 116, 0.08)",
+  },
+  {
+    maxDepthT: 0.6,
+    fill: "#6bb9ff",
+    stroke: "#2f74d6",
+    glowInner: "rgba(184, 222, 255, 0.9)",
+    glowOuter: "rgba(97, 154, 235, 0.08)",
+  },
+  {
+    maxDepthT: 0.8,
+    fill: "#b784ff",
+    stroke: "#7a44d1",
+    glowInner: "rgba(224, 193, 255, 0.9)",
+    glowOuter: "rgba(152, 87, 232, 0.08)",
+  },
+  {
+    maxDepthT: Number.POSITIVE_INFINITY,
+    fill: "#ffd95f",
+    stroke: "#f3a91f",
+    glowInner: "rgba(255, 250, 170, 0.95)",
+    glowOuter: "rgba(255, 204, 64, 0.08)",
+  },
+];
 
 function clampValue(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -140,6 +177,15 @@ function roundMetric(value, digits = 4) {
     return null;
   }
   return Number(value.toFixed(digits));
+}
+
+function getRunnerCoinPaletteByDepth(depthT) {
+  for (const step of RUNNER_COIN_COLOR_STEPS) {
+    if (depthT < step.maxDepthT) {
+      return step;
+    }
+  }
+  return RUNNER_COIN_COLOR_STEPS[RUNNER_COIN_COLOR_STEPS.length - 1];
 }
 
 function createEmptyExtent() {
@@ -2916,6 +2962,7 @@ export default function App() {
       if (depthT <= 0) {
         continue;
       }
+      const coinPalette = getRunnerCoinPaletteByDepth(depthT);
       const trackPoint = projectTrackPoint(coin.trackX, coin.trackY, depthT);
       const x = trackPoint.x;
       const y = trackPoint.y - coin.height * lerpValue(0.12, 0.66, depthT);
@@ -2924,14 +2971,14 @@ export default function App() {
         continue;
       }
       const glow = ctx.createRadialGradient(x, y, radius * 0.18, x, y, radius * 1.8);
-      glow.addColorStop(0, "rgba(255, 250, 170, 0.95)");
-      glow.addColorStop(1, "rgba(255, 204, 64, 0.06)");
+      glow.addColorStop(0, coinPalette.glowInner);
+      glow.addColorStop(1, coinPalette.glowOuter);
       ctx.fillStyle = glow;
       ctx.beginPath();
       ctx.arc(x, y, radius * 1.8, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#ffd95f";
-      ctx.strokeStyle = "#f3a91f";
+      ctx.fillStyle = coinPalette.fill;
+      ctx.strokeStyle = coinPalette.stroke;
       ctx.lineWidth = Math.max(1, radius * 0.18);
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, Math.PI * 2);
