@@ -1575,3 +1575,126 @@ button:disabled {
 .sgm-history-grid {
   margin-top: 10px;
 }
+
+.gesture-analytics-lab {
+  gap: 10px;
+  overflow: auto;
+}
+
+.analytics-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.metric-tile {
+  background: rgba(238, 245, 255, 0.82);
+  border: 1px solid #cdddff;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+}
+
+.metric-tile strong {
+  color: #355074;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.metric-tile span {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.chart-block {
+  background: rgba(245, 249, 255, 0.92);
+  border: 1px solid #cfdff3;
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.chart-block h3 {
+  font-size: 0.9rem;
+  margin: 0 0 6px;
+}
+
+.chart-block canvas {
+  border-radius: 8px;
+  display: block;
+  height: auto;
+  max-width: 100%;
+  width: 100%;
+}
+
+.histogram-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.histogram-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 150px 1fr 52px;
+}
+
+.histogram-row span {
+  font-size: 0.82rem;
+}
+
+.histogram-bar-wrap {
+  background: #deebfa;
+  border-radius: 99px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.histogram-bar {
+  background: linear-gradient(90deg, #4f84f0, #27c6ff);
+  border-radius: 99px;
+  height: 100%;
+}
+
+.session-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.session-controls label {
+  align-items: center;
+  display: flex;
+  font-size: 0.83rem;
+  gap: 6px;
+}
+
+.session-controls select,
+.session-controls input[type="range"] {
+  min-width: 200px;
+}
+
+.comparison-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.comparison-card {
+  background: rgba(236, 246, 255, 0.86);
+  border: 1px solid #cce0f6;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.86rem;
+  gap: 4px;
+  padding: 10px;
+}
+
+.comparison-card h4 {
+  font-size: 0.92rem;
+  margin: 0 0 6px;
+}
