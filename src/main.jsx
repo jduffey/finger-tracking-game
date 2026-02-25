@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
+import RouletteGame from "./RouletteGame";
 import { createScopedLogger, initializeLogging } from "./logger";
 import "./styles.css";
 
@@ -12,7 +12,7 @@ bootLog.info("React bootstrap started", {
 });
 
 ReactDOM.createRoot(document.getElementById("root")).render(
-  <App />,
+  <RouletteGame />,
 );
 
 bootLog.info("React render call completed");
