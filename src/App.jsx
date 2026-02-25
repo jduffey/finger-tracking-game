@@ -34,6 +34,7 @@ import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from ".
 import { createScopedLogger } from "./logger";
 import MinorityReportLab from "./components/MinorityReportLab";
 import BodyPoseLab from "./components/BodyPoseLab";
+import GestureAnalyticsLab from "./components/GestureAnalyticsLab";
 import { createGestureEngine } from "./gestures/gestureEngine";
 import {
   ALL_GESTURE_IDS,
@@ -49,6 +50,7 @@ const PHASES = {
   RUNNER: "RUNNER",
   BODY_POSE: "BODY_POSE",
   MINORITY_REPORT_LAB: "MINORITY_REPORT_LAB",
+  GESTURE_ANALYTICS_LAB: "GESTURE_ANALYTICS_LAB",
   GAME: "GAME",
 };
 
@@ -912,6 +914,8 @@ export default function App() {
     personalizationRef.current.getSampleCounts(),
   );
   const [labTrainingState, setLabTrainingState] = useState(createInitialLabTrainingState);
+  const [analyticsHands, setAnalyticsHands] = useState([]);
+  const [analyticsTimestamp, setAnalyticsTimestamp] = useState(0);
   const [poseModelReady, setPoseModelReady] = useState(false);
   const [poseModelError, setPoseModelError] = useState("");
   const [poseStatus, setPoseStatus] = useState(createEmptyPoseStatus);
@@ -1086,7 +1090,8 @@ export default function App() {
     phase === PHASES.FLIGHT ||
     phase === PHASES.RUNNER ||
     phase === PHASES.BODY_POSE ||
-    phase === PHASES.MINORITY_REPORT_LAB;
+    phase === PHASES.MINORITY_REPORT_LAB ||
+    phase === PHASES.GESTURE_ANALYTICS_LAB;
   const cameraPanelTitle =
     phase === PHASES.FLIGHT
       ? "Camera + Flight Controls"
@@ -1096,6 +1101,8 @@ export default function App() {
       ? "Camera + Body Pose Highlight"
       : phase === PHASES.MINORITY_REPORT_LAB
       ? "Camera + Minority Report Controls"
+      : phase === PHASES.GESTURE_ANALYTICS_LAB
+      ? "Camera + Gesture Analytics"
       : phase === PHASES.GAME
       ? "Camera + Tracking"
       : phase === PHASES.SANDBOX
@@ -3223,6 +3230,34 @@ export default function App() {
           }
         : previous,
     );
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
+  function startGestureAnalyticsLab() {
+    appLog.info("Gesture Analytics Lab start requested", {
+      currentPhase: phaseRef.current,
+      cameraReady,
+      modelReady,
+    });
+    stopGameSession();
+    resetArcCalibrationSession("start_gesture_analytics_lab");
+    setIsCalibrating(false);
+    isCalibratingRef.current = false;
+    calibrationSampleRef.current = null;
+    setCalibrationSampleFrames(0);
+    setAnalyticsHands([]);
+    setAnalyticsTimestamp(0);
+    setPhase(PHASES.GESTURE_ANALYTICS_LAB);
+    phaseRef.current = PHASES.GESTURE_ANALYTICS_LAB;
+    setCalibrationMessage(
+      "Gesture Analytics Lab active. Movement is measured for behavioral instrumentation, not direct control.",
+    );
+  }
+
+  function returnFromGestureAnalyticsLab() {
+    appLog.info("Returning from Gesture Analytics Lab to calibration input test");
     setPhase(PHASES.CALIBRATION);
     phaseRef.current = PHASES.CALIBRATION;
     setCalibrationMessage("Back on Calibration Input Test.");
@@ -5364,6 +5399,13 @@ export default function App() {
           const primaryHand = stableHands[0] ?? null;
           processTrackingFrame(primaryHand, timestamp);
           processMinorityReportFrame(stableHands, timestamp);
+          if (phaseRef.current === PHASES.GESTURE_ANALYTICS_LAB) {
+            setAnalyticsHands(stableHands);
+            setAnalyticsTimestamp(timestamp);
+            drawCameraOverlayHands(stableHands, {
+              showSkeleton: true,
+            });
+          }
           if (phaseRef.current === PHASES.MINORITY_REPORT_LAB) {
             drawCameraOverlayHands(stableHands, {
               showSkeleton: labShowSkeletonRef.current,
@@ -5606,6 +5648,9 @@ export default function App() {
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
+                    <button className="secondary" onClick={startGestureAnalyticsLab}>
+                      Open Gesture Analytics Lab
+                    </button>
                   </>
                 ) : phase === PHASES.FLIGHT ? (
                   <>
@@ -5633,6 +5678,9 @@ export default function App() {
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
+                    <button className="secondary" onClick={startGestureAnalyticsLab}>
+                      Open Gesture Analytics Lab
+                    </button>
                   </>
                 ) : phase === PHASES.BODY_POSE ? (
                   <>
@@ -5648,6 +5696,9 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
+                    </button>
+                    <button className="secondary" onClick={startGestureAnalyticsLab}>
+                      Open Gesture Analytics Lab
                     </button>
                   </>
                 ) : phase === PHASES.RUNNER ? (
@@ -5669,6 +5720,33 @@ export default function App() {
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
+                    <button className="secondary" onClick={startGestureAnalyticsLab}>
+                      Open Gesture Analytics Lab
+                    </button>
+                  </>
+                ) : phase === PHASES.GESTURE_ANALYTICS_LAB ? (
+                  <>
+                    <button onClick={returnFromGestureAnalyticsLab}>Back to Input Test</button>
+                    <button className="secondary" onClick={startGestureAnalyticsLab}>
+                      Reset Analytics Lab
+                    </button>
+                    <button className="secondary" onClick={startMinorityReportLab}>
+                      Open Minority Report Lab
+                    </button>
+                    <button className="secondary" onClick={startRunnerSession}>
+                      Switch to Runner
+                    </button>
+                    <button className="secondary" onClick={startFlightSession}>
+                      Switch to Flight
+                    </button>
+                    <button className="secondary" onClick={startBodyPoseLab}>
+                      Open Body Pose Lab
+                    </button>
+                    {hasSavedCalibration && (
+                      <button className="secondary" onClick={startGameSession}>
+                        Switch to Whack-a-Mole
+                      </button>
+                    )}
                   </>
                 ) : (
                   <>
@@ -5901,6 +5979,12 @@ export default function App() {
             onImportSamples={importLabSamples}
             onClearEventLog={clearLabEventLog}
           />
+        ) : phase === PHASES.GESTURE_ANALYTICS_LAB ? (
+          <GestureAnalyticsLab
+            liveHands={analyticsHands}
+            liveTimestamp={analyticsTimestamp}
+            fps={fps}
+          />
         ) : (
           <section className="card panel">
             <h2>Whack-a-Mole</h2>
@@ -5934,6 +6018,9 @@ export default function App() {
               </button>
               <button className="secondary" onClick={startMinorityReportLab}>
                 Open Minority Report Lab
+              </button>
+              <button className="secondary" onClick={startGestureAnalyticsLab}>
+                Open Gesture Analytics Lab
               </button>
               <button className="secondary" onClick={handleRecalibrate}>
                 Recalibrate
@@ -5970,7 +6057,9 @@ export default function App() {
         )}
       </div>
 
-      {phase !== PHASES.MINORITY_REPORT_LAB && phase !== PHASES.BODY_POSE && (
+      {phase !== PHASES.MINORITY_REPORT_LAB &&
+        phase !== PHASES.GESTURE_ANALYTICS_LAB &&
+        phase !== PHASES.BODY_POSE && (
         <>
           <div
             className={`tracked-cursor ${handDetected ? "" : "paused"}`}
