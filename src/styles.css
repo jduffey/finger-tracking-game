@@ -84,6 +84,11 @@ body {
   width: 100%;
 }
 
+.content-grid.calibration-layout {
+  align-items: stretch;
+  grid-template-columns: minmax(300px, 34vw) minmax(0, 1fr);
+}
+
 .card {
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid #d0d8e5;
@@ -96,6 +101,11 @@ body {
   min-height: 0;
   overflow: hidden;
   padding: 12px;
+}
+
+.camera-card {
+  min-width: 0;
+  overflow: auto;
 }
 
 .card h2 {
@@ -183,19 +193,41 @@ body {
 
 .input-test-panel h3 {
   font-size: 0.98rem;
-  margin: 0 0 6px;
+  margin: 8px 0 6px;
+}
+
+.calibration-panel {
+  align-items: center;
+  justify-content: center;
+}
+
+.calibration-panel > h2,
+.calibration-panel > .small-text {
+  text-align: center;
+  width: 100%;
+}
+
+.input-test-primary {
+  justify-content: center;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.input-test-stage {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: center;
+  min-height: 0;
+  width: 100%;
 }
 
 .input-test-grid {
   display: grid;
-  flex: 1 1 auto;
-  gap: 8px;
+  gap: var(--input-test-grid-gap, 8px);
   grid-template-columns: repeat(4, minmax(0, 1fr));
   grid-template-rows: repeat(3, minmax(0, 1fr));
-  height: 100%;
-  margin-top: 8px;
-  min-height: 0;
-  width: 100%;
+  margin-top: 0;
 }
 
 .input-test-cell {
@@ -206,7 +238,8 @@ body {
   color: #294156;
   display: flex;
   justify-content: center;
-  height: 100%;
+  aspect-ratio: 1 / 1;
+  height: auto;
   min-height: 0;
   padding: 8px;
   text-align: center;

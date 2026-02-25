@@ -52,6 +52,7 @@ const MIN_VISIBLE_SPAN = 1e-6;
 const INPUT_TEST_GRID_ROWS = 3;
 const INPUT_TEST_GRID_COLS = 4;
 const INPUT_TEST_CELL_COUNT = INPUT_TEST_GRID_ROWS * INPUT_TEST_GRID_COLS;
+const INPUT_TEST_CELL_GAP = 8;
 
 function clampValue(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -214,6 +215,33 @@ function isPointInsideClientRect(point, rect) {
   );
 }
 
+function computeFittedGridSize(containerWidth, containerHeight, columns, rows, gap) {
+  if (
+    !Number.isFinite(containerWidth) ||
+    !Number.isFinite(containerHeight) ||
+    containerWidth <= 0 ||
+    containerHeight <= 0
+  ) {
+    return { width: 0, height: 0, cellSize: 0 };
+  }
+
+  const horizontalGapTotal = Math.max(0, columns - 1) * gap;
+  const verticalGapTotal = Math.max(0, rows - 1) * gap;
+  const maxCellFromWidth = (containerWidth - horizontalGapTotal) / columns;
+  const maxCellFromHeight = (containerHeight - verticalGapTotal) / rows;
+  const fittedCellSize = Math.floor(Math.max(0, Math.min(maxCellFromWidth, maxCellFromHeight)));
+
+  if (!Number.isFinite(fittedCellSize) || fittedCellSize <= 0) {
+    return { width: 0, height: 0, cellSize: 0 };
+  }
+
+  return {
+    width: fittedCellSize * columns + horizontalGapTotal,
+    height: fittedCellSize * rows + verticalGapTotal,
+    cellSize: fittedCellSize,
+  };
+}
+
 export default function App() {
   const appLog = useMemo(() => createScopedLogger("app"), []);
 
@@ -256,6 +284,11 @@ export default function App() {
     "Press Start Calibration to begin.",
   );
   const [inputTestHoveredCell, setInputTestHoveredCell] = useState(-1);
+  const [inputTestGridSize, setInputTestGridSize] = useState({
+    width: 0,
+    height: 0,
+    cellSize: 0,
+  });
 
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(Math.ceil(GAME_DURATION_MS / 1000));
@@ -267,6 +300,7 @@ export default function App() {
   const overlayCanvasRef = useRef(null);
   const cameraWrapRef = useRef(null);
   const boardRef = useRef(null);
+  const inputTestStageRef = useRef(null);
   const inputTestCellRefs = useRef([]);
 
   const detectorRef = useRef(null);
@@ -793,6 +827,84 @@ export default function App() {
       observer.disconnect();
       window.removeEventListener("resize", updateBoardLayout);
       window.removeEventListener("scroll", updateBoardLayout, true);
+    };
+  }, [appLog, phase]);
+
+  useEffect(() => {
+    if (phase !== PHASES.CALIBRATION) {
+      setInputTestGridSize((previous) =>
+        previous.width === 0 && previous.height === 0 && previous.cellSize === 0
+          ? previous
+          : { width: 0, height: 0, cellSize: 0 },
+      );
+      return undefined;
+    }
+
+    const stage = inputTestStageRef.current;
+    if (!stage) {
+      appLog.debug("Skipping input-test grid sizing because stage ref is unavailable");
+      return undefined;
+    }
+
+    let rafId = 0;
+    const updateGridSize = () => {
+      const rect = stage.getBoundingClientRect();
+      const nextSize = computeFittedGridSize(
+        rect.width,
+        rect.height,
+        INPUT_TEST_GRID_COLS,
+        INPUT_TEST_GRID_ROWS,
+        INPUT_TEST_CELL_GAP,
+      );
+      setInputTestGridSize((previous) => {
+        if (
+          previous.width === nextSize.width &&
+          previous.height === nextSize.height &&
+          previous.cellSize === nextSize.cellSize
+        ) {
+          return previous;
+        }
+        appLog.debug("Updated calibration input-test grid fit size", {
+          stageWidth: roundMetric(rect.width, 1),
+          stageHeight: roundMetric(rect.height, 1),
+          nextSize,
+        });
+        return nextSize;
+      });
+    };
+
+    const scheduleGridSizeUpdate = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        updateGridSize();
+      });
+    };
+
+    scheduleGridSizeUpdate();
+
+    if (!window.ResizeObserver) {
+      appLog.warn("ResizeObserver unavailable for input-test stage sizing; using window resize fallback");
+      window.addEventListener("resize", scheduleGridSizeUpdate);
+      return () => {
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+        }
+        window.removeEventListener("resize", scheduleGridSizeUpdate);
+      };
+    }
+
+    const observer = new ResizeObserver(scheduleGridSizeUpdate);
+    observer.observe(stage);
+    window.addEventListener("resize", scheduleGridSizeUpdate);
+    return () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+      observer.disconnect();
+      window.removeEventListener("resize", scheduleGridSizeUpdate);
     };
   }, [appLog, phase]);
 
@@ -1916,9 +2028,9 @@ export default function App() {
         </div>
       </header>
 
-      <div className="content-grid">
+      <div className={`content-grid ${phase === PHASES.CALIBRATION ? "calibration-layout" : ""}`}>
         <section className="card camera-card">
-          <h2>Camera + Tracking</h2>
+          <h2>{phase === PHASES.CALIBRATION ? "Camera + Calibration Controls" : "Camera + Tracking"}</h2>
           <div className="camera-wrap" ref={cameraWrapRef}>
             <video ref={videoRef} className="camera-video" playsInline muted autoPlay />
             <canvas ref={overlayCanvasRef} className="camera-overlay" />
@@ -1938,6 +2050,36 @@ export default function App() {
 
           {cameraError && <p className="error-text">{cameraError}</p>}
           {modelError && <p className="error-text">{modelError}</p>}
+
+          {phase === PHASES.CALIBRATION && (
+            <>
+              <p className="small-text">{calibrationMessage}</p>
+              <p className="small-text">
+                Captured points: {calibrationPairsCount}/{calibrationTargets.length}
+                {isCalibrating
+                  ? ` | Sampling: ${calibrationSampleFrames}/${CALIBRATION_SAMPLE_FRAMES}`
+                  : ""}
+              </p>
+
+              <div className="button-row">
+                <button onClick={beginCalibration} disabled={!cameraReady || !modelReady}>
+                  {isCalibrating ? "Restart Calibration" : "Start Calibration"}
+                </button>
+                {hasSavedCalibration && !isCalibrating && (
+                  <button className="secondary" onClick={startGameSession}>
+                    Use Saved Calibration
+                  </button>
+                )}
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() => resetCalibrationInputTests("manual_button")}
+                >
+                  Reset Input Test
+                </button>
+              </div>
+            </>
+          )}
 
           <label className="debug-toggle">
             <input
@@ -1961,59 +2103,45 @@ export default function App() {
 
         {phase === PHASES.CALIBRATION ? (
           <section className="card panel calibration-panel">
-            <h2>Calibration</h2>
-            <p>{calibrationMessage}</p>
+            <h2>Calibration Input Test</h2>
             <p className="small-text">
-              Captured points: {calibrationPairsCount}/{calibrationTargets.length}
+              Primary target area: hover any box, then pinch while hovering to verify input behavior.
             </p>
-            {isCalibrating && (
-              <p className="small-text">
-                Sampling frames: {calibrationSampleFrames}/{CALIBRATION_SAMPLE_FRAMES}
-              </p>
-            )}
 
-            <div className="button-row">
-              <button onClick={beginCalibration} disabled={!cameraReady || !modelReady}>
-                {isCalibrating ? "Restart Calibration" : "Start Calibration"}
-              </button>
-              {hasSavedCalibration && !isCalibrating && (
-                <button className="secondary" onClick={startGameSession}>
-                  Use Saved Calibration
-                </button>
-              )}
-              <button
-                className="secondary"
-                type="button"
-                onClick={() => resetCalibrationInputTests("manual_button")}
-              >
-                Reset Input Test
-              </button>
-            </div>
+            <div className="input-test-panel input-test-primary">
+              <div className="input-test-stage" ref={inputTestStageRef}>
+                <div
+                  className="input-test-grid"
+                  style={{
+                    width: `${inputTestGridSize.width}px`,
+                    height: `${inputTestGridSize.height}px`,
+                    "--input-test-grid-gap": `${INPUT_TEST_CELL_GAP}px`,
+                  }}
+                >
+                  {Array.from({ length: INPUT_TEST_CELL_COUNT }, (_, cellIndex) => {
+                    const isHovered = inputTestHoveredCell === cellIndex;
+                    const isPinching = inputTestPinchingCell === cellIndex;
+                    return (
+                      <div
+                        key={cellIndex}
+                        ref={(element) => {
+                          inputTestCellRefs.current[cellIndex] = element;
+                        }}
+                        className={`input-test-cell ${
+                          isPinching ? "pinching" : isHovered ? "hovered" : ""
+                        }`}
+                      >
+                        <span>{cellIndex + 1}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
 
-            <div className="input-test-panel">
               <h3>Input Test</h3>
               <p className="small-text">
                 Move over any of the 12 cells to see hover color. Keep hovering and pinch to switch to pinch color.
               </p>
-              <div className="input-test-grid">
-                {Array.from({ length: INPUT_TEST_CELL_COUNT }, (_, cellIndex) => {
-                  const isHovered = inputTestHoveredCell === cellIndex;
-                  const isPinching = inputTestPinchingCell === cellIndex;
-                  return (
-                    <div
-                      key={cellIndex}
-                      ref={(element) => {
-                        inputTestCellRefs.current[cellIndex] = element;
-                      }}
-                      className={`input-test-cell ${
-                        isPinching ? "pinching" : isHovered ? "hovered" : ""
-                      }`}
-                    >
-                      <span>{cellIndex + 1}</span>
-                    </div>
-                  );
-                })}
-              </div>
               <p className="small-text">
                 Hovered cell: {inputTestHoveredCell >= 0 ? inputTestHoveredCell + 1 : "none"} | Pinch:{" "}
                 {pinchActive ? "active" : "idle"}
