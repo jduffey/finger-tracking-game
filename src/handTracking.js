@@ -83,7 +83,7 @@ export function getLastDetectionMeta() {
   return { ...lastDetectionMeta };
 }
 
-export async function detectPrimaryHand(detector, videoElement) {
+export async function detectHands(detector, videoElement) {
   trackingLog.debug("Running hand detection frame", {
     hasDetector: Boolean(detector),
     hasVideoElement: Boolean(videoElement),
@@ -96,7 +96,7 @@ export async function detectPrimaryHand(detector, videoElement) {
       reason: "detector_or_video_not_ready",
     };
     trackingLog.debug("Skipping hand detection due to missing detector/video readiness");
-    return null;
+    return [];
   }
 
   let hands = null;
@@ -116,7 +116,7 @@ export async function detectPrimaryHand(detector, videoElement) {
       error,
       activeBackend: tf.getBackend(),
     });
-    return null;
+    return [];
   }
   trackingLog.debug("Received hand detection results", {
     handCount: hands?.length ?? 0,
@@ -130,69 +130,44 @@ export async function detectPrimaryHand(detector, videoElement) {
       reason: "no_hands",
     };
     trackingLog.debug("No hands detected on frame");
-    return null;
+    return [];
   }
 
-  // Prefer the most confident hand, but still iterate candidates so a bad first
-  // hand does not suppress valid coordinates from another detection.
+  // Prefer confident hands first while still iterating all candidates so a bad
+  // first hand does not suppress valid coordinates from another detection.
   const sortedHands = [...hands].sort((a, b) => (b?.score ?? 0) - (a?.score ?? 0));
   const width = Math.max(1, videoElement.videoWidth || videoElement.clientWidth);
   const height = Math.max(1, videoElement.videoHeight || videoElement.clientHeight);
+  const extractedHands = [];
 
   for (const candidate of sortedHands) {
-    const keypoints = candidate?.keypoints ?? [];
-    const fingerTips = extractFingerTips(keypoints, width, height);
-    const indexTip = fingerTips.index;
-    const thumbTip = fingerTips.thumb;
-
-    if (!indexTip || !thumbTip) {
-      continue;
+    const extracted = extractHandCandidate(candidate, width, height);
+    if (extracted) {
+      extractedHands.push(extracted);
     }
+  }
 
-    const dx = thumbTip.u - indexTip.u;
-    const dy = thumbTip.v - indexTip.v;
-    const pinchDistance = Math.hypot(dx, dy);
-
-    if (!Number.isFinite(pinchDistance)) {
-      continue;
-    }
-
-    const landmarks = [];
-    for (const point of keypoints) {
-      const normalized = toMirroredNormalized(point, width, height);
-      if (normalized) {
-        landmarks.push(normalized);
-      }
-    }
-
+  if (extractedHands.length > 0) {
     invalidValueStreak = 0;
     lastDetectionMeta = {
-      handsDetected: hands.length,
+      handsDetected: extractedHands.length,
       invalid: false,
       reason: "ok",
     };
-    const score = Number.isFinite(candidate.score) ? candidate.score : 0;
-
-    trackingLog.debug("Primary hand extracted", {
+    trackingLog.debug("Hands extracted", {
       runtime: activeRuntime,
-      score,
-      pinchDistance,
-      indexTip,
-      thumbTip,
-      fingerTipsDetected: summarizeFingerTips(fingerTips),
+      handCount: extractedHands.length,
       videoWidth: width,
       videoHeight: height,
-      landmarksCount: landmarks.length,
+      hands: extractedHands.map((hand, index) => ({
+        index,
+        score: hand.score,
+        handedness: hand.handedness,
+        pinchDistance: hand.pinchDistance,
+        landmarksCount: hand.landmarks.length,
+      })),
     });
-
-    return {
-      score,
-      indexTip,
-      thumbTip,
-      fingerTips,
-      pinchDistance,
-      landmarks,
-    };
+    return extractedHands;
   }
 
   invalidValueStreak += 1;
@@ -213,7 +188,12 @@ export async function detectPrimaryHand(detector, videoElement) {
       thumbTipSummary: summarizePoint(firstKeypoints[4]),
     });
   }
-  return null;
+  return [];
+}
+
+export async function detectPrimaryHand(detector, videoElement) {
+  const hands = await detectHands(detector, videoElement);
+  return hands[0] ?? null;
 }
 
 function toMirroredNormalized(point, width, height) {
@@ -253,6 +233,70 @@ function extractFingerTips(keypoints, width, height) {
   }
 
   return tips;
+}
+
+function extractHandCandidate(candidate, width, height) {
+  const keypoints = candidate?.keypoints ?? [];
+  const fingerTips = extractFingerTips(keypoints, width, height);
+  const indexTip = fingerTips.index;
+  const thumbTip = fingerTips.thumb;
+
+  if (!indexTip || !thumbTip) {
+    return null;
+  }
+
+  const dx = thumbTip.u - indexTip.u;
+  const dy = thumbTip.v - indexTip.v;
+  const pinchDistance = Math.hypot(dx, dy);
+  if (!Number.isFinite(pinchDistance)) {
+    return null;
+  }
+
+  // Preserve original keypoint indices so downstream index-based feature extraction
+  // keeps landmark semantics even when some points are invalid this frame.
+  const landmarks = keypoints.map((point) => toMirroredNormalized(point, width, height));
+
+  const score = Number.isFinite(candidate?.score) ? candidate.score : 0;
+  return {
+    score,
+    indexTip,
+    thumbTip,
+    fingerTips,
+    pinchDistance,
+    landmarks,
+    handedness: normalizeHandedness(candidate),
+  };
+}
+
+function normalizeHandedness(candidate) {
+  const labels = [];
+
+  if (typeof candidate?.handedness === "string") {
+    labels.push(candidate.handedness);
+  }
+
+  if (Array.isArray(candidate?.handednesses)) {
+    for (const handednessEntry of candidate.handednesses) {
+      if (typeof handednessEntry === "string") {
+        labels.push(handednessEntry);
+      } else if (typeof handednessEntry?.label === "string") {
+        labels.push(handednessEntry.label);
+      } else if (typeof handednessEntry?.categoryName === "string") {
+        labels.push(handednessEntry.categoryName);
+      }
+    }
+  }
+
+  for (const label of labels) {
+    const lowered = String(label).toLowerCase();
+    if (lowered.includes("left")) {
+      return "Left";
+    }
+    if (lowered.includes("right")) {
+      return "Right";
+    }
+  }
+  return null;
 }
 
 function summarizeFingerTips(fingerTips) {
