@@ -32,6 +32,7 @@ const PHASES = {
   CALIBRATION: "CALIBRATION",
   SANDBOX: "SANDBOX",
   FLIGHT: "FLIGHT",
+  RUNNER: "RUNNER",
   GAME: "GAME",
 };
 
@@ -96,6 +97,19 @@ const FLIGHT_WORLD_HALF_WIDTH = 520;
 const FLIGHT_WORLD_HALF_HEIGHT = 320;
 const FLIGHT_HUD_UPDATE_MS = 90;
 const FLIGHT_ROLL_WEIGHTS = [-2, -1, 0, 1, 2];
+const RUNNER_LANES = [-1, 0, 1];
+const RUNNER_SPEED = 360;
+const RUNNER_MAX_Z = 1480;
+const RUNNER_NEAR_Z = 24;
+const RUNNER_GRAVITY = 1740;
+const RUNNER_JUMP_VELOCITY = 790;
+const RUNNER_MAX_JUMP_HEIGHT = 190;
+const RUNNER_COIN_COUNT = 20;
+const RUNNER_COIN_RESPAWN_MIN_Z = 860;
+const RUNNER_COIN_RESPAWN_MAX_Z = 1880;
+const RUNNER_HUD_UPDATE_MS = 90;
+const RUNNER_LANE_SMOOTH_ALPHA = 0.19;
+const RUNNER_POINTER_LANE_DEBOUNCE = 0.06;
 
 function clampValue(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -417,6 +431,33 @@ function createFlightRings() {
   return rings;
 }
 
+function pickRandomRunnerLane() {
+  return RUNNER_LANES[Math.floor(Math.random() * RUNNER_LANES.length)] ?? 0;
+}
+
+function createRunnerCoin(zMin = RUNNER_COIN_RESPAWN_MIN_Z, zMax = RUNNER_COIN_RESPAWN_MAX_Z) {
+  const airborne = Math.random() < 0.4;
+  return {
+    id: Math.random().toString(36).slice(2),
+    lane: pickRandomRunnerLane(),
+    z: randomBetween(zMin, zMax),
+    height: airborne ? randomBetween(74, 138) : randomBetween(0, 28),
+    value: 1,
+  };
+}
+
+function createRunnerCoins() {
+  const coins = [];
+  for (let index = 0; index < RUNNER_COIN_COUNT; index += 1) {
+    const baseZ =
+      RUNNER_COIN_RESPAWN_MIN_Z +
+      (index / Math.max(1, RUNNER_COIN_COUNT - 1)) *
+        (RUNNER_COIN_RESPAWN_MAX_Z - RUNNER_COIN_RESPAWN_MIN_Z);
+    coins.push(createRunnerCoin(baseZ, baseZ + randomBetween(90, 240)));
+  }
+  return coins;
+}
+
 function createSandboxBlocks(stageWidth, stageHeight) {
   const safeWidth = Math.max(320, stageWidth);
   const safeHeight = Math.max(240, stageHeight);
@@ -559,6 +600,13 @@ export default function App() {
     baselineSamples: 0,
     distance: 0,
   });
+  const [runnerHud, setRunnerHud] = useState({
+    coins: 0,
+    distance: 0,
+    lane: 0,
+    jumping: false,
+    jumpHeight: 0,
+  });
 
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(Math.ceil(GAME_DURATION_MS / 1000));
@@ -574,6 +622,8 @@ export default function App() {
   const sandboxStageRef = useRef(null);
   const flightStageRef = useRef(null);
   const flightCanvasRef = useRef(null);
+  const runnerStageRef = useRef(null);
+  const runnerCanvasRef = useRef(null);
   const inputTestCellRefs = useRef([]);
 
   const detectorRef = useRef(null);
@@ -645,6 +695,18 @@ export default function App() {
   const flightBaselineRef = useRef(createEmptyFlightBaseline());
   const flightBaselineSamplesRef = useRef([]);
   const flightHudLastUpdateRef = useRef(0);
+  const runnerStateRef = useRef({
+    initialized: false,
+    lastTimestamp: 0,
+    laneTarget: 0,
+    laneFloat: 0,
+    runnerY: 0,
+    runnerVy: 0,
+    distance: 0,
+    coinsCollected: 0,
+    coins: [],
+  });
+  const runnerHudLastUpdateRef = useRef(0);
 
   const holesRef = useRef(holes);
   const hitZonesRef = useRef([]);
@@ -661,10 +723,15 @@ export default function App() {
     [calibrationTargets, calibrationTargetIndex],
   );
   const isCalibrationLayoutPhase =
-    phase === PHASES.CALIBRATION || phase === PHASES.SANDBOX || phase === PHASES.FLIGHT;
+    phase === PHASES.CALIBRATION ||
+    phase === PHASES.SANDBOX ||
+    phase === PHASES.FLIGHT ||
+    phase === PHASES.RUNNER;
   const cameraPanelTitle =
     phase === PHASES.FLIGHT
       ? "Camera + Flight Controls"
+      : phase === PHASES.RUNNER
+      ? "Camera + Runner Controls"
       : phase === PHASES.GAME
       ? "Camera + Tracking"
       : phase === PHASES.SANDBOX
@@ -732,6 +799,27 @@ export default function App() {
         baselineReady: false,
         baselineSamples: 0,
         distance: 0,
+      });
+    }
+    if (phase !== PHASES.RUNNER) {
+      runnerStateRef.current = {
+        initialized: false,
+        lastTimestamp: 0,
+        laneTarget: 0,
+        laneFloat: 0,
+        runnerY: 0,
+        runnerVy: 0,
+        distance: 0,
+        coinsCollected: 0,
+        coins: [],
+      };
+      runnerHudLastUpdateRef.current = 0;
+      setRunnerHud({
+        coins: 0,
+        distance: 0,
+        lane: 0,
+        jumping: false,
+        jumpHeight: 0,
       });
     }
   }, [phase]);
@@ -805,6 +893,13 @@ export default function App() {
       flightHud,
     });
   }, [appLog, phase, flightHud]);
+
+  useEffect(() => {
+    appLog.debug("Runner HUD state changed", {
+      phase,
+      runnerHud,
+    });
+  }, [appLog, phase, runnerHud]);
 
   useEffect(() => {
     appLog.debug("Calibration input test state changed", {
@@ -1396,6 +1491,66 @@ export default function App() {
         appLog.info("Synced flight canvas dimensions", { width, height });
       }
       resetFlightSession("flight_stage_resize_or_open");
+    };
+    const scheduleSync = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        syncCanvasSizeAndReset();
+      });
+    };
+
+    scheduleSync();
+
+    if (!window.ResizeObserver) {
+      window.addEventListener("resize", scheduleSync);
+      return () => {
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+        }
+        window.removeEventListener("resize", scheduleSync);
+      };
+    }
+
+    const observer = new ResizeObserver(scheduleSync);
+    observer.observe(stage);
+    window.addEventListener("resize", scheduleSync);
+    return () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+      observer.disconnect();
+      window.removeEventListener("resize", scheduleSync);
+    };
+  }, [appLog, phase]);
+
+  useEffect(() => {
+    if (phase !== PHASES.RUNNER) {
+      return undefined;
+    }
+    const stage = runnerStageRef.current;
+    const canvas = runnerCanvasRef.current;
+    if (!stage || !canvas) {
+      appLog.debug("Skipping runner stage observer because stage/canvas ref is unavailable", {
+        hasStage: Boolean(stage),
+        hasCanvas: Boolean(canvas),
+      });
+      return undefined;
+    }
+
+    let rafId = 0;
+    const syncCanvasSizeAndReset = () => {
+      const rect = stage.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width));
+      const height = Math.max(1, Math.round(rect.height));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+        appLog.info("Synced runner canvas dimensions", { width, height });
+      }
+      resetRunnerSession("runner_stage_resize_or_open");
     };
     const scheduleSync = () => {
       if (rafId) {
@@ -2439,6 +2594,339 @@ export default function App() {
     publishFlightHud(timestamp);
   }
 
+  function publishRunnerHud(timestamp) {
+    if (timestamp - runnerHudLastUpdateRef.current < RUNNER_HUD_UPDATE_MS) {
+      return;
+    }
+    runnerHudLastUpdateRef.current = timestamp;
+    const state = runnerStateRef.current;
+    const nextHud = {
+      coins: state.coinsCollected,
+      distance: roundMetric(state.distance, 1) ?? 0,
+      lane: Math.round(state.laneTarget),
+      jumping: state.runnerY > 0.1,
+      jumpHeight: roundMetric(state.runnerY, 1) ?? 0,
+    };
+    setRunnerHud((previous) => {
+      if (
+        previous.coins === nextHud.coins &&
+        previous.distance === nextHud.distance &&
+        previous.lane === nextHud.lane &&
+        previous.jumping === nextHud.jumping &&
+        previous.jumpHeight === nextHud.jumpHeight
+      ) {
+        return previous;
+      }
+      return nextHud;
+    });
+  }
+
+  function resetRunnerSession(reason = "manual_reset") {
+    runnerStateRef.current = {
+      initialized: true,
+      lastTimestamp: 0,
+      laneTarget: 0,
+      laneFloat: 0,
+      runnerY: 0,
+      runnerVy: 0,
+      distance: 0,
+      coinsCollected: 0,
+      coins: createRunnerCoins(),
+    };
+    runnerHudLastUpdateRef.current = 0;
+    setRunnerHud({
+      coins: 0,
+      distance: 0,
+      lane: 0,
+      jumping: false,
+      jumpHeight: 0,
+    });
+    setCalibrationMessage(
+      "Runner mode active. Move hand left/center/right to change lanes. Pinch to jump.",
+    );
+    appLog.info("Runner session reset", {
+      reason,
+      coinCount: runnerStateRef.current.coins.length,
+    });
+  }
+
+  function startRunnerSession() {
+    appLog.info("Runner session start requested", {
+      hasTransform: Boolean(transformRef.current),
+      currentPhase: phaseRef.current,
+      cameraReady,
+      modelReady,
+    });
+    stopGameSession();
+    resetArcCalibrationSession("start_runner");
+    setIsCalibrating(false);
+    isCalibratingRef.current = false;
+    calibrationSampleRef.current = null;
+    setCalibrationSampleFrames(0);
+    setPhase(PHASES.RUNNER);
+    phaseRef.current = PHASES.RUNNER;
+    setCalibrationMessage(
+      "Runner mode active. Move hand left/center/right to change lanes. Pinch to jump.",
+    );
+    requestAnimationFrame(() => resetRunnerSession("start_runner"));
+  }
+
+  function returnFromRunnerSession() {
+    appLog.info("Returning from runner mode to calibration input test");
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
+  function setRunnerLaneFromPointer(pointerPoint, hasHand, frameId) {
+    if (phaseRef.current !== PHASES.RUNNER) {
+      return;
+    }
+    if (!hasHand || !pointerPoint) {
+      return;
+    }
+    const stage = runnerStageRef.current;
+    if (!stage) {
+      return;
+    }
+    const rect = stage.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      return;
+    }
+    const localX = clampValue(pointerPoint.x - rect.left, 0, rect.width);
+    const normalizedX = localX / rect.width;
+    let lane = 0;
+    if (normalizedX < 1 / 3 - RUNNER_POINTER_LANE_DEBOUNCE) {
+      lane = -1;
+    } else if (normalizedX > 2 / 3 + RUNNER_POINTER_LANE_DEBOUNCE) {
+      lane = 1;
+    } else {
+      lane = 0;
+    }
+
+    const state = runnerStateRef.current;
+    if (state.laneTarget !== lane) {
+      state.laneTarget = lane;
+      appLog.info("Runner lane target changed from pointer", {
+        frameId,
+        lane,
+        normalizedX: roundMetric(normalizedX, 4),
+      });
+    }
+  }
+
+  function triggerRunnerJump(timestamp, source = "pinch") {
+    if (phaseRef.current !== PHASES.RUNNER) {
+      return;
+    }
+    const state = runnerStateRef.current;
+    if (!state.initialized) {
+      return;
+    }
+    if (state.runnerY > 2 || state.runnerVy > 0) {
+      appLog.debug("Runner jump ignored because player is already airborne", {
+        source,
+        runnerY: state.runnerY,
+        runnerVy: state.runnerVy,
+      });
+      return;
+    }
+    state.runnerVy = RUNNER_JUMP_VELOCITY;
+    appLog.info("Runner jump triggered", {
+      timestamp,
+      source,
+      lane: state.laneTarget,
+      jumpVelocity: RUNNER_JUMP_VELOCITY,
+    });
+  }
+
+  function drawRunnerScene() {
+    const stage = runnerStageRef.current;
+    const canvas = runnerCanvasRef.current;
+    if (!stage || !canvas) {
+      return;
+    }
+    const rect = stage.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width));
+    const height = Math.max(1, Math.round(rect.height));
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+
+    const state = runnerStateRef.current;
+    const horizonY = height * 0.28;
+    const groundY = height * 0.94;
+    const projectLaneX = (lane, depthT) => {
+      const spacing = lerpValue(width * 0.11, width * 0.29, depthT);
+      return width * 0.5 + lane * spacing;
+    };
+    const depthFromZ = (z) => clampValue(1 - z / RUNNER_MAX_Z, 0, 1);
+
+    ctx.clearRect(0, 0, width, height);
+    const sky = ctx.createLinearGradient(0, 0, 0, horizonY);
+    sky.addColorStop(0, "#1d2738");
+    sky.addColorStop(1, "#2f4468");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, width, horizonY);
+
+    const city = ctx.createLinearGradient(0, horizonY * 0.45, 0, horizonY + 40);
+    city.addColorStop(0, "rgba(23, 33, 52, 0.18)");
+    city.addColorStop(1, "rgba(14, 21, 34, 0.85)");
+    ctx.fillStyle = city;
+    ctx.fillRect(0, horizonY * 0.45, width, horizonY);
+
+    const groundGradient = ctx.createLinearGradient(0, horizonY, 0, height);
+    groundGradient.addColorStop(0, "#2a3950");
+    groundGradient.addColorStop(1, "#172232");
+    ctx.fillStyle = groundGradient;
+    ctx.fillRect(0, horizonY, width, height - horizonY);
+
+    const leftNear = projectLaneX(-1.75, 1);
+    const rightNear = projectLaneX(1.75, 1);
+    const leftFar = projectLaneX(-1.75, 0);
+    const rightFar = projectLaneX(1.75, 0);
+    ctx.fillStyle = "rgba(80, 120, 170, 0.15)";
+    ctx.beginPath();
+    ctx.moveTo(leftFar, horizonY);
+    ctx.lineTo(rightFar, horizonY);
+    ctx.lineTo(rightNear, groundY);
+    ctx.lineTo(leftNear, groundY);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(177, 212, 255, 0.28)";
+    ctx.lineWidth = 2;
+    for (const lane of RUNNER_LANES) {
+      const xNear = projectLaneX(lane, 1);
+      const xFar = projectLaneX(lane, 0);
+      ctx.beginPath();
+      ctx.moveTo(xFar, horizonY);
+      ctx.lineTo(xNear, groundY);
+      ctx.stroke();
+    }
+
+    for (const coin of state.coins) {
+      const depthT = depthFromZ(coin.z);
+      if (depthT <= 0) {
+        continue;
+      }
+      const x = projectLaneX(coin.lane, depthT);
+      const yBase = lerpValue(horizonY, groundY, depthT);
+      const y = yBase - coin.height * lerpValue(0.15, 0.72, depthT);
+      const radius = lerpValue(4, 18, depthT);
+      if (x < -60 || x > width + 60 || y < -60 || y > height + 60) {
+        continue;
+      }
+      const glow = ctx.createRadialGradient(x, y, radius * 0.18, x, y, radius * 1.8);
+      glow.addColorStop(0, "rgba(255, 250, 170, 0.95)");
+      glow.addColorStop(1, "rgba(255, 204, 64, 0.06)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffd95f";
+      ctx.strokeStyle = "#f3a91f";
+      ctx.lineWidth = Math.max(1, radius * 0.18);
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    const runnerX = projectLaneX(state.laneFloat, 1);
+    const runnerY = groundY - state.runnerY * 0.66;
+    const bodyHeight = 74;
+    const bodyWidth = 38;
+    ctx.fillStyle = "#6ee7ff";
+    ctx.fillRect(runnerX - bodyWidth * 0.14, runnerY - bodyHeight * 0.96, bodyWidth * 0.28, bodyHeight * 0.44);
+    ctx.fillStyle = "#ffefe0";
+    ctx.beginPath();
+    ctx.arc(runnerX, runnerY - bodyHeight * 0.92, bodyWidth * 0.24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#2cc4ff";
+    ctx.fillRect(runnerX - bodyWidth * 0.38, runnerY - bodyHeight * 0.74, bodyWidth * 0.76, bodyHeight * 0.56);
+    ctx.fillStyle = "#122741";
+    ctx.fillRect(runnerX - bodyWidth * 0.34, runnerY - bodyHeight * 0.2, bodyWidth * 0.24, bodyHeight * 0.35);
+    ctx.fillRect(runnerX + bodyWidth * 0.1, runnerY - bodyHeight * 0.2, bodyWidth * 0.24, bodyHeight * 0.35);
+    ctx.strokeStyle = "rgba(161, 232, 255, 0.42)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(runnerX - 8, runnerY + 6);
+    ctx.lineTo(runnerX + 8, runnerY + 6);
+    ctx.stroke();
+  }
+
+  function updateRunnerSimulation(timestamp) {
+    if (phaseRef.current !== PHASES.RUNNER) {
+      return;
+    }
+    const state = runnerStateRef.current;
+    if (!state.initialized) {
+      resetRunnerSession("auto_init");
+      return;
+    }
+
+    const dtSeconds = clampValue(
+      (timestamp - (state.lastTimestamp || timestamp)) / 1000,
+      0.001,
+      SANDBOX_MAX_STEP_SECONDS,
+    );
+    state.lastTimestamp = timestamp;
+    state.distance += RUNNER_SPEED * dtSeconds;
+
+    state.laneFloat = lerpValue(state.laneFloat, state.laneTarget, RUNNER_LANE_SMOOTH_ALPHA);
+    if (Math.abs(state.laneFloat - state.laneTarget) < 0.001) {
+      state.laneFloat = state.laneTarget;
+    }
+
+    state.runnerVy -= RUNNER_GRAVITY * dtSeconds;
+    state.runnerY += state.runnerVy * dtSeconds;
+    if (state.runnerY < 0) {
+      state.runnerY = 0;
+      if (state.runnerVy < 0) {
+        state.runnerVy = 0;
+      }
+    }
+    if (state.runnerY > RUNNER_MAX_JUMP_HEIGHT) {
+      state.runnerY = RUNNER_MAX_JUMP_HEIGHT;
+      state.runnerVy = Math.min(0, state.runnerVy);
+    }
+
+    for (const coin of state.coins) {
+      coin.z -= RUNNER_SPEED * dtSeconds;
+      const inCollectionZone = coin.z < 90 && coin.z > -40;
+      if (inCollectionZone) {
+        const laneMatch = Math.abs(coin.lane - state.laneFloat) < 0.44;
+        const heightMatch = Math.abs(coin.height - state.runnerY) < 56;
+        if (laneMatch && heightMatch) {
+          state.coinsCollected += coin.value ?? 1;
+          appLog.info("Runner coin collected", {
+            coinsCollected: state.coinsCollected,
+            lane: state.laneTarget,
+            jumpHeight: roundMetric(state.runnerY, 2),
+          });
+          Object.assign(coin, createRunnerCoin());
+        }
+      }
+
+      if (coin.z < RUNNER_NEAR_Z - 80) {
+        Object.assign(
+          coin,
+          createRunnerCoin(RUNNER_COIN_RESPAWN_MIN_Z, RUNNER_COIN_RESPAWN_MAX_Z),
+        );
+      }
+    }
+
+    drawRunnerScene();
+    publishRunnerHud(timestamp);
+  }
+
   function getHoveredInputTestCellIndex(pointerPoint) {
     if (!pointerPoint) {
       return -1;
@@ -2622,13 +3110,13 @@ export default function App() {
     transformRef.current = solved;
     saveCalibration(solved);
     setHasSavedCalibration(true);
-    setCalibrationMessage("Lazy arc calibration complete. Launching flight mode.");
+    setCalibrationMessage("Lazy arc calibration complete. Launching runner mode.");
     appLog.info("Lazy-arc calibration solved successfully", {
       reason,
       sampleCount: captured.length,
       model: solved,
     });
-    startFlightSession();
+    startRunnerSession();
   }
 
   function finalizeCalibrationSample() {
@@ -2708,11 +3196,11 @@ export default function App() {
       setHasSavedCalibration(true);
       setIsCalibrating(false);
       isCalibratingRef.current = false;
-      setCalibrationMessage("Calibration complete. Launching flight mode.");
+      setCalibrationMessage("Calibration complete. Launching runner mode.");
       appLog.info("Calibration solved successfully", {
         transform: solved,
       });
-      startFlightSession();
+      startRunnerSession();
       return;
     }
 
@@ -2773,6 +3261,11 @@ export default function App() {
         targetIndex: calibrationIndexRef.current,
         sampleFrames: CALIBRATION_SAMPLE_FRAMES,
       });
+      return;
+    }
+
+    if (phaseRef.current === PHASES.RUNNER) {
+      triggerRunnerJump(timestamp, "pinch_click");
       return;
     }
 
@@ -3225,6 +3718,7 @@ export default function App() {
         updateFlightControlFromTips(null, timestamp, frameId);
         updateSandboxPhysics(timestamp, cursorRef.current, false, false);
         updateFlightSimulation(timestamp);
+        updateRunnerSimulation(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -3259,6 +3753,7 @@ export default function App() {
       updateFlightControlFromTips(null, timestamp, frameId);
       updateSandboxPhysics(timestamp, cursorRef.current, false, false);
       updateFlightSimulation(timestamp);
+      updateRunnerSimulation(timestamp);
       updateGame(timestamp);
       return;
     }
@@ -3393,6 +3888,7 @@ export default function App() {
     cursorRef.current = smoothed;
     setCursor(smoothed);
     updateCalibrationInputTestHoverState(smoothed, true, frameId);
+    setRunnerLaneFromPointer(smoothed, true, frameId);
 
     appLog.debug("Updated raw and smoothed cursor", {
       frameId,
@@ -3490,6 +3986,7 @@ export default function App() {
     updateSandboxPhysics(timestamp, smoothed, true, pinchStateRef.current);
     drawCameraOverlay(hand);
     updateFlightSimulation(timestamp);
+    updateRunnerSimulation(timestamp);
     updateGame(timestamp);
   }
 
@@ -3526,6 +4023,7 @@ export default function App() {
         }
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
+        updateRunnerSimulation(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -3540,6 +4038,7 @@ export default function App() {
         }
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
+        updateRunnerSimulation(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -3555,6 +4054,7 @@ export default function App() {
         });
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
+        updateRunnerSimulation(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -3624,6 +4124,7 @@ export default function App() {
         appLog.error("Frame inference failed", { error });
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
+        updateRunnerSimulation(timestamp);
         updateGame(timestamp);
       } finally {
         inferenceBusyRef.current = false;
@@ -3679,7 +4180,10 @@ export default function App() {
           {cameraError && <p className="error-text">{cameraError}</p>}
           {modelError && <p className="error-text">{modelError}</p>}
 
-          {(phase === PHASES.CALIBRATION || phase === PHASES.SANDBOX || phase === PHASES.FLIGHT) && (
+          {(phase === PHASES.CALIBRATION ||
+            phase === PHASES.SANDBOX ||
+            phase === PHASES.FLIGHT ||
+            phase === PHASES.RUNNER) && (
             <>
               <p className="small-text">{calibrationMessage}</p>
               {phase === PHASES.CALIBRATION ? (
@@ -3696,13 +4200,17 @@ export default function App() {
                 <p className="small-text">
                   Pinch over a block to grab it. Keep pinching to drag, then release to fling.
                 </p>
-              ) : (
+              ) : phase === PHASES.FLIGHT ? (
                 <p className="small-text">
                   Steering uses all five fingertips. Neutral baseline:{" "}
                   {flightHud.baselineReady
                     ? "locked"
                     : `${flightHud.baselineSamples}/${FLIGHT_BASELINE_SAMPLE_TARGET}`}
                   .
+                </p>
+              ) : (
+                <p className="small-text">
+                  Lane control: move hand left/center/right. Pinch to jump for higher coins.
                 </p>
               )}
 
@@ -3724,6 +4232,14 @@ export default function App() {
                       {isArcCalibrating
                         ? "Restart Lazy Arc Calibration"
                         : "Start Lazy Arc Calibration"}
+                    </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={startRunnerSession}
+                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
+                    >
+                      Launch Runner Game
                     </button>
                     <button
                       className="secondary"
@@ -3769,11 +4285,14 @@ export default function App() {
                         Start Whack-a-Mole
                       </button>
                     )}
+                    <button className="secondary" onClick={startRunnerSession}>
+                      Launch Runner Game
+                    </button>
                     <button className="secondary" onClick={startFlightSession}>
                       Launch Flight Game
                     </button>
                   </>
-                ) : (
+                ) : phase === PHASES.FLIGHT ? (
                   <>
                     <button onClick={returnFromFlightSession}>Back to Input Test</button>
                     <button
@@ -3789,6 +4308,30 @@ export default function App() {
                       onClick={() => resetFlightSession("manual_button")}
                     >
                       Reset Flight Scene
+                    </button>
+                    <button className="secondary" onClick={startRunnerSession}>
+                      Switch to Runner
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={returnFromRunnerSession}>Back to Input Test</button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={() => resetRunnerSession("manual_button")}
+                    >
+                      Reset Runner
+                    </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={() => triggerRunnerJump(performance.now(), "manual_button")}
+                    >
+                      Jump (Test)
+                    </button>
+                    <button className="secondary" onClick={startFlightSession}>
+                      Switch to Flight
                     </button>
                   </>
                 )}
@@ -3939,6 +4482,38 @@ export default function App() {
               </button>
             </div>
           </section>
+        ) : phase === PHASES.RUNNER ? (
+          <section className="card panel runner-panel">
+            <h2>Track Runner</h2>
+            <p className="small-text">
+              Three-lane runner: move hand left/center/right to switch tracks and pinch to jump.
+            </p>
+            <p className="small-text">
+              Collect coins on your lane. Air coins require a jump.
+            </p>
+
+            <div className="runner-stage" ref={runnerStageRef}>
+              <canvas className="runner-canvas" ref={runnerCanvasRef} />
+              <div className="runner-hud">
+                <span>Coins: {runnerHud.coins}</span>
+                <span>Distance: {runnerHud.distance.toFixed(0)} u</span>
+                <span>
+                  Lane: {runnerHud.lane === -1 ? "left" : runnerHud.lane === 1 ? "right" : "center"}
+                </span>
+                <span>Jump: {runnerHud.jumping ? `${runnerHud.jumpHeight.toFixed(0)} px` : "grounded"}</span>
+              </div>
+            </div>
+
+            <div className="button-row">
+              <button onClick={startRunnerSession}>Restart Runner</button>
+              <button className="secondary" onClick={startFlightSession}>
+                Switch to Flight
+              </button>
+              <button className="secondary" onClick={startGameSession}>
+                Switch to Whack-a-Mole
+              </button>
+            </div>
+          </section>
         ) : (
           <section className="card panel">
             <h2>Whack-a-Mole</h2>
@@ -3963,6 +4538,9 @@ export default function App() {
               </button>
               <button className="secondary" onClick={startFlightSession}>
                 Launch Flight Game
+              </button>
+              <button className="secondary" onClick={startRunnerSession}>
+                Launch Runner Game
               </button>
               <button className="secondary" onClick={handleRecalibrate}>
                 Recalibrate
