@@ -56,7 +56,8 @@ Open the local URL printed by Vite (typically `http://localhost:5173`) in Chrome
 - **Pinch** (thumb + index): confirm calibration target / hit mole
 - **Start Game / Restart Game**: play 30-second round
 - **Recalibrate**: clear stored transform and return to calibration
-- **Debug overlay**: shows landmarks, raw pointer marker, and pinch/FPS info
+- **Camera overlay**: always shows fingertip markers (thumb/index/middle/ring/pinky)
+- **Debug overlay**: adds landmarks, raw pointer marker, and pinch/FPS info
 
 ## Calibration Persistence
 

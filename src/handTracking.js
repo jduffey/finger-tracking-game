@@ -11,6 +11,13 @@ const MEDIAPIPE_SOLUTION_PATH = "https://cdn.jsdelivr.net/npm/@mediapipe/hands";
 const DEFAULT_RUNTIME = "tfjs";
 const DEFAULT_MODEL_TYPE = "full";
 const DEFAULT_MAX_HANDS = 1;
+const FINGER_TIP_INDEX_BY_NAME = {
+  thumb: 4,
+  index: 8,
+  middle: 12,
+  ring: 16,
+  pinky: 20,
+};
 
 let lastDetectionMeta = {
   handsDetected: 0,
@@ -134,22 +141,16 @@ export async function detectPrimaryHand(detector, videoElement) {
 
   for (const candidate of sortedHands) {
     const keypoints = candidate?.keypoints ?? [];
-    const indexTip = keypoints[8];
-    const thumbTip = keypoints[4];
+    const fingerTips = extractFingerTips(keypoints, width, height);
+    const indexTip = fingerTips.index;
+    const thumbTip = fingerTips.thumb;
 
     if (!indexTip || !thumbTip) {
       continue;
     }
 
-    const mirroredIndex = toMirroredNormalized(indexTip, width, height);
-    const mirroredThumb = toMirroredNormalized(thumbTip, width, height);
-
-    if (!mirroredIndex || !mirroredThumb) {
-      continue;
-    }
-
-    const dx = mirroredThumb.u - mirroredIndex.u;
-    const dy = mirroredThumb.v - mirroredIndex.v;
+    const dx = thumbTip.u - indexTip.u;
+    const dy = thumbTip.v - indexTip.v;
     const pinchDistance = Math.hypot(dx, dy);
 
     if (!Number.isFinite(pinchDistance)) {
@@ -176,8 +177,9 @@ export async function detectPrimaryHand(detector, videoElement) {
       runtime: activeRuntime,
       score,
       pinchDistance,
-      indexTip: mirroredIndex,
-      thumbTip: mirroredThumb,
+      indexTip,
+      thumbTip,
+      fingerTipsDetected: summarizeFingerTips(fingerTips),
       videoWidth: width,
       videoHeight: height,
       landmarksCount: landmarks.length,
@@ -185,8 +187,9 @@ export async function detectPrimaryHand(detector, videoElement) {
 
     return {
       score,
-      indexTip: mirroredIndex,
-      thumbTip: mirroredThumb,
+      indexTip,
+      thumbTip,
+      fingerTips,
       pinchDistance,
       landmarks,
     };
@@ -230,6 +233,34 @@ function toMirroredNormalized(point, width, height) {
   return {
     u: clamp01(1 - x / width),
     v: clamp01(y / height),
+  };
+}
+
+function extractFingerTips(keypoints, width, height) {
+  const tips = {
+    thumb: null,
+    index: null,
+    middle: null,
+    ring: null,
+    pinky: null,
+  };
+
+  for (const [fingerName, keypointIndex] of Object.entries(FINGER_TIP_INDEX_BY_NAME)) {
+    const keypoint = keypoints[keypointIndex];
+    const normalized = toMirroredNormalized(keypoint, width, height);
+    tips[fingerName] = normalized || null;
+  }
+
+  return tips;
+}
+
+function summarizeFingerTips(fingerTips) {
+  return {
+    thumb: Boolean(fingerTips?.thumb),
+    index: Boolean(fingerTips?.index),
+    middle: Boolean(fingerTips?.middle),
+    ring: Boolean(fingerTips?.ring),
+    pinky: Boolean(fingerTips?.pinky),
   };
 }
 

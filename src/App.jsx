@@ -39,6 +39,13 @@ const INVALID_LANDMARK_RECOVERY_THRESHOLD = 45;
 const NO_HAND_RECOVERY_THRESHOLD = 300;
 const HAND_DETECTION_GRACE_MS = 1600;
 const INITIAL_TRACKING_RUNTIME = "mediapipe";
+const FINGERTIP_OVERLAY_STYLES = {
+  thumb: { fill: "rgba(255, 122, 89, 0.95)", radius: 4.8 },
+  index: { fill: "rgba(255, 255, 255, 0.98)", radius: 6.2 },
+  middle: { fill: "rgba(111, 245, 164, 0.95)", radius: 4.8 },
+  ring: { fill: "rgba(128, 183, 255, 0.95)", radius: 4.8 },
+  pinky: { fill: "rgba(226, 153, 255, 0.95)", radius: 4.8 },
+};
 
 export default function App() {
   const appLog = useMemo(() => createScopedLogger("app"), []);
@@ -997,10 +1004,32 @@ export default function App() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (hand?.indexTip) {
-      ctx.fillStyle = "rgba(255, 218, 101, 0.95)";
+    if (hand?.fingerTips) {
+      for (const [fingerName, style] of Object.entries(FINGERTIP_OVERLAY_STYLES)) {
+        const tip = hand.fingerTips[fingerName];
+        if (!tip) {
+          continue;
+        }
+        const x = tip.u * canvas.width;
+        const y = tip.v * canvas.height;
+
+        ctx.fillStyle = style.fill;
+        ctx.beginPath();
+        ctx.arc(x, y, style.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (fingerName === "index") {
+          ctx.strokeStyle = "rgba(12, 16, 20, 0.75)";
+          ctx.lineWidth = 1.25;
+          ctx.beginPath();
+          ctx.arc(x, y, style.radius + 1.8, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+    } else if (hand?.indexTip) {
+      ctx.fillStyle = "rgba(255, 255, 255, 0.98)";
       ctx.beginPath();
-      ctx.arc(hand.indexTip.u * canvas.width, hand.indexTip.v * canvas.height, 6, 0, Math.PI * 2);
+      ctx.arc(hand.indexTip.u * canvas.width, hand.indexTip.v * canvas.height, 6.2, 0, Math.PI * 2);
       ctx.fill();
     }
 
