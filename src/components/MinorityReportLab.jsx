@@ -2,54 +2,51 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import GestureDebugPanel from "./GestureDebugPanel";
 import { GESTURE_IDS } from "../gestures/constants";
 
-const PANEL_WIDTH = 196;
-const PANEL_HEIGHT = 124;
-const PANEL_COUNT = 6;
+const DESKTOP_COUNT = 3;
 const STAGE_DEFAULT_SIZE = { width: 960, height: 640 };
-const HAND_INFO_BOX_SIZE = { width: 170, height: 88 };
-const HAND_INFO_BOX_MARGIN = 10;
-const DEFAULT_STAGE_TRANSFORM = {
-  x: 0,
-  y: 0,
-  scale: 1,
-  rotation: 0,
-};
+const OPEN_PALM_HOLD_MS = 1000;
 
-const SCENES = [
+const WINDOW_PRESETS = [
   {
-    id: "analysis_wall",
-    name: "Analysis Wall",
-    description: "Scene for card sorting and direct panel manipulation.",
+    id: "win-editor",
+    title: "Notes.txt",
+    appType: "editor",
+    desktopId: 0,
+    x: 220,
+    y: 160,
+    width: 340,
+    height: 240,
   },
   {
-    id: "timeline_stack",
-    name: "Timeline Stack",
-    description: "Scene for horizontal timeline browsing.",
+    id: "win-image",
+    title: "Image Viewer",
+    appType: "image",
+    desktopId: 0,
+    x: 540,
+    y: 210,
+    width: 320,
+    height: 220,
   },
   {
-    id: "briefing_ring",
-    name: "Briefing Ring",
-    description: "Scene for circular panel arrangement.",
+    id: "win-terminal",
+    title: "Terminal Mock",
+    appType: "terminal",
+    desktopId: 1,
+    x: 250,
+    y: 220,
+    width: 420,
+    height: 230,
   },
-];
-
-const HAND_INFO_BOX_DEFAULTS = {
-  Left: { x: 16, y: 16 },
-  Right: {
-    x: STAGE_DEFAULT_SIZE.width - HAND_INFO_BOX_SIZE.width - 16,
-    y: 16,
+  {
+    id: "win-inspector",
+    title: "System Monitor",
+    appType: "terminal",
+    desktopId: 2,
+    x: 340,
+    y: 180,
+    width: 380,
+    height: 250,
   },
-};
-
-const PANEL_TITLES = [
-  "Case Files",
-  "Transit Feed",
-  "Person of Interest",
-  "Signal Spectra",
-  "Evidence Locker",
-  "Anomaly Report",
-  "Predictive Map",
-  "Ops Dispatch",
 ];
 
 function clamp(value, min, max) {
@@ -58,165 +55,87 @@ function clamp(value, min, max) {
 
 function wrapAngle(value) {
   let angle = value;
-  while (angle > Math.PI) {
-    angle -= Math.PI * 2;
-  }
-  while (angle < -Math.PI) {
-    angle += Math.PI * 2;
-  }
+  while (angle > Math.PI) angle -= Math.PI * 2;
+  while (angle < -Math.PI) angle += Math.PI * 2;
   return angle;
 }
 
-function scenePoint(sceneIndex, cardIndex, width, height) {
-  const safeWidth = Math.max(360, width);
-  const safeHeight = Math.max(280, height);
-  const centerX = safeWidth * 0.5;
-  const centerY = safeHeight * 0.5;
+function createWindows() {
+  return WINDOW_PRESETS.map((windowPreset, index) => ({
+    ...windowPreset,
+    rotation: 0,
+    scale: 1,
+    state: "normal",
+    zIndex: index + 1,
+    throwingUntil: 0,
+  }));
+}
 
-  if (sceneIndex === 0) {
-    const colCount = 3;
-    const rowCount = Math.ceil(PANEL_COUNT / colCount);
-    const col = cardIndex % colCount;
-    const row = Math.floor(cardIndex / colCount);
-    const spanX = Math.min(620, safeWidth * 0.72);
-    const spanY = Math.min(340, safeHeight * 0.62);
-    return {
-      x: centerX + (col / Math.max(1, colCount - 1) - 0.5) * spanX,
-      y: centerY + (row / Math.max(1, rowCount - 1) - 0.5) * spanY,
-      rotation: (col - 1) * 0.06,
-      scale: 1,
-    };
-  }
-
-  if (sceneIndex === 1) {
-    const bandY = centerY + (cardIndex % 2 === 0 ? -68 : 68);
-    const minX = safeWidth * 0.12;
-    const maxX = safeWidth * 0.88;
-    const t = cardIndex / Math.max(1, PANEL_COUNT - 1);
-    return {
-      x: minX + t * (maxX - minX),
-      y: bandY,
-      rotation: (t - 0.5) * 0.22,
-      scale: 0.95 + (cardIndex % 3) * 0.04,
-    };
-  }
-
-  const radiusX = Math.min(290, safeWidth * 0.3);
-  const radiusY = Math.min(190, safeHeight * 0.26);
-  const angle = (-Math.PI * 0.5) + (cardIndex / PANEL_COUNT) * (Math.PI * 2);
+function getWindowBounds(windowItem) {
   return {
-    x: centerX + Math.cos(angle) * radiusX,
-    y: centerY + Math.sin(angle) * radiusY,
-    rotation: angle * 0.35,
-    scale: 0.94 + Math.sin(angle * 2) * 0.06,
+    left: windowItem.x,
+    top: windowItem.y,
+    right: windowItem.x + windowItem.width,
+    bottom: windowItem.y + windowItem.height,
   };
 }
 
-function createPanels(sceneIndex, stageSize) {
-  const width = stageSize?.width ?? STAGE_DEFAULT_SIZE.width;
-  const height = stageSize?.height ?? STAGE_DEFAULT_SIZE.height;
+function findTopWindowAtPoint(windows, desktopId, point) {
+  const visible = windows
+    .filter((windowItem) => windowItem.desktopId === desktopId && windowItem.state !== "closed" && windowItem.state !== "minimized")
+    .sort((first, second) => second.zIndex - first.zIndex);
 
-  return Array.from({ length: PANEL_COUNT }, (_, index) => {
-    const scenePlacement = scenePoint(sceneIndex, index, width, height);
-    return {
-      id: `panel-${index + 1}`,
-      title: PANEL_TITLES[index % PANEL_TITLES.length],
-      subtitle: `Node ${index + 1}`,
-      x: scenePlacement.x,
-      y: scenePlacement.y,
-      rotation: scenePlacement.rotation,
-      scale: scenePlacement.scale,
-      selected: false,
-      throwingUntil: 0,
-    };
-  });
+  return (
+    visible.find((windowItem) => {
+      const bounds = getWindowBounds(windowItem);
+      return point.x >= bounds.left && point.x <= bounds.right && point.y >= bounds.top && point.y <= bounds.bottom;
+    }) ?? null
+  );
 }
 
-function applySceneLayout(existingPanels, sceneIndex, stageSize) {
-  const width = stageSize?.width ?? STAGE_DEFAULT_SIZE.width;
-  const height = stageSize?.height ?? STAGE_DEFAULT_SIZE.height;
-  return existingPanels.map((panel, index) => {
-    const nextPlacement = scenePoint(sceneIndex, index, width, height);
-    return {
-      ...panel,
-      x: nextPlacement.x,
-      y: nextPlacement.y,
-      rotation: nextPlacement.rotation,
-      scale: nextPlacement.scale,
-      selected: false,
-      throwingUntil: 0,
-    };
-  });
-}
-
-function pointerToLocal(pointer, stageSize, transform) {
-  if (!pointer) {
-    return null;
+function getMenuActions(windowItem) {
+  if (!windowItem) {
+    return [];
   }
-  const width = stageSize.width;
-  const height = stageSize.height;
-  const px = pointer.x * width;
-  const py = pointer.y * height;
-
-  const centerX = width * 0.5;
-  const centerY = height * 0.5;
-  const translatedX = px - centerX - transform.x;
-  const translatedY = py - centerY - transform.y;
-
-  const cos = Math.cos(-transform.rotation);
-  const sin = Math.sin(-transform.rotation);
-  const rotatedX = translatedX * cos - translatedY * sin;
-  const rotatedY = translatedX * sin + translatedY * cos;
-
-  return {
-    x: rotatedX / Math.max(0.001, transform.scale) + centerX,
-    y: rotatedY / Math.max(0.001, transform.scale) + centerY,
-  };
+  return [
+    windowItem.state === "maximized" ? "Restore" : "Maximize",
+    windowItem.state === "minimized" ? "Restore" : "Minimize",
+    "Close",
+  ];
 }
 
-function nearestPanel(panels, localPointer, maxDistance = 150) {
-  if (!localPointer) {
-    return null;
+function renderMockApp(windowItem) {
+  if (windowItem.appType === "editor") {
+    return (
+      <div className="gc-app editor">
+        <p>Gesture Control OS demo notes:</p>
+        <ul>
+          <li>Pinch to move windows.</li>
+          <li>Two-hand expand/compress for size states.</li>
+          <li>Use swipe to switch virtual desktops.</li>
+        </ul>
+      </div>
+    );
   }
 
-  let winner = null;
-  let bestDistance = Number.POSITIVE_INFINITY;
-
-  for (const panel of panels) {
-    const distance = Math.hypot(localPointer.x - panel.x, localPointer.y - panel.y);
-    if (distance < bestDistance) {
-      winner = panel;
-      bestDistance = distance;
-    }
+  if (windowItem.appType === "image") {
+    return (
+      <div className="gc-app image">
+        <div className="gc-image-placeholder">
+          <span>Mock Landscape</span>
+        </div>
+      </div>
+    );
   }
 
-  if (!winner || bestDistance > maxDistance) {
-    return null;
-  }
-
-  return {
-    panel: winner,
-    distance: bestDistance,
-  };
-}
-
-function clampPanelPosition(panel, stageSize) {
-  const halfWidth = PANEL_WIDTH * 0.5;
-  const halfHeight = PANEL_HEIGHT * 0.5;
-  return {
-    ...panel,
-    x: clamp(panel.x, halfWidth, stageSize.width - halfWidth),
-    y: clamp(panel.y, halfHeight, stageSize.height - halfHeight),
-  };
-}
-
-function clampInfoBoxPosition(position, stageSize) {
-  const maxX = Math.max(HAND_INFO_BOX_MARGIN, stageSize.width - HAND_INFO_BOX_SIZE.width - HAND_INFO_BOX_MARGIN);
-  const maxY = Math.max(HAND_INFO_BOX_MARGIN, stageSize.height - HAND_INFO_BOX_SIZE.height - HAND_INFO_BOX_MARGIN);
-  return {
-    x: clamp(position.x, HAND_INFO_BOX_MARGIN, maxX),
-    y: clamp(position.y, HAND_INFO_BOX_MARGIN, maxY),
-  };
+  return (
+    <div className="gc-app terminal">
+      <p>&gt; boot gesture-control-os --demo</p>
+      <p>&gt; workspace: {windowItem.desktopId + 1}</p>
+      <p>&gt; focus: {windowItem.title}</p>
+      <p>&gt; status: ready</p>
+    </div>
+  );
 }
 
 export default function MinorityReportLab(props) {
@@ -244,84 +163,34 @@ export default function MinorityReportLab(props) {
   } = props;
 
   const stageRef = useRef(null);
+  const dragRef = useRef(null);
+  const palmHoldRef = useRef({ Left: null, Right: null });
   const [stageSize, setStageSize] = useState(STAGE_DEFAULT_SIZE);
-  const [sceneIndex, setSceneIndex] = useState(0);
-  const [stageTransform, setStageTransform] = useState(DEFAULT_STAGE_TRANSFORM);
-  const [panels, setPanels] = useState(() => createPanels(0, STAGE_DEFAULT_SIZE));
-  const [selectedPanelId, setSelectedPanelId] = useState(null);
-  const [pointerTrails, setPointerTrails] = useState({});
-  const [handInfoBoxPositions, setHandInfoBoxPositions] = useState(HAND_INFO_BOX_DEFAULTS);
+  const [windows, setWindows] = useState(createWindows);
+  const [workspaceRotation, setWorkspaceRotation] = useState(0);
+  const [activeDesktopId, setActiveDesktopId] = useState(0);
+  const [focusedWindowId, setFocusedWindowId] = useState("win-editor");
+  const [zCounter, setZCounter] = useState(WINDOW_PRESETS.length + 4);
+  const [windowMenu, setWindowMenu] = useState({ open: false, windowId: null, selectedIndex: 0 });
 
-  const panelsRef = useRef(panels);
-  const sceneIndexRef = useRef(sceneIndex);
-  const stageTransformRef = useRef(stageTransform);
-  const grabRef = useRef(null);
-  const twoHandManipRef = useRef({ active: false, base: null });
-  const pointerTrailsRef = useRef(pointerTrails);
-  const handInfoBoxDragRef = useRef({
-    Left: null,
-    Right: null,
-  });
+  const windowsRef = useRef(windows);
+  const focusedWindowRef = useRef(focusedWindowId);
+  const activeDesktopRef = useRef(activeDesktopId);
 
   useEffect(() => {
-    panelsRef.current = panels;
-  }, [panels]);
+    windowsRef.current = windows;
+  }, [windows]);
 
   useEffect(() => {
-    sceneIndexRef.current = sceneIndex;
-  }, [sceneIndex]);
+    focusedWindowRef.current = focusedWindowId;
+  }, [focusedWindowId]);
 
   useEffect(() => {
-    stageTransformRef.current = stageTransform;
-  }, [stageTransform]);
+    activeDesktopRef.current = activeDesktopId;
+  }, [activeDesktopId]);
 
-  useEffect(() => {
-    pointerTrailsRef.current = pointerTrails;
-  }, [pointerTrails]);
-
-  useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) {
-      return undefined;
-    }
-
-    const syncSize = () => {
-      const rect = stage.getBoundingClientRect();
-      const width = Math.max(1, Math.round(rect.width));
-      const height = Math.max(1, Math.round(rect.height));
-      setStageSize((previous) => {
-        if (previous.width === width && previous.height === height) {
-          return previous;
-        }
-        return { width, height };
-      });
-    };
-
-    syncSize();
-
-    if (!window.ResizeObserver) {
-      window.addEventListener("resize", syncSize);
-      return () => {
-        window.removeEventListener("resize", syncSize);
-      };
-    }
-
-    const observer = new ResizeObserver(syncSize);
-    observer.observe(stage);
-    window.addEventListener("resize", syncSize);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", syncSize);
-    };
-  }, []);
-
-  const sceneMeta = useMemo(() => SCENES[sceneIndex] ?? SCENES[0], [sceneIndex]);
   const handsByLabel = useMemo(() => {
-    const map = {
-      Left: null,
-      Right: null,
-    };
+    const map = { Left: null, Right: null };
     const hands = Array.isArray(engineOutput?.hands) ? engineOutput.hands : [];
     for (const hand of hands) {
       if (hand?.label === "Left") {
@@ -334,17 +203,26 @@ export default function MinorityReportLab(props) {
   }, [engineOutput?.hands]);
 
   useEffect(() => {
-    setPanels((previous) => {
-      if (previous.length === 0) {
-        return createPanels(sceneIndexRef.current, stageSize);
-      }
-      return previous.map((panel) => clampPanelPosition(panel, stageSize));
-    });
-    setHandInfoBoxPositions((previous) => ({
-      Left: clampInfoBoxPosition(previous.Left ?? HAND_INFO_BOX_DEFAULTS.Left, stageSize),
-      Right: clampInfoBoxPosition(previous.Right ?? HAND_INFO_BOX_DEFAULTS.Right, stageSize),
-    }));
-  }, [stageSize]);
+    const stage = stageRef.current;
+    if (!stage) return undefined;
+
+    const syncSize = () => {
+      const rect = stage.getBoundingClientRect();
+      setStageSize({
+        width: Math.max(1, Math.round(rect.width)),
+        height: Math.max(1, Math.round(rect.height)),
+      });
+    };
+
+    syncSize();
+    const observer = window.ResizeObserver ? new ResizeObserver(syncSize) : null;
+    observer?.observe(stage);
+    window.addEventListener("resize", syncSize);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", syncSize);
+    };
+  }, []);
 
   useEffect(() => {
     const frameId = engineOutput?.frameId;
@@ -352,403 +230,293 @@ export default function MinorityReportLab(props) {
       return;
     }
 
-    const handStates = Array.isArray(engineOutput?.hands) ? engineOutput.hands : [];
-    const twoHand = engineOutput?.twoHand ?? { present: false };
+    const now = performance.now();
+    const hands = Array.isArray(engineOutput?.hands) ? engineOutput.hands : [];
     const events = Array.isArray(engineOutput?.events) ? engineOutput.events : [];
 
-    if (showTrails) {
-      setPointerTrails((previous) => {
-        const next = { ...previous };
-        for (const hand of handStates) {
-          if (!hand.pointer) {
-            continue;
-          }
-          const current = Array.isArray(next[hand.id]) ? next[hand.id].slice(-22) : [];
-          current.push({
-            x: hand.pointer.x * stageSize.width,
-            y: hand.pointer.y * stageSize.height,
-          });
-          next[hand.id] = current;
-        }
-        for (const handId of Object.keys(next)) {
-          if (!handStates.find((hand) => hand.id === handId)) {
-            delete next[handId];
+    for (const hand of hands) {
+      const label = hand.label === "Left" ? "Left" : hand.label === "Right" ? "Right" : null;
+      if (!label) continue;
+      if ((hand.openness ?? 0) > 1.25) {
+        if (!palmHoldRef.current[label]) {
+          palmHoldRef.current[label] = { startedAt: now };
+        } else if (now - palmHoldRef.current[label].startedAt >= OPEN_PALM_HOLD_MS && !windowMenu.open) {
+          const focused = windowsRef.current.find((windowItem) => windowItem.id === focusedWindowRef.current);
+          if (focused && focused.desktopId === activeDesktopRef.current && focused.state !== "closed") {
+            setWindowMenu({ open: true, windowId: focused.id, selectedIndex: 0 });
           }
         }
-        return next;
-      });
-    } else if (Object.keys(pointerTrailsRef.current).length > 0) {
-      setPointerTrails({});
+      } else {
+        palmHoldRef.current[label] = null;
+      }
     }
 
-    const hasSymmetricSwipe = events.some((event) => event.gestureId === GESTURE_IDS.SYMMETRIC_SWIPE);
-
-    const cycleScene = (step, hard) => {
-      setSceneIndex((previous) => {
-        const nextIndex = (previous + step + SCENES.length) % SCENES.length;
-        sceneIndexRef.current = nextIndex;
-        setPanels((currentPanels) => applySceneLayout(currentPanels, nextIndex, stageSize));
-        if (hard) {
-          setStageTransform(DEFAULT_STAGE_TRANSFORM);
-          stageTransformRef.current = DEFAULT_STAGE_TRANSFORM;
-          grabRef.current = null;
-          twoHandManipRef.current = { active: false, base: null };
-        }
-        return nextIndex;
+    const focusWindow = (windowId) => {
+      setFocusedWindowId(windowId);
+      setZCounter((previous) => {
+        const nextZ = previous + 1;
+        setWindows((current) =>
+          current.map((windowItem) =>
+            windowItem.id === windowId
+              ? {
+                  ...windowItem,
+                  zIndex: nextZ,
+                }
+              : windowItem,
+          ),
+        );
+        return nextZ;
       });
     };
 
-    const toggleNearestPanelSelection = (handId) => {
-      const hand = handStates.find((candidate) => candidate.id === handId) ?? handStates[0] ?? null;
-      if (!hand?.pointer) {
-        return;
-      }
-      const pointerLocal = pointerToLocal(hand.pointer, stageSize, stageTransformRef.current);
-      const nearest = nearestPanel(panelsRef.current, pointerLocal, 240);
-      if (!nearest?.panel) {
-        return;
-      }
-
-      const targetPanelId = nearest.panel.id;
-      setSelectedPanelId((previousSelected) => (previousSelected === targetPanelId ? null : targetPanelId));
-      setPanels((currentPanels) =>
-        currentPanels.map((panel) => ({
-          ...panel,
-          selected: panel.id === targetPanelId ? !panel.selected : false,
-        })),
+    const applyWindowAction = (windowId, action) => {
+      if (!windowId || !action) return;
+      setWindows((current) =>
+        current.map((windowItem) => {
+          if (windowItem.id !== windowId) return windowItem;
+          if (action === "Maximize") {
+            return { ...windowItem, state: "maximized", x: 18, y: 18, width: stageSize.width - 36, height: stageSize.height - 36 };
+          }
+          if (action === "Minimize") {
+            return { ...windowItem, state: "minimized" };
+          }
+          if (action === "Restore") {
+            const base = WINDOW_PRESETS.find((entry) => entry.id === windowItem.id);
+            return {
+              ...windowItem,
+              state: "normal",
+              width: base?.width ?? windowItem.width,
+              height: base?.height ?? windowItem.height,
+              x: clamp(windowItem.x, 18, Math.max(18, stageSize.width - (base?.width ?? windowItem.width) - 18)),
+              y: clamp(windowItem.y, 18, Math.max(18, stageSize.height - (base?.height ?? windowItem.height) - 18)),
+            };
+          }
+          if (action === "Close") {
+            return { ...windowItem, state: "closed" };
+          }
+          return windowItem;
+        }),
       );
     };
 
     for (const event of events) {
-      if (hasSymmetricSwipe && (event.gestureId === GESTURE_IDS.SWIPE_LEFT || event.gestureId === GESTURE_IDS.SWIPE_RIGHT)) {
-        continue;
-      }
-
       if (event.gestureId === GESTURE_IDS.SWIPE_LEFT) {
-        cycleScene(-1, false);
+        setActiveDesktopId((previous) => (previous - 1 + DESKTOP_COUNT) % DESKTOP_COUNT);
       } else if (event.gestureId === GESTURE_IDS.SWIPE_RIGHT) {
-        cycleScene(1, false);
+        setActiveDesktopId((previous) => (previous + 1) % DESKTOP_COUNT);
+      } else if (event.gestureId === GESTURE_IDS.EXPAND) {
+        applyWindowAction(focusedWindowRef.current, "Maximize");
+      } else if (event.gestureId === GESTURE_IDS.COMPRESS) {
+        applyWindowAction(focusedWindowRef.current, "Minimize");
+      } else if (event.gestureId === GESTURE_IDS.ROTATE_TWIST) {
+        setWindows((current) =>
+          current.map((windowItem) =>
+            windowItem.id === focusedWindowRef.current
+              ? { ...windowItem, rotation: wrapAngle(windowItem.rotation + 0.25) }
+              : windowItem,
+          ),
+        );
+        if (windowMenu.open) {
+          setWorkspaceRotation((previous) => wrapAngle(previous + 0.18));
+        }
       } else if (event.gestureId === GESTURE_IDS.SYMMETRIC_SWIPE) {
-        const direction = event.meta?.direction === "left" ? -1 : 1;
-        cycleScene(direction, true);
-      } else if (event.gestureId === GESTURE_IDS.PUSH_FORWARD) {
-        toggleNearestPanelSelection(event.handId);
-      } else if (event.gestureId === GESTURE_IDS.CIRCLE) {
-        setStageTransform(DEFAULT_STAGE_TRANSFORM);
-        stageTransformRef.current = DEFAULT_STAGE_TRANSFORM;
+        applyWindowAction(focusedWindowRef.current, "Close");
+      } else if (event.gestureId === GESTURE_IDS.PUSH_FORWARD && windowMenu.open) {
+        const win = windowsRef.current.find((windowItem) => windowItem.id === windowMenu.windowId);
+        const actions = getMenuActions(win);
+        const action = actions[windowMenu.selectedIndex] ?? actions[0];
+        applyWindowAction(windowMenu.windowId, action);
+        setWindowMenu({ open: false, windowId: null, selectedIndex: 0 });
       }
 
       if (
-        grabRef.current &&
+        dragRef.current &&
         (event.gestureId === GESTURE_IDS.SWIPE_LEFT || event.gestureId === GESTURE_IDS.SWIPE_RIGHT) &&
-        event.handId &&
-        event.handId !== grabRef.current.handId &&
-        event.confidence >= Math.max(0.82, confidenceThreshold + 0.08)
+        event.handId === dragRef.current.handId
       ) {
-        const throwDirection = event.gestureId === GESTURE_IDS.SWIPE_LEFT ? -1 : 1;
-        const throwDistanceX = throwDirection * Math.max(220, stageSize.width * 0.44);
-        const throwDistanceY = (event.meta?.velocity?.y ?? 0) * 160;
-        const grabbed = grabRef.current;
-        grabRef.current = null;
-
-        setPanels((currentPanels) =>
-          currentPanels.map((panel) => {
-            if (panel.id !== grabbed.panelId) {
-              return panel;
-            }
-            return {
-              ...panel,
-              x: panel.x + throwDistanceX,
-              y: panel.y + throwDistanceY,
-              rotation: panel.rotation + throwDirection * 0.46,
-              throwingUntil: Date.now() + 650,
-            };
-          }),
+        const direction = event.gestureId === GESTURE_IDS.SWIPE_LEFT ? -1 : 1;
+        setWindows((current) =>
+          current.map((windowItem) =>
+            windowItem.id === dragRef.current.windowId
+              ? {
+                  ...windowItem,
+                  x: clamp(windowItem.x + direction * 220, 10, stageSize.width - windowItem.width - 10),
+                  y: clamp(windowItem.y - 80, 10, stageSize.height - windowItem.height - 10),
+                  rotation: wrapAngle(windowItem.rotation + direction * 0.28),
+                  throwingUntil: Date.now() + 520,
+                }
+              : windowItem,
+          ),
         );
       }
     }
 
-    if (twoHand.present && engineOutput?.continuous?.twoHandManipulationActive) {
-      const currentTransform = stageTransformRef.current;
-      if (!twoHandManipRef.current.active) {
-        twoHandManipRef.current = {
-          active: true,
-          base: {
-            distance: twoHand.distance,
-            angle: twoHand.angle,
-            midpoint: twoHand.midpoint,
-            transform: currentTransform,
-          },
-        };
-      }
-
-      const base = twoHandManipRef.current.base;
-      const distanceRatio = twoHand.distance / Math.max(0.02, base.distance);
-      const deltaAngle = wrapAngle(twoHand.angle - base.angle);
-      const moveX = (twoHand.midpoint.x - base.midpoint.x) * stageSize.width;
-      const moveY = (twoHand.midpoint.y - base.midpoint.y) * stageSize.height;
-      const nextTransform = {
-        x: base.transform.x + moveX,
-        y: base.transform.y + moveY,
-        scale: clamp(base.transform.scale * distanceRatio, 0.45, 2.6),
-        rotation: wrapAngle(base.transform.rotation + deltaAngle),
-      };
-      setStageTransform(nextTransform);
-      stageTransformRef.current = nextTransform;
-      grabRef.current = null;
-    } else {
-      twoHandManipRef.current = { active: false, base: null };
-    }
-
-    if (engineOutput?.continuous?.twoHandManipulationActive) {
-      return;
-    }
-
-    const currentGrab = grabRef.current;
-    if (currentGrab) {
-      const hand = handStates.find((candidate) => candidate.id === currentGrab.handId) ?? null;
-      if (!hand || !hand.pinchActive) {
-        grabRef.current = null;
+    const currentDrag = dragRef.current;
+    if (currentDrag) {
+      const hand = hands.find((candidate) => candidate.id === currentDrag.handId);
+      if (!hand?.pinchActive) {
+        dragRef.current = null;
       } else {
-        const localPointer = pointerToLocal(hand.pointer, stageSize, stageTransformRef.current);
-        if (localPointer) {
-          setPanels((currentPanels) =>
-            currentPanels.map((panel) => {
-              if (panel.id !== currentGrab.panelId) {
-                return panel;
-              }
-              return clampPanelPosition(
-                {
-                  ...panel,
-                  x: localPointer.x - currentGrab.offsetX,
-                  y: localPointer.y - currentGrab.offsetY,
-                  throwingUntil: 0,
-                },
-                stageSize,
-              );
-            }),
-          );
-        }
+        setWindows((current) =>
+          current.map((windowItem) => {
+            if (windowItem.id !== currentDrag.windowId || !hand.pointer) return windowItem;
+            return {
+              ...windowItem,
+              x: clamp(hand.pointer.x * stageSize.width - currentDrag.offsetX, 6, stageSize.width - windowItem.width - 6),
+              y: clamp(hand.pointer.y * stageSize.height - currentDrag.offsetY, 6, stageSize.height - windowItem.height - 6),
+              throwingUntil: 0,
+            };
+          }),
+        );
       }
       return;
     }
 
-    for (const hand of handStates) {
-      if (!hand.pinchActive) {
-        continue;
-      }
-      const localPointer = pointerToLocal(hand.pointer, stageSize, stageTransformRef.current);
-      const nearest = nearestPanel(panelsRef.current, localPointer, 168);
-      if (!nearest?.panel) {
-        continue;
-      }
-
-      grabRef.current = {
+    for (const hand of hands) {
+      if (!hand.pinchActive || !hand.pointer) continue;
+      const point = { x: hand.pointer.x * stageSize.width, y: hand.pointer.y * stageSize.height };
+      const targetWindow = findTopWindowAtPoint(windowsRef.current, activeDesktopRef.current, point);
+      if (!targetWindow) continue;
+      dragRef.current = {
         handId: hand.id,
-        panelId: nearest.panel.id,
-        offsetX: localPointer.x - nearest.panel.x,
-        offsetY: localPointer.y - nearest.panel.y,
+        windowId: targetWindow.id,
+        offsetX: point.x - targetWindow.x,
+        offsetY: point.y - targetWindow.y,
       };
-      setSelectedPanelId(nearest.panel.id);
-      setPanels((currentPanels) =>
-        currentPanels.map((panel) => ({
-          ...panel,
-          selected: panel.id === nearest.panel.id,
-        })),
-      );
+      focusWindow(targetWindow.id);
       break;
     }
+  }, [engineOutput, stageSize, windowMenu.open, windowMenu.selectedIndex, windowMenu.windowId]);
 
-    const nextBoxPositions = {
-      ...handInfoBoxPositions,
-    };
-    let didUpdateBoxPosition = false;
-    for (const label of ["Left", "Right"]) {
-      const hand = handStates.find((candidate) => candidate.label === label) ?? null;
-      const dragState = handInfoBoxDragRef.current[label];
-      if (!hand || !hand.pointer) {
-        handInfoBoxDragRef.current[label] = null;
-        continue;
-      }
-
-      const pointer = {
-        x: hand.pointer.x * stageSize.width,
-        y: hand.pointer.y * stageSize.height,
-      };
-      const box = nextBoxPositions[label] ?? HAND_INFO_BOX_DEFAULTS[label];
-
-      if (!hand.pinchActive) {
-        handInfoBoxDragRef.current[label] = null;
-        continue;
-      }
-
-      if (!dragState) {
-        const inside =
-          pointer.x >= box.x &&
-          pointer.x <= box.x + HAND_INFO_BOX_SIZE.width &&
-          pointer.y >= box.y &&
-          pointer.y <= box.y + HAND_INFO_BOX_SIZE.height;
-        if (inside) {
-          handInfoBoxDragRef.current[label] = {
-            offsetX: pointer.x - box.x,
-            offsetY: pointer.y - box.y,
-          };
-        } else {
-          continue;
-        }
-      }
-
-      const activeDragState = handInfoBoxDragRef.current[label];
-      if (!activeDragState) {
-        continue;
-      }
-      const proposed = clampInfoBoxPosition(
-        {
-          x: pointer.x - activeDragState.offsetX,
-          y: pointer.y - activeDragState.offsetY,
-        },
-        stageSize,
-      );
-      if (Math.abs(proposed.x - box.x) > 0.1 || Math.abs(proposed.y - box.y) > 0.1) {
-        nextBoxPositions[label] = proposed;
-        didUpdateBoxPosition = true;
-      }
-    }
-    if (didUpdateBoxPosition) {
-      setHandInfoBoxPositions(nextBoxPositions);
-    }
-  }, [
-    confidenceThreshold,
-    engineOutput,
-    handInfoBoxPositions,
-    showTrails,
-    stageSize,
-  ]);
+  const focusedWindow = windows.find((windowItem) => windowItem.id === focusedWindowId) ?? null;
+  const menuActions = getMenuActions(focusedWindow);
 
   return (
     <section className="card panel minority-lab-panel">
-      <h2>Minority Report Lab</h2>
-      <p className="small-text">Two-hand pinch controls the global stage transform (translate/scale/rotate).</p>
+      <h2>Gesture Control OS</h2>
+      <p className="small-text">Demo mode: desktop-like interaction with gesture chaining and multi-window focus.</p>
       <p className="small-text">
-        Scene: <strong>{sceneMeta.name}</strong> | {sceneMeta.description}
+        Desktop {activeDesktopId + 1}/{DESKTOP_COUNT} · Focus: <strong>{focusedWindow?.title ?? "None"}</strong>
       </p>
 
       <div className="minority-lab-layout">
         <div className="minority-stage-shell">
-          <div className="minority-stage" ref={stageRef}>
-            <div className="minority-stage-transform" style={{
-              transform: `translate(${stageTransform.x}px, ${stageTransform.y}px) rotate(${stageTransform.rotation}rad) scale(${stageTransform.scale})`,
-            }}>
-              {panels.map((panel) => (
-                <article
-                  key={panel.id}
-                  className={`minority-panel-card ${panel.selected ? "selected" : ""} ${selectedPanelId === panel.id ? "focused" : ""}`}
-                  style={{
-                    left: `${panel.x}px`,
-                    top: `${panel.y}px`,
-                    transform: `translate(-50%, -50%) rotate(${panel.rotation}rad) scale(${panel.scale})`,
-                    transition:
-                      panel.throwingUntil > Date.now()
-                        ? "left 620ms cubic-bezier(.09,.67,.22,.98), top 620ms cubic-bezier(.09,.67,.22,.98), transform 620ms cubic-bezier(.09,.67,.22,.98), box-shadow 220ms ease"
-                        : "left 120ms linear, top 120ms linear, transform 120ms linear, box-shadow 150ms ease",
-                  }}
-                >
-                  <h4>{panel.title}</h4>
-                  <p>{panel.subtitle}</p>
-                  <small>
-                    x:{panel.x.toFixed(0)} y:{panel.y.toFixed(0)} r:{(panel.rotation * 57.2958).toFixed(0)}° s:{panel.scale.toFixed(2)}
-                  </small>
-                </article>
-              ))}
-            </div>
-
-            {showTrails && (
-              <svg className="lab-pointer-trails" viewBox={`0 0 ${stageSize.width} ${stageSize.height}`} preserveAspectRatio="none">
-                {Object.entries(pointerTrails).map(([handId, trail]) => {
-                  if (!Array.isArray(trail) || trail.length < 2) {
-                    return null;
-                  }
+          <div className="gesture-desktop-stage" ref={stageRef}>
+            <div className="gesture-desktop-transform" style={{ transform: `rotate(${workspaceRotation}rad)` }}>
+              {windows
+                .filter((windowItem) => windowItem.desktopId === activeDesktopId && windowItem.state !== "closed")
+                .map((windowItem) => {
+                  const isFocused = windowItem.id === focusedWindowId;
                   return (
-                    <polyline
-                      key={`trail-${handId}`}
-                      points={trail.map((point) => `${point.x},${point.y}`).join(" ")}
-                      className="lab-pointer-trail"
-                    />
+                    <article
+                      key={windowItem.id}
+                      className={`gc-window ${isFocused ? "focused" : ""} ${windowItem.state === "minimized" ? "minimized" : ""}`}
+                      style={{
+                        left: `${windowItem.x}px`,
+                        top: `${windowItem.y}px`,
+                        width: `${windowItem.width}px`,
+                        height: `${windowItem.height}px`,
+                        zIndex: windowItem.zIndex,
+                        transform: `rotate(${windowItem.rotation}rad) scale(${windowItem.scale})`,
+                        transition:
+                          windowItem.throwingUntil > Date.now()
+                            ? "left 500ms cubic-bezier(.16,.73,.21,1), top 500ms cubic-bezier(.16,.73,.21,1), transform 500ms cubic-bezier(.16,.73,.21,1)"
+                            : "left 120ms linear, top 120ms linear, transform 120ms linear",
+                      }}
+                      onMouseDown={() => {
+                        setFocusedWindowId(windowItem.id);
+                      }}
+                    >
+                      <header className="gc-window-header">
+                        <strong>{windowItem.title}</strong>
+                        <span>{windowItem.state}</span>
+                      </header>
+                      <div className="gc-window-body">{renderMockApp(windowItem)}</div>
+                    </article>
                   );
                 })}
-              </svg>
+            </div>
+
+            {windowMenu.open && focusedWindow && (
+              <div className="gc-window-menu">
+                <h4>Window Menu</h4>
+                {menuActions.map((action, index) => (
+                  <button
+                    type="button"
+                    key={action}
+                    className={index === windowMenu.selectedIndex ? "selected" : ""}
+                    onClick={() => setWindowMenu((current) => ({ ...current, selectedIndex: index }))}
+                  >
+                    {action}
+                  </button>
+                ))}
+                <small>Push forward to confirm selected action.</small>
+              </div>
             )}
 
             {engineOutput?.hands?.map((hand) => (
               <div
-                key={`pointer-${hand.id}`}
-                className={`lab-hand-pointer ${hand.label === "Left" ? "left" : hand.label === "Right" ? "right" : "generic"} ${hand.pinchActive ? "pinched" : ""}`}
-                style={{
-                  left: `${hand.pointer.x * 100}%`,
-                  top: `${hand.pointer.y * 100}%`,
-                }}
+                key={`cursor-${hand.id}`}
+                className={`gc-cursor ${hand.label === "Left" ? "left" : hand.label === "Right" ? "right" : "generic"} ${hand.pinchActive ? "pinched" : ""}`}
+                style={{ left: `${(hand.pointer?.x ?? 0) * 100}%`, top: `${(hand.pointer?.y ?? 0) * 100}%` }}
               >
                 <span>{hand.label ?? hand.id}</span>
               </div>
             ))}
 
-            {["Left", "Right"].map((label) => {
-              const hand = handsByLabel[label];
-              const isDetected = Boolean(hand);
-              const isDragging = Boolean(handInfoBoxDragRef.current[label]);
-              const boxPosition = handInfoBoxPositions[label] ?? HAND_INFO_BOX_DEFAULTS[label];
-              return (
-                <div
-                  key={`info-${label}`}
-                  className={`lab-hand-infobox ${label === "Left" ? "left" : "right"} ${
-                    isDetected ? "detected" : "missing"
-                  } ${isDragging ? "dragging" : ""}`}
-                  style={{
-                    left: `${boxPosition.x}px`,
-                    top: `${boxPosition.y}px`,
-                  }}
-                >
-                  <h5>{label} Hand</h5>
-                  <p>Status: {isDetected ? "detected" : "not detected"}</p>
-                  <p>Pinch: {isDetected ? (hand.pinchActive ? "active" : "idle") : "n/a"}</p>
-                  <p>
-                    Pointer:{" "}
-                    {isDetected
-                      ? `${(hand.pointer?.x ?? 0).toFixed(3)}, ${(hand.pointer?.y ?? 0).toFixed(3)}`
-                      : "n/a"}
-                  </p>
-                  <p className="hint">Pinch inside this box to drag</p>
+            <div className="gc-desktop-indicator-strip">
+              {Array.from({ length: DESKTOP_COUNT }).map((_, index) => (
+                <div key={`desktop-${index}`} className={`gc-desktop-pill ${index === activeDesktopId ? "active" : ""}`}>
+                  D{index + 1}
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
         </div>
 
-        <GestureDebugPanel
-          fps={fps}
-          detectionStatus={detectionStatus}
-          hands={engineOutput?.hands ?? []}
-          confidences={engineOutput?.confidences}
-          heuristicConfidences={engineOutput?.heuristicConfidences}
-          personalizedConfidences={engineOutput?.personalizedConfidences}
-          threshold={confidenceThreshold}
-          onThresholdChange={onConfidenceThresholdChange}
-          showSkeleton={showSkeleton}
-          showTrails={showTrails}
-          personalizationEnabled={personalizationEnabled}
-          onToggleShowSkeleton={onShowSkeletonChange}
-          onToggleShowTrails={onShowTrailsChange}
-          onTogglePersonalization={onPersonalizationEnabledChange}
-          eventLog={eventLog}
-          onClearEventLog={onClearEventLog}
-          trainingState={trainingState}
-          sampleCounts={sampleCounts}
-          onRecordGesture={onRecordGesture}
-          onDeleteLastSample={onDeleteLastSample}
-          onClearSamples={onClearSamples}
-          onExportSamples={onExportSamples}
-          onImportSamples={onImportSamples}
-        />
+        <div className="gc-side-stack">
+          <div className="gesture-debug-section">
+            <h3>Window State Inspector</h3>
+            <div className="gc-inspector-list">
+              {windows.map((windowItem) => (
+                <div key={`inspect-${windowItem.id}`} className={`gc-inspector-row ${windowItem.id === focusedWindowId ? "focused" : ""}`}>
+                  <strong>{windowItem.title}</strong>
+                  <span>Desktop: {windowItem.desktopId + 1}</span>
+                  <span>State: {windowItem.state}</span>
+                  <span>
+                    x:{windowItem.x.toFixed(0)} y:{windowItem.y.toFixed(0)} z:{windowItem.zIndex}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <GestureDebugPanel
+            fps={fps}
+            detectionStatus={detectionStatus}
+            hands={engineOutput?.hands ?? []}
+            confidences={engineOutput?.confidences}
+            heuristicConfidences={engineOutput?.heuristicConfidences}
+            personalizedConfidences={engineOutput?.personalizedConfidences}
+            threshold={confidenceThreshold}
+            onThresholdChange={onConfidenceThresholdChange}
+            showSkeleton={showSkeleton}
+            showTrails={showTrails}
+            personalizationEnabled={personalizationEnabled}
+            onToggleShowSkeleton={onShowSkeletonChange}
+            onToggleShowTrails={onShowTrailsChange}
+            onTogglePersonalization={onPersonalizationEnabledChange}
+            eventLog={eventLog}
+            onClearEventLog={onClearEventLog}
+            trainingState={trainingState}
+            sampleCounts={sampleCounts}
+            onRecordGesture={onRecordGesture}
+            onDeleteLastSample={onDeleteLastSample}
+            onClearSamples={onClearSamples}
+            onExportSamples={onExportSamples}
+            onImportSamples={onImportSamples}
+          />
+        </div>
       </div>
     </section>
   );
