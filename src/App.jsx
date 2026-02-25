@@ -49,6 +49,9 @@ const FINGERTIP_OVERLAY_STYLES = {
 const EXTENT_FINGER_NAMES = ["thumb", "index", "middle", "ring", "pinky"];
 const EXTENT_LOG_SAMPLE_INTERVAL = 180;
 const MIN_VISIBLE_SPAN = 1e-6;
+const INPUT_TEST_GRID_ROWS = 4;
+const INPUT_TEST_GRID_COLS = 4;
+const INPUT_TEST_CELL_COUNT = INPUT_TEST_GRID_ROWS * INPUT_TEST_GRID_COLS;
 
 function clampValue(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -199,6 +202,18 @@ function summarizeFingerExtentStats(fingerStats, canvasWidth, canvasHeight) {
   };
 }
 
+function isPointInsideClientRect(point, rect) {
+  if (!point || !rect) {
+    return false;
+  }
+  return (
+    point.x >= rect.left &&
+    point.x <= rect.right &&
+    point.y >= rect.top &&
+    point.y <= rect.bottom
+  );
+}
+
 export default function App() {
   const appLog = useMemo(() => createScopedLogger("app"), []);
 
@@ -240,6 +255,7 @@ export default function App() {
   const [calibrationMessage, setCalibrationMessage] = useState(
     "Press Start Calibration to begin.",
   );
+  const [inputTestHoveredCell, setInputTestHoveredCell] = useState(-1);
 
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(Math.ceil(GAME_DURATION_MS / 1000));
@@ -251,6 +267,7 @@ export default function App() {
   const overlayCanvasRef = useRef(null);
   const cameraWrapRef = useRef(null);
   const boardRef = useRef(null);
+  const inputTestCellRefs = useRef([]);
 
   const detectorRef = useRef(null);
   const streamRef = useRef(null);
@@ -286,6 +303,7 @@ export default function App() {
   const calibrationPairsRef = useRef([]);
   const calibrationSampleRef = useRef(null);
   const isCalibratingRef = useRef(isCalibrating);
+  const inputTestHoveredCellRef = useRef(inputTestHoveredCell);
 
   const holesRef = useRef(holes);
   const hitZonesRef = useRef([]);
@@ -301,6 +319,10 @@ export default function App() {
     () => calibrationTargets[calibrationTargetIndex] ?? null,
     [calibrationTargets, calibrationTargetIndex],
   );
+  const inputTestPinchingCell =
+    phase === PHASES.CALIBRATION && !isCalibrating && pinchActive
+      ? inputTestHoveredCell
+      : -1;
 
   useEffect(() => {
     appLog.info("App mounted", {
@@ -315,6 +337,16 @@ export default function App() {
   useEffect(() => {
     appLog.info("Phase changed", { phase });
   }, [appLog, phase]);
+
+  useEffect(() => {
+    if (phase === PHASES.CALIBRATION) {
+      return;
+    }
+    if (inputTestHoveredCellRef.current !== -1) {
+      inputTestHoveredCellRef.current = -1;
+      setInputTestHoveredCell(-1);
+    }
+  }, [phase]);
 
   useEffect(() => {
     appLog.debug("Viewport changed", viewport);
@@ -359,6 +391,26 @@ export default function App() {
     calibrationPairsCount,
     calibrationSampleFrames,
     calibrationMessage,
+  ]);
+
+  useEffect(() => {
+    appLog.debug("Calibration input test state changed", {
+      hoveredCellIndex: inputTestHoveredCell,
+      totalCells: INPUT_TEST_CELL_COUNT,
+      pinchActive,
+      pinchingHoverCell:
+        phase === PHASES.CALIBRATION && !isCalibrating && pinchActive
+          ? inputTestHoveredCell
+          : -1,
+      phase,
+      isCalibrating,
+    });
+  }, [
+    appLog,
+    inputTestHoveredCell,
+    pinchActive,
+    phase,
+    isCalibrating,
   ]);
 
   useEffect(() => {
@@ -417,6 +469,10 @@ export default function App() {
   useEffect(() => {
     isCalibratingRef.current = isCalibrating;
   }, [isCalibrating]);
+
+  useEffect(() => {
+    inputTestHoveredCellRef.current = inputTestHoveredCell;
+  }, [inputTestHoveredCell]);
 
   useEffect(() => {
     holesRef.current = holes;
@@ -833,6 +889,52 @@ export default function App() {
     }
   }
 
+  function resetCalibrationInputTests(reason = "manual_reset") {
+    inputTestHoveredCellRef.current = -1;
+    setInputTestHoveredCell(-1);
+    appLog.info("Calibration input tests reset", { reason });
+  }
+
+  function getHoveredInputTestCellIndex(pointerPoint) {
+    if (!pointerPoint) {
+      return -1;
+    }
+    for (let cellIndex = 0; cellIndex < INPUT_TEST_CELL_COUNT; cellIndex += 1) {
+      const cellElement = inputTestCellRefs.current[cellIndex];
+      const cellRect = cellElement?.getBoundingClientRect() ?? null;
+      if (isPointInsideClientRect(pointerPoint, cellRect)) {
+        return cellIndex;
+      }
+    }
+    return -1;
+  }
+
+  function updateCalibrationInputTestHoverState(pointerPoint, hasHand, frameId) {
+    if (
+      phaseRef.current !== PHASES.CALIBRATION ||
+      isCalibratingRef.current ||
+      !hasHand ||
+      !pointerPoint
+    ) {
+      if (inputTestHoveredCellRef.current !== -1) {
+        inputTestHoveredCellRef.current = -1;
+        setInputTestHoveredCell(-1);
+      }
+      return;
+    }
+
+    const hoveredCellIndex = getHoveredInputTestCellIndex(pointerPoint);
+    if (inputTestHoveredCellRef.current !== hoveredCellIndex) {
+      inputTestHoveredCellRef.current = hoveredCellIndex;
+      setInputTestHoveredCell(hoveredCellIndex);
+      appLog.info("Calibration grid hover cell changed", {
+        frameId,
+        hoveredCellIndex,
+        pointerPoint,
+      });
+    }
+  }
+
   function stopGameSession() {
     appLog.info("Stopping game session", {
       wasRunning: gameRunningRef.current,
@@ -1012,6 +1114,7 @@ export default function App() {
     setTransform(null);
     transformRef.current = null;
     setHasSavedCalibration(false);
+    resetCalibrationInputTests("recalibrate");
     setCalibrationMessage("Calibration cleared. Run calibration again.");
     beginCalibration();
   }
@@ -1023,6 +1126,7 @@ export default function App() {
       phase: phaseRef.current,
       gameRunning: gameRunningRef.current,
     });
+
     if (isCalibratingRef.current) {
       if (!handDetectedRef.current) {
         appLog.warn("Pinch click ignored during calibration because hand is missing");
@@ -1518,6 +1622,7 @@ export default function App() {
         setPinchActive(false);
         appLog.debug("Pinch state reset because hand is missing", { frameId });
       }
+      updateCalibrationInputTestHoverState(cursorRef.current, false, frameId);
       drawCameraOverlay(null);
       updateGame(timestamp);
       return;
@@ -1564,6 +1669,7 @@ export default function App() {
     );
     cursorRef.current = smoothed;
     setCursor(smoothed);
+    updateCalibrationInputTestHoverState(smoothed, true, frameId);
 
     appLog.debug("Updated raw and smoothed cursor", {
       frameId,
@@ -1621,6 +1727,18 @@ export default function App() {
         nowPinching: nextPinch,
         pinchDistance: hand.pinchDistance,
       });
+
+      if (
+        phaseRef.current === PHASES.CALIBRATION &&
+        !isCalibratingRef.current &&
+        nextPinch &&
+        inputTestHoveredCellRef.current >= 0
+      ) {
+        appLog.info("Calibration grid pinch-active over hovered cell", {
+          frameId,
+          hoveredCellIndex: inputTestHoveredCellRef.current,
+        });
+      }
 
       if (
         !wasPinching &&
@@ -1863,6 +1981,43 @@ export default function App() {
                   Use Saved Calibration
                 </button>
               )}
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => resetCalibrationInputTests("manual_button")}
+              >
+                Reset Input Test
+              </button>
+            </div>
+
+            <div className="input-test-panel">
+              <h3>Input Test</h3>
+              <p className="small-text">
+                Move over any cell to see hover color. Keep hovering and pinch to switch to pinch color.
+              </p>
+              <div className="input-test-grid">
+                {Array.from({ length: INPUT_TEST_CELL_COUNT }, (_, cellIndex) => {
+                  const isHovered = inputTestHoveredCell === cellIndex;
+                  const isPinching = inputTestPinchingCell === cellIndex;
+                  return (
+                    <div
+                      key={cellIndex}
+                      ref={(element) => {
+                        inputTestCellRefs.current[cellIndex] = element;
+                      }}
+                      className={`input-test-cell ${
+                        isPinching ? "pinching" : isHovered ? "hovered" : ""
+                      }`}
+                    >
+                      <span>{cellIndex + 1}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="small-text">
+                Hovered cell: {inputTestHoveredCell >= 0 ? inputTestHoveredCell + 1 : "none"} | Pinch:{" "}
+                {pinchActive ? "active" : "idle"}
+              </p>
             </div>
           </section>
         ) : (

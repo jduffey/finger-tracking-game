@@ -146,6 +146,63 @@ body {
   margin-top: 4px;
 }
 
+.input-test-panel {
+  background: rgba(236, 243, 252, 0.72);
+  border: 1px solid #ced9eb;
+  border-radius: 12px;
+  margin-top: 12px;
+  padding: 10px;
+}
+
+.input-test-panel h3 {
+  font-size: 0.98rem;
+  margin: 0 0 6px;
+}
+
+.input-test-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 8px;
+}
+
+.input-test-cell {
+  align-items: center;
+  background: #f8fbff;
+  border: 2px dashed #8ba0bb;
+  border-radius: 10px;
+  color: #294156;
+  display: flex;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  padding: 8px;
+  text-align: center;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.input-test-cell span {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.input-test-cell.hovered {
+  background: #fff7e3;
+  border-color: #d5901b;
+  box-shadow: 0 0 0 3px rgba(213, 144, 27, 0.17);
+  transform: translateY(-1px);
+}
+
+.input-test-cell.pinching {
+  background: #fcdde2;
+  border-color: #bf2642;
+  box-shadow: 0 0 0 3px rgba(191, 38, 66, 0.19);
+  transform: translateY(-1px);
+}
+
 .button-row {
   display: flex;
   flex-wrap: wrap;
