@@ -38,6 +38,7 @@ import RouletteFingerGame from "./components/RouletteFingerGame.jsx";
 import ConveyorSphereGame from "./components/ConveyorSphereGame.jsx";
 import SpatialGestureMemory from "./components/SpatialGestureMemory.jsx";
 import GestureAnalyticsLab from "./components/GestureAnalyticsLab.jsx";
+import GestureArtLab from "./components/GestureArtLab.jsx";
 import { createGestureEngine } from "./gestures/gestureEngine.js";
 import {
   ALL_GESTURE_IDS,
@@ -58,6 +59,7 @@ const PHASES = {
   ROULETTE: "ROULETTE",
   SPATIAL_GESTURE_MEMORY: "SPATIAL_GESTURE_MEMORY",
   GESTURE_ANALYTICS_LAB: "GESTURE_ANALYTICS_LAB",
+  GESTURE_ART_LAB: "GESTURE_ART_LAB",
   GAME: "GAME",
 };
 
@@ -1285,6 +1287,7 @@ export default function App() {
   });
   const [analyticsHands, setAnalyticsHands] = useState([]);
   const [analyticsTimestamp, setAnalyticsTimestamp] = useState(0);
+  const [gestureArtHands, setGestureArtHands] = useState([]);
   const [poseModelReady, setPoseModelReady] = useState(false);
   const [poseModelError, setPoseModelError] = useState("");
   const [poseStatus, setPoseStatus] = useState(createEmptyPoseStatus);
@@ -1465,7 +1468,8 @@ export default function App() {
     phase === PHASES.CONVEYOR ||
     phase === PHASES.ROULETTE ||
     phase === PHASES.SPATIAL_GESTURE_MEMORY ||
-    phase === PHASES.GESTURE_ANALYTICS_LAB;
+    phase === PHASES.GESTURE_ANALYTICS_LAB ||
+    phase === PHASES.GESTURE_ART_LAB;
   const cameraPanelTitle =
     phase === PHASES.FLIGHT
       ? "Camera + Flight Controls"
@@ -1483,6 +1487,8 @@ export default function App() {
       ? "Camera + Spatial Memory Controls"
       : phase === PHASES.GESTURE_ANALYTICS_LAB
       ? "Camera + Gesture Analytics"
+      : phase === PHASES.GESTURE_ART_LAB
+      ? "Camera + Gesture Art Controls"
       : phase === PHASES.GAME
       ? "Camera + Tracking"
       : phase === PHASES.SANDBOX
@@ -1595,6 +1601,9 @@ export default function App() {
     }
     if (phase !== PHASES.SPATIAL_GESTURE_MEMORY && spatialMemoryRef.current?.active) {
       setSpatialMemoryState((prev) => ({ ...prev, active: false }));
+    }
+    if (phase !== PHASES.GESTURE_ART_LAB) {
+      setGestureArtHands([]);
     }
   }, [phase]);
 
@@ -3715,6 +3724,34 @@ export default function App() {
 
   function returnFromGestureAnalyticsLab() {
     appLog.info("Returning from Gesture Analytics Lab to calibration input test");
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
+  function startGestureArtLab() {
+    appLog.info("Gesture Art Lab start requested", {
+      currentPhase: phaseRef.current,
+      cameraReady,
+      modelReady,
+    });
+    stopGameSession();
+    resetArcCalibrationSession("start_gesture_art_lab");
+    setIsCalibrating(false);
+    isCalibratingRef.current = false;
+    calibrationSampleRef.current = null;
+    setCalibrationSampleFrames(0);
+    setGestureArtHands([]);
+    setPhase(PHASES.GESTURE_ART_LAB);
+    phaseRef.current = PHASES.GESTURE_ART_LAB;
+    setCalibrationMessage(
+      "Gesture Art Lab active. One hand draws particles, two hands warp the entire field.",
+    );
+  }
+
+  function returnFromGestureArtLab() {
+    appLog.info("Returning from Gesture Art Lab to calibration input test");
+    setGestureArtHands([]);
     setPhase(PHASES.CALIBRATION);
     phaseRef.current = PHASES.CALIBRATION;
     setCalibrationMessage("Back on Calibration Input Test.");
@@ -6098,6 +6135,8 @@ export default function App() {
             drawCameraOverlayHands(stableHands, {
               showSkeleton: true,
             });
+          } else if (phaseRef.current === PHASES.GESTURE_ART_LAB) {
+            setGestureArtHands(stableHands);
           }
           if (phaseRef.current === PHASES.MINORITY_REPORT_LAB) {
             drawCameraOverlayHands(stableHands, {
@@ -6191,6 +6230,8 @@ export default function App() {
               ? "Body mode: keep head, shoulders, elbows, and wrists in view."
               : phase === PHASES.MINORITY_REPORT_LAB
               ? "In lab mode, thumb tips drive pointers."
+              : phase === PHASES.GESTURE_ART_LAB
+              ? "Index fingertip controls the primary art attractor in real time."
               : "Use your THUMB tip as the pointer."}
           </p>
           <p className="help-text">
@@ -6202,6 +6243,8 @@ export default function App() {
               ? "Pinch to grab/release. Swipes/push/circle and two-hand gestures trigger lab actions."
               : phase === PHASES.CONVEYOR
               ? "Pinch to grab spheres, then release to throw. Faster flicks add speed."
+              : phase === PHASES.GESTURE_ART_LAB
+              ? "One hand draws, two hands warp, circle clears, and push toggles freeze."
               : 'Pinch (thumb + index) to "click".'}
           </p>
 
@@ -6226,7 +6269,8 @@ export default function App() {
             phase === PHASES.BODY_POSE ||
             phase === PHASES.RUNNER ||
             phase === PHASES.CONVEYOR ||
-            phase === PHASES.MINORITY_REPORT_LAB) && (
+            phase === PHASES.MINORITY_REPORT_LAB ||
+            phase === PHASES.GESTURE_ART_LAB) && (
             <>
               <p className="small-text">{calibrationMessage}</p>
               {phase === PHASES.CALIBRATION ? (
@@ -6265,6 +6309,11 @@ export default function App() {
                 <p className="small-text">
                   Multi-hand mode active: one-hand pinch grabs panels, two-hand pinch transforms
                   the stage, and gestures fire to the event log.
+                </p>
+              ) : phase === PHASES.GESTURE_ART_LAB ? (
+                <p className="small-text">
+                  Continuous mapping mode: index attractor, pinch thickness, openness palette,
+                  wrist hue, velocity emission, and two-hand warp controls.
                 </p>
               ) : (
                 <p className="small-text">
@@ -6339,6 +6388,22 @@ export default function App() {
                     >
                       Launch Spatial Gesture Memory
                     </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={startGestureAnalyticsLab}
+                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
+                    >
+                      Open Gesture Analytics Lab
+                    </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={startGestureArtLab}
+                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
+                    >
+                      Open Gesture Art Lab
+                    </button>
                     {hasSavedCalibration && !isCalibrating && !isArcCalibrating && (
                       <button className="secondary" onClick={startGameSession}>
                         Start Whack-a-Mole
@@ -6392,8 +6457,12 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startSpatialGestureMemorySession}>
                       Launch Spatial Gesture Memory
+                    </button>
                     <button className="secondary" onClick={startGestureAnalyticsLab}>
                       Open Gesture Analytics Lab
+                    </button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Open Gesture Art Lab
                     </button>
                   </>
                 ) : phase === PHASES.FLIGHT ? (
@@ -6431,6 +6500,9 @@ export default function App() {
                     <button className="secondary" onClick={startGestureAnalyticsLab}>
                       Open Gesture Analytics Lab
                     </button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Open Gesture Art Lab
+                    </button>
                   </>
                 ) : phase === PHASES.BODY_POSE ? (
                   <>
@@ -6456,6 +6528,9 @@ export default function App() {
                     <button className="secondary" onClick={startGestureAnalyticsLab}>
                       Open Gesture Analytics Lab
                     </button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Open Gesture Art Lab
+                    </button>
                   </>
                 ) : phase === PHASES.RUNNER ? (
                   <>
@@ -6479,8 +6554,14 @@ export default function App() {
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
+                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
+                      Launch Spatial Gesture Memory
+                    </button>
                     <button className="secondary" onClick={startGestureAnalyticsLab}>
                       Open Gesture Analytics Lab
+                    </button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Open Gesture Art Lab
                     </button>
                   </>
                 ) : phase === PHASES.GESTURE_ANALYTICS_LAB ? (
@@ -6501,11 +6582,36 @@ export default function App() {
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
                     </button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Open Gesture Art Lab
+                    </button>
                     {hasSavedCalibration && (
                       <button className="secondary" onClick={startGameSession}>
                         Switch to Whack-a-Mole
                       </button>
                     )}
+                  </>
+                ) : phase === PHASES.GESTURE_ART_LAB ? (
+                  <>
+                    <button onClick={returnFromGestureArtLab}>Back to Input Test</button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Restart Gesture Art Lab
+                    </button>
+                    <button className="secondary" onClick={startMinorityReportLab}>
+                      Switch to Minority Report Lab
+                    </button>
+                    <button className="secondary" onClick={startGestureAnalyticsLab}>
+                      Open Gesture Analytics Lab
+                    </button>
+                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
+                      Launch Spatial Gesture Memory
+                    </button>
+                    <button className="secondary" onClick={startRunnerSession}>
+                      Switch to Runner
+                    </button>
+                    <button className="secondary" onClick={startFlightSession}>
+                      Switch to Flight
+                    </button>
                   </>
                 ) : phase === PHASES.CONVEYOR ? (
                   <>
@@ -6528,6 +6634,12 @@ export default function App() {
                     <button className="secondary" onClick={startSpatialGestureMemorySession}>
                       Launch Spatial Gesture Memory
                     </button>
+                    <button className="secondary" onClick={startGestureAnalyticsLab}>
+                      Open Gesture Analytics Lab
+                    </button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Open Gesture Art Lab
+                    </button>
                   </>
                 ) : phase === PHASES.SPATIAL_GESTURE_MEMORY ? (
                   <>
@@ -6544,6 +6656,12 @@ export default function App() {
                     <button className="secondary" onClick={startRunnerSession}>
                       Switch to Runner
                     </button>
+                    <button className="secondary" onClick={startGestureAnalyticsLab}>
+                      Open Gesture Analytics Lab
+                    </button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Open Gesture Art Lab
+                    </button>
                   </>
                 ) : (
                   <>
@@ -6553,6 +6671,12 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startSpatialGestureMemorySession}>
                       Launch Spatial Gesture Memory
+                    </button>
+                    <button className="secondary" onClick={startGestureAnalyticsLab}>
+                      Open Gesture Analytics Lab
+                    </button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Open Gesture Art Lab
                     </button>
                     <button className="secondary" onClick={startRunnerSession}>
                       Switch to Runner
@@ -6811,18 +6935,15 @@ export default function App() {
             state={spatialMemoryState}
             onStart={startSpatialGestureMemoryRound}
             onReset={resetSpatialGestureMemory}
+          />
         ) : phase === PHASES.GESTURE_ANALYTICS_LAB ? (
           <GestureAnalyticsLab
             liveHands={analyticsHands}
             liveTimestamp={analyticsTimestamp}
             fps={fps}
           />
-        ) : phase === PHASES.SPATIAL_GESTURE_MEMORY ? (
-          <SpatialGestureMemory
-            state={spatialMemoryState}
-            onStart={startSpatialGestureMemoryRound}
-            onReset={resetSpatialGestureMemory}
-          />
+        ) : phase === PHASES.GESTURE_ART_LAB ? (
+          <GestureArtLab hands={gestureArtHands} fps={fps} handDetected={handDetected} />
         ) : (
           <section className="card panel">
             <h2>Whack-a-Mole</h2>
@@ -6869,6 +6990,9 @@ export default function App() {
               <button className="secondary" onClick={startGestureAnalyticsLab}>
                 Open Gesture Analytics Lab
               </button>
+              <button className="secondary" onClick={startGestureArtLab}>
+                Open Gesture Art Lab
+              </button>
               <button className="secondary" onClick={handleRecalibrate}>
                 Recalibrate
               </button>
@@ -6907,7 +7031,8 @@ export default function App() {
       {phase !== PHASES.MINORITY_REPORT_LAB &&
         phase !== PHASES.GESTURE_ANALYTICS_LAB &&
         phase !== PHASES.BODY_POSE &&
-        phase !== PHASES.SPATIAL_GESTURE_MEMORY && (
+        phase !== PHASES.SPATIAL_GESTURE_MEMORY &&
+        phase !== PHASES.GESTURE_ART_LAB && (
         <>
           <div
             className={`tracked-cursor ${handDetected ? "" : "paused"}`}
