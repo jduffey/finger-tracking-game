@@ -76,3 +76,26 @@ export function isPointInCircle(point, circle) {
   gameLogicLog.debug("Point-circle collision result", { dx, dy, hit });
   return hit;
 }
+
+export function getRunnerLaneFromNormalizedX(normalizedX, laneDebounce = 0.06) {
+  gameLogicLog.debug("Resolving runner lane from normalized x", {
+    normalizedX,
+    laneDebounce,
+  });
+  if (!Number.isFinite(normalizedX)) {
+    gameLogicLog.warn("Runner lane resolution fallback to center due to invalid normalized x", {
+      normalizedX,
+    });
+    return 0;
+  }
+
+  const clampedX = Math.min(1, Math.max(0, normalizedX));
+  let lane = 0;
+  if (clampedX < 1 / 3 - laneDebounce) {
+    lane = -1;
+  } else if (clampedX > 2 / 3 + laneDebounce) {
+    lane = 1;
+  }
+  gameLogicLog.debug("Resolved runner lane", { clampedX, lane });
+  return lane;
+}

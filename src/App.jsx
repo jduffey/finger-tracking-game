@@ -14,6 +14,7 @@ import {
 import {
   buildGridHoles,
   GAME_DURATION_MS,
+  getRunnerLaneFromNormalizedX,
   isPointInCircle,
   MOLE_VISIBLE_MS,
   pickRandomHole,
@@ -2678,36 +2679,19 @@ export default function App() {
     setCalibrationMessage("Back on Calibration Input Test.");
   }
 
-  function setRunnerLaneFromPointer(pointerPoint, hasHand, frameId) {
+  function setRunnerLaneFromNormalizedX(normalizedX, hasHand, frameId) {
     if (phaseRef.current !== PHASES.RUNNER) {
       return;
     }
-    if (!hasHand || !pointerPoint) {
+    if (!hasHand || !Number.isFinite(normalizedX)) {
       return;
-    }
-    const stage = runnerStageRef.current;
-    if (!stage) {
-      return;
-    }
-    const rect = stage.getBoundingClientRect();
-    if (!rect.width || !rect.height) {
-      return;
-    }
-    const localX = clampValue(pointerPoint.x - rect.left, 0, rect.width);
-    const normalizedX = localX / rect.width;
-    let lane = 0;
-    if (normalizedX < 1 / 3 - RUNNER_POINTER_LANE_DEBOUNCE) {
-      lane = -1;
-    } else if (normalizedX > 2 / 3 + RUNNER_POINTER_LANE_DEBOUNCE) {
-      lane = 1;
-    } else {
-      lane = 0;
     }
 
+    const lane = getRunnerLaneFromNormalizedX(normalizedX, RUNNER_POINTER_LANE_DEBOUNCE);
     const state = runnerStateRef.current;
     if (state.laneTarget !== lane) {
       state.laneTarget = lane;
-      appLog.info("Runner lane target changed from pointer", {
+      appLog.info("Runner lane target changed from normalized tracking x", {
         frameId,
         lane,
         normalizedX: roundMetric(normalizedX, 4),
@@ -3888,7 +3872,7 @@ export default function App() {
     cursorRef.current = smoothed;
     setCursor(smoothed);
     updateCalibrationInputTestHoverState(smoothed, true, frameId);
-    setRunnerLaneFromPointer(smoothed, true, frameId);
+    setRunnerLaneFromNormalizedX(mappedPointerTip.u, true, frameId);
 
     appLog.debug("Updated raw and smoothed cursor", {
       frameId,
