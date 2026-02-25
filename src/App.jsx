@@ -3916,9 +3916,12 @@ export default function App() {
 
     const coverMetrics = computeCameraCoverMetrics();
     const visibleBounds = coverMetrics?.mirroredNormalized ?? null;
-    const thumbTipRawU = Number.isFinite(hand.thumbTip?.uRaw) ? hand.thumbTip.uRaw : hand.thumbTip.u;
-    const thumbTipRawV = Number.isFinite(hand.thumbTip?.vRaw) ? hand.thumbTip.vRaw : hand.thumbTip.v;
+    const thumbTipRawU = Number.isFinite(hand.thumbTip?.uRaw) ? hand.thumbTip.uRaw : hand.thumbTip?.u;
+    const thumbTipRawV = Number.isFinite(hand.thumbTip?.vRaw) ? hand.thumbTip.vRaw : hand.thumbTip?.v;
+    const indexTipRawU = Number.isFinite(hand.indexTip?.uRaw) ? hand.indexTip.uRaw : hand.indexTip?.u;
+    const indexTipRawV = Number.isFinite(hand.indexTip?.vRaw) ? hand.indexTip.vRaw : hand.indexTip?.v;
     const visibleThumbTip = normalizeTipToVisibleBounds(thumbTipRawU, thumbTipRawV, visibleBounds);
+    const visibleIndexTip = normalizeTipToVisibleBounds(indexTipRawU, indexTipRawV, visibleBounds);
     const mappedFingerTips = {};
     for (const fingerName of EXTENT_FINGER_NAMES) {
       const tip = hand.fingerTips?.[fingerName];
@@ -3939,7 +3942,25 @@ export default function App() {
         : visibleThumbTip
           ? { u: visibleThumbTip.u, v: visibleThumbTip.v }
           : { u: hand.thumbTip.u, v: hand.thumbTip.v };
-    const mappedPointerTip = mappedThumbTip;
+    const mappedIndexTip =
+      mappedFingerTips.index && Number.isFinite(mappedFingerTips.index.u) && Number.isFinite(mappedFingerTips.index.v)
+        ? mappedFingerTips.index
+        : visibleIndexTip
+          ? { u: visibleIndexTip.u, v: visibleIndexTip.v }
+          : Number.isFinite(hand.indexTip?.u) && Number.isFinite(hand.indexTip?.v)
+            ? { u: hand.indexTip.u, v: hand.indexTip.v }
+            : null;
+    const runnerUsesIndexPointer = phaseRef.current === PHASES.RUNNER;
+    const mappedPointerTip =
+      runnerUsesIndexPointer && mappedIndexTip
+        ? mappedIndexTip
+        : mappedThumbTip;
+    const pointerSource = runnerUsesIndexPointer && mappedIndexTip ? "index" : "thumb";
+    const pointerRawU = pointerSource === "index" ? indexTipRawU : thumbTipRawU;
+    const pointerRawV = pointerSource === "index" ? indexTipRawV : thumbTipRawV;
+    const pointerClampedU = pointerSource === "index" ? hand.indexTip?.u : hand.thumbTip?.u;
+    const pointerClampedV = pointerSource === "index" ? hand.indexTip?.v : hand.thumbTip?.v;
+    const visiblePointerTip = pointerSource === "index" ? visibleIndexTip : visibleThumbTip;
     updateTrackingExtentsWithHand(hand, frameId, timestamp, visibleBounds);
     updateFlightControlFromTips(mappedFingerTips, timestamp, frameId);
 
@@ -4046,15 +4067,15 @@ export default function App() {
       usedTransform: shouldUseTransform,
       transformMode,
       pointerTip: {
-        source: "thumb",
-        uRaw: roundMetric(thumbTipRawU),
-        vRaw: roundMetric(thumbTipRawV),
-        uClamped: roundMetric(hand.thumbTip.u),
-        vClamped: roundMetric(hand.thumbTip.v),
+        source: pointerSource,
+        uRaw: roundMetric(pointerRawU),
+        vRaw: roundMetric(pointerRawV),
+        uClamped: roundMetric(pointerClampedU),
+        vClamped: roundMetric(pointerClampedV),
       },
       mappedPointerTip,
       arcMappedPoint,
-      visiblePointerTip: visibleThumbTip,
+      visiblePointerTip,
       visibleBounds: visibleBounds
         ? {
             uMin: roundMetric(visibleBounds.uMin),
@@ -4073,7 +4094,7 @@ export default function App() {
         targetIndex: calibrationSampleRef.current.targetIndex,
         sampleCount: calibrationSampleRef.current.points.length,
         mappedPointerTip,
-        visiblePointerTip: visibleThumbTip,
+        visiblePointerTip,
       });
       if (calibrationSampleRef.current.points.length >= CALIBRATION_SAMPLE_FRAMES) {
         finalizeCalibrationSample();
@@ -4314,7 +4335,11 @@ export default function App() {
           </div>
 
           <p className="help-text">Hold one hand up.</p>
-          <p className="help-text">Use your THUMB tip as the pointer.</p>
+          <p className="help-text">
+            {phase === PHASES.RUNNER
+              ? "Use your INDEX tip to steer the runner."
+              : "Use your THUMB tip as the pointer."}
+          </p>
           <p className="help-text">Pinch (thumb + index) to "click".</p>
 
           <div className="status-row">
