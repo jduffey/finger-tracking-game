@@ -30,8 +30,10 @@ import {
   getLastDetectionMeta,
   initHandTracking,
 } from "./handTracking";
+import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from "./poseTracking";
 import { createScopedLogger } from "./logger";
 import MinorityReportLab from "./components/MinorityReportLab";
+import BodyPoseLab from "./components/BodyPoseLab";
 import { createGestureEngine } from "./gestures/gestureEngine";
 import {
   ALL_GESTURE_IDS,
@@ -45,6 +47,7 @@ const PHASES = {
   SANDBOX: "SANDBOX",
   FLIGHT: "FLIGHT",
   RUNNER: "RUNNER",
+  BODY_POSE: "BODY_POSE",
   MINORITY_REPORT_LAB: "MINORITY_REPORT_LAB",
   GAME: "GAME",
 };
@@ -162,6 +165,29 @@ const LAB_DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
 const LAB_EVENT_LOG_LIMIT = 220;
 const LAB_TRAIN_CAPTURE_FRAMES = 24;
 const LAB_TRAIN_COUNTDOWN_SECONDS = 3;
+const POSE_KEYPOINT_THRESHOLD = 0.2;
+const POSE_CONNECTIONS = [
+  ["left_shoulder", "right_shoulder"],
+  ["left_shoulder", "left_elbow"],
+  ["left_elbow", "left_wrist"],
+  ["right_shoulder", "right_elbow"],
+  ["right_elbow", "right_wrist"],
+  ["left_shoulder", "left_hip"],
+  ["right_shoulder", "right_hip"],
+  ["left_hip", "right_hip"],
+  ["left_eye", "right_eye"],
+  ["nose", "left_eye"],
+  ["nose", "right_eye"],
+  ["left_eye", "left_ear"],
+  ["right_eye", "right_ear"],
+];
+const POSE_KEYPOINT_GROUPS = {
+  head: ["nose", "left_ear", "right_ear"],
+  eyes: ["left_eye", "right_eye"],
+  shoulders: ["left_shoulder", "right_shoulder"],
+  arms: ["left_elbow", "right_elbow", "left_wrist", "right_wrist"],
+  torso: ["left_hip", "right_hip", "left_shoulder", "right_shoulder"],
+};
 
 const GESTURE_LABEL_BY_ID = GESTURE_DEFINITIONS.reduce((accumulator, definition) => {
   accumulator[definition.id] = definition.label;
@@ -419,6 +445,31 @@ function summarizeEventMeta(meta) {
     return `d=${meta.pinchDistance.toFixed(3)}`;
   }
   return "";
+}
+
+function createEmptyPoseStatus() {
+  return {
+    detected: false,
+    score: 0,
+    keypointsCount: 0,
+    parts: {
+      head: false,
+      eyes: false,
+      shoulders: false,
+      arms: false,
+      torso: false,
+    },
+  };
+}
+
+function hasVisiblePoseKeypoints(map, names, minScore = POSE_KEYPOINT_THRESHOLD) {
+  for (const name of names) {
+    const point = map[name];
+    if (point && Number.isFinite(point.score) && point.score >= minScore) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function summarizeExtentForLog(extent, canvasWidth, canvasHeight) {
@@ -795,6 +846,9 @@ export default function App() {
     personalizationRef.current.getSampleCounts(),
   );
   const [labTrainingState, setLabTrainingState] = useState(createInitialLabTrainingState);
+  const [poseModelReady, setPoseModelReady] = useState(false);
+  const [poseModelError, setPoseModelError] = useState("");
+  const [poseStatus, setPoseStatus] = useState(createEmptyPoseStatus);
 
   const [transform, setTransform] = useState(null);
   const [hasSavedCalibration, setHasSavedCalibration] = useState(false);
@@ -855,6 +909,8 @@ export default function App() {
   const inputTestCellRefs = useRef([]);
 
   const detectorRef = useRef(null);
+  const poseDetectorRef = useRef(null);
+  const poseInitPromiseRef = useRef(null);
   const streamRef = useRef(null);
   const rafRef = useRef(0);
   const inferenceBusyRef = useRef(false);
@@ -963,12 +1019,15 @@ export default function App() {
     phase === PHASES.SANDBOX ||
     phase === PHASES.FLIGHT ||
     phase === PHASES.RUNNER ||
+    phase === PHASES.BODY_POSE ||
     phase === PHASES.MINORITY_REPORT_LAB;
   const cameraPanelTitle =
     phase === PHASES.FLIGHT
       ? "Camera + Flight Controls"
       : phase === PHASES.RUNNER
       ? "Camera + Runner Controls"
+      : phase === PHASES.BODY_POSE
+      ? "Camera + Body Pose Highlight"
       : phase === PHASES.MINORITY_REPORT_LAB
       ? "Camera + Minority Report Controls"
       : phase === PHASES.GAME
@@ -980,6 +1039,7 @@ export default function App() {
     phase === PHASES.CALIBRATION && !isCalibrating && pinchActive
       ? inputTestHoveredCell
       : -1;
+  const isBodyPosePhase = phase === PHASES.BODY_POSE;
 
   useEffect(() => {
     appLog.info("App mounted", {
@@ -1076,6 +1136,9 @@ export default function App() {
             }
           : previous,
       );
+    }
+    if (phase !== PHASES.BODY_POSE) {
+      setPoseStatus(createEmptyPoseStatus());
     }
   }, [phase]);
 
@@ -1861,6 +1924,68 @@ export default function App() {
       window.removeEventListener("resize", scheduleSync);
     };
   }, [appLog, phase]);
+
+  useEffect(() => {
+    if (phase === PHASES.BODY_POSE) {
+      void ensurePoseDetectorInitialized("enter_body_pose");
+    }
+  }, [phase]);
+
+  useEffect(() => {
+    return () => {
+      if (poseDetectorRef.current) {
+        poseDetectorRef.current.dispose?.();
+        poseDetectorRef.current = null;
+      }
+    };
+  }, []);
+
+  async function ensurePoseDetectorInitialized(reason = "manual") {
+    if (poseDetectorRef.current) {
+      setPoseModelReady(true);
+      return true;
+    }
+
+    if (poseInitPromiseRef.current) {
+      await poseInitPromiseRef.current;
+      return Boolean(poseDetectorRef.current);
+    }
+
+    const requestedBackend = getCurrentBackend() === "cpu" ? "cpu" : "webgl";
+    setPoseModelReady(false);
+    setPoseModelError("");
+    poseInitPromiseRef.current = (async () => {
+      try {
+        appLog.info("Initializing pose detector", {
+          reason,
+          requestedBackend,
+        });
+        const detector = await initPoseTracking({
+          runtime: "tfjs",
+          backend: requestedBackend,
+        });
+        poseDetectorRef.current = detector;
+        setPoseModelReady(true);
+        setPoseModelError("");
+        appLog.info("Pose detector ready", {
+          reason,
+          runtime: getPoseRuntime(),
+        });
+      } catch (error) {
+        appLog.error("Pose detector initialization failed", { reason, error });
+        setPoseModelError(
+          error instanceof Error
+            ? error.message
+            : "Failed to initialize body pose detector.",
+        );
+      } finally {
+        poseInitPromiseRef.current = null;
+      }
+    })();
+
+    await poseInitPromiseRef.current;
+    return Boolean(poseDetectorRef.current);
+  }
 
   function getRecoveryConfig(attempt, reason) {
     const currentRuntime = getCurrentRuntime() || activeRuntime;
@@ -2962,6 +3087,34 @@ export default function App() {
 
   function returnFromRunnerSession() {
     appLog.info("Returning from runner mode to calibration input test");
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
+  function startBodyPoseLab() {
+    appLog.info("Body pose lab start requested", {
+      currentPhase: phaseRef.current,
+      cameraReady,
+      modelReady,
+    });
+    stopGameSession();
+    resetArcCalibrationSession("start_body_pose_lab");
+    setIsCalibrating(false);
+    isCalibratingRef.current = false;
+    calibrationSampleRef.current = null;
+    setCalibrationSampleFrames(0);
+    setPoseStatus(createEmptyPoseStatus());
+    setPhase(PHASES.BODY_POSE);
+    phaseRef.current = PHASES.BODY_POSE;
+    setCalibrationMessage(
+      "Body Pose Highlight Lab active. Keep your head and upper body centered in frame.",
+    );
+    void ensurePoseDetectorInitialized("start_body_pose_lab");
+  }
+
+  function returnFromBodyPoseLab() {
+    appLog.info("Returning from body pose lab to calibration input test");
     setPhase(PHASES.CALIBRATION);
     phaseRef.current = PHASES.CALIBRATION;
     setCalibrationMessage("Back on Calibration Input Test.");
@@ -4120,7 +4273,95 @@ export default function App() {
     }
   }
 
-  function processTrackingFrame(hand, timestamp) {
+  function drawPoseOverlay(pose) {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!pose || !Array.isArray(pose.keypoints) || pose.keypoints.length === 0) {
+      return;
+    }
+
+    const keypointMap = {};
+    for (const keypoint of pose.keypoints) {
+      if (!keypoint?.name || !Number.isFinite(keypoint.u) || !Number.isFinite(keypoint.v)) {
+        continue;
+      }
+      keypointMap[keypoint.name] = keypoint;
+    }
+
+    ctx.lineWidth = 2.8;
+    ctx.strokeStyle = "rgba(128, 202, 255, 0.72)";
+    for (const [startName, endName] of POSE_CONNECTIONS) {
+      const start = keypointMap[startName];
+      const end = keypointMap[endName];
+      if (
+        !start ||
+        !end ||
+        (start.score ?? 0) < POSE_KEYPOINT_THRESHOLD ||
+        (end.score ?? 0) < POSE_KEYPOINT_THRESHOLD
+      ) {
+        continue;
+      }
+      ctx.beginPath();
+      ctx.moveTo(start.u * canvas.width, start.v * canvas.height);
+      ctx.lineTo(end.u * canvas.width, end.v * canvas.height);
+      ctx.stroke();
+    }
+
+    const colorByGroup = {
+      head: "rgba(255, 195, 92, 0.96)",
+      eyes: "rgba(255, 120, 120, 0.96)",
+      shoulders: "rgba(123, 237, 181, 0.96)",
+      arms: "rgba(105, 188, 255, 0.96)",
+      torso: "rgba(198, 153, 255, 0.96)",
+      other: "rgba(223, 232, 248, 0.86)",
+    };
+
+    const resolveGroup = (name) => {
+      if (POSE_KEYPOINT_GROUPS.head.includes(name)) {
+        return "head";
+      }
+      if (POSE_KEYPOINT_GROUPS.eyes.includes(name)) {
+        return "eyes";
+      }
+      if (POSE_KEYPOINT_GROUPS.shoulders.includes(name)) {
+        return "shoulders";
+      }
+      if (POSE_KEYPOINT_GROUPS.arms.includes(name)) {
+        return "arms";
+      }
+      if (POSE_KEYPOINT_GROUPS.torso.includes(name)) {
+        return "torso";
+      }
+      return "other";
+    };
+
+    for (const keypoint of pose.keypoints) {
+      if (!keypoint?.name || (keypoint.score ?? 0) < POSE_KEYPOINT_THRESHOLD) {
+        continue;
+      }
+      const group = resolveGroup(keypoint.name);
+      const x = keypoint.u * canvas.width;
+      const y = keypoint.v * canvas.height;
+      ctx.fillStyle = colorByGroup[group];
+      ctx.beginPath();
+      ctx.arc(x, y, group === "eyes" ? 4.6 : 5.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(245, 250, 255, 0.9)";
+      ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+      ctx.fillText(keypoint.name.replace("left_", "L-").replace("right_", "R-"), x + 6, y - 6);
+    }
+  }
+
+  function updateFrameTiming(timestamp) {
     frameCounterRef.current += 1;
     const frameId = frameCounterRef.current;
 
@@ -4134,6 +4375,70 @@ export default function App() {
       }
     }
     lastFrameTimeRef.current = timestamp;
+    return frameId;
+  }
+
+  function processPoseFrame(pose, timestamp) {
+    const frameId = updateFrameTiming(timestamp);
+    const poseMeta = getLastPoseMeta();
+
+    if (!pose) {
+      if (handDetectedRef.current) {
+        handDetectedRef.current = false;
+        setHandDetected(false);
+      }
+      setPinchActive(false);
+      setPoseStatus((previous) => (previous.detected ? createEmptyPoseStatus() : previous));
+      drawPoseOverlay(null);
+      if (frameId % 45 === 0) {
+        appLog.debug("Body pose frame without detection", {
+          frameId,
+          poseMeta,
+        });
+      }
+      return;
+    }
+
+    if (!handDetectedRef.current) {
+      handDetectedRef.current = true;
+      setHandDetected(true);
+    }
+    setPinchActive(false);
+
+    const keypointMap = {};
+    for (const point of pose.keypoints) {
+      if (point?.name) {
+        keypointMap[point.name] = point;
+      }
+    }
+
+    const nextPoseStatus = {
+      detected: true,
+      score: Number.isFinite(pose.score) ? pose.score : 0,
+      keypointsCount: pose.keypoints.length,
+      parts: {
+        head: hasVisiblePoseKeypoints(keypointMap, POSE_KEYPOINT_GROUPS.head),
+        eyes: hasVisiblePoseKeypoints(keypointMap, POSE_KEYPOINT_GROUPS.eyes),
+        shoulders: hasVisiblePoseKeypoints(keypointMap, POSE_KEYPOINT_GROUPS.shoulders),
+        arms: hasVisiblePoseKeypoints(keypointMap, POSE_KEYPOINT_GROUPS.arms),
+        torso: hasVisiblePoseKeypoints(keypointMap, POSE_KEYPOINT_GROUPS.torso),
+      },
+    };
+    setPoseStatus(nextPoseStatus);
+    drawPoseOverlay(pose);
+
+    if (frameId % 45 === 0) {
+      appLog.debug("Body pose frame processed", {
+        frameId,
+        poseMeta,
+        score: nextPoseStatus.score,
+        parts: nextPoseStatus.parts,
+      });
+    }
+  }
+
+  function processTrackingFrame(hand, timestamp) {
+    const frameId = updateFrameTiming(timestamp);
 
     appLog.debug("Processing tracking frame", {
       frameId,
@@ -4756,6 +5061,44 @@ export default function App() {
 
       rafRef.current = requestAnimationFrame(frameLoop);
 
+      if (phaseRef.current === PHASES.BODY_POSE) {
+        const video = videoRef.current;
+        const poseDetector = poseDetectorRef.current;
+        if (!poseDetector || !video || video.readyState < 2) {
+          if (frameCounterRef.current % 30 === 0) {
+            appLog.debug("Skipping body pose frame due to detector/video readiness", {
+              hasPoseDetector: Boolean(poseDetector),
+              hasVideo: Boolean(video),
+              readyState: video?.readyState ?? null,
+            });
+          }
+          setPoseStatus((previous) => (previous.detected ? createEmptyPoseStatus() : previous));
+          if (handDetectedRef.current) {
+            handDetectedRef.current = false;
+            setHandDetected(false);
+          }
+          drawPoseOverlay(null);
+          return;
+        }
+
+        if (inferenceBusyRef.current) {
+          return;
+        }
+
+        inferenceBusyRef.current = true;
+        try {
+          const pose = await detectPose(poseDetector, video);
+          if (!cancelled && mountedRef.current) {
+            processPoseFrame(pose, timestamp);
+          }
+        } catch (error) {
+          appLog.error("Pose frame inference failed", { error });
+        } finally {
+          inferenceBusyRef.current = false;
+        }
+        return;
+      }
+
       if (inferenceBusyRef.current) {
         inferenceBusySkipCounterRef.current += 1;
         if (inferenceBusySkipCounterRef.current % 30 === 0) {
@@ -4900,11 +5243,22 @@ export default function App() {
       <header className="top-bar">
         <h1>Finger Whack</h1>
         <div className={`tracking-indicator ${handDetected ? "ok" : "warn"}`}>
-          {handDetected ? "Hand detected" : "Hand not detected"} | FPS: {fps.toFixed(1)}
+          {phase === PHASES.BODY_POSE
+            ? handDetected
+              ? "Pose detected"
+              : "Pose not detected"
+            : handDetected
+            ? "Hand detected"
+            : "Hand not detected"}{" "}
+          | FPS: {fps.toFixed(1)}
         </div>
       </header>
 
-      <div className={`content-grid ${isCalibrationLayoutPhase ? "calibration-layout" : ""}`}>
+      <div
+        className={`content-grid ${
+          isCalibrationLayoutPhase && !isBodyPosePhase ? "calibration-layout" : ""
+        } ${isBodyPosePhase ? "body-layout" : ""}`}
+      >
         <section className="card camera-card">
           <h2>{cameraPanelTitle}</h2>
           <div
@@ -4920,6 +5274,8 @@ export default function App() {
           <p className="help-text">
             {phase === PHASES.RUNNER
               ? "Use your INDEX tip to steer the runner."
+              : phase === PHASES.BODY_POSE
+              ? "Body mode: keep head, shoulders, elbows, and wrists in view."
               : phase === PHASES.MINORITY_REPORT_LAB
               ? "In lab mode, index tips drive pointers; active pinch uses thumb-index midpoint."
               : "Use your THUMB tip as the pointer."}
@@ -4927,6 +5283,8 @@ export default function App() {
           <p className="help-text">
             {phase === PHASES.RUNNER
               ? "Pinch is disabled in runner mode."
+              : phase === PHASES.BODY_POSE
+              ? "No pinch input needed; pose keypoints are highlighted directly."
               : phase === PHASES.MINORITY_REPORT_LAB
               ? "Pinch to grab/release. Swipes/push/circle and two-hand gestures trigger lab actions."
               : 'Pinch (thumb + index) to "click".'}
@@ -4935,17 +5293,22 @@ export default function App() {
           <div className="status-row">
             <span>Camera: {cameraReady ? "ready" : "waiting"}</span>
             <span>Model: {modelReady ? "ready" : "loading"}</span>
+            {phase === PHASES.BODY_POSE && (
+              <span>Pose model: {poseModelReady ? "ready" : "loading"}</span>
+            )}
             <span>Runtime: {activeRuntime}</span>
             <span>Backend: {activeBackend}</span>
-            <span>Pinch: {pinchActive ? "active" : "idle"}</span>
+            {phase !== PHASES.BODY_POSE && <span>Pinch: {pinchActive ? "active" : "idle"}</span>}
           </div>
 
           {cameraError && <p className="error-text">{cameraError}</p>}
           {modelError && <p className="error-text">{modelError}</p>}
+          {phase === PHASES.BODY_POSE && poseModelError && <p className="error-text">{poseModelError}</p>}
 
           {(phase === PHASES.CALIBRATION ||
             phase === PHASES.SANDBOX ||
             phase === PHASES.FLIGHT ||
+            phase === PHASES.BODY_POSE ||
             phase === PHASES.RUNNER ||
             phase === PHASES.MINORITY_REPORT_LAB) && (
             <>
@@ -4971,6 +5334,11 @@ export default function App() {
                     ? "locked"
                     : `${flightHud.baselineSamples}/${FLIGHT_BASELINE_SAMPLE_TARGET}`}
                   .
+                </p>
+              ) : phase === PHASES.BODY_POSE ? (
+                <p className="small-text">
+                  Body pose mode tracks head/eyes/shoulders/arms/torso and highlights keypoints on
+                  the webcam overlay.
                 </p>
               ) : phase === PHASES.MINORITY_REPORT_LAB ? (
                 <p className="small-text">
@@ -5017,6 +5385,14 @@ export default function App() {
                       disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
                     >
                       Launch Flight Game
+                    </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={startBodyPoseLab}
+                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
+                    >
+                      Open Body Pose Lab
                     </button>
                     <button
                       className="secondary"
@@ -5068,6 +5444,9 @@ export default function App() {
                     <button className="secondary" onClick={startFlightSession}>
                       Launch Flight Game
                     </button>
+                    <button className="secondary" onClick={startBodyPoseLab}>
+                      Open Body Pose Lab
+                    </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
@@ -5092,6 +5471,25 @@ export default function App() {
                     <button className="secondary" onClick={startRunnerSession}>
                       Switch to Runner
                     </button>
+                    <button className="secondary" onClick={startBodyPoseLab}>
+                      Open Body Pose Lab
+                    </button>
+                    <button className="secondary" onClick={startMinorityReportLab}>
+                      Open Minority Report Lab
+                    </button>
+                  </>
+                ) : phase === PHASES.BODY_POSE ? (
+                  <>
+                    <button onClick={returnFromBodyPoseLab}>Back to Input Test</button>
+                    <button className="secondary" onClick={startBodyPoseLab}>
+                      Restart Body Pose Lab
+                    </button>
+                    <button className="secondary" onClick={startRunnerSession}>
+                      Switch to Runner
+                    </button>
+                    <button className="secondary" onClick={startFlightSession}>
+                      Switch to Flight
+                    </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
@@ -5109,6 +5507,9 @@ export default function App() {
                     <button className="secondary" onClick={startFlightSession}>
                       Switch to Flight
                     </button>
+                    <button className="secondary" onClick={startBodyPoseLab}>
+                      Open Body Pose Lab
+                    </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
@@ -5124,6 +5525,9 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startFlightSession}>
                       Switch to Flight
+                    </button>
+                    <button className="secondary" onClick={startBodyPoseLab}>
+                      Open Body Pose Lab
                     </button>
                     {hasSavedCalibration && (
                       <button className="secondary" onClick={startGameSession}>
@@ -5304,11 +5708,16 @@ export default function App() {
               <button className="secondary" onClick={startFlightSession}>
                 Switch to Flight
               </button>
+              <button className="secondary" onClick={startBodyPoseLab}>
+                Open Body Pose Lab
+              </button>
               <button className="secondary" onClick={startGameSession}>
                 Switch to Whack-a-Mole
               </button>
             </div>
           </section>
+        ) : phase === PHASES.BODY_POSE ? (
+          <BodyPoseLab poseStatus={poseStatus} />
         ) : phase === PHASES.MINORITY_REPORT_LAB ? (
           <MinorityReportLab
             fps={fps}
@@ -5364,6 +5773,9 @@ export default function App() {
               <button className="secondary" onClick={startRunnerSession}>
                 Launch Runner Game
               </button>
+              <button className="secondary" onClick={startBodyPoseLab}>
+                Open Body Pose Lab
+              </button>
               <button className="secondary" onClick={startMinorityReportLab}>
                 Open Minority Report Lab
               </button>
@@ -5402,7 +5814,7 @@ export default function App() {
         )}
       </div>
 
-      {phase !== PHASES.MINORITY_REPORT_LAB && (
+      {phase !== PHASES.MINORITY_REPORT_LAB && phase !== PHASES.BODY_POSE && (
         <>
           <div
             className={`tracked-cursor ${handDetected ? "" : "paused"}`}
