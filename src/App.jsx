@@ -1542,16 +1542,20 @@ export default function App() {
     }
 
     let rafId = 0;
-    const syncCanvasSizeAndReset = () => {
+    const syncCanvasSize = () => {
       const rect = stage.getBoundingClientRect();
       const width = Math.max(1, Math.round(rect.width));
       const height = Math.max(1, Math.round(rect.height));
+      let resized = false;
       if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
         canvas.height = height;
+        resized = true;
         appLog.info("Synced runner canvas dimensions", { width, height });
       }
-      resetRunnerSession("runner_stage_resize_or_open");
+      if (resized) {
+        drawRunnerScene();
+      }
     };
     const scheduleSync = () => {
       if (rafId) {
@@ -1559,7 +1563,7 @@ export default function App() {
       }
       rafId = requestAnimationFrame(() => {
         rafId = 0;
-        syncCanvasSizeAndReset();
+        syncCanvasSize();
       });
     };
 
