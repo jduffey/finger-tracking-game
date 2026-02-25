@@ -483,8 +483,6 @@ function createEmptyPoseStatus() {
       shoulders: false,
       arms: false,
       torso: false,
-      mouth: false,
-      chin: false,
       fingers: false,
       fingertips: false,
     },
@@ -499,175 +497,6 @@ function hasVisiblePoseKeypoints(map, names, minScore = POSE_KEYPOINT_THRESHOLD)
     }
   }
   return false;
-}
-
-function getVisiblePosePoint(map, names, minScore = POSE_KEYPOINT_THRESHOLD) {
-  for (const name of names) {
-    const point = map[name];
-    if (point && Number.isFinite(point.score) && point.score >= minScore) {
-      return point;
-    }
-  }
-  return null;
-}
-
-function clampNormalizedPoint(point) {
-  if (!point || !Number.isFinite(point.u) || !Number.isFinite(point.v)) {
-    return null;
-  }
-  return {
-    ...point,
-    u: clampValue(point.u, 0, 1),
-    v: clampValue(point.v, 0, 1),
-  };
-}
-
-function normalizedAxisFromPoints(leftPoint, rightPoint) {
-  if (!leftPoint || !rightPoint) {
-    return { x: 1, y: 0 };
-  }
-  const dx = rightPoint.u - leftPoint.u;
-  const dy = rightPoint.v - leftPoint.v;
-  const length = Math.hypot(dx, dy);
-  if (!Number.isFinite(length) || length < 1e-6) {
-    return { x: 1, y: 0 };
-  }
-  return {
-    x: dx / length,
-    y: dy / length,
-  };
-}
-
-function deriveMouthAndChinFromPoseMap(map) {
-  const nose = getVisiblePosePoint(map, ["nose"]);
-  const leftEye = getVisiblePosePoint(map, ["left_eye"]);
-  const rightEye = getVisiblePosePoint(map, ["right_eye"]);
-  const leftEar = getVisiblePosePoint(map, ["left_ear"]);
-  const rightEar = getVisiblePosePoint(map, ["right_ear"]);
-  const leftShoulder = getVisiblePosePoint(map, ["left_shoulder"]);
-  const rightShoulder = getVisiblePosePoint(map, ["right_shoulder"]);
-  const leftMouth = getVisiblePosePoint(map, ["mouth_left", "left_mouth"], 0.08);
-  const rightMouth = getVisiblePosePoint(map, ["mouth_right", "right_mouth"], 0.08);
-
-  let mouthCenter = null;
-  let mouthSpan = 0;
-  const mouthAxis =
-    leftEye && rightEye
-      ? normalizedAxisFromPoints(leftEye, rightEye)
-      : leftEar && rightEar
-      ? normalizedAxisFromPoints(leftEar, rightEar)
-      : leftShoulder && rightShoulder
-      ? normalizedAxisFromPoints(leftShoulder, rightShoulder)
-      : { x: 1, y: 0 };
-
-  if (leftMouth && rightMouth) {
-    mouthCenter = clampNormalizedPoint({
-      u: (leftMouth.u + rightMouth.u) * 0.5,
-      v: (leftMouth.v + rightMouth.v) * 0.5,
-      score: (leftMouth.score + rightMouth.score) * 0.5,
-      name: "mouth",
-    });
-    mouthSpan = Math.hypot(leftMouth.u - rightMouth.u, leftMouth.v - rightMouth.v);
-  } else if (nose && leftEye && rightEye) {
-    const eyeMid = {
-      u: (leftEye.u + rightEye.u) * 0.5,
-      v: (leftEye.v + rightEye.v) * 0.5,
-    };
-    mouthCenter = clampNormalizedPoint({
-      u: nose.u + (nose.u - eyeMid.u) * 0.3,
-      v: nose.v + (nose.v - eyeMid.v) * 1.1,
-      score: (nose.score + leftEye.score + rightEye.score) / 3,
-      name: "mouth",
-    });
-    mouthSpan = Math.hypot(leftEye.u - rightEye.u, leftEye.v - rightEye.v) * 0.34;
-  } else if (nose && leftShoulder && rightShoulder) {
-    const shoulderMid = {
-      u: (leftShoulder.u + rightShoulder.u) * 0.5,
-      v: (leftShoulder.v + rightShoulder.v) * 0.5,
-    };
-    mouthCenter = clampNormalizedPoint({
-      u: nose.u + (shoulderMid.u - nose.u) * 0.18,
-      v: nose.v + (shoulderMid.v - nose.v) * 0.32,
-      score: (nose.score + leftShoulder.score + rightShoulder.score) / 3,
-      name: "mouth",
-    });
-    mouthSpan =
-      Math.hypot(leftShoulder.u - rightShoulder.u, leftShoulder.v - rightShoulder.v) * 0.2;
-  }
-
-  if (leftMouth && !mouthCenter) {
-    mouthCenter = clampNormalizedPoint({
-      ...leftMouth,
-      name: "mouth",
-    });
-  }
-  if (rightMouth && !mouthCenter) {
-    mouthCenter = clampNormalizedPoint({
-      ...rightMouth,
-      name: "mouth",
-    });
-  }
-
-  let mouthLeft = clampNormalizedPoint(leftMouth ? { ...leftMouth, name: "mouth_left_corner" } : null);
-  let mouthRight = clampNormalizedPoint(rightMouth ? { ...rightMouth, name: "mouth_right_corner" } : null);
-
-  if (mouthCenter && mouthSpan > 0.004) {
-    const halfSpan = clampValue(mouthSpan * 0.5, 0.012, 0.11);
-    const offset = {
-      u: mouthAxis.x * halfSpan,
-      v: mouthAxis.y * halfSpan,
-    };
-    if (!mouthLeft) {
-      mouthLeft = clampNormalizedPoint({
-        u: mouthCenter.u - offset.u,
-        v: mouthCenter.v - offset.v,
-        score: mouthCenter.score ?? 0.5,
-        name: "mouth_left_corner",
-      });
-    }
-    if (!mouthRight) {
-      mouthRight = clampNormalizedPoint({
-        u: mouthCenter.u + offset.u,
-        v: mouthCenter.v + offset.v,
-        score: mouthCenter.score ?? 0.5,
-        name: "mouth_right_corner",
-      });
-    }
-  }
-
-  if (!mouthCenter && mouthLeft && mouthRight) {
-    mouthCenter = clampNormalizedPoint({
-      u: (mouthLeft.u + mouthRight.u) * 0.5,
-      v: (mouthLeft.v + mouthRight.v) * 0.5,
-      score: (mouthLeft.score + mouthRight.score) * 0.5,
-      name: "mouth",
-    });
-  }
-
-  let chin = null;
-  if (mouthCenter && nose) {
-    chin = clampNormalizedPoint({
-      u: mouthCenter.u + (mouthCenter.u - nose.u) * 0.26,
-      v: mouthCenter.v + (mouthCenter.v - nose.v) * 1.0,
-      score: Math.min(mouthCenter.score ?? 0.5, nose.score ?? 0.5),
-      name: "chin",
-    });
-  }
-
-  if (chin && leftEar && rightEar) {
-    const earSpan = Math.abs(leftEar.u - rightEar.u);
-    chin = clampNormalizedPoint({
-      ...chin,
-      v: chin.v + earSpan * 0.16,
-    });
-  }
-
-  return {
-    mouthLeft,
-    mouthRight,
-    mouthCenter,
-    chin,
-  };
 }
 
 function isValidHandLandmark(point) {
@@ -4555,8 +4384,6 @@ export default function App() {
         shoulders: "rgba(123, 237, 181, 0.96)",
         arms: "rgba(105, 188, 255, 0.96)",
         torso: "rgba(198, 153, 255, 0.96)",
-        mouth: "rgba(255, 151, 104, 0.98)",
-        chin: "rgba(255, 215, 148, 0.98)",
         other: "rgba(223, 232, 248, 0.86)",
       };
 
@@ -4579,20 +4406,6 @@ export default function App() {
         return "other";
       };
 
-      const faceMarkers = deriveMouthAndChinFromPoseMap(keypointMap);
-      if (faceMarkers.mouthLeft) {
-        keypointMap.mouth_left_corner = faceMarkers.mouthLeft;
-      }
-      if (faceMarkers.mouthRight) {
-        keypointMap.mouth_right_corner = faceMarkers.mouthRight;
-      }
-      if (faceMarkers.mouthCenter) {
-        keypointMap.mouth_center = faceMarkers.mouthCenter;
-      }
-      if (faceMarkers.chin) {
-        keypointMap.chin = faceMarkers.chin;
-      }
-
       for (const keypoint of pose.keypoints) {
         if (!keypoint?.name || (keypoint.score ?? 0) < POSE_KEYPOINT_THRESHOLD) {
           continue;
@@ -4608,56 +4421,6 @@ export default function App() {
         ctx.fillStyle = "rgba(245, 250, 255, 0.9)";
         ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
         ctx.fillText(keypoint.name.replace("left_", "L-").replace("right_", "R-"), x + 6, y - 6);
-      }
-
-      const leftCorner = keypointMap.mouth_left_corner;
-      const rightCorner = keypointMap.mouth_right_corner;
-      if (leftCorner && rightCorner) {
-        ctx.strokeStyle = "rgba(255, 156, 108, 0.72)";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(leftCorner.u * canvas.width, leftCorner.v * canvas.height);
-        ctx.lineTo(rightCorner.u * canvas.width, rightCorner.v * canvas.height);
-        ctx.stroke();
-      }
-
-      const derivedMarkers = [
-        {
-          key: "mouth_left_corner",
-          label: "mouth L",
-          color: "mouth",
-        },
-        {
-          key: "mouth_right_corner",
-          label: "mouth R",
-          color: "mouth",
-        },
-        {
-          key: "chin",
-          label: "chin",
-          color: "chin",
-        },
-      ];
-
-      for (const derived of derivedMarkers) {
-        const marker = keypointMap[derived.key];
-        if (!marker || !Number.isFinite(marker.u) || !Number.isFinite(marker.v)) {
-          continue;
-        }
-        const x = marker.u * canvas.width;
-        const y = marker.v * canvas.height;
-        ctx.fillStyle = colorByGroup[derived.color];
-        ctx.beginPath();
-        ctx.arc(x, y, 6.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "rgba(15, 22, 30, 0.8)";
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.arc(x, y, 8.2, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.fillStyle = "rgba(255, 244, 229, 0.92)";
-        ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
-        ctx.fillText(derived.label, x + 8, y + 4);
       }
     }
 
@@ -4796,7 +4559,6 @@ export default function App() {
         keypointMap[point.name] = point;
       }
     }
-    const faceMarkers = deriveMouthAndChinFromPoseMap(keypointMap);
 
     const nextPoseStatus = {
       detected: true,
@@ -4811,8 +4573,6 @@ export default function App() {
         shoulders: hasVisiblePoseKeypoints(keypointMap, POSE_KEYPOINT_GROUPS.shoulders),
         arms: hasVisiblePoseKeypoints(keypointMap, POSE_KEYPOINT_GROUPS.arms),
         torso: hasVisiblePoseKeypoints(keypointMap, POSE_KEYPOINT_GROUPS.torso),
-        mouth: Boolean(faceMarkers.mouthLeft || faceMarkers.mouthRight),
-        chin: Boolean(faceMarkers.chin),
         fingers: fingerSummary.fingersVisible,
         fingertips: fingerSummary.fingertipsVisible,
       },

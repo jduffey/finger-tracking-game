@@ -6,8 +6,6 @@ export default function BodyPoseLab({ poseStatus }) {
     shoulders: false,
     arms: false,
     torso: false,
-    mouth: false,
-    chin: false,
     fingers: false,
     fingertips: false,
   };
@@ -50,8 +48,6 @@ export default function BodyPoseLab({ poseStatus }) {
       <div className="body-part-list">
         <div className={parts.head ? "active" : "inactive"}>Head</div>
         <div className={parts.eyes ? "active" : "inactive"}>Eyes</div>
-        <div className={parts.mouth ? "active" : "inactive"}>Mouth corners</div>
-        <div className={parts.chin ? "active" : "inactive"}>Chin</div>
         <div className={parts.shoulders ? "active" : "inactive"}>Shoulders</div>
         <div className={parts.arms ? "active" : "inactive"}>Arms</div>
         <div className={parts.torso ? "active" : "inactive"}>Torso</div>
@@ -60,7 +56,7 @@ export default function BodyPoseLab({ poseStatus }) {
       </div>
 
       <p className="small-text">
-        Tip: keep your face and both hands visible to light up mouth-corner, chin, and fingertip indicators.
+        Tip: keep your upper body and both hands visible to light up the body and fingertip indicators.
       </p>
     </section>
   );
