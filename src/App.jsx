@@ -13,7 +13,6 @@ import {
 } from "./calibration";
 import {
   buildGridHoles,
-  canRunnerStartJump,
   computeRunnerTrackGridLayout,
   GAME_DURATION_MS,
   getRunnerTrackIndexFromNormalized,
@@ -107,9 +106,6 @@ const RUNNER_DEFAULT_TRACK_INDEX = Math.floor((RUNNER_TRACK_GRID_SIZE - 1) / 2);
 const RUNNER_SPEED = 360;
 const RUNNER_MAX_Z = 1480;
 const RUNNER_NEAR_Z = 24;
-const RUNNER_GRAVITY = 1740;
-const RUNNER_JUMP_VELOCITY = 790;
-const RUNNER_MAX_JUMP_HEIGHT = 190;
 const RUNNER_COIN_COUNT = 20;
 const RUNNER_COIN_RESPAWN_MIN_Z = 860;
 const RUNNER_COIN_RESPAWN_MAX_Z = 1880;
@@ -487,7 +483,6 @@ function pickRandomRunnerTrackIndex() {
 }
 
 function createRunnerCoin(zMin = RUNNER_COIN_RESPAWN_MIN_Z, zMax = RUNNER_COIN_RESPAWN_MAX_Z) {
-  const airborne = Math.random() < 0.4;
   const trackXIndex = pickRandomRunnerTrackIndex();
   const trackYIndex = pickRandomRunnerTrackIndex();
   return {
@@ -497,7 +492,7 @@ function createRunnerCoin(zMin = RUNNER_COIN_RESPAWN_MIN_Z, zMax = RUNNER_COIN_R
     trackX: getRunnerTrackOffsetFromIndex(trackXIndex, RUNNER_TRACK_GRID_SIZE),
     trackY: getRunnerTrackOffsetFromIndex(trackYIndex, RUNNER_TRACK_GRID_SIZE),
     z: randomBetween(zMin, zMax),
-    height: airborne ? randomBetween(74, 138) : randomBetween(0, 28),
+    height: 0,
     value: 1,
   };
 }
@@ -662,8 +657,6 @@ export default function App() {
     trackCol: RUNNER_DEFAULT_TRACK_INDEX + 1,
     trackRow: RUNNER_DEFAULT_TRACK_INDEX + 1,
     trackSpacingPx: 0,
-    jumping: false,
-    jumpHeight: 0,
   });
 
   const [score, setScore] = useState(0);
@@ -763,8 +756,6 @@ export default function App() {
     trackXFloat: getRunnerTrackOffsetFromIndex(RUNNER_DEFAULT_TRACK_INDEX, RUNNER_TRACK_GRID_SIZE),
     trackYFloat: getRunnerTrackOffsetFromIndex(RUNNER_DEFAULT_TRACK_INDEX, RUNNER_TRACK_GRID_SIZE),
     trackSpacing: 0,
-    runnerY: 0,
-    runnerVy: 0,
     distance: 0,
     coinsCollected: 0,
     coins: [],
@@ -876,8 +867,6 @@ export default function App() {
         trackXFloat: getRunnerTrackOffsetFromIndex(RUNNER_DEFAULT_TRACK_INDEX, RUNNER_TRACK_GRID_SIZE),
         trackYFloat: getRunnerTrackOffsetFromIndex(RUNNER_DEFAULT_TRACK_INDEX, RUNNER_TRACK_GRID_SIZE),
         trackSpacing: 0,
-        runnerY: 0,
-        runnerVy: 0,
         distance: 0,
         coinsCollected: 0,
         coins: [],
@@ -889,8 +878,6 @@ export default function App() {
         trackCol: RUNNER_DEFAULT_TRACK_INDEX + 1,
         trackRow: RUNNER_DEFAULT_TRACK_INDEX + 1,
         trackSpacingPx: 0,
-        jumping: false,
-        jumpHeight: 0,
       });
     }
   }, [phase]);
@@ -2681,8 +2668,6 @@ export default function App() {
       trackCol: state.trackXTargetIndex + 1,
       trackRow: state.trackYTargetIndex + 1,
       trackSpacingPx: roundMetric(state.trackSpacing, 1) ?? 0,
-      jumping: state.runnerY > 0.1,
-      jumpHeight: roundMetric(state.runnerY, 1) ?? 0,
     };
     setRunnerHud((previous) => {
       if (
@@ -2690,9 +2675,7 @@ export default function App() {
         previous.distance === nextHud.distance &&
         previous.trackCol === nextHud.trackCol &&
         previous.trackRow === nextHud.trackRow &&
-        previous.trackSpacingPx === nextHud.trackSpacingPx &&
-        previous.jumping === nextHud.jumping &&
-        previous.jumpHeight === nextHud.jumpHeight
+        previous.trackSpacingPx === nextHud.trackSpacingPx
       ) {
         return previous;
       }
@@ -2715,8 +2698,6 @@ export default function App() {
       trackXFloat: defaultTrackOffset,
       trackYFloat: defaultTrackOffset,
       trackSpacing: 0,
-      runnerY: 0,
-      runnerVy: 0,
       distance: 0,
       coinsCollected: 0,
       coins: createRunnerCoins(),
@@ -2728,12 +2709,10 @@ export default function App() {
       trackCol: RUNNER_DEFAULT_TRACK_INDEX + 1,
       trackRow: RUNNER_DEFAULT_TRACK_INDEX + 1,
       trackSpacingPx: 0,
-      jumping: false,
-      jumpHeight: 0,
     });
     runnerGeometryLogKeyRef.current = "";
     setCalibrationMessage(
-      "Runner mode active. Move hand to pick one of 4x4 converging tracks. Pinch to jump.",
+      "Runner mode active. Move hand to pick one of 4x4 converging tracks.",
     );
     appLog.info("Runner session reset", {
       reason,
@@ -2757,7 +2736,7 @@ export default function App() {
     setPhase(PHASES.RUNNER);
     phaseRef.current = PHASES.RUNNER;
     setCalibrationMessage(
-      "Runner mode active. Move hand to pick one of 4x4 converging tracks. Pinch to jump.",
+      "Runner mode active. Move hand to pick one of 4x4 converging tracks.",
     );
     requestAnimationFrame(() => resetRunnerSession("start_runner"));
   }
@@ -2797,32 +2776,6 @@ export default function App() {
         normalizedY: roundMetric(normalizedY, 4),
       });
     }
-  }
-
-  function triggerRunnerJump(timestamp, source = "pinch") {
-    if (phaseRef.current !== PHASES.RUNNER) {
-      return;
-    }
-    const state = runnerStateRef.current;
-    if (!state.initialized) {
-      return;
-    }
-    if (!canRunnerStartJump(state.runnerY, state.runnerVy)) {
-      appLog.debug("Runner jump ignored because player is already airborne", {
-        source,
-        runnerY: state.runnerY,
-        runnerVy: state.runnerVy,
-      });
-      return;
-    }
-    state.runnerVy = RUNNER_JUMP_VELOCITY;
-    appLog.info("Runner jump triggered", {
-      timestamp,
-      source,
-      trackCol: state.trackXTargetIndex + 1,
-      trackRow: state.trackYTargetIndex + 1,
-      jumpVelocity: RUNNER_JUMP_VELOCITY,
-    });
   }
 
   function drawRunnerScene() {
@@ -2988,7 +2941,7 @@ export default function App() {
 
     const runnerTrackPoint = projectTrackPoint(state.trackXFloat, state.trackYFloat, 1);
     const runnerX = runnerTrackPoint.x;
-    const runnerY = runnerTrackPoint.y - state.runnerY * 0.66;
+    const runnerY = runnerTrackPoint.y;
     const bodyHeight = 74;
     const bodyWidth = 38;
     ctx.fillStyle = "#6ee7ff";
@@ -3037,28 +2990,14 @@ export default function App() {
       state.trackYFloat = state.trackYTarget;
     }
 
-    state.runnerVy -= RUNNER_GRAVITY * dtSeconds;
-    state.runnerY += state.runnerVy * dtSeconds;
-    if (state.runnerY < 0) {
-      state.runnerY = 0;
-      if (state.runnerVy < 0) {
-        state.runnerVy = 0;
-      }
-    }
-    if (state.runnerY > RUNNER_MAX_JUMP_HEIGHT) {
-      state.runnerY = RUNNER_MAX_JUMP_HEIGHT;
-      state.runnerVy = Math.min(0, state.runnerVy);
-    }
-
     for (const coin of state.coins) {
       coin.z -= RUNNER_SPEED * dtSeconds;
-      if (shouldCollectRunnerCoin(coin, state.trackXFloat, state.trackYFloat, state.runnerY)) {
+      if (shouldCollectRunnerCoin(coin, state.trackXFloat, state.trackYFloat, 0)) {
         state.coinsCollected += coin.value ?? 1;
         appLog.info("Runner coin collected", {
           coinsCollected: state.coinsCollected,
           trackCol: state.trackXTargetIndex + 1,
           trackRow: state.trackYTargetIndex + 1,
-          jumpHeight: roundMetric(state.runnerY, 2),
         });
         Object.assign(coin, createRunnerCoin());
       }
@@ -3413,7 +3352,9 @@ export default function App() {
     }
 
     if (phaseRef.current === PHASES.RUNNER) {
-      triggerRunnerJump(timestamp, "pinch_click");
+      appLog.debug("Pinch click ignored in runner mode because jumping is disabled", {
+        timestamp,
+      });
       return;
     }
 
@@ -4340,7 +4281,11 @@ export default function App() {
               ? "Use your INDEX tip to steer the runner."
               : "Use your THUMB tip as the pointer."}
           </p>
-          <p className="help-text">Pinch (thumb + index) to "click".</p>
+          <p className="help-text">
+            {phase === PHASES.RUNNER
+              ? "Pinch is disabled in runner mode."
+              : 'Pinch (thumb + index) to "click".'}
+          </p>
 
           <div className="status-row">
             <span>Camera: {cameraReady ? "ready" : "waiting"}</span>
@@ -4384,7 +4329,6 @@ export default function App() {
               ) : (
                 <p className="small-text">
                   4x4 track control: move hand across the camera view to pick any converging track.
-                  Pinch to jump for higher coins.
                 </p>
               )}
 
@@ -4496,13 +4440,6 @@ export default function App() {
                       onClick={() => resetRunnerSession("manual_button")}
                     >
                       Reset Runner
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={() => triggerRunnerJump(performance.now(), "manual_button")}
-                    >
-                      Jump (Test)
                     </button>
                     <button className="secondary" onClick={startFlightSession}>
                       Switch to Flight
@@ -4660,11 +4597,10 @@ export default function App() {
           <section className="card panel runner-panel">
             <h2>Track Runner</h2>
             <p className="small-text">
-              4x4 converging-track runner: move hand to switch tracks in both directions and pinch
-              to jump.
+              4x4 converging-track runner: move hand to switch tracks in both directions.
             </p>
             <p className="small-text">
-              Collect coins on your selected track. Air coins require a jump.
+              Collect coins on your selected track.
             </p>
 
             <div className="runner-stage" ref={runnerStageRef}>
@@ -4674,7 +4610,6 @@ export default function App() {
                 <span>Distance: {runnerHud.distance.toFixed(0)} u</span>
                 <span>Track: C{runnerHud.trackCol}/R{runnerHud.trackRow}</span>
                 <span>Node gap: {runnerHud.trackSpacingPx.toFixed(1)} px</span>
-                <span>Jump: {runnerHud.jumping ? `${runnerHud.jumpHeight.toFixed(0)} px` : "grounded"}</span>
               </div>
             </div>
 

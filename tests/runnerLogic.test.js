@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  canRunnerStartJump,
   computeRunnerTrackGridLayout,
   getRunnerTrackIndexFromNormalized,
   getRunnerTrackOffsetFromIndex,
@@ -55,13 +54,6 @@ test("computeRunnerTrackGridLayout maintains equal node spacing", () => {
   assert.ok(Math.abs(yStepA - layout.trackSpacing) < 1e-9);
   assert.ok(Math.abs(yStepB - layout.trackSpacing) < 1e-9);
   assert.ok(Math.abs(yStepC - layout.trackSpacing) < 1e-9);
-});
-
-test("canRunnerStartJump only allows jumps when grounded and not rising", () => {
-  assert.equal(canRunnerStartJump(0, 0), true);
-  assert.equal(canRunnerStartJump(1.9, -10), true);
-  assert.equal(canRunnerStartJump(2.1, -10), false);
-  assert.equal(canRunnerStartJump(0, 30), false);
 });
 
 test("shouldCollectRunnerCoin requires near-z, 2D track match, and jump-height match", () => {

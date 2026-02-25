@@ -168,21 +168,6 @@ export function computeRunnerTrackGridLayout(stageWidth, stageHeight, gridSize =
   return layout;
 }
 
-export function canRunnerStartJump(runnerY, runnerVy, airborneHeightThreshold = 2) {
-  gameLogicLog.debug("Checking runner jump eligibility", {
-    runnerY,
-    runnerVy,
-    airborneHeightThreshold,
-  });
-  const eligible =
-    Number.isFinite(runnerY) &&
-    Number.isFinite(runnerVy) &&
-    runnerY <= airborneHeightThreshold &&
-    runnerVy <= 0;
-  gameLogicLog.debug("Runner jump eligibility resolved", { eligible });
-  return eligible;
-}
-
 export function shouldCollectRunnerCoin(
   coin,
   trackXFloat,
