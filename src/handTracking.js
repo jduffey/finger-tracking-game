@@ -252,13 +252,9 @@ function extractHandCandidate(candidate, width, height) {
     return null;
   }
 
-  const landmarks = [];
-  for (const point of keypoints) {
-    const normalized = toMirroredNormalized(point, width, height);
-    if (normalized) {
-      landmarks.push(normalized);
-    }
-  }
+  // Preserve original keypoint indices so downstream index-based feature extraction
+  // keeps landmark semantics even when some points are invalid this frame.
+  const landmarks = keypoints.map((point) => toMirroredNormalized(point, width, height));
 
   const score = Number.isFinite(candidate?.score) ? candidate.score : 0;
   return {

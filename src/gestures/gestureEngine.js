@@ -283,6 +283,15 @@ export function createGestureEngine(options = {}) {
     return next;
   }
 
+  function clearHoldCountersForHand(handId) {
+    const suffix = `:${handId}`;
+    for (const key of state.holdByKey.keys()) {
+      if (key.endsWith(suffix)) {
+        state.holdByKey.delete(key);
+      }
+    }
+  }
+
   function update(updateInput) {
     const timestamp = Number.isFinite(updateInput?.timestamp) ? updateInput.timestamp : performance.now();
     const dtSeconds = state.lastTimestamp > 0
@@ -367,6 +376,7 @@ export function createGestureEngine(options = {}) {
         continue;
       }
       if (state.frameId - handState.lastSeenFrame > STALE_HAND_FRAME_LIMIT) {
+        clearHoldCountersForHand(handId);
         state.hands.delete(handId);
       }
     }

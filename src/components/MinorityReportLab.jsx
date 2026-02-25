@@ -258,6 +258,8 @@ export default function MinorityReportLab(props) {
   const grabRef = useRef(null);
   const twoHandManipRef = useRef({ active: false, base: null });
   const pointerTrailsRef = useRef(pointerTrails);
+  const handInfoBoxPositionsRef = useRef(handInfoBoxPositions);
+  const processedEventsFrameRef = useRef(-1);
   const handInfoBoxDragRef = useRef({
     Left: null,
     Right: null,
@@ -278,6 +280,10 @@ export default function MinorityReportLab(props) {
   useEffect(() => {
     pointerTrailsRef.current = pointerTrails;
   }, [pointerTrails]);
+
+  useEffect(() => {
+    handInfoBoxPositionsRef.current = handInfoBoxPositions;
+  }, [handInfoBoxPositions]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -351,6 +357,10 @@ export default function MinorityReportLab(props) {
     if (!Number.isFinite(frameId)) {
       return;
     }
+    const shouldProcessDiscreteEvents = processedEventsFrameRef.current !== frameId;
+    if (shouldProcessDiscreteEvents) {
+      processedEventsFrameRef.current = frameId;
+    }
 
     const handStates = Array.isArray(engineOutput?.hands) ? engineOutput.hands : [];
     const twoHand = engineOutput?.twoHand ?? { present: false };
@@ -381,90 +391,92 @@ export default function MinorityReportLab(props) {
       setPointerTrails({});
     }
 
-    const hasSymmetricSwipe = events.some((event) => event.gestureId === GESTURE_IDS.SYMMETRIC_SWIPE);
+    if (shouldProcessDiscreteEvents) {
+      const hasSymmetricSwipe = events.some((event) => event.gestureId === GESTURE_IDS.SYMMETRIC_SWIPE);
 
-    const cycleScene = (step, hard) => {
-      setSceneIndex((previous) => {
-        const nextIndex = (previous + step + SCENES.length) % SCENES.length;
-        sceneIndexRef.current = nextIndex;
-        setPanels((currentPanels) => applySceneLayout(currentPanels, nextIndex, stageSize));
-        if (hard) {
+      const cycleScene = (step, hard) => {
+        setSceneIndex((previous) => {
+          const nextIndex = (previous + step + SCENES.length) % SCENES.length;
+          sceneIndexRef.current = nextIndex;
+          setPanels((currentPanels) => applySceneLayout(currentPanels, nextIndex, stageSize));
+          if (hard) {
+            setStageTransform(DEFAULT_STAGE_TRANSFORM);
+            stageTransformRef.current = DEFAULT_STAGE_TRANSFORM;
+            grabRef.current = null;
+            twoHandManipRef.current = { active: false, base: null };
+          }
+          return nextIndex;
+        });
+      };
+
+      const toggleNearestPanelSelection = (handId) => {
+        const hand = handStates.find((candidate) => candidate.id === handId) ?? handStates[0] ?? null;
+        if (!hand?.pointer) {
+          return;
+        }
+        const pointerLocal = pointerToLocal(hand.pointer, stageSize, stageTransformRef.current);
+        const nearest = nearestPanel(panelsRef.current, pointerLocal, 240);
+        if (!nearest?.panel) {
+          return;
+        }
+
+        const targetPanelId = nearest.panel.id;
+        setSelectedPanelId((previousSelected) => (previousSelected === targetPanelId ? null : targetPanelId));
+        setPanels((currentPanels) =>
+          currentPanels.map((panel) => ({
+            ...panel,
+            selected: panel.id === targetPanelId ? !panel.selected : false,
+          })),
+        );
+      };
+
+      for (const event of events) {
+        if (hasSymmetricSwipe && (event.gestureId === GESTURE_IDS.SWIPE_LEFT || event.gestureId === GESTURE_IDS.SWIPE_RIGHT)) {
+          continue;
+        }
+
+        if (event.gestureId === GESTURE_IDS.SWIPE_LEFT) {
+          cycleScene(-1, false);
+        } else if (event.gestureId === GESTURE_IDS.SWIPE_RIGHT) {
+          cycleScene(1, false);
+        } else if (event.gestureId === GESTURE_IDS.SYMMETRIC_SWIPE) {
+          const direction = event.meta?.direction === "left" ? -1 : 1;
+          cycleScene(direction, true);
+        } else if (event.gestureId === GESTURE_IDS.PUSH_FORWARD) {
+          toggleNearestPanelSelection(event.handId);
+        } else if (event.gestureId === GESTURE_IDS.CIRCLE) {
           setStageTransform(DEFAULT_STAGE_TRANSFORM);
           stageTransformRef.current = DEFAULT_STAGE_TRANSFORM;
-          grabRef.current = null;
-          twoHandManipRef.current = { active: false, base: null };
         }
-        return nextIndex;
-      });
-    };
 
-    const toggleNearestPanelSelection = (handId) => {
-      const hand = handStates.find((candidate) => candidate.id === handId) ?? handStates[0] ?? null;
-      if (!hand?.pointer) {
-        return;
-      }
-      const pointerLocal = pointerToLocal(hand.pointer, stageSize, stageTransformRef.current);
-      const nearest = nearestPanel(panelsRef.current, pointerLocal, 240);
-      if (!nearest?.panel) {
-        return;
-      }
+        if (
+          grabRef.current &&
+          (event.gestureId === GESTURE_IDS.SWIPE_LEFT || event.gestureId === GESTURE_IDS.SWIPE_RIGHT) &&
+          event.handId &&
+          event.handId !== grabRef.current.handId &&
+          event.confidence >= Math.max(0.82, confidenceThreshold + 0.08)
+        ) {
+          const throwDirection = event.gestureId === GESTURE_IDS.SWIPE_LEFT ? -1 : 1;
+          const throwDistanceX = throwDirection * Math.max(220, stageSize.width * 0.44);
+          const throwDistanceY = (event.meta?.velocity?.y ?? 0) * 160;
+          const grabbed = grabRef.current;
+          grabRef.current = null;
 
-      const targetPanelId = nearest.panel.id;
-      setSelectedPanelId((previousSelected) => (previousSelected === targetPanelId ? null : targetPanelId));
-      setPanels((currentPanels) =>
-        currentPanels.map((panel) => ({
-          ...panel,
-          selected: panel.id === targetPanelId ? !panel.selected : false,
-        })),
-      );
-    };
-
-    for (const event of events) {
-      if (hasSymmetricSwipe && (event.gestureId === GESTURE_IDS.SWIPE_LEFT || event.gestureId === GESTURE_IDS.SWIPE_RIGHT)) {
-        continue;
-      }
-
-      if (event.gestureId === GESTURE_IDS.SWIPE_LEFT) {
-        cycleScene(-1, false);
-      } else if (event.gestureId === GESTURE_IDS.SWIPE_RIGHT) {
-        cycleScene(1, false);
-      } else if (event.gestureId === GESTURE_IDS.SYMMETRIC_SWIPE) {
-        const direction = event.meta?.direction === "left" ? -1 : 1;
-        cycleScene(direction, true);
-      } else if (event.gestureId === GESTURE_IDS.PUSH_FORWARD) {
-        toggleNearestPanelSelection(event.handId);
-      } else if (event.gestureId === GESTURE_IDS.CIRCLE) {
-        setStageTransform(DEFAULT_STAGE_TRANSFORM);
-        stageTransformRef.current = DEFAULT_STAGE_TRANSFORM;
-      }
-
-      if (
-        grabRef.current &&
-        (event.gestureId === GESTURE_IDS.SWIPE_LEFT || event.gestureId === GESTURE_IDS.SWIPE_RIGHT) &&
-        event.handId &&
-        event.handId !== grabRef.current.handId &&
-        event.confidence >= Math.max(0.82, confidenceThreshold + 0.08)
-      ) {
-        const throwDirection = event.gestureId === GESTURE_IDS.SWIPE_LEFT ? -1 : 1;
-        const throwDistanceX = throwDirection * Math.max(220, stageSize.width * 0.44);
-        const throwDistanceY = (event.meta?.velocity?.y ?? 0) * 160;
-        const grabbed = grabRef.current;
-        grabRef.current = null;
-
-        setPanels((currentPanels) =>
-          currentPanels.map((panel) => {
-            if (panel.id !== grabbed.panelId) {
-              return panel;
-            }
-            return {
-              ...panel,
-              x: panel.x + throwDistanceX,
-              y: panel.y + throwDistanceY,
-              rotation: panel.rotation + throwDirection * 0.46,
-              throwingUntil: Date.now() + 650,
-            };
-          }),
-        );
+          setPanels((currentPanels) =>
+            currentPanels.map((panel) => {
+              if (panel.id !== grabbed.panelId) {
+                return panel;
+              }
+              return {
+                ...panel,
+                x: panel.x + throwDistanceX,
+                y: panel.y + throwDistanceY,
+                rotation: panel.rotation + throwDirection * 0.46,
+                throwingUntil: Date.now() + 650,
+              };
+            }),
+          );
+        }
       }
     }
 
@@ -560,7 +572,7 @@ export default function MinorityReportLab(props) {
     }
 
     const nextBoxPositions = {
-      ...handInfoBoxPositions,
+      ...handInfoBoxPositionsRef.current,
     };
     let didUpdateBoxPosition = false;
     for (const label of ["Left", "Right"]) {
@@ -615,12 +627,12 @@ export default function MinorityReportLab(props) {
       }
     }
     if (didUpdateBoxPosition) {
+      handInfoBoxPositionsRef.current = nextBoxPositions;
       setHandInfoBoxPositions(nextBoxPositions);
     }
   }, [
     confidenceThreshold,
     engineOutput,
-    handInfoBoxPositions,
     showTrails,
     stageSize,
   ]);
