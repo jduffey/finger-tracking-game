@@ -324,6 +324,20 @@ body {
   user-select: none;
 }
 
+.sandbox-block.steel {
+  border-color: rgba(47, 67, 97, 0.58);
+  box-shadow:
+    0 8px 20px rgba(12, 24, 44, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+}
+
+.sandbox-block.rubber {
+  border-color: rgba(102, 25, 25, 0.56);
+  box-shadow:
+    0 8px 20px rgba(83, 21, 18, 0.3),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
 .sandbox-block.grabbed {
   box-shadow:
     0 12px 24px rgba(8, 18, 35, 0.36),

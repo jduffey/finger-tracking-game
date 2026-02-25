@@ -59,27 +59,27 @@ const INPUT_TEST_GRID_ROWS = 6;
 const INPUT_TEST_GRID_COLS = 10;
 const INPUT_TEST_CELL_COUNT = INPUT_TEST_GRID_ROWS * INPUT_TEST_GRID_COLS;
 const INPUT_TEST_CELL_GAP = 8;
-const SANDBOX_BLOCK_COUNT = 12;
-const SANDBOX_BLOCK_COLUMNS = 6;
-const SANDBOX_BLOCK_GAP = 8;
-const SANDBOX_GRAVITY = 1850;
-const SANDBOX_BOUNCE = 0.22;
-const SANDBOX_REST_VELOCITY = 26;
+const SANDBOX_BLOCK_COUNT = 4;
+const SANDBOX_BLOCK_GAP = 14;
+const SANDBOX_GRAVITY = 2050;
+const SANDBOX_REST_VELOCITY = 28;
 const SANDBOX_MAX_STEP_SECONDS = 0.05;
-const SANDBOX_BLOCK_COLORS = [
-  "#ff7f50",
-  "#1cac78",
-  "#4f86f7",
-  "#ee204d",
-  "#ffb347",
-  "#8b5cf6",
-  "#06b6d4",
-  "#f97316",
-  "#22c55e",
-  "#eab308",
-  "#ef4444",
-  "#3b82f6",
-];
+const SANDBOX_MAX_FLING_SPEED = 2200;
+const SANDBOX_COLLISION_ITERATIONS = 4;
+const SANDBOX_COLLISION_FRICTION = 0.2;
+const SANDBOX_FLOOR_FRICTION = 0.86;
+const SANDBOX_TOP_SPAWN_BAND_RATIO = 0.24;
+const SANDBOX_SUPPORT_EPSILON = 8;
+const SANDBOX_OVERHANG_ACCEL = 2100;
+const SANDBOX_MATERIAL_SEQUENCE = ["steel", "steel", "rubber", "rubber"];
+const SANDBOX_MATERIAL_PROPS = {
+  steel: { restitution: 0.16, mass: 1.75, airDrag: 0.996 },
+  rubber: { restitution: 0.62, mass: 1.05, airDrag: 0.992 },
+};
+const SANDBOX_MATERIAL_COLORS = {
+  steel: ["#91a2b8", "#7d8fa8"],
+  rubber: ["#ef4444", "#f97316"],
+};
 
 function clampValue(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -273,40 +273,107 @@ function computeFittedGridSize(containerWidth, containerHeight, columns, rows, g
   };
 }
 
+function shuffleArray(items) {
+  const copy = [...items];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    const next = copy[index];
+    copy[index] = copy[swapIndex];
+    copy[swapIndex] = next;
+  }
+  return copy;
+}
+
+function randomBetween(min, max) {
+  return min + Math.random() * Math.max(0, max - min);
+}
+
+function doBlocksOverlap(a, b, padding = 0) {
+  return (
+    a.x < b.x + b.size + padding &&
+    a.x + a.size + padding > b.x &&
+    a.y < b.y + b.size + padding &&
+    a.y + a.size + padding > b.y
+  );
+}
+
 function createSandboxBlocks(stageWidth, stageHeight) {
-  const safeWidth = Math.max(220, stageWidth);
-  const safeHeight = Math.max(180, stageHeight);
-  const columns = SANDBOX_BLOCK_COLUMNS;
-  const rows = Math.ceil(SANDBOX_BLOCK_COUNT / columns);
+  const safeWidth = Math.max(320, stageWidth);
+  const safeHeight = Math.max(240, stageHeight);
   const horizontalPadding = Math.max(14, safeWidth * 0.04);
-  const verticalPadding = Math.max(12, safeHeight * 0.04);
-  const maxWidthCellSize =
-    (safeWidth - horizontalPadding * 2 - SANDBOX_BLOCK_GAP * (columns - 1)) / columns;
-  const maxHeightCellSize =
-    (safeHeight * 0.42 - SANDBOX_BLOCK_GAP * Math.max(0, rows - 1)) / Math.max(1, rows);
-  const blockSize = Math.floor(clampValue(Math.min(maxWidthCellSize, maxHeightCellSize), 28, 66));
-  const baseY =
-    safeHeight -
-    verticalPadding -
-    rows * blockSize -
-    SANDBOX_BLOCK_GAP * Math.max(0, rows - 1);
+  const topPadding = Math.max(8, safeHeight * 0.03);
+  const spawnBandHeight = Math.max(68, safeHeight * SANDBOX_TOP_SPAWN_BAND_RATIO);
+  const maxSizeFromWidth =
+    (safeWidth - horizontalPadding * 2 - SANDBOX_BLOCK_GAP * (SANDBOX_BLOCK_COUNT - 1)) /
+    SANDBOX_BLOCK_COUNT;
+  const desiredSize = Math.min(safeWidth * 0.2, safeHeight * 0.24);
+  const blockSize = Math.floor(clampValue(Math.min(desiredSize, maxSizeFromWidth), 42, 132));
+  const xMin = horizontalPadding;
+  const xMax = safeWidth - horizontalPadding - blockSize;
+  const yMin = topPadding;
+  const yMax = topPadding + Math.max(0, spawnBandHeight - blockSize);
+  const placementPadding = Math.max(4, SANDBOX_BLOCK_GAP * 0.35);
+
+  const shuffledMaterials = shuffleArray(SANDBOX_MATERIAL_SEQUENCE);
+  const colorDeckByMaterial = {
+    steel: shuffleArray(SANDBOX_MATERIAL_COLORS.steel),
+    rubber: shuffleArray(SANDBOX_MATERIAL_COLORS.rubber),
+  };
+  const colorIndexByMaterial = {
+    steel: 0,
+    rubber: 0,
+  };
 
   const blocks = [];
   for (let blockIndex = 0; blockIndex < SANDBOX_BLOCK_COUNT; blockIndex += 1) {
-    const column = blockIndex % columns;
-    const row = Math.floor(blockIndex / columns);
-    const x = horizontalPadding + column * (blockSize + SANDBOX_BLOCK_GAP);
-    const y = baseY + row * (blockSize + SANDBOX_BLOCK_GAP);
+    const material = shuffledMaterials[blockIndex] ?? "steel";
+    const palette = colorDeckByMaterial[material] ?? SANDBOX_MATERIAL_COLORS.steel;
+    const color = palette[colorIndexByMaterial[material] % palette.length];
+    colorIndexByMaterial[material] += 1;
+
+    let placed = null;
+    for (let attempt = 0; attempt < 220; attempt += 1) {
+      const candidate = {
+        x: randomBetween(xMin, xMax),
+        y: randomBetween(yMin, yMax),
+        size: blockSize,
+      };
+      const collides = blocks.some((other) =>
+        doBlocksOverlap(other, candidate, placementPadding),
+      );
+      if (!collides) {
+        placed = candidate;
+        break;
+      }
+    }
+
+    if (!placed) {
+      const slotStride = (safeWidth - horizontalPadding * 2 - blockSize) / Math.max(1, SANDBOX_BLOCK_COUNT - 1);
+      const fallbackX = clampValue(
+        horizontalPadding + blockIndex * slotStride,
+        xMin,
+        xMax,
+      );
+      const fallbackY = yMin + (blockIndex % 2) * Math.min(blockSize * 0.36, spawnBandHeight * 0.44);
+      placed = { x: fallbackX, y: fallbackY, size: blockSize };
+    }
+
+    const materialProps = SANDBOX_MATERIAL_PROPS[material] ?? SANDBOX_MATERIAL_PROPS.steel;
     blocks.push({
       id: blockIndex + 1,
-      x,
-      y,
+      x: placed.x,
+      y: placed.y,
       size: blockSize,
       vx: 0,
       vy: 0,
-      color: SANDBOX_BLOCK_COLORS[blockIndex % SANDBOX_BLOCK_COLORS.length],
+      material,
+      restitution: materialProps.restitution,
+      mass: materialProps.mass,
+      airDrag: materialProps.airDrag,
+      color,
     });
   }
+
   return blocks;
 }
 
@@ -419,6 +486,8 @@ export default function App() {
   const sandboxBlocksRef = useRef(sandboxBlocks);
   const sandboxGrabbedBlockIdRef = useRef(sandboxGrabbedBlockId);
   const sandboxGrabOffsetRef = useRef({ x: 0, y: 0 });
+  const sandboxGrabVelocityRef = useRef({ vx: 0, vy: 0 });
+  const sandboxGrabLastPositionRef = useRef({ x: 0, y: 0, timestamp: 0 });
   const sandboxLastTickRef = useRef(0);
 
   const holesRef = useRef(holes);
@@ -482,6 +551,9 @@ export default function App() {
       sandboxGrabbedBlockIdRef.current = null;
       setSandboxGrabbedBlockId(null);
     }
+    sandboxGrabOffsetRef.current = { x: 0, y: 0 };
+    sandboxGrabVelocityRef.current = { vx: 0, vy: 0 };
+    sandboxGrabLastPositionRef.current = { x: 0, y: 0, timestamp: 0 };
   }, [phase]);
 
   useEffect(() => {
@@ -1242,6 +1314,9 @@ export default function App() {
     sandboxLastTickRef.current = performance.now();
     sandboxGrabbedBlockIdRef.current = null;
     setSandboxGrabbedBlockId(null);
+    sandboxGrabOffsetRef.current = { x: 0, y: 0 };
+    sandboxGrabVelocityRef.current = { vx: 0, vy: 0 };
+    sandboxGrabLastPositionRef.current = { x: 0, y: 0, timestamp: 0 };
     appLog.info("Sandbox blocks reset", {
       reason,
       width: rect.width,
@@ -1267,6 +1342,11 @@ export default function App() {
 
   function returnToCalibrationInputTest() {
     appLog.info("Returning from sandbox to calibration input test");
+    sandboxGrabbedBlockIdRef.current = null;
+    sandboxGrabOffsetRef.current = { x: 0, y: 0 };
+    sandboxGrabVelocityRef.current = { vx: 0, vy: 0 };
+    sandboxGrabLastPositionRef.current = { x: 0, y: 0, timestamp: 0 };
+    setSandboxGrabbedBlockId(null);
     setPhase(PHASES.CALIBRATION);
     phaseRef.current = PHASES.CALIBRATION;
     setCalibrationMessage("Back on Calibration Input Test.");
@@ -1309,13 +1389,34 @@ export default function App() {
 
     let blocks = sandboxBlocksRef.current.map((block) => ({ ...block }));
     let grabbedId = sandboxGrabbedBlockIdRef.current;
+    const clampVelocity = (value) =>
+      clampValue(value, -SANDBOX_MAX_FLING_SPEED, SANDBOX_MAX_FLING_SPEED);
 
-    if (!pinchNow || !hasHand) {
-      if (grabbedId !== null) {
-        grabbedId = null;
-        sandboxGrabbedBlockIdRef.current = null;
-        setSandboxGrabbedBlockId(null);
+    const releaseGrabbedBlock = () => {
+      if (grabbedId === null) {
+        return;
       }
+      const releaseIndex = blocks.findIndex((block) => block.id === grabbedId);
+      if (releaseIndex >= 0) {
+        const releaseVelocity = sandboxGrabVelocityRef.current;
+        blocks[releaseIndex].vx = clampVelocity(releaseVelocity.vx);
+        blocks[releaseIndex].vy = clampVelocity(releaseVelocity.vy);
+        appLog.info("Sandbox block released with fling velocity", {
+          blockId: grabbedId,
+          vx: roundMetric(blocks[releaseIndex].vx, 2),
+          vy: roundMetric(blocks[releaseIndex].vy, 2),
+        });
+      }
+      grabbedId = null;
+      sandboxGrabbedBlockIdRef.current = null;
+      setSandboxGrabbedBlockId(null);
+      sandboxGrabOffsetRef.current = { x: 0, y: 0 };
+      sandboxGrabVelocityRef.current = { vx: 0, vy: 0 };
+      sandboxGrabLastPositionRef.current = { x: 0, y: 0, timestamp: 0 };
+    };
+
+    if (!pinchNow || !hasHand || !pointerLocal) {
+      releaseGrabbedBlock();
     }
 
     if (pinchNow && hasHand && pointerLocal) {
@@ -1335,6 +1436,15 @@ export default function App() {
               x: pointerLocal.x - block.x,
               y: pointerLocal.y - block.y,
             };
+            sandboxGrabVelocityRef.current = {
+              vx: block.vx,
+              vy: block.vy,
+            };
+            sandboxGrabLastPositionRef.current = {
+              x: block.x,
+              y: block.y,
+              timestamp,
+            };
             const grabbedBlock = blocks.splice(index, 1)[0];
             blocks.push(grabbedBlock);
             break;
@@ -1346,6 +1456,8 @@ export default function App() {
         const grabbedIndex = blocks.findIndex((block) => block.id === grabbedId);
         if (grabbedIndex >= 0) {
           const grabbedBlock = blocks[grabbedIndex];
+          const previousX = grabbedBlock.x;
+          const previousY = grabbedBlock.y;
           grabbedBlock.x = clampValue(
             pointerLocal.x - sandboxGrabOffsetRef.current.x,
             0,
@@ -1356,6 +1468,27 @@ export default function App() {
             0,
             rect.height - grabbedBlock.size,
           );
+
+          const previousMove = sandboxGrabLastPositionRef.current;
+          const elapsedSeconds = Math.max(
+            1 / 120,
+            (timestamp - (previousMove.timestamp || timestamp)) / 1000,
+          );
+          const instantVx = (grabbedBlock.x - previousX) / elapsedSeconds;
+          const instantVy = (grabbedBlock.y - previousY) / elapsedSeconds;
+          const smoothedVx =
+            sandboxGrabVelocityRef.current.vx * 0.58 + instantVx * 0.42;
+          const smoothedVy =
+            sandboxGrabVelocityRef.current.vy * 0.58 + instantVy * 0.42;
+          sandboxGrabVelocityRef.current = {
+            vx: clampVelocity(smoothedVx),
+            vy: clampVelocity(smoothedVy),
+          };
+          sandboxGrabLastPositionRef.current = {
+            x: grabbedBlock.x,
+            y: grabbedBlock.y,
+            timestamp,
+          };
           grabbedBlock.vx = 0;
           grabbedBlock.vy = 0;
         }
@@ -1368,31 +1501,200 @@ export default function App() {
       }
 
       block.vy += SANDBOX_GRAVITY * dtSeconds;
+      const drag = Number.isFinite(block.airDrag) ? block.airDrag : 0.994;
+      block.vx *= drag;
+      block.vy *= drag;
       block.x += block.vx * dtSeconds;
       block.y += block.vy * dtSeconds;
 
+      const restitution = Number.isFinite(block.restitution) ? block.restitution : 0.2;
       if (block.x < 0) {
         block.x = 0;
-        block.vx = -block.vx * SANDBOX_BOUNCE;
+        if (block.vx < 0) {
+          block.vx = -block.vx * restitution;
+          block.vy *= SANDBOX_FLOOR_FRICTION;
+        }
       } else if (block.x + block.size > rect.width) {
         block.x = rect.width - block.size;
-        block.vx = -block.vx * SANDBOX_BOUNCE;
+        if (block.vx > 0) {
+          block.vx = -block.vx * restitution;
+          block.vy *= SANDBOX_FLOOR_FRICTION;
+        }
       }
 
       if (block.y < 0) {
         block.y = 0;
-        block.vy = Math.abs(block.vy) * SANDBOX_BOUNCE;
+        if (block.vy < 0) {
+          block.vy = -block.vy * restitution;
+          block.vx *= SANDBOX_FLOOR_FRICTION;
+        }
       } else if (block.y + block.size > rect.height) {
         block.y = rect.height - block.size;
-        block.vy = -Math.abs(block.vy) * SANDBOX_BOUNCE;
+        if (block.vy > 0) {
+          block.vy = -Math.abs(block.vy) * restitution;
+          block.vx *= SANDBOX_FLOOR_FRICTION;
+        }
         if (Math.abs(block.vy) < SANDBOX_REST_VELOCITY) {
           block.vy = 0;
         }
       }
+    }
 
-      block.vx *= 0.985;
-      if (Math.abs(block.vx) < 0.01) {
+    for (let iteration = 0; iteration < SANDBOX_COLLISION_ITERATIONS; iteration += 1) {
+      for (let first = 0; first < blocks.length; first += 1) {
+        for (let second = first + 1; second < blocks.length; second += 1) {
+          const blockA = blocks[first];
+          const blockB = blocks[second];
+          const overlapX =
+            Math.min(blockA.x + blockA.size, blockB.x + blockB.size) -
+            Math.max(blockA.x, blockB.x);
+          const overlapY =
+            Math.min(blockA.y + blockA.size, blockB.y + blockB.size) -
+            Math.max(blockA.y, blockB.y);
+          if (overlapX <= 0 || overlapY <= 0) {
+            continue;
+          }
+
+          const centerAx = blockA.x + blockA.size / 2;
+          const centerAy = blockA.y + blockA.size / 2;
+          const centerBx = blockB.x + blockB.size / 2;
+          const centerBy = blockB.y + blockB.size / 2;
+          const blockAGrabbed = grabbedId === blockA.id;
+          const blockBGrabbed = grabbedId === blockB.id;
+          const moveShareA = blockAGrabbed ? 0 : blockBGrabbed ? 1 : 0.5;
+          const moveShareB = blockBGrabbed ? 0 : blockAGrabbed ? 1 : 0.5;
+          const invMassA = blockAGrabbed ? 0 : 1 / Math.max(0.001, blockA.mass || 1);
+          const invMassB = blockBGrabbed ? 0 : 1 / Math.max(0.001, blockB.mass || 1);
+          const invMassSum = invMassA + invMassB;
+          const restitution = Math.max(
+            blockA.restitution ?? 0.2,
+            blockB.restitution ?? 0.2,
+          );
+
+          if (overlapX < overlapY) {
+            const direction = centerAx < centerBx ? -1 : 1;
+            const separation = overlapX + 0.01;
+            blockA.x = clampValue(
+              blockA.x + direction * separation * moveShareA,
+              0,
+              rect.width - blockA.size,
+            );
+            blockB.x = clampValue(
+              blockB.x - direction * separation * moveShareB,
+              0,
+              rect.width - blockB.size,
+            );
+
+            if (invMassSum > 0) {
+              const normal = centerAx < centerBx ? 1 : -1;
+              const relativeNormalVelocity = (blockB.vx - blockA.vx) * normal;
+              if (relativeNormalVelocity < 0) {
+                const impulseMagnitude =
+                  (-(1 + restitution) * relativeNormalVelocity) / invMassSum;
+                blockA.vx -= impulseMagnitude * invMassA * normal;
+                blockB.vx += impulseMagnitude * invMassB * normal;
+              }
+              const tangentVelocity = blockB.vy - blockA.vy;
+              const frictionImpulse = tangentVelocity * SANDBOX_COLLISION_FRICTION;
+              blockA.vy += frictionImpulse * invMassA * 0.5;
+              blockB.vy -= frictionImpulse * invMassB * 0.5;
+            }
+          } else {
+            const direction = centerAy < centerBy ? -1 : 1;
+            const separation = overlapY + 0.01;
+            blockA.y = clampValue(
+              blockA.y + direction * separation * moveShareA,
+              0,
+              rect.height - blockA.size,
+            );
+            blockB.y = clampValue(
+              blockB.y - direction * separation * moveShareB,
+              0,
+              rect.height - blockB.size,
+            );
+
+            if (invMassSum > 0) {
+              const normal = centerAy < centerBy ? 1 : -1;
+              const relativeNormalVelocity = (blockB.vy - blockA.vy) * normal;
+              if (relativeNormalVelocity < 0) {
+                const impulseMagnitude =
+                  (-(1 + restitution) * relativeNormalVelocity) / invMassSum;
+                blockA.vy -= impulseMagnitude * invMassA * normal;
+                blockB.vy += impulseMagnitude * invMassB * normal;
+              }
+              const tangentVelocity = blockB.vx - blockA.vx;
+              const frictionImpulse = tangentVelocity * SANDBOX_COLLISION_FRICTION;
+              blockA.vx += frictionImpulse * invMassA * 0.5;
+              blockB.vx -= frictionImpulse * invMassB * 0.5;
+            }
+          }
+        }
+      }
+    }
+
+    for (const block of blocks) {
+      if (grabbedId !== null && block.id === grabbedId) {
+        continue;
+      }
+
+      const isOnFloor = Math.abs(block.y + block.size - rect.height) <= 1.2;
+      if (isOnFloor && Math.abs(block.vx) < 1.2) {
         block.vx = 0;
+      }
+
+      if (!isOnFloor) {
+        let supportMin = Number.POSITIVE_INFINITY;
+        let supportMax = Number.NEGATIVE_INFINITY;
+
+        for (const other of blocks) {
+          if (other.id === block.id) {
+            continue;
+          }
+          const verticalGap = Math.abs(block.y + block.size - other.y);
+          if (verticalGap > SANDBOX_SUPPORT_EPSILON) {
+            continue;
+          }
+          const overlapLeft = Math.max(block.x, other.x);
+          const overlapRight = Math.min(block.x + block.size, other.x + other.size);
+          const overlapWidth = overlapRight - overlapLeft;
+          if (overlapWidth <= 1) {
+            continue;
+          }
+          supportMin = Math.min(supportMin, overlapLeft);
+          supportMax = Math.max(supportMax, overlapRight);
+        }
+
+        if (Number.isFinite(supportMin) && Number.isFinite(supportMax)) {
+          const centerX = block.x + block.size / 2;
+          let overhangDistance = 0;
+          if (centerX < supportMin) {
+            overhangDistance = centerX - supportMin;
+          } else if (centerX > supportMax) {
+            overhangDistance = centerX - supportMax;
+          }
+
+          if (overhangDistance !== 0) {
+            const direction = Math.sign(overhangDistance);
+            const overhangRatio = clampValue(
+              Math.abs(overhangDistance) / Math.max(1, block.size * 0.5),
+              0.08,
+              1.4,
+            );
+            block.vx += direction * SANDBOX_OVERHANG_ACCEL * overhangRatio * dtSeconds;
+            block.vy += SANDBOX_GRAVITY * 0.08 * dtSeconds;
+          }
+        }
+      }
+
+      block.x = clampValue(block.x, 0, rect.width - block.size);
+      block.y = clampValue(block.y, 0, rect.height - block.size);
+      block.vx = clampVelocity(block.vx);
+      block.vy = clampVelocity(block.vy);
+      if (Math.abs(block.vx) < 0.18) {
+        block.vx = 0;
+      }
+      if (Math.abs(block.vy) < 0.18 && block.y + block.size >= rect.height - 0.6) {
+        block.vy = 0;
       }
     }
 
@@ -2641,8 +2943,7 @@ export default function App() {
                 </p>
               ) : (
                 <p className="small-text">
-                  Pinch over a block to grab it. Keep pinching to drag, then release to drop with
-                  gravity.
+                  Pinch over a block to grab it. Keep pinching to drag, then release to fling.
                 </p>
               )}
 
@@ -2782,7 +3083,10 @@ export default function App() {
           <section className="card panel sandbox-panel">
             <h2>Pinch Drag Sandbox</h2>
             <p className="small-text">
-              Hover over a block and pinch to grab it. Move while pinching, then release to drop.
+              Hover over a block and pinch to grab it. Move while pinching, then release to fling.
+            </p>
+            <p className="small-text">
+              Two steel blocks (lower bounce) and two rubber blocks (higher bounce).
             </p>
 
             <div className="sandbox-panel-body">
@@ -2790,7 +3094,7 @@ export default function App() {
                 {sandboxBlocks.map((block) => (
                   <div
                     key={block.id}
-                    className={`sandbox-block ${
+                    className={`sandbox-block ${block.material} ${
                       sandboxGrabbedBlockId === block.id ? "grabbed" : ""
                     }`}
                     style={{
