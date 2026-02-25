@@ -65,6 +65,7 @@ body {
 }
 
 .content-grid {
+  align-items: start;
   display: grid;
   gap: 14px;
   grid-template-columns: minmax(280px, 460px) minmax(280px, 1fr);
@@ -75,6 +76,7 @@ body {
   border: 1px solid #d0d8e5;
   border-radius: 14px;
   box-shadow: 0 14px 28px -22px rgba(27, 49, 74, 0.5);
+  max-width: 100%;
   padding: 12px;
 }
 
@@ -150,6 +152,7 @@ body {
   background: rgba(236, 243, 252, 0.72);
   border: 1px solid #ced9eb;
   border-radius: 12px;
+  max-width: 100%;
   margin-top: 12px;
   padding: 10px;
 }
@@ -164,6 +167,8 @@ body {
   gap: 8px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 8px;
+  margin-inline: auto;
+  width: min(100%, clamp(220px, 42vh, 360px));
 }
 
 .input-test-cell {
