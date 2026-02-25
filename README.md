@@ -38,7 +38,7 @@ Open the local URL printed by Vite (typically `http://localhost:5173`) in Chrome
 - Tracking now starts with MediaPipe runtime first (for more stable hand coordinates on this machine), then can probe TFJS as a fallback path if needed.
 - If repeated invalid landmarks or long no-hand streaks occur, the app auto-recovers runtime/backend and logs each attempt in detail.
 - Hand-detected status uses a short grace window to avoid flickering off on single dropped frames.
-- Use **Log Tracking Extents** in the UI to log observed fingertip min/max extents and camera cover/crop bounds for edge-alignment diagnostics.
+- Use **Log Tracking Extents** in the UI to log raw vs clamped fingertip extents, visible-area-normalized extents, out-of-visible-bounds ratios, and camera cover/crop bounds for edge-alignment diagnostics.
 
 ## How It Works
 
@@ -48,7 +48,7 @@ Open the local URL printed by Vite (typically `http://localhost:5173`) in Chrome
 4. An affine transform is solved with least squares:
    - `x = a1*u + a2*v + a3`
    - `y = b1*u + b2*v + b3`
-5. The transform maps mirrored camera coordinates to screen coordinates, then cursor smoothing is applied.
+5. The tracker maps fingertip coordinates into the visible camera window (derived from object-fit cover crop), then applies calibration and cursor smoothing.
 6. In game mode, pinch rising-edge events hit moles when the smoothed cursor is inside the active mole zone.
 
 ## Controls
@@ -59,11 +59,12 @@ Open the local URL printed by Vite (typically `http://localhost:5173`) in Chrome
 - **Recalibrate**: clear stored transform and return to calibration
 - **Camera overlay**: always shows fingertip markers (thumb/index/middle/ring/pinky)
 - **Debug overlay**: adds landmarks, raw pointer marker, and pinch/FPS info
-- **Log Tracking Extents**: writes current/maximum fingertip coverage and visible camera bounds to the log file
+- **Log Tracking Extents**: writes raw/clamped/visible-normalized fingertip coverage plus visible camera bounds to the log file
 
 ## Calibration Persistence
 
 Calibration is saved in `localStorage` and reused on reload. You can clear it with **Recalibrate**.
+Newer builds use a newer calibration storage key; after updating, do one fresh calibration pass.
 
 ## Troubleshooting
 

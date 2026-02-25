@@ -1,6 +1,6 @@
 import { createScopedLogger } from "./logger";
 
-export const CALIBRATION_STORAGE_KEY = "fingerWhack.calibration.v1";
+export const CALIBRATION_STORAGE_KEY = "fingerWhack.calibration.v2";
 const calibrationLog = createScopedLogger("calibration");
 
 export function createCalibrationTargets(width, height) {

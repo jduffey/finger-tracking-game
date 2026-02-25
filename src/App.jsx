@@ -48,6 +48,7 @@ const FINGERTIP_OVERLAY_STYLES = {
 };
 const EXTENT_FINGER_NAMES = ["thumb", "index", "middle", "ring", "pinky"];
 const EXTENT_LOG_SAMPLE_INTERVAL = 180;
+const MIN_VISIBLE_SPAN = 1e-6;
 
 function clampValue(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -70,17 +71,78 @@ function createEmptyExtent() {
   };
 }
 
+function createFingerExtentStats() {
+  return {
+    raw: createEmptyExtent(),
+    clamped: createEmptyExtent(),
+    visible: createEmptyExtent(),
+    totalSamples: 0,
+    clampedSamples: 0,
+    outsideVisibleCount: 0,
+  };
+}
+
 function createTrackingExtentState() {
   const fingers = EXTENT_FINGER_NAMES.reduce((accumulator, fingerName) => {
-    accumulator[fingerName] = createEmptyExtent();
+    accumulator[fingerName] = createFingerExtentStats();
     return accumulator;
   }, {});
   return {
     sampleFrames: 0,
     lastFrameId: 0,
     lastTimestamp: 0,
-    overall: createEmptyExtent(),
+    rawOverall: createEmptyExtent(),
+    clampedOverall: createEmptyExtent(),
+    visibleOverall: createEmptyExtent(),
+    totalTipSamples: 0,
+    clampedTipSamples: 0,
+    outsideVisibleTipSamples: 0,
+    lastVisibleBounds: null,
     fingers,
+  };
+}
+
+function updateExtentAccumulator(extent, u, v) {
+  if (!extent || !Number.isFinite(u) || !Number.isFinite(v)) {
+    return false;
+  }
+  extent.count += 1;
+  extent.minU = Math.min(extent.minU, u);
+  extent.maxU = Math.max(extent.maxU, u);
+  extent.minV = Math.min(extent.minV, v);
+  extent.maxV = Math.max(extent.maxV, v);
+  return true;
+}
+
+function safeRatio(part, total) {
+  if (!Number.isFinite(part) || !Number.isFinite(total) || total <= 0) {
+    return 0;
+  }
+  return part / total;
+}
+
+function normalizeTipToVisibleBounds(uRaw, vRaw, visibleBounds) {
+  if (!visibleBounds || !Number.isFinite(uRaw) || !Number.isFinite(vRaw)) {
+    return null;
+  }
+  const uSpan = Math.max(MIN_VISIBLE_SPAN, visibleBounds.uMax - visibleBounds.uMin);
+  const vSpan = Math.max(MIN_VISIBLE_SPAN, visibleBounds.vMax - visibleBounds.vMin);
+  const uVisibleRaw = (uRaw - visibleBounds.uMin) / uSpan;
+  const vVisibleRaw = (vRaw - visibleBounds.vMin) / vSpan;
+  const uVisible = clampValue(uVisibleRaw, 0, 1);
+  const vVisible = clampValue(vVisibleRaw, 0, 1);
+
+  return {
+    u: uVisible,
+    v: vVisible,
+    uRaw: uVisibleRaw,
+    vRaw: vVisibleRaw,
+    inBounds:
+      uRaw >= visibleBounds.uMin &&
+      uRaw <= visibleBounds.uMax &&
+      vRaw >= visibleBounds.vMin &&
+      vRaw <= visibleBounds.vMax,
+    wasClamped: uVisible !== uVisibleRaw || vVisible !== vVisibleRaw,
   };
 }
 
@@ -114,6 +176,26 @@ function summarizeExtentForLog(extent, canvasWidth, canvasHeight) {
     samples: extent.count,
     mirroredNormalized: normalized,
     canvasPixels: pixels,
+  };
+}
+
+function summarizeFingerExtentStats(fingerStats, canvasWidth, canvasHeight) {
+  if (!fingerStats || fingerStats.totalSamples === 0) {
+    return null;
+  }
+
+  return {
+    samples: fingerStats.totalSamples,
+    clampedSamples: fingerStats.clampedSamples,
+    clampedRatio: roundMetric(safeRatio(fingerStats.clampedSamples, fingerStats.totalSamples), 6),
+    outsideVisibleSamples: fingerStats.outsideVisibleCount,
+    outsideVisibleRatio: roundMetric(
+      safeRatio(fingerStats.outsideVisibleCount, fingerStats.totalSamples),
+      6,
+    ),
+    raw: summarizeExtentForLog(fingerStats.raw, canvasWidth, canvasHeight),
+    clamped: summarizeExtentForLog(fingerStats.clamped, canvasWidth, canvasHeight),
+    visibleNormalized: summarizeExtentForLog(fingerStats.visible, canvasWidth, canvasHeight),
   };
 }
 
@@ -1134,7 +1216,7 @@ export default function App() {
     const canvasHeight = coverMetrics?.canvas.height ?? 0;
 
     const fingerExtents = EXTENT_FINGER_NAMES.reduce((accumulator, fingerName) => {
-      accumulator[fingerName] = summarizeExtentForLog(
+      accumulator[fingerName] = summarizeFingerExtentStats(
         extentState.fingers[fingerName],
         canvasWidth,
         canvasHeight,
@@ -1162,9 +1244,39 @@ export default function App() {
       sampleFrames: extentState.sampleFrames,
       lastFrameId: extentState.lastFrameId,
       lastTimestamp: roundMetric(extentState.lastTimestamp, 1),
-      overall: summarizeExtentForLog(extentState.overall, canvasWidth, canvasHeight),
+      overall: {
+        raw: summarizeExtentForLog(extentState.rawOverall, canvasWidth, canvasHeight),
+        clamped: summarizeExtentForLog(extentState.clampedOverall, canvasWidth, canvasHeight),
+        visibleNormalized: summarizeExtentForLog(
+          extentState.visibleOverall,
+          canvasWidth,
+          canvasHeight,
+        ),
+      },
+      totals: {
+        tipSamples: extentState.totalTipSamples,
+        clampedSamples: extentState.clampedTipSamples,
+        clampedRatio: roundMetric(
+          safeRatio(extentState.clampedTipSamples, extentState.totalTipSamples),
+          6,
+        ),
+        outsideVisibleSamples: extentState.outsideVisibleTipSamples,
+        outsideVisibleRatio: roundMetric(
+          safeRatio(extentState.outsideVisibleTipSamples, extentState.totalTipSamples),
+          6,
+        ),
+      },
       fingerExtents,
       visibleMirroredBounds,
+      lastVisibleBounds:
+        extentState.lastVisibleBounds && Number.isFinite(extentState.lastVisibleBounds.uMin)
+          ? {
+              uMin: roundMetric(extentState.lastVisibleBounds.uMin),
+              uMax: roundMetric(extentState.lastVisibleBounds.uMax),
+              vMin: roundMetric(extentState.lastVisibleBounds.vMin),
+              vMax: roundMetric(extentState.lastVisibleBounds.vMax),
+            }
+          : null,
       cameraCoverMetrics: coverMetrics
         ? {
             canvas: coverMetrics.canvas,
@@ -1187,12 +1299,20 @@ export default function App() {
     });
   }
 
-  function updateTrackingExtentsWithHand(hand, frameId, timestamp) {
+  function updateTrackingExtentsWithHand(hand, frameId, timestamp, visibleBounds) {
     if (!hand) {
       return;
     }
 
     const extentState = trackingExtentsRef.current;
+    extentState.lastVisibleBounds = visibleBounds
+      ? {
+          uMin: visibleBounds.uMin,
+          uMax: visibleBounds.uMax,
+          vMin: visibleBounds.vMin,
+          vMax: visibleBounds.vMax,
+        }
+      : null;
     const tips = hand.fingerTips ?? {
       thumb: hand.thumbTip ?? null,
       index: hand.indexTip ?? null,
@@ -1208,26 +1328,53 @@ export default function App() {
         continue;
       }
 
-      const fingerExtent = extentState.fingers[fingerName];
-      if (fingerExtent.count === 0) {
+      const uClamped = tip.u;
+      const vClamped = tip.v;
+      const uRaw = Number.isFinite(tip.uRaw) ? tip.uRaw : uClamped;
+      const vRaw = Number.isFinite(tip.vRaw) ? tip.vRaw : vClamped;
+      const wasClamped = Boolean(
+        tip.wasClamped || uRaw !== uClamped || vRaw !== vClamped,
+      );
+
+      const fingerStats = extentState.fingers[fingerName];
+      if (fingerStats.totalSamples === 0) {
         appLog.info("First fingertip sample captured for extent tracking", {
           fingerName,
           frameId,
-          tip,
+          uRaw,
+          vRaw,
+          uClamped,
+          vClamped,
+          wasClamped,
         });
       }
 
-      fingerExtent.count += 1;
-      fingerExtent.minU = Math.min(fingerExtent.minU, tip.u);
-      fingerExtent.maxU = Math.max(fingerExtent.maxU, tip.u);
-      fingerExtent.minV = Math.min(fingerExtent.minV, tip.v);
-      fingerExtent.maxV = Math.max(fingerExtent.maxV, tip.v);
+      fingerStats.totalSamples += 1;
+      extentState.totalTipSamples += 1;
 
-      extentState.overall.count += 1;
-      extentState.overall.minU = Math.min(extentState.overall.minU, tip.u);
-      extentState.overall.maxU = Math.max(extentState.overall.maxU, tip.u);
-      extentState.overall.minV = Math.min(extentState.overall.minV, tip.v);
-      extentState.overall.maxV = Math.max(extentState.overall.maxV, tip.v);
+      const updatedRaw = updateExtentAccumulator(fingerStats.raw, uRaw, vRaw);
+      const updatedClamped = updateExtentAccumulator(fingerStats.clamped, uClamped, vClamped);
+      if (updatedRaw) {
+        updateExtentAccumulator(extentState.rawOverall, uRaw, vRaw);
+      }
+      if (updatedClamped) {
+        updateExtentAccumulator(extentState.clampedOverall, uClamped, vClamped);
+      }
+
+      if (wasClamped) {
+        fingerStats.clampedSamples += 1;
+        extentState.clampedTipSamples += 1;
+      }
+
+      const visibleTip = normalizeTipToVisibleBounds(uRaw, vRaw, visibleBounds);
+      if (visibleTip) {
+        updateExtentAccumulator(fingerStats.visible, visibleTip.u, visibleTip.v);
+        updateExtentAccumulator(extentState.visibleOverall, visibleTip.u, visibleTip.v);
+        if (!visibleTip.inBounds) {
+          fingerStats.outsideVisibleCount += 1;
+          extentState.outsideVisibleTipSamples += 1;
+        }
+      }
 
       updatedAny = true;
     }
@@ -1383,14 +1530,23 @@ export default function App() {
     }
     lastValidHandTimestampRef.current = timestamp;
     handGraceFrameCounterRef.current = 0;
-    updateTrackingExtentsWithHand(hand, frameId, timestamp);
+
+    const coverMetrics = computeCameraCoverMetrics();
+    const visibleBounds = coverMetrics?.mirroredNormalized ?? null;
+    const indexTipRawU = Number.isFinite(hand.indexTip?.uRaw) ? hand.indexTip.uRaw : hand.indexTip.u;
+    const indexTipRawV = Number.isFinite(hand.indexTip?.vRaw) ? hand.indexTip.vRaw : hand.indexTip.v;
+    const visibleIndexTip = normalizeTipToVisibleBounds(indexTipRawU, indexTipRawV, visibleBounds);
+    const mappedIndexTip = visibleIndexTip
+      ? { u: visibleIndexTip.u, v: visibleIndexTip.v }
+      : { u: hand.indexTip.u, v: hand.indexTip.v };
+    updateTrackingExtentsWithHand(hand, frameId, timestamp, visibleBounds);
 
     const shouldUseTransform = Boolean(transformRef.current) && !isCalibratingRef.current;
     const mappedPoint = shouldUseTransform
-      ? applyAffineTransform(transformRef.current, hand.indexTip.u, hand.indexTip.v)
+      ? applyAffineTransform(transformRef.current, mappedIndexTip.u, mappedIndexTip.v)
       : {
-          x: hand.indexTip.u * viewportRef.current.width,
-          y: hand.indexTip.v * viewportRef.current.height,
+          x: mappedIndexTip.u * viewportRef.current.width,
+          y: mappedIndexTip.v * viewportRef.current.height,
         };
 
     const rawPoint = clampPoint(mappedPoint, viewportRef.current.width, viewportRef.current.height);
@@ -1415,15 +1571,33 @@ export default function App() {
       previous: prev,
       smoothed,
       usedTransform: shouldUseTransform,
+      indexTip: {
+        uRaw: roundMetric(indexTipRawU),
+        vRaw: roundMetric(indexTipRawV),
+        uClamped: roundMetric(hand.indexTip.u),
+        vClamped: roundMetric(hand.indexTip.v),
+      },
+      mappedIndexTip,
+      visibleIndexTip,
+      visibleBounds: visibleBounds
+        ? {
+            uMin: roundMetric(visibleBounds.uMin),
+            uMax: roundMetric(visibleBounds.uMax),
+            vMin: roundMetric(visibleBounds.vMin),
+            vMax: roundMetric(visibleBounds.vMax),
+          }
+        : null,
     });
 
     if (isCalibratingRef.current && calibrationSampleRef.current) {
-      calibrationSampleRef.current.points.push({ u: hand.indexTip.u, v: hand.indexTip.v });
+      calibrationSampleRef.current.points.push({ u: mappedIndexTip.u, v: mappedIndexTip.v });
       setCalibrationSampleFrames(calibrationSampleRef.current.points.length);
       appLog.debug("Captured calibration sample frame", {
         frameId,
         targetIndex: calibrationSampleRef.current.targetIndex,
         sampleCount: calibrationSampleRef.current.points.length,
+        mappedIndexTip,
+        visibleIndexTip,
       });
       if (calibrationSampleRef.current.points.length >= CALIBRATION_SAMPLE_FRAMES) {
         finalizeCalibrationSample();

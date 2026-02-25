@@ -223,16 +223,17 @@ function toMirroredNormalized(point, width, height) {
   }
 
   const { x, y, normalized } = numeric;
-  if (normalized) {
-    return {
-      u: clamp01(1 - x),
-      v: clamp01(y),
-    };
-  }
+  const uRaw = normalized ? 1 - x : 1 - x / width;
+  const vRaw = normalized ? y : y / height;
+  const u = clamp01(uRaw);
+  const v = clamp01(vRaw);
 
   return {
-    u: clamp01(1 - x / width),
-    v: clamp01(y / height),
+    u,
+    v,
+    uRaw,
+    vRaw,
+    wasClamped: u !== uRaw || v !== vRaw,
   };
 }
 
@@ -301,6 +302,9 @@ function summarizePoint(point) {
     y: point.y,
     u: point.u,
     v: point.v,
+    uRaw: point.uRaw,
+    vRaw: point.vRaw,
+    wasClamped: point.wasClamped,
     asArray0: point[0],
     asArray1: point[1],
   };
