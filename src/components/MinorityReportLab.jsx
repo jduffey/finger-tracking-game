@@ -6,6 +6,8 @@ const PANEL_WIDTH = 196;
 const PANEL_HEIGHT = 124;
 const PANEL_COUNT = 6;
 const STAGE_DEFAULT_SIZE = { width: 960, height: 640 };
+const HAND_INFO_BOX_SIZE = { width: 170, height: 88 };
+const HAND_INFO_BOX_MARGIN = 10;
 const DEFAULT_STAGE_TRANSFORM = {
   x: 0,
   y: 0,
@@ -33,7 +35,10 @@ const SCENES = [
 
 const HAND_INFO_BOX_DEFAULTS = {
   Left: { x: 16, y: 16 },
-  Right: { x: 16, y: 16 },
+  Right: {
+    x: STAGE_DEFAULT_SIZE.width - HAND_INFO_BOX_SIZE.width - 16,
+    y: 16,
+  },
 };
 
 const PANEL_TITLES = [
@@ -205,6 +210,15 @@ function clampPanelPosition(panel, stageSize) {
   };
 }
 
+function clampInfoBoxPosition(position, stageSize) {
+  const maxX = Math.max(HAND_INFO_BOX_MARGIN, stageSize.width - HAND_INFO_BOX_SIZE.width - HAND_INFO_BOX_MARGIN);
+  const maxY = Math.max(HAND_INFO_BOX_MARGIN, stageSize.height - HAND_INFO_BOX_SIZE.height - HAND_INFO_BOX_MARGIN);
+  return {
+    x: clamp(position.x, HAND_INFO_BOX_MARGIN, maxX),
+    y: clamp(position.y, HAND_INFO_BOX_MARGIN, maxY),
+  };
+}
+
 export default function MinorityReportLab(props) {
   const {
     fps,
@@ -236,6 +250,7 @@ export default function MinorityReportLab(props) {
   const [panels, setPanels] = useState(() => createPanels(0, STAGE_DEFAULT_SIZE));
   const [selectedPanelId, setSelectedPanelId] = useState(null);
   const [pointerTrails, setPointerTrails] = useState({});
+  const [handInfoBoxPositions, setHandInfoBoxPositions] = useState(HAND_INFO_BOX_DEFAULTS);
 
   const panelsRef = useRef(panels);
   const sceneIndexRef = useRef(sceneIndex);
@@ -243,6 +258,10 @@ export default function MinorityReportLab(props) {
   const grabRef = useRef(null);
   const twoHandManipRef = useRef({ active: false, base: null });
   const pointerTrailsRef = useRef(pointerTrails);
+  const handInfoBoxDragRef = useRef({
+    Left: null,
+    Right: null,
+  });
 
   useEffect(() => {
     panelsRef.current = panels;
@@ -321,6 +340,10 @@ export default function MinorityReportLab(props) {
       }
       return previous.map((panel) => clampPanelPosition(panel, stageSize));
     });
+    setHandInfoBoxPositions((previous) => ({
+      Left: clampInfoBoxPosition(previous.Left ?? HAND_INFO_BOX_DEFAULTS.Left, stageSize),
+      Right: clampInfoBoxPosition(previous.Right ?? HAND_INFO_BOX_DEFAULTS.Right, stageSize),
+    }));
   }, [stageSize]);
 
   useEffect(() => {
@@ -535,9 +558,69 @@ export default function MinorityReportLab(props) {
       );
       break;
     }
+
+    const nextBoxPositions = {
+      ...handInfoBoxPositions,
+    };
+    let didUpdateBoxPosition = false;
+    for (const label of ["Left", "Right"]) {
+      const hand = handStates.find((candidate) => candidate.label === label) ?? null;
+      const dragState = handInfoBoxDragRef.current[label];
+      if (!hand || !hand.pointer) {
+        handInfoBoxDragRef.current[label] = null;
+        continue;
+      }
+
+      const pointer = {
+        x: hand.pointer.x * stageSize.width,
+        y: hand.pointer.y * stageSize.height,
+      };
+      const box = nextBoxPositions[label] ?? HAND_INFO_BOX_DEFAULTS[label];
+
+      if (!hand.pinchActive) {
+        handInfoBoxDragRef.current[label] = null;
+        continue;
+      }
+
+      if (!dragState) {
+        const inside =
+          pointer.x >= box.x &&
+          pointer.x <= box.x + HAND_INFO_BOX_SIZE.width &&
+          pointer.y >= box.y &&
+          pointer.y <= box.y + HAND_INFO_BOX_SIZE.height;
+        if (inside) {
+          handInfoBoxDragRef.current[label] = {
+            offsetX: pointer.x - box.x,
+            offsetY: pointer.y - box.y,
+          };
+        } else {
+          continue;
+        }
+      }
+
+      const activeDragState = handInfoBoxDragRef.current[label];
+      if (!activeDragState) {
+        continue;
+      }
+      const proposed = clampInfoBoxPosition(
+        {
+          x: pointer.x - activeDragState.offsetX,
+          y: pointer.y - activeDragState.offsetY,
+        },
+        stageSize,
+      );
+      if (Math.abs(proposed.x - box.x) > 0.1 || Math.abs(proposed.y - box.y) > 0.1) {
+        nextBoxPositions[label] = proposed;
+        didUpdateBoxPosition = true;
+      }
+    }
+    if (didUpdateBoxPosition) {
+      setHandInfoBoxPositions(nextBoxPositions);
+    }
   }, [
     confidenceThreshold,
     engineOutput,
+    handInfoBoxPositions,
     showTrails,
     stageSize,
   ]);
@@ -612,23 +695,18 @@ export default function MinorityReportLab(props) {
             {["Left", "Right"].map((label) => {
               const hand = handsByLabel[label];
               const isDetected = Boolean(hand);
+              const isDragging = Boolean(handInfoBoxDragRef.current[label]);
+              const boxPosition = handInfoBoxPositions[label] ?? HAND_INFO_BOX_DEFAULTS[label];
               return (
                 <div
                   key={`info-${label}`}
                   className={`lab-hand-infobox ${label === "Left" ? "left" : "right"} ${
                     isDetected ? "detected" : "missing"
-                  }`}
-                  style={
-                    label === "Left"
-                      ? {
-                          left: `${HAND_INFO_BOX_DEFAULTS.Left.x}px`,
-                          top: `${HAND_INFO_BOX_DEFAULTS.Left.y}px`,
-                        }
-                      : {
-                          right: `${HAND_INFO_BOX_DEFAULTS.Right.x}px`,
-                          top: `${HAND_INFO_BOX_DEFAULTS.Right.y}px`,
-                        }
-                  }
+                  } ${isDragging ? "dragging" : ""}`}
+                  style={{
+                    left: `${boxPosition.x}px`,
+                    top: `${boxPosition.y}px`,
+                  }}
                 >
                   <h5>{label} Hand</h5>
                   <p>Status: {isDetected ? "detected" : "not detected"}</p>
@@ -639,6 +717,7 @@ export default function MinorityReportLab(props) {
                       ? `${(hand.pointer?.x ?? 0).toFixed(3)}, ${(hand.pointer?.y ?? 0).toFixed(3)}`
                       : "n/a"}
                   </p>
+                  <p className="hint">Pinch inside this box to drag</p>
                 </div>
               );
             })}

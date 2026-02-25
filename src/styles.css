@@ -578,10 +578,13 @@ body {
   border: 1px solid rgba(111, 170, 220, 0.42);
   border-radius: 10px;
   color: #e8f4ff;
+  height: 88px;
   min-width: 152px;
+  width: 170px;
   padding: 7px 9px;
   position: absolute;
   top: 12px;
+  user-select: none;
   z-index: 5;
 }
 
@@ -596,6 +599,12 @@ body {
   margin: 0 0 2px;
 }
 
+.lab-hand-infobox .hint {
+  color: #9ec2e5;
+  font-size: 0.62rem;
+  margin-top: 2px;
+}
+
 .lab-hand-infobox.left.detected {
   border-color: rgba(255, 136, 99, 0.75);
 }
@@ -607,6 +616,10 @@ body {
 .lab-hand-infobox.missing {
   border-color: rgba(147, 166, 185, 0.64);
   color: #ccdae8;
+}
+
+.lab-hand-infobox.dragging {
+  box-shadow: 0 0 0 3px rgba(128, 188, 255, 0.32);
 }
 
 .gesture-debug-panel {
