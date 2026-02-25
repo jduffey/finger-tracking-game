@@ -19,6 +19,7 @@ import {
 import {
   detectPrimaryHand,
   getCurrentBackend,
+  getCurrentRuntime,
   getLastDetectionMeta,
   initHandTracking,
 } from "./handTracking";
@@ -35,7 +36,8 @@ const PINCH_DEBOUNCE_MS = 250;
 const CURSOR_ALPHA = 0.35;
 const CALIBRATION_SAMPLE_FRAMES = 10;
 const INVALID_LANDMARK_RECOVERY_THRESHOLD = 45;
-const CPU_FALLBACK_RECOVERY_ATTEMPT = 2;
+const NO_HAND_RECOVERY_THRESHOLD = 120;
+const MEDIAPIPE_FALLBACK_RECOVERY_ATTEMPT = 2;
 
 export default function App() {
   const appLog = useMemo(() => createScopedLogger("app"), []);
@@ -51,6 +53,7 @@ export default function App() {
   const [modelReady, setModelReady] = useState(false);
   const [modelError, setModelError] = useState("");
   const [activeBackend, setActiveBackend] = useState("webgl");
+  const [activeRuntime, setActiveRuntime] = useState("tfjs");
 
   const [handDetected, setHandDetected] = useState(false);
   const [pinchActive, setPinchActive] = useState(false);
@@ -111,6 +114,7 @@ export default function App() {
   const inferenceBusySkipCounterRef = useRef(0);
   const recoveryFrameSkipCounterRef = useRef(0);
   const invalidLandmarkStreakRef = useRef(0);
+  const noHandStreakRef = useRef(0);
   const detectorRecoveryAttemptsRef = useRef(0);
   const recoveringDetectorRef = useRef(false);
 
@@ -164,6 +168,10 @@ export default function App() {
   useEffect(() => {
     appLog.info("Tracking backend changed", { activeBackend });
   }, [activeBackend, appLog]);
+
+  useEffect(() => {
+    appLog.info("Tracking runtime changed", { activeRuntime });
+  }, [activeRuntime, appLog]);
 
   useEffect(() => {
     appLog.debug("Hand detection state changed", { handDetected });
@@ -395,9 +403,17 @@ export default function App() {
     const initModel = async () => {
       try {
         appLog.info("Initializing hand-tracking detector", {
+          requestedRuntime: "tfjs",
           requestedBackend: "webgl",
+          requestedModelType: "full",
+          requestedMaxHands: 1,
         });
-        const detector = await initHandTracking({ backend: "webgl" });
+        const detector = await initHandTracking({
+          runtime: "tfjs",
+          backend: "webgl",
+          modelType: "full",
+          maxHands: 1,
+        });
         if (cancelled) {
           appLog.warn("Model initialized after cancellation; disposing detector");
           detector?.dispose?.();
@@ -405,6 +421,7 @@ export default function App() {
         }
         detectorRef.current = detector;
         setActiveBackend(getCurrentBackend() || "webgl");
+        setActiveRuntime(getCurrentRuntime() || "tfjs");
         appLog.info("Hand-tracking detector is ready");
         setModelReady(true);
       } catch (error) {
@@ -540,6 +557,19 @@ export default function App() {
     };
   }, [appLog, phase]);
 
+  function getRecoveryConfig(attempt) {
+    if (attempt === 1) {
+      return { runtime: "tfjs", backend: "webgl", modelType: "full", maxHands: 1 };
+    }
+    if (attempt === MEDIAPIPE_FALLBACK_RECOVERY_ATTEMPT) {
+      return { runtime: "mediapipe", modelType: "full", maxHands: 1 };
+    }
+    if (attempt >= MEDIAPIPE_FALLBACK_RECOVERY_ATTEMPT + 2) {
+      return { runtime: "mediapipe", modelType: "full", maxHands: 1 };
+    }
+    return { runtime: "tfjs", backend: "cpu", modelType: "full", maxHands: 1 };
+  }
+
   async function recoverDetectorFromInvalidLandmarks(reason, details) {
     if (recoveringDetectorRef.current) {
       return;
@@ -548,35 +578,44 @@ export default function App() {
     recoveringDetectorRef.current = true;
     detectorRecoveryAttemptsRef.current += 1;
     const attempt = detectorRecoveryAttemptsRef.current;
-    const requestedBackend = attempt >= CPU_FALLBACK_RECOVERY_ATTEMPT ? "cpu" : "webgl";
+    const requestedConfig = getRecoveryConfig(attempt);
 
     appLog.warn("Attempting detector recovery", {
       attempt,
       reason,
-      requestedBackend,
+      requestedRuntime: requestedConfig.runtime,
+      requestedBackend: requestedConfig.backend ?? "n/a",
+      requestedModelType: requestedConfig.modelType,
       details,
       invalidLandmarkStreak: invalidLandmarkStreakRef.current,
+      noHandStreak: noHandStreakRef.current,
     });
 
     try {
       const previousDetector = detectorRef.current;
-      detectorRef.current = null;
-      if (previousDetector) {
+      const nextDetector = await initHandTracking(requestedConfig);
+      detectorRef.current = nextDetector;
+      if (previousDetector && previousDetector !== nextDetector) {
         previousDetector.dispose?.();
       }
-
-      const nextDetector = await initHandTracking({ backend: requestedBackend });
-      detectorRef.current = nextDetector;
       invalidLandmarkStreakRef.current = 0;
-      setActiveBackend(getCurrentBackend() || requestedBackend);
+      noHandStreakRef.current = 0;
+      setActiveBackend(
+        getCurrentBackend() ||
+          requestedConfig.backend ||
+          (requestedConfig.runtime === "mediapipe" ? "n/a" : "unknown"),
+      );
+      setActiveRuntime(getCurrentRuntime() || requestedConfig.runtime);
       appLog.info("Detector recovery succeeded", {
         attempt,
+        activeRuntime: getCurrentRuntime(),
         activeBackend: getCurrentBackend(),
       });
     } catch (error) {
       appLog.error("Detector recovery failed", {
         attempt,
-        requestedBackend,
+        requestedRuntime: requestedConfig.runtime,
+        requestedBackend: requestedConfig.backend ?? "n/a",
         error,
       });
       setModelError(
@@ -1176,6 +1215,23 @@ export default function App() {
           invalidLandmarkStreakRef.current = 0;
         }
 
+        if (detectionMeta.reason === "no_hands") {
+          noHandStreakRef.current += 1;
+          if (noHandStreakRef.current === NO_HAND_RECOVERY_THRESHOLD) {
+            appLog.warn("No hands detected for extended period; attempting recovery", {
+              noHandStreak: noHandStreakRef.current,
+              detectionMeta,
+            });
+            void recoverDetectorFromInvalidLandmarks("continuous_no_hands", detectionMeta);
+          }
+        } else if (noHandStreakRef.current > 0) {
+          appLog.info("No-hand streak ended", {
+            noHandStreak: noHandStreakRef.current,
+            detectionMeta,
+          });
+          noHandStreakRef.current = 0;
+        }
+
         if (!cancelled && mountedRef.current) {
           processTrackingFrame(hand, timestamp);
         }
@@ -1224,6 +1280,7 @@ export default function App() {
           <div className="status-row">
             <span>Camera: {cameraReady ? "ready" : "waiting"}</span>
             <span>Model: {modelReady ? "ready" : "loading"}</span>
+            <span>Runtime: {activeRuntime}</span>
             <span>Backend: {activeBackend}</span>
             <span>Pinch: {pinchActive ? "active" : "idle"}</span>
           </div>

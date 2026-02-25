@@ -7,12 +7,10 @@ import { createScopedLogger } from "./logger";
 const HAND_MODEL = handPoseDetection.SupportedModels.MediaPipeHands;
 const trackingLog = createScopedLogger("handTracking");
 const INVALID_VALUE_LOG_INTERVAL = 30;
-
-const DETECTOR_CONFIG = {
-  runtime: "tfjs",
-  modelType: "lite",
-  maxHands: 2,
-};
+const MEDIAPIPE_SOLUTION_PATH = "https://cdn.jsdelivr.net/npm/@mediapipe/hands";
+const DEFAULT_RUNTIME = "tfjs";
+const DEFAULT_MODEL_TYPE = "full";
+const DEFAULT_MAX_HANDS = 1;
 
 let lastDetectionMeta = {
   handsDetected: 0,
@@ -20,24 +18,47 @@ let lastDetectionMeta = {
   reason: "none",
 };
 let invalidValueStreak = 0;
+let activeRuntime = DEFAULT_RUNTIME;
 
 export async function initHandTracking(options = {}) {
+  const runtime = options.runtime ?? DEFAULT_RUNTIME;
   const backend = options.backend ?? "webgl";
-  trackingLog.info("Initializing TFJS hand tracking", {
-    detectorConfig: DETECTOR_CONFIG,
+  const modelType = options.modelType ?? DEFAULT_MODEL_TYPE;
+  const maxHands = Number.isFinite(options.maxHands) ? options.maxHands : DEFAULT_MAX_HANDS;
+  const detectorConfig = {
+    runtime,
+    modelType,
+    maxHands,
+    ...(runtime === "mediapipe" ? { solutionPath: MEDIAPIPE_SOLUTION_PATH } : {}),
+  };
+
+  trackingLog.info("Initializing hand tracking detector", {
+    runtime,
     requestedBackend: backend,
+    detectorConfig,
   });
-  const activeBefore = tf.getBackend();
-  if (activeBefore !== backend) {
-    trackingLog.debug("Setting TFJS backend", { backend, activeBefore });
-    await tf.setBackend(backend);
+
+  if (runtime === "tfjs") {
+    const activeBefore = tf.getBackend();
+    if (activeBefore !== backend) {
+      trackingLog.debug("Setting TFJS backend", { backend, activeBefore });
+      await tf.setBackend(backend);
+    } else {
+      trackingLog.debug("TFJS backend already active", { backend });
+    }
+    trackingLog.debug("Waiting for TFJS ready");
+    await tf.ready();
   } else {
-    trackingLog.debug("TFJS backend already active", { backend });
+    trackingLog.debug("Skipping TFJS backend setup for non-TFJS runtime", {
+      runtime,
+      activeBackend: tf.getBackend(),
+    });
   }
-  trackingLog.debug("Waiting for TFJS ready");
-  await tf.ready();
-  const detector = await handPoseDetection.createDetector(HAND_MODEL, DETECTOR_CONFIG);
+
+  const detector = await handPoseDetection.createDetector(HAND_MODEL, detectorConfig);
+  activeRuntime = runtime;
   trackingLog.info("Hand tracking detector initialized", {
+    runtime: activeRuntime,
     activeBackend: tf.getBackend(),
   });
   return detector;
@@ -45,6 +66,10 @@ export async function initHandTracking(options = {}) {
 
 export function getCurrentBackend() {
   return tf.getBackend();
+}
+
+export function getCurrentRuntime() {
+  return activeRuntime;
 }
 
 export function getLastDetectionMeta() {
@@ -71,7 +96,6 @@ export async function detectPrimaryHand(detector, videoElement) {
   try {
     hands = await detector.estimateHands(videoElement, {
       flipHorizontal: false,
-      staticImageMode: true,
     });
   } catch (error) {
     invalidValueStreak += 1;
@@ -102,107 +126,91 @@ export async function detectPrimaryHand(detector, videoElement) {
     return null;
   }
 
-  const bestHand = hands.reduce((best, current) => {
-    const bestScore = best?.score ?? 0;
-    const currentScore = current?.score ?? 0;
-    return currentScore > bestScore ? current : best;
-  }, hands[0]);
-
-  const keypoints = bestHand.keypoints ?? [];
-  const indexTip = keypoints[8];
-  const thumbTip = keypoints[4];
-
-  if (!indexTip || !thumbTip) {
-    lastDetectionMeta = {
-      handsDetected: hands.length,
-      invalid: true,
-      reason: "missing_required_keypoints",
-    };
-    trackingLog.warn("Hand detected but required landmarks missing", {
-      indexTipPresent: Boolean(indexTip),
-      thumbTipPresent: Boolean(thumbTip),
-      keypointCount: keypoints.length,
-    });
-    return null;
-  }
-
+  // Prefer the most confident hand, but still iterate candidates so a bad first
+  // hand does not suppress valid coordinates from another detection.
+  const sortedHands = [...hands].sort((a, b) => (b?.score ?? 0) - (a?.score ?? 0));
   const width = Math.max(1, videoElement.videoWidth || videoElement.clientWidth);
   const height = Math.max(1, videoElement.videoHeight || videoElement.clientHeight);
 
-  const mirroredIndex = toMirroredNormalized(indexTip, width, height);
-  const mirroredThumb = toMirroredNormalized(thumbTip, width, height);
+  for (const candidate of sortedHands) {
+    const keypoints = candidate?.keypoints ?? [];
+    const indexTip = keypoints[8];
+    const thumbTip = keypoints[4];
 
-  if (!mirroredIndex || !mirroredThumb) {
-    invalidValueStreak += 1;
+    if (!indexTip || !thumbTip) {
+      continue;
+    }
+
+    const mirroredIndex = toMirroredNormalized(indexTip, width, height);
+    const mirroredThumb = toMirroredNormalized(thumbTip, width, height);
+
+    if (!mirroredIndex || !mirroredThumb) {
+      continue;
+    }
+
+    const dx = mirroredThumb.u - mirroredIndex.u;
+    const dy = mirroredThumb.v - mirroredIndex.v;
+    const pinchDistance = Math.hypot(dx, dy);
+
+    if (!Number.isFinite(pinchDistance)) {
+      continue;
+    }
+
+    const landmarks = [];
+    for (const point of keypoints) {
+      const normalized = toMirroredNormalized(point, width, height);
+      if (normalized) {
+        landmarks.push(normalized);
+      }
+    }
+
+    invalidValueStreak = 0;
     lastDetectionMeta = {
       handsDetected: hands.length,
-      invalid: true,
-      reason: "non_finite_keypoint_values",
+      invalid: false,
+      reason: "ok",
     };
-    if (invalidValueStreak <= 5 || invalidValueStreak % INVALID_VALUE_LOG_INTERVAL === 0) {
-      trackingLog.warn("Ignoring hand with invalid fingertip coordinates", {
-        invalidValueStreak,
-        indexTipSummary: summarizePoint(indexTip),
-        thumbTipSummary: summarizePoint(thumbTip),
-      });
-    }
-    return null;
-  }
+    const score = Number.isFinite(candidate.score) ? candidate.score : 0;
 
-  const dx = mirroredThumb.u - mirroredIndex.u;
-  const dy = mirroredThumb.v - mirroredIndex.v;
-  const pinchDistance = Math.hypot(dx, dy);
+    trackingLog.debug("Primary hand extracted", {
+      runtime: activeRuntime,
+      score,
+      pinchDistance,
+      indexTip: mirroredIndex,
+      thumbTip: mirroredThumb,
+      videoWidth: width,
+      videoHeight: height,
+      landmarksCount: landmarks.length,
+    });
 
-  if (!Number.isFinite(pinchDistance)) {
-    invalidValueStreak += 1;
-    lastDetectionMeta = {
-      handsDetected: hands.length,
-      invalid: true,
-      reason: "non_finite_pinch_distance",
+    return {
+      score,
+      indexTip: mirroredIndex,
+      thumbTip: mirroredThumb,
+      pinchDistance,
+      landmarks,
     };
-    if (invalidValueStreak <= 5 || invalidValueStreak % INVALID_VALUE_LOG_INTERVAL === 0) {
-      trackingLog.warn("Ignoring hand due to non-finite pinch distance", {
-        invalidValueStreak,
-        dx,
-        dy,
-      });
-    }
-    return null;
   }
 
-  const landmarks = [];
-  for (const point of keypoints) {
-    const normalized = toMirroredNormalized(point, width, height);
-    if (normalized) {
-      landmarks.push(normalized);
-    }
-  }
-
-  invalidValueStreak = 0;
+  invalidValueStreak += 1;
   lastDetectionMeta = {
     handsDetected: hands.length,
-    invalid: false,
-    reason: "ok",
+    invalid: true,
+    reason: "non_finite_keypoint_values",
   };
-  const score = Number.isFinite(bestHand.score) ? bestHand.score : 0;
-
-  trackingLog.debug("Primary hand extracted", {
-    score,
-    pinchDistance,
-    indexTip: mirroredIndex,
-    thumbTip: mirroredThumb,
-    videoWidth: width,
-    videoHeight: height,
-    landmarksCount: landmarks.length,
-  });
-
-  return {
-    score,
-    indexTip: mirroredIndex,
-    thumbTip: mirroredThumb,
-    pinchDistance,
-    landmarks,
-  };
+  if (invalidValueStreak <= 5 || invalidValueStreak % INVALID_VALUE_LOG_INTERVAL === 0) {
+    const firstHand = sortedHands[0];
+    const firstKeypoints = firstHand?.keypoints ?? [];
+    trackingLog.warn("Ignoring hand with invalid fingertip coordinates", {
+      runtime: activeRuntime,
+      invalidValueStreak,
+      firstHandScore: firstHand?.score ?? null,
+      firstHandKeypointCount: firstKeypoints.length,
+      indexTipSummary: summarizePoint(firstKeypoints[8]),
+      thumbTipSummary: summarizePoint(firstKeypoints[4]),
+    });
+  }
+  return null;
 }
 
 function toMirroredNormalized(point, width, height) {

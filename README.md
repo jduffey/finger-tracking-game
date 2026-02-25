@@ -35,7 +35,7 @@ Open the local URL printed by Vite (typically `http://localhost:5173`) in Chrome
 - File name format is `YYYY-MM-DD-HH-MM-SS.log`.
 - Browser runtime events (tracking frames, calibration, pinch transitions, game state transitions, lifecycle events, console messages, and unhandled errors) are streamed into that file for troubleshooting.
 - `logs/` is git-ignored.
-- If WebGL returns repeated invalid landmarks, the app automatically reinitializes tracking and can fall back to CPU backend as a recovery path (logged in detail).
+- If TFJS/WebGL returns repeated invalid landmarks or no-hand streaks, the app can automatically reinitialize tracking and fall back to MediaPipe runtime / TFJS CPU (logged in detail).
 
 ## How It Works
 
@@ -72,3 +72,5 @@ Calibration is saved in `localStorage` and reused on reload. You can clear it wi
   - Improve lighting.
   - Keep one hand visible and reduce background clutter.
   - Close other heavy browser tabs/processes.
+- MediaPipe runtime fallback fails to initialize:
+  - Confirm internet access (the fallback uses `https://cdn.jsdelivr.net/npm/@mediapipe/hands`).
