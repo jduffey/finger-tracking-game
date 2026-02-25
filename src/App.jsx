@@ -49,7 +49,7 @@ const FINGERTIP_OVERLAY_STYLES = {
 const EXTENT_FINGER_NAMES = ["thumb", "index", "middle", "ring", "pinky"];
 const EXTENT_LOG_SAMPLE_INTERVAL = 180;
 const MIN_VISIBLE_SPAN = 1e-6;
-const INPUT_TEST_GRID_ROWS = 4;
+const INPUT_TEST_GRID_ROWS = 3;
 const INPUT_TEST_GRID_COLS = 4;
 const INPUT_TEST_CELL_COUNT = INPUT_TEST_GRID_ROWS * INPUT_TEST_GRID_COLS;
 
@@ -1960,7 +1960,7 @@ export default function App() {
         </section>
 
         {phase === PHASES.CALIBRATION ? (
-          <section className="card panel">
+          <section className="card panel calibration-panel">
             <h2>Calibration</h2>
             <p>{calibrationMessage}</p>
             <p className="small-text">
@@ -1993,7 +1993,7 @@ export default function App() {
             <div className="input-test-panel">
               <h3>Input Test</h3>
               <p className="small-text">
-                Move over any cell to see hover color. Keep hovering and pinch to switch to pinch color.
+                Move over any of the 12 cells to see hover color. Keep hovering and pinch to switch to pinch color.
               </p>
               <div className="input-test-grid">
                 {Array.from({ length: INPUT_TEST_CELL_COUNT }, (_, cellIndex) => {
