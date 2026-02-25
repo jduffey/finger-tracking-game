@@ -46,6 +46,76 @@ const FINGERTIP_OVERLAY_STYLES = {
   ring: { fill: "rgba(128, 183, 255, 0.95)", radius: 4.8 },
   pinky: { fill: "rgba(226, 153, 255, 0.95)", radius: 4.8 },
 };
+const EXTENT_FINGER_NAMES = ["thumb", "index", "middle", "ring", "pinky"];
+const EXTENT_LOG_SAMPLE_INTERVAL = 180;
+
+function clampValue(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function roundMetric(value, digits = 4) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  return Number(value.toFixed(digits));
+}
+
+function createEmptyExtent() {
+  return {
+    count: 0,
+    minU: 1,
+    maxU: 0,
+    minV: 1,
+    maxV: 0,
+  };
+}
+
+function createTrackingExtentState() {
+  const fingers = EXTENT_FINGER_NAMES.reduce((accumulator, fingerName) => {
+    accumulator[fingerName] = createEmptyExtent();
+    return accumulator;
+  }, {});
+  return {
+    sampleFrames: 0,
+    lastFrameId: 0,
+    lastTimestamp: 0,
+    overall: createEmptyExtent(),
+    fingers,
+  };
+}
+
+function summarizeExtentForLog(extent, canvasWidth, canvasHeight) {
+  if (!extent || extent.count === 0) {
+    return null;
+  }
+
+  const normalized = {
+    uMin: roundMetric(extent.minU),
+    uMax: roundMetric(extent.maxU),
+    vMin: roundMetric(extent.minV),
+    vMax: roundMetric(extent.maxV),
+    uSpan: roundMetric(extent.maxU - extent.minU),
+    vSpan: roundMetric(extent.maxV - extent.minV),
+  };
+
+  const hasCanvas = Number.isFinite(canvasWidth) && canvasWidth > 0 && Number.isFinite(canvasHeight) && canvasHeight > 0;
+  const pixels = hasCanvas
+    ? {
+        xMin: roundMetric(extent.minU * canvasWidth, 2),
+        xMax: roundMetric(extent.maxU * canvasWidth, 2),
+        yMin: roundMetric(extent.minV * canvasHeight, 2),
+        yMax: roundMetric(extent.maxV * canvasHeight, 2),
+        xSpan: roundMetric((extent.maxU - extent.minU) * canvasWidth, 2),
+        ySpan: roundMetric((extent.maxV - extent.minV) * canvasHeight, 2),
+      }
+    : null;
+
+  return {
+    samples: extent.count,
+    mirroredNormalized: normalized,
+    canvasPixels: pixels,
+  };
+}
 
 export default function App() {
   const appLog = useMemo(() => createScopedLogger("app"), []);
@@ -125,6 +195,7 @@ export default function App() {
   const recoveryFrameSkipCounterRef = useRef(0);
   const invalidLandmarkStreakRef = useRef(0);
   const noHandStreakRef = useRef(0);
+  const trackingExtentsRef = useRef(createTrackingExtentState());
   const detectorRecoveryAttemptsRef = useRef(0);
   const recoveringDetectorRef = useRef(false);
 
@@ -630,6 +701,7 @@ export default function App() {
     detectorRecoveryAttemptsRef.current += 1;
     const attempt = detectorRecoveryAttemptsRef.current;
     const requestedConfig = getRecoveryConfig(attempt, reason);
+    logTrackingExtentsSnapshot(`pre_recovery_${reason}`);
 
     appLog.warn("Attempting detector recovery", {
       attempt,
@@ -990,6 +1062,188 @@ export default function App() {
     }
   }
 
+  function computeCameraCoverMetrics() {
+    const video = videoRef.current;
+    const canvas = overlayCanvasRef.current;
+    if (!video || !canvas || !video.videoWidth || !video.videoHeight || !canvas.width || !canvas.height) {
+      return null;
+    }
+
+    const videoWidth = video.videoWidth;
+    const videoHeight = video.videoHeight;
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+    const scale = Math.max(canvasWidth / videoWidth, canvasHeight / videoHeight);
+    const renderedWidth = videoWidth * scale;
+    const renderedHeight = videoHeight * scale;
+    const offsetX = (canvasWidth - renderedWidth) / 2;
+    const offsetY = (canvasHeight - renderedHeight) / 2;
+
+    // Convert from rendered-canvas crop back to source-video visible window.
+    const sourceX = clampValue(-offsetX / scale, 0, videoWidth);
+    const sourceY = clampValue(-offsetY / scale, 0, videoHeight);
+    const sourceWidth = clampValue(canvasWidth / scale, 0, videoWidth);
+    const sourceHeight = clampValue(canvasHeight / scale, 0, videoHeight);
+
+    const sourceNormalized = {
+      xMin: sourceX / videoWidth,
+      xMax: (sourceX + sourceWidth) / videoWidth,
+      yMin: sourceY / videoHeight,
+      yMax: (sourceY + sourceHeight) / videoHeight,
+    };
+
+    // Tracking points are mirrored, so convert source-x bounds into mirrored-u bounds.
+    const mirroredNormalized = {
+      uMin: 1 - sourceNormalized.xMax,
+      uMax: 1 - sourceNormalized.xMin,
+      vMin: sourceNormalized.yMin,
+      vMax: sourceNormalized.yMax,
+    };
+
+    return {
+      canvas: {
+        width: canvasWidth,
+        height: canvasHeight,
+      },
+      video: {
+        width: videoWidth,
+        height: videoHeight,
+      },
+      render: {
+        scale,
+        renderedWidth,
+        renderedHeight,
+        offsetX,
+        offsetY,
+      },
+      visibleSourcePixels: {
+        x: sourceX,
+        y: sourceY,
+        width: sourceWidth,
+        height: sourceHeight,
+      },
+      sourceNormalized,
+      mirroredNormalized,
+    };
+  }
+
+  function logTrackingExtentsSnapshot(reason) {
+    const extentState = trackingExtentsRef.current;
+    const coverMetrics = computeCameraCoverMetrics();
+    const canvasWidth = coverMetrics?.canvas.width ?? 0;
+    const canvasHeight = coverMetrics?.canvas.height ?? 0;
+
+    const fingerExtents = EXTENT_FINGER_NAMES.reduce((accumulator, fingerName) => {
+      accumulator[fingerName] = summarizeExtentForLog(
+        extentState.fingers[fingerName],
+        canvasWidth,
+        canvasHeight,
+      );
+      return accumulator;
+    }, {});
+
+    const visibleMirroredBounds = coverMetrics
+      ? {
+          uMin: roundMetric(coverMetrics.mirroredNormalized.uMin),
+          uMax: roundMetric(coverMetrics.mirroredNormalized.uMax),
+          vMin: roundMetric(coverMetrics.mirroredNormalized.vMin),
+          vMax: roundMetric(coverMetrics.mirroredNormalized.vMax),
+          uSpan: roundMetric(
+            coverMetrics.mirroredNormalized.uMax - coverMetrics.mirroredNormalized.uMin,
+          ),
+          vSpan: roundMetric(
+            coverMetrics.mirroredNormalized.vMax - coverMetrics.mirroredNormalized.vMin,
+          ),
+        }
+      : null;
+
+    appLog.info("Tracking extent snapshot", {
+      reason,
+      sampleFrames: extentState.sampleFrames,
+      lastFrameId: extentState.lastFrameId,
+      lastTimestamp: roundMetric(extentState.lastTimestamp, 1),
+      overall: summarizeExtentForLog(extentState.overall, canvasWidth, canvasHeight),
+      fingerExtents,
+      visibleMirroredBounds,
+      cameraCoverMetrics: coverMetrics
+        ? {
+            canvas: coverMetrics.canvas,
+            video: coverMetrics.video,
+            render: {
+              scale: roundMetric(coverMetrics.render.scale, 5),
+              renderedWidth: roundMetric(coverMetrics.render.renderedWidth, 2),
+              renderedHeight: roundMetric(coverMetrics.render.renderedHeight, 2),
+              offsetX: roundMetric(coverMetrics.render.offsetX, 2),
+              offsetY: roundMetric(coverMetrics.render.offsetY, 2),
+            },
+            visibleSourcePixels: {
+              x: roundMetric(coverMetrics.visibleSourcePixels.x, 2),
+              y: roundMetric(coverMetrics.visibleSourcePixels.y, 2),
+              width: roundMetric(coverMetrics.visibleSourcePixels.width, 2),
+              height: roundMetric(coverMetrics.visibleSourcePixels.height, 2),
+            },
+          }
+        : null,
+    });
+  }
+
+  function updateTrackingExtentsWithHand(hand, frameId, timestamp) {
+    if (!hand) {
+      return;
+    }
+
+    const extentState = trackingExtentsRef.current;
+    const tips = hand.fingerTips ?? {
+      thumb: hand.thumbTip ?? null,
+      index: hand.indexTip ?? null,
+      middle: null,
+      ring: null,
+      pinky: null,
+    };
+
+    let updatedAny = false;
+    for (const fingerName of EXTENT_FINGER_NAMES) {
+      const tip = tips[fingerName];
+      if (!tip || !Number.isFinite(tip.u) || !Number.isFinite(tip.v)) {
+        continue;
+      }
+
+      const fingerExtent = extentState.fingers[fingerName];
+      if (fingerExtent.count === 0) {
+        appLog.info("First fingertip sample captured for extent tracking", {
+          fingerName,
+          frameId,
+          tip,
+        });
+      }
+
+      fingerExtent.count += 1;
+      fingerExtent.minU = Math.min(fingerExtent.minU, tip.u);
+      fingerExtent.maxU = Math.max(fingerExtent.maxU, tip.u);
+      fingerExtent.minV = Math.min(fingerExtent.minV, tip.v);
+      fingerExtent.maxV = Math.max(fingerExtent.maxV, tip.v);
+
+      extentState.overall.count += 1;
+      extentState.overall.minU = Math.min(extentState.overall.minU, tip.u);
+      extentState.overall.maxU = Math.max(extentState.overall.maxU, tip.u);
+      extentState.overall.minV = Math.min(extentState.overall.minV, tip.v);
+      extentState.overall.maxV = Math.max(extentState.overall.maxV, tip.v);
+
+      updatedAny = true;
+    }
+
+    if (!updatedAny) {
+      return;
+    }
+
+    extentState.sampleFrames += 1;
+    extentState.lastFrameId = frameId;
+    extentState.lastTimestamp = timestamp;
+    if (extentState.sampleFrames % EXTENT_LOG_SAMPLE_INTERVAL === 0) {
+      logTrackingExtentsSnapshot("periodic_extent_samples");
+    }
+  }
+
   function drawCameraOverlay(hand) {
     const canvas = overlayCanvasRef.current;
     if (!canvas) {
@@ -1107,6 +1361,7 @@ export default function App() {
         });
       }
       if (handDetectedRef.current) {
+        logTrackingExtentsSnapshot("hand_detection_lost");
         handDetectedRef.current = false;
         setHandDetected(false);
         appLog.debug("Hand detection flag switched to false", { frameId });
@@ -1128,6 +1383,7 @@ export default function App() {
     }
     lastValidHandTimestampRef.current = timestamp;
     handGraceFrameCounterRef.current = 0;
+    updateTrackingExtentsWithHand(hand, frameId, timestamp);
 
     const shouldUseTransform = Boolean(transformRef.current) && !isCalibratingRef.current;
     const mappedPoint = shouldUseTransform
@@ -1399,6 +1655,16 @@ export default function App() {
             />
             Debug overlay
           </label>
+          <div className="button-row">
+            <button
+              className="secondary"
+              type="button"
+              disabled={!modelReady}
+              onClick={() => logTrackingExtentsSnapshot("manual_button")}
+            >
+              Log Tracking Extents
+            </button>
+          </div>
         </section>
 
         {phase === PHASES.CALIBRATION ? (

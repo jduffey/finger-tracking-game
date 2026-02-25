@@ -38,10 +38,11 @@ Open the local URL printed by Vite (typically `http://localhost:5173`) in Chrome
 - Tracking now starts with MediaPipe runtime first (for more stable hand coordinates on this machine), then can probe TFJS as a fallback path if needed.
 - If repeated invalid landmarks or long no-hand streaks occur, the app auto-recovers runtime/backend and logs each attempt in detail.
 - Hand-detected status uses a short grace window to avoid flickering off on single dropped frames.
+- Use **Log Tracking Extents** in the UI to log observed fingertip min/max extents and camera cover/crop bounds for edge-alignment diagnostics.
 
 ## How It Works
 
-1. The app requests webcam permission and starts TFJS with the WebGL backend.
+1. The app requests webcam permission and starts with MediaPipe runtime (then can fallback/probe TFJS backends if needed).
 2. Hand landmarks are inferred in a `requestAnimationFrame` loop using MediaPipe Hands.
 3. Calibration collects 9 screen targets. Each pinch samples index fingertip data over 10 frames and averages it.
 4. An affine transform is solved with least squares:
@@ -58,6 +59,7 @@ Open the local URL printed by Vite (typically `http://localhost:5173`) in Chrome
 - **Recalibrate**: clear stored transform and return to calibration
 - **Camera overlay**: always shows fingertip markers (thumb/index/middle/ring/pinky)
 - **Debug overlay**: adds landmarks, raw pointer marker, and pinch/FPS info
+- **Log Tracking Extents**: writes current/maximum fingertip coverage and visible camera bounds to the log file
 
 ## Calibration Persistence
 
