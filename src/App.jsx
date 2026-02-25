@@ -166,6 +166,7 @@ const LAB_EVENT_LOG_LIMIT = 220;
 const LAB_TRAIN_CAPTURE_FRAMES = 24;
 const LAB_TRAIN_COUNTDOWN_SECONDS = 3;
 const POSE_KEYPOINT_THRESHOLD = 0.2;
+const HAND_LABEL_MEMORY_MS = 1400;
 const POSE_CONNECTIONS = [
   ["left_shoulder", "right_shoulder"],
   ["left_shoulder", "left_elbow"],
@@ -387,7 +388,52 @@ function resolveHandLabelFromHint(labelHint) {
   return null;
 }
 
-function assignStableHandLabels(hands) {
+function getHandPointerX(hand) {
+  return hand?.indexTip?.u ?? hand?.thumbTip?.u ?? 0.5;
+}
+
+function pruneHandLabelMemory(memory, timestamp) {
+  if (!memory?.byLabel || typeof memory.byLabel !== "object") {
+    return;
+  }
+  for (const [label, entry] of Object.entries(memory.byLabel)) {
+    if (!entry || !Number.isFinite(entry.x)) {
+      delete memory.byLabel[label];
+      continue;
+    }
+    if (
+      Number.isFinite(timestamp) &&
+      Number.isFinite(entry.timestamp) &&
+      timestamp - entry.timestamp > HAND_LABEL_MEMORY_MS
+    ) {
+      delete memory.byLabel[label];
+    }
+  }
+}
+
+function computeFallbackLabelCost(label, handX, memoryByLabel) {
+  const memoryEntry = memoryByLabel?.[label];
+  if (memoryEntry && Number.isFinite(memoryEntry.x)) {
+    return Math.abs(handX - memoryEntry.x);
+  }
+  if (label === "Left") {
+    return Math.abs(handX - 0.25) + 0.12;
+  }
+  if (label === "Right") {
+    return Math.abs(handX - 0.75) + 0.12;
+  }
+  return 0.65;
+}
+
+function assignStableHandLabels(hands, options = {}) {
+  const memory = options?.memory && typeof options.memory === "object" ? options.memory : null;
+  const timestamp = Number.isFinite(options?.timestamp) ? options.timestamp : Date.now();
+  if (memory && (!memory.byLabel || typeof memory.byLabel !== "object")) {
+    memory.byLabel = {};
+  }
+  if (memory) {
+    pruneHandLabelMemory(memory, timestamp);
+  }
   if (!Array.isArray(hands) || hands.length === 0) {
     return [];
   }
@@ -412,31 +458,100 @@ function assignStableHandLabels(hands) {
   }
 
   unlabeled.sort((first, second) => {
-    const firstX = first?.indexTip?.u ?? first?.thumbTip?.u ?? 0.5;
-    const secondX = second?.indexTip?.u ?? second?.thumbTip?.u ?? 0.5;
+    const firstX = getHandPointerX(first);
+    const secondX = getHandPointerX(second);
     return firstX - secondX;
   });
 
+  const fallbackLabelPool = [];
+  if (!takenLabels.has("Left")) {
+    fallbackLabelPool.push("Left");
+  }
+  if (!takenLabels.has("Right")) {
+    fallbackLabelPool.push("Right");
+  }
+  let genericIndex = 0;
+  while (fallbackLabelPool.length < unlabeled.length) {
+    const candidate = `Hand ${String.fromCharCode(65 + genericIndex)}`;
+    genericIndex += 1;
+    if (!takenLabels.has(candidate) && !fallbackLabelPool.includes(candidate)) {
+      fallbackLabelPool.push(candidate);
+    }
+  }
+
+  const assignedLabels = new Array(unlabeled.length).fill(null);
+  const memoryByLabel = memory?.byLabel ?? null;
+  if (unlabeled.length === 2 && fallbackLabelPool.length >= 2) {
+    let best = null;
+    for (let firstIndex = 0; firstIndex < fallbackLabelPool.length; firstIndex += 1) {
+      for (let secondIndex = 0; secondIndex < fallbackLabelPool.length; secondIndex += 1) {
+        if (firstIndex === secondIndex) {
+          continue;
+        }
+        const firstLabel = fallbackLabelPool[firstIndex];
+        const secondLabel = fallbackLabelPool[secondIndex];
+        const totalCost =
+          computeFallbackLabelCost(firstLabel, getHandPointerX(unlabeled[0]), memoryByLabel) +
+          computeFallbackLabelCost(secondLabel, getHandPointerX(unlabeled[1]), memoryByLabel);
+        if (!best || totalCost < best.cost) {
+          best = {
+            cost: totalCost,
+            firstLabel,
+            secondLabel,
+          };
+        }
+      }
+    }
+    if (best) {
+      assignedLabels[0] = best.firstLabel;
+      assignedLabels[1] = best.secondLabel;
+    }
+  }
+
+  const consumedFallbackLabels = new Set(assignedLabels.filter(Boolean));
+  for (let index = 0; index < unlabeled.length; index += 1) {
+    if (assignedLabels[index]) {
+      continue;
+    }
+    const handX = getHandPointerX(unlabeled[index]);
+    let chosenLabel = null;
+    let bestCost = Number.POSITIVE_INFINITY;
+    for (const candidateLabel of fallbackLabelPool) {
+      if (consumedFallbackLabels.has(candidateLabel)) {
+        continue;
+      }
+      const cost = computeFallbackLabelCost(candidateLabel, handX, memoryByLabel);
+      if (cost < bestCost) {
+        bestCost = cost;
+        chosenLabel = candidateLabel;
+      }
+    }
+    if (!chosenLabel) {
+      chosenLabel = `Hand ${String.fromCharCode(65 + index)}`;
+    }
+    consumedFallbackLabels.add(chosenLabel);
+    assignedLabels[index] = chosenLabel;
+  }
+
   for (let index = 0; index < unlabeled.length; index += 1) {
     const hand = unlabeled[index];
-    const handX = hand?.indexTip?.u ?? hand?.thumbTip?.u ?? 0.5;
-    const fallbackLabel =
-      unlabeled.length === 1
-        ? handX <= 0.5
-          ? "Left"
-          : "Right"
-        : index === 0
-        ? "Left"
-        : index === 1
-        ? "Right"
-        : `Hand ${String.fromCharCode(65 + index)}`;
-    const label = takenLabels.has(fallbackLabel) ? `Hand ${String.fromCharCode(65 + index)}` : fallbackLabel;
+    const label = assignedLabels[index] ?? `Hand ${String.fromCharCode(65 + index)}`;
     takenLabels.add(label);
     labeled.push({
       ...hand,
       label,
       id: label,
     });
+  }
+
+  if (memory) {
+    for (const hand of labeled) {
+      memory.byLabel[hand.label] = {
+        x: getHandPointerX(hand),
+        timestamp,
+      };
+    }
+    pruneHandLabelMemory(memory, timestamp);
   }
 
   return labeled.sort((first, second) => {
@@ -992,6 +1107,7 @@ export default function App() {
   const labShowSkeletonRef = useRef(labShowSkeleton);
   const labPersonalizationEnabledRef = useRef(labPersonalizationEnabled);
   const labTrainingSessionRef = useRef(null);
+  const handLabelMemoryRef = useRef({ byLabel: {} });
 
   const handDetectedRef = useRef(false);
   const lastValidHandTimestampRef = useRef(0);
@@ -5243,7 +5359,10 @@ export default function App() {
         try {
           const pose = await detectPose(poseDetector, video);
           const detectedHands = handDetector ? await detectHands(handDetector, video) : [];
-          const stableHands = assignStableHandLabels(detectedHands).slice(0, TRACKING_MAX_HANDS);
+          const stableHands = assignStableHandLabels(detectedHands, {
+            memory: handLabelMemoryRef.current,
+            timestamp,
+          }).slice(0, TRACKING_MAX_HANDS);
           if (!cancelled && mountedRef.current) {
             processPoseFrame(pose, timestamp, stableHands);
           }
@@ -5360,7 +5479,10 @@ export default function App() {
         }
 
         if (!cancelled && mountedRef.current) {
-          const stableHands = assignStableHandLabels(detectedHands).slice(0, TRACKING_MAX_HANDS);
+          const stableHands = assignStableHandLabels(detectedHands, {
+            memory: handLabelMemoryRef.current,
+            timestamp,
+          }).slice(0, TRACKING_MAX_HANDS);
           const primaryHand = stableHands[0] ?? null;
           processTrackingFrame(primaryHand, timestamp);
           processMinorityReportFrame(stableHands, timestamp);

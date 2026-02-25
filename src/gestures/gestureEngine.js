@@ -480,6 +480,32 @@ export function createGestureEngine(options = {}) {
       confidences[gestureId] = clamp(heuristic * (1 - trust) + adjustedPersonalized * trust, 0, 1);
     }
 
+    const perHandConfidences = {};
+    for (const handState of orderedHands) {
+      const perHandHeuristicMap = perHandHeuristic[handState.id] ?? {};
+      const handVector = flattenSingleHandWindow(handState.window, windowSize);
+      const perHandLiveVectors = SINGLE_HAND_GESTURES.reduce((accumulator, gestureId) => {
+        accumulator[gestureId] = handVector;
+        return accumulator;
+      }, {});
+      const perHandPersonalizedMap = personalizationEnabled && personalizer
+        ? personalizer.classifyLiveVectors(perHandLiveVectors)
+        : createEmptyConfidenceMap();
+
+      const blended = {};
+      for (const gestureId of SINGLE_HAND_GESTURES) {
+        const heuristic = perHandHeuristicMap[gestureId] ?? 0;
+        const personalized = perHandPersonalizedMap[gestureId] ?? 0;
+        const sampleCount = personalizationEnabled && personalizer
+          ? personalizer.getSampleCount(gestureId)
+          : 0;
+        const trust = personalizationEnabled ? getPersonalizationTrust(sampleCount) : 0;
+        const adjustedPersonalized = clamp(personalized * 1.45, 0, 1);
+        blended[gestureId] = clamp(heuristic * (1 - trust) + adjustedPersonalized * trust, 0, 1);
+      }
+      perHandConfidences[handState.id] = blended;
+    }
+
     const singleDiscreteGestures = [
       GESTURE_IDS.OPEN_PALM,
       GESTURE_IDS.SWIPE_LEFT,
@@ -488,15 +514,9 @@ export function createGestureEngine(options = {}) {
       GESTURE_IDS.CIRCLE,
     ];
     for (const handState of orderedHands) {
-      const perHandConfidenceMap = perHandHeuristic[handState.id] ?? {};
+      const perHandConfidenceMap = perHandConfidences[handState.id] ?? {};
       for (const gestureId of singleDiscreteGestures) {
-        const handSpecificBlendedConfidence = clamp(
-          confidences[gestureId] > 0
-            ? Math.max(perHandConfidenceMap[gestureId] ?? 0, confidences[gestureId] * 0.92)
-            : perHandConfidenceMap[gestureId] ?? 0,
-          0,
-          1,
-        );
+        const handSpecificBlendedConfidence = clamp(perHandConfidenceMap[gestureId] ?? 0, 0, 1);
         const key = `${gestureId}:${handState.id}`;
         const above = handSpecificBlendedConfidence >= confidenceThreshold;
         const holdCount = advanceHoldCounter(key, above);
