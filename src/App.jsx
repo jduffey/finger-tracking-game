@@ -1798,10 +1798,10 @@ export default function App() {
           ctx.stroke();
         }
       }
-    } else if (hand?.indexTip) {
+    } else if (hand?.thumbTip) {
       ctx.fillStyle = "rgba(255, 255, 255, 0.98)";
       ctx.beginPath();
-      ctx.arc(hand.indexTip.u * canvas.width, hand.indexTip.v * canvas.height, 6.2, 0, Math.PI * 2);
+      ctx.arc(hand.thumbTip.u * canvas.width, hand.thumbTip.v * canvas.height, 6.2, 0, Math.PI * 2);
       ctx.fill();
     }
 
