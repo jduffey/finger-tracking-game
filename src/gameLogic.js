@@ -77,27 +77,95 @@ export function isPointInCircle(point, circle) {
   return hit;
 }
 
-export function getRunnerLaneFromNormalizedX(normalizedX, laneDebounce = 0.06) {
-  gameLogicLog.debug("Resolving runner lane from normalized x", {
-    normalizedX,
-    laneDebounce,
+export function getRunnerTrackIndexFromNormalized(normalizedValue, gridSize = 4) {
+  gameLogicLog.debug("Resolving runner track index from normalized value", {
+    normalizedValue,
+    gridSize,
   });
-  if (!Number.isFinite(normalizedX)) {
-    gameLogicLog.warn("Runner lane resolution fallback to center due to invalid normalized x", {
-      normalizedX,
+  const safeGridSize = Number.isFinite(gridSize) ? Math.max(1, Math.floor(gridSize)) : 4;
+  const defaultIndex = Math.floor((safeGridSize - 1) / 2);
+  if (!Number.isFinite(normalizedValue)) {
+    gameLogicLog.warn("Runner track index fallback to default due to invalid normalized value", {
+      normalizedValue,
+      defaultIndex,
     });
-    return 0;
+    return defaultIndex;
   }
 
-  const clampedX = Math.min(1, Math.max(0, normalizedX));
-  let lane = 0;
-  if (clampedX < 1 / 3 - laneDebounce) {
-    lane = -1;
-  } else if (clampedX > 2 / 3 + laneDebounce) {
-    lane = 1;
-  }
-  gameLogicLog.debug("Resolved runner lane", { clampedX, lane });
-  return lane;
+  const clamped = Math.min(1, Math.max(0, normalizedValue));
+  const index = Math.min(safeGridSize - 1, Math.floor(clamped * safeGridSize));
+  gameLogicLog.debug("Resolved runner track index", {
+    clamped,
+    index,
+    safeGridSize,
+  });
+  return index;
+}
+
+export function getRunnerTrackOffsetFromIndex(trackIndex, gridSize = 4) {
+  gameLogicLog.debug("Resolving runner track offset from index", {
+    trackIndex,
+    gridSize,
+  });
+  const safeGridSize = Number.isFinite(gridSize) ? Math.max(1, Math.floor(gridSize)) : 4;
+  const clampedIndex = Math.min(
+    safeGridSize - 1,
+    Math.max(0, Number.isFinite(trackIndex) ? Math.floor(trackIndex) : 0),
+  );
+  const centerOffset = (safeGridSize - 1) * 0.5;
+  const offset = clampedIndex - centerOffset;
+  gameLogicLog.debug("Resolved runner track offset", { clampedIndex, centerOffset, offset });
+  return offset;
+}
+
+export function computeRunnerTrackGridLayout(stageWidth, stageHeight, gridSize = 4) {
+  gameLogicLog.debug("Computing runner track grid layout", {
+    stageWidth,
+    stageHeight,
+    gridSize,
+  });
+  const width = Number.isFinite(stageWidth) ? Math.max(1, stageWidth) : 1;
+  const height = Number.isFinite(stageHeight) ? Math.max(1, stageHeight) : 1;
+  const safeGridSize = Number.isFinite(gridSize) ? Math.max(2, Math.floor(gridSize)) : 4;
+  const trackHalfSpan = (safeGridSize - 1) * 0.5;
+
+  const focalPoint = {
+    x: width * 0.5,
+    y: height * 0.5,
+  };
+  const nearMarginX = Math.max(14, width * 0.02);
+  const nearMarginY = Math.max(16, height * 0.03);
+
+  const maxSpacingX = (width * 0.5 - nearMarginX) / trackHalfSpan;
+  const maxSpacingYTop = (focalPoint.y - nearMarginY) / trackHalfSpan;
+  const maxSpacingYBottom = (height - nearMarginY - focalPoint.y) / trackHalfSpan;
+  const trackSpacing = Math.max(
+    24,
+    Math.min(maxSpacingX, maxSpacingYTop, maxSpacingYBottom),
+  );
+
+  const trackOffsets = Array.from({ length: safeGridSize }, (_, index) =>
+    getRunnerTrackOffsetFromIndex(index, safeGridSize),
+  );
+  const columnXs = trackOffsets.map((offset) => focalPoint.x + offset * trackSpacing);
+  const rowYs = trackOffsets.map((offset) => focalPoint.y + offset * trackSpacing);
+
+  const layout = {
+    width,
+    height,
+    gridSize: safeGridSize,
+    trackHalfSpan,
+    focalPoint,
+    horizonY: focalPoint.y,
+    groundY: height * 0.96,
+    trackSpacing,
+    trackOffsets,
+    columnXs,
+    rowYs,
+    fieldEdgeOffset: trackHalfSpan + 0.65,
+  };
+  gameLogicLog.debug("Computed runner track grid layout", layout);
+  return layout;
 }
 
 export function canRunnerStartJump(runnerY, runnerVy, airborneHeightThreshold = 2) {
@@ -117,44 +185,57 @@ export function canRunnerStartJump(runnerY, runnerVy, airborneHeightThreshold = 
 
 export function shouldCollectRunnerCoin(
   coin,
-  laneFloat,
+  trackXFloat,
+  trackYFloat,
   runnerY,
   options = {},
 ) {
-  const laneTolerance = options.laneTolerance ?? 0.44;
+  const trackXTolerance = options.trackXTolerance ?? 0.52;
+  const trackYTolerance = options.trackYTolerance ?? 0.52;
   const heightTolerance = options.heightTolerance ?? 56;
   const nearZMin = options.nearZMin ?? -40;
   const nearZMax = options.nearZMax ?? 90;
 
   gameLogicLog.debug("Evaluating runner coin collection eligibility", {
     coin,
-    laneFloat,
+    trackXFloat,
+    trackYFloat,
     runnerY,
-    laneTolerance,
+    trackXTolerance,
+    trackYTolerance,
     heightTolerance,
     nearZMin,
     nearZMax,
   });
 
-  if (!coin || !Number.isFinite(coin.z) || !Number.isFinite(coin.lane) || !Number.isFinite(coin.height)) {
+  if (
+    !coin ||
+    !Number.isFinite(coin.z) ||
+    !Number.isFinite(coin.trackX) ||
+    !Number.isFinite(coin.trackY) ||
+    !Number.isFinite(coin.height)
+  ) {
     gameLogicLog.warn("Coin collection eligibility failed due to invalid coin payload", { coin });
     return false;
   }
-  if (!Number.isFinite(laneFloat) || !Number.isFinite(runnerY)) {
+  if (!Number.isFinite(trackXFloat) || !Number.isFinite(trackYFloat) || !Number.isFinite(runnerY)) {
     gameLogicLog.warn("Coin collection eligibility failed due to invalid runner state", {
-      laneFloat,
+      trackXFloat,
+      trackYFloat,
       runnerY,
     });
     return false;
   }
 
   const inCollectionZone = coin.z < nearZMax && coin.z > nearZMin;
-  const laneMatch = Math.abs(coin.lane - laneFloat) < laneTolerance;
+  const trackXMatch = Math.abs(coin.trackX - trackXFloat) < trackXTolerance;
+  const trackYMatch = Math.abs(coin.trackY - trackYFloat) < trackYTolerance;
   const heightMatch = Math.abs(coin.height - runnerY) < heightTolerance;
-  const shouldCollect = inCollectionZone && laneMatch && heightMatch;
+  const shouldCollect = inCollectionZone && trackXMatch && trackYMatch && heightMatch;
   gameLogicLog.debug("Runner coin eligibility resolved", {
     inCollectionZone,
-    laneMatch,
+    trackXMatch,
+    trackYMatch,
     heightMatch,
     shouldCollect,
   });

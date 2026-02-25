@@ -14,8 +14,10 @@ import {
 import {
   buildGridHoles,
   canRunnerStartJump,
+  computeRunnerTrackGridLayout,
   GAME_DURATION_MS,
-  getRunnerLaneFromNormalizedX,
+  getRunnerTrackIndexFromNormalized,
+  getRunnerTrackOffsetFromIndex,
   isPointInCircle,
   MOLE_VISIBLE_MS,
   pickRandomHole,
@@ -100,7 +102,8 @@ const FLIGHT_WORLD_HALF_WIDTH = 520;
 const FLIGHT_WORLD_HALF_HEIGHT = 320;
 const FLIGHT_HUD_UPDATE_MS = 90;
 const FLIGHT_ROLL_WEIGHTS = [-2, -1, 0, 1, 2];
-const RUNNER_LANES = [-1, 0, 1];
+const RUNNER_TRACK_GRID_SIZE = 4;
+const RUNNER_DEFAULT_TRACK_INDEX = Math.floor((RUNNER_TRACK_GRID_SIZE - 1) / 2);
 const RUNNER_SPEED = 360;
 const RUNNER_MAX_Z = 1480;
 const RUNNER_NEAR_Z = 24;
@@ -112,7 +115,6 @@ const RUNNER_COIN_RESPAWN_MIN_Z = 860;
 const RUNNER_COIN_RESPAWN_MAX_Z = 1880;
 const RUNNER_HUD_UPDATE_MS = 90;
 const RUNNER_LANE_SMOOTH_ALPHA = 0.19;
-const RUNNER_POINTER_LANE_DEBOUNCE = 0.06;
 
 function clampValue(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -434,15 +436,20 @@ function createFlightRings() {
   return rings;
 }
 
-function pickRandomRunnerLane() {
-  return RUNNER_LANES[Math.floor(Math.random() * RUNNER_LANES.length)] ?? 0;
+function pickRandomRunnerTrackIndex() {
+  return Math.floor(Math.random() * RUNNER_TRACK_GRID_SIZE);
 }
 
 function createRunnerCoin(zMin = RUNNER_COIN_RESPAWN_MIN_Z, zMax = RUNNER_COIN_RESPAWN_MAX_Z) {
   const airborne = Math.random() < 0.4;
+  const trackXIndex = pickRandomRunnerTrackIndex();
+  const trackYIndex = pickRandomRunnerTrackIndex();
   return {
     id: Math.random().toString(36).slice(2),
-    lane: pickRandomRunnerLane(),
+    trackXIndex,
+    trackYIndex,
+    trackX: getRunnerTrackOffsetFromIndex(trackXIndex, RUNNER_TRACK_GRID_SIZE),
+    trackY: getRunnerTrackOffsetFromIndex(trackYIndex, RUNNER_TRACK_GRID_SIZE),
     z: randomBetween(zMin, zMax),
     height: airborne ? randomBetween(74, 138) : randomBetween(0, 28),
     value: 1,
@@ -606,7 +613,9 @@ export default function App() {
   const [runnerHud, setRunnerHud] = useState({
     coins: 0,
     distance: 0,
-    lane: 0,
+    trackCol: RUNNER_DEFAULT_TRACK_INDEX + 1,
+    trackRow: RUNNER_DEFAULT_TRACK_INDEX + 1,
+    trackSpacingPx: 0,
     jumping: false,
     jumpHeight: 0,
   });
@@ -701,8 +710,13 @@ export default function App() {
   const runnerStateRef = useRef({
     initialized: false,
     lastTimestamp: 0,
-    laneTarget: 0,
-    laneFloat: 0,
+    trackXTargetIndex: RUNNER_DEFAULT_TRACK_INDEX,
+    trackYTargetIndex: RUNNER_DEFAULT_TRACK_INDEX,
+    trackXTarget: getRunnerTrackOffsetFromIndex(RUNNER_DEFAULT_TRACK_INDEX, RUNNER_TRACK_GRID_SIZE),
+    trackYTarget: getRunnerTrackOffsetFromIndex(RUNNER_DEFAULT_TRACK_INDEX, RUNNER_TRACK_GRID_SIZE),
+    trackXFloat: getRunnerTrackOffsetFromIndex(RUNNER_DEFAULT_TRACK_INDEX, RUNNER_TRACK_GRID_SIZE),
+    trackYFloat: getRunnerTrackOffsetFromIndex(RUNNER_DEFAULT_TRACK_INDEX, RUNNER_TRACK_GRID_SIZE),
+    trackSpacing: 0,
     runnerY: 0,
     runnerVy: 0,
     distance: 0,
@@ -710,6 +724,7 @@ export default function App() {
     coins: [],
   });
   const runnerHudLastUpdateRef = useRef(0);
+  const runnerGeometryLogKeyRef = useRef("");
 
   const holesRef = useRef(holes);
   const hitZonesRef = useRef([]);
@@ -808,8 +823,13 @@ export default function App() {
       runnerStateRef.current = {
         initialized: false,
         lastTimestamp: 0,
-        laneTarget: 0,
-        laneFloat: 0,
+        trackXTargetIndex: RUNNER_DEFAULT_TRACK_INDEX,
+        trackYTargetIndex: RUNNER_DEFAULT_TRACK_INDEX,
+        trackXTarget: getRunnerTrackOffsetFromIndex(RUNNER_DEFAULT_TRACK_INDEX, RUNNER_TRACK_GRID_SIZE),
+        trackYTarget: getRunnerTrackOffsetFromIndex(RUNNER_DEFAULT_TRACK_INDEX, RUNNER_TRACK_GRID_SIZE),
+        trackXFloat: getRunnerTrackOffsetFromIndex(RUNNER_DEFAULT_TRACK_INDEX, RUNNER_TRACK_GRID_SIZE),
+        trackYFloat: getRunnerTrackOffsetFromIndex(RUNNER_DEFAULT_TRACK_INDEX, RUNNER_TRACK_GRID_SIZE),
+        trackSpacing: 0,
         runnerY: 0,
         runnerVy: 0,
         distance: 0,
@@ -820,7 +840,9 @@ export default function App() {
       setRunnerHud({
         coins: 0,
         distance: 0,
-        lane: 0,
+        trackCol: RUNNER_DEFAULT_TRACK_INDEX + 1,
+        trackRow: RUNNER_DEFAULT_TRACK_INDEX + 1,
+        trackSpacingPx: 0,
         jumping: false,
         jumpHeight: 0,
       });
@@ -2610,7 +2632,9 @@ export default function App() {
     const nextHud = {
       coins: state.coinsCollected,
       distance: roundMetric(state.distance, 1) ?? 0,
-      lane: Math.round(state.laneTarget),
+      trackCol: state.trackXTargetIndex + 1,
+      trackRow: state.trackYTargetIndex + 1,
+      trackSpacingPx: roundMetric(state.trackSpacing, 1) ?? 0,
       jumping: state.runnerY > 0.1,
       jumpHeight: roundMetric(state.runnerY, 1) ?? 0,
     };
@@ -2618,7 +2642,9 @@ export default function App() {
       if (
         previous.coins === nextHud.coins &&
         previous.distance === nextHud.distance &&
-        previous.lane === nextHud.lane &&
+        previous.trackCol === nextHud.trackCol &&
+        previous.trackRow === nextHud.trackRow &&
+        previous.trackSpacingPx === nextHud.trackSpacingPx &&
         previous.jumping === nextHud.jumping &&
         previous.jumpHeight === nextHud.jumpHeight
       ) {
@@ -2629,11 +2655,20 @@ export default function App() {
   }
 
   function resetRunnerSession(reason = "manual_reset") {
+    const defaultTrackOffset = getRunnerTrackOffsetFromIndex(
+      RUNNER_DEFAULT_TRACK_INDEX,
+      RUNNER_TRACK_GRID_SIZE,
+    );
     runnerStateRef.current = {
       initialized: true,
       lastTimestamp: 0,
-      laneTarget: 0,
-      laneFloat: 0,
+      trackXTargetIndex: RUNNER_DEFAULT_TRACK_INDEX,
+      trackYTargetIndex: RUNNER_DEFAULT_TRACK_INDEX,
+      trackXTarget: defaultTrackOffset,
+      trackYTarget: defaultTrackOffset,
+      trackXFloat: defaultTrackOffset,
+      trackYFloat: defaultTrackOffset,
+      trackSpacing: 0,
       runnerY: 0,
       runnerVy: 0,
       distance: 0,
@@ -2644,12 +2679,15 @@ export default function App() {
     setRunnerHud({
       coins: 0,
       distance: 0,
-      lane: 0,
+      trackCol: RUNNER_DEFAULT_TRACK_INDEX + 1,
+      trackRow: RUNNER_DEFAULT_TRACK_INDEX + 1,
+      trackSpacingPx: 0,
       jumping: false,
       jumpHeight: 0,
     });
+    runnerGeometryLogKeyRef.current = "";
     setCalibrationMessage(
-      "Runner mode active. Move hand left/center/right to change lanes. Pinch to jump.",
+      "Runner mode active. Move hand to pick one of 4x4 converging tracks. Pinch to jump.",
     );
     appLog.info("Runner session reset", {
       reason,
@@ -2673,7 +2711,7 @@ export default function App() {
     setPhase(PHASES.RUNNER);
     phaseRef.current = PHASES.RUNNER;
     setCalibrationMessage(
-      "Runner mode active. Move hand left/center/right to change lanes. Pinch to jump.",
+      "Runner mode active. Move hand to pick one of 4x4 converging tracks. Pinch to jump.",
     );
     requestAnimationFrame(() => resetRunnerSession("start_runner"));
   }
@@ -2685,22 +2723,32 @@ export default function App() {
     setCalibrationMessage("Back on Calibration Input Test.");
   }
 
-  function setRunnerLaneFromNormalizedX(normalizedX, hasHand, frameId) {
+  function setRunnerTrackFromNormalized(normalizedX, normalizedY, hasHand, frameId) {
     if (phaseRef.current !== PHASES.RUNNER) {
       return;
     }
-    if (!hasHand || !Number.isFinite(normalizedX)) {
+    if (!hasHand || !Number.isFinite(normalizedX) || !Number.isFinite(normalizedY)) {
       return;
     }
 
-    const lane = getRunnerLaneFromNormalizedX(normalizedX, RUNNER_POINTER_LANE_DEBOUNCE);
+    const nextTrackXIndex = getRunnerTrackIndexFromNormalized(normalizedX, RUNNER_TRACK_GRID_SIZE);
+    const nextTrackYIndex = getRunnerTrackIndexFromNormalized(normalizedY, RUNNER_TRACK_GRID_SIZE);
+    const nextTrackX = getRunnerTrackOffsetFromIndex(nextTrackXIndex, RUNNER_TRACK_GRID_SIZE);
+    const nextTrackY = getRunnerTrackOffsetFromIndex(nextTrackYIndex, RUNNER_TRACK_GRID_SIZE);
     const state = runnerStateRef.current;
-    if (state.laneTarget !== lane) {
-      state.laneTarget = lane;
-      appLog.info("Runner lane target changed from normalized tracking x", {
+    if (state.trackXTargetIndex !== nextTrackXIndex || state.trackYTargetIndex !== nextTrackYIndex) {
+      state.trackXTargetIndex = nextTrackXIndex;
+      state.trackYTargetIndex = nextTrackYIndex;
+      state.trackXTarget = nextTrackX;
+      state.trackYTarget = nextTrackY;
+      appLog.info("Runner track target changed from normalized tracking point", {
         frameId,
-        lane,
+        trackXIndex: nextTrackXIndex,
+        trackYIndex: nextTrackYIndex,
+        trackX: roundMetric(nextTrackX, 4),
+        trackY: roundMetric(nextTrackY, 4),
         normalizedX: roundMetric(normalizedX, 4),
+        normalizedY: roundMetric(normalizedY, 4),
       });
     }
   }
@@ -2725,7 +2773,8 @@ export default function App() {
     appLog.info("Runner jump triggered", {
       timestamp,
       source,
-      lane: state.laneTarget,
+      trackCol: state.trackXTargetIndex + 1,
+      trackRow: state.trackYTargetIndex + 1,
       jumpVelocity: RUNNER_JUMP_VELOCITY,
     });
   }
@@ -2750,11 +2799,41 @@ export default function App() {
     }
 
     const state = runnerStateRef.current;
-    const horizonY = height * 0.28;
-    const groundY = height * 0.94;
-    const projectLaneX = (lane, depthT) => {
-      const spacing = lerpValue(width * 0.11, width * 0.29, depthT);
-      return width * 0.5 + lane * spacing;
+    const layout = computeRunnerTrackGridLayout(width, height, RUNNER_TRACK_GRID_SIZE);
+    const {
+      focalPoint,
+      horizonY,
+      groundY,
+      trackSpacing,
+      trackOffsets,
+      fieldEdgeOffset,
+      rowYs,
+      columnXs,
+    } = layout;
+    state.trackSpacing = trackSpacing;
+
+    const geometryLogKey = `${width}x${height}|s:${trackSpacing.toFixed(2)}|fx:${focalPoint.x.toFixed(
+      2,
+    )}|fy:${focalPoint.y.toFixed(2)}`;
+    if (geometryLogKey !== runnerGeometryLogKeyRef.current) {
+      runnerGeometryLogKeyRef.current = geometryLogKey;
+      appLog.info("Runner geometry updated", {
+        width,
+        height,
+        focalPoint,
+        trackSpacing: roundMetric(trackSpacing, 3),
+        rowYs: rowYs.map((value) => roundMetric(value, 2)),
+        columnXs: columnXs.map((value) => roundMetric(value, 2)),
+      });
+    }
+
+    const projectTrackPoint = (trackX, trackY, depthT) => {
+      const nearX = focalPoint.x + trackX * trackSpacing;
+      const nearY = focalPoint.y + trackY * trackSpacing;
+      return {
+        x: lerpValue(focalPoint.x, nearX, depthT),
+        y: lerpValue(focalPoint.y, nearY, depthT),
+      };
     };
     const depthFromZ = (z) => clampValue(1 - z / RUNNER_MAX_Z, 0, 1);
 
@@ -2777,27 +2856,58 @@ export default function App() {
     ctx.fillStyle = groundGradient;
     ctx.fillRect(0, horizonY, width, height - horizonY);
 
-    const leftNear = projectLaneX(-1.75, 1);
-    const rightNear = projectLaneX(1.75, 1);
-    const leftFar = projectLaneX(-1.75, 0);
-    const rightFar = projectLaneX(1.75, 0);
+    const nearTopLeft = projectTrackPoint(-fieldEdgeOffset, -fieldEdgeOffset, 1);
+    const nearTopRight = projectTrackPoint(fieldEdgeOffset, -fieldEdgeOffset, 1);
+    const nearBottomRight = projectTrackPoint(fieldEdgeOffset, fieldEdgeOffset, 1);
+    const nearBottomLeft = projectTrackPoint(-fieldEdgeOffset, fieldEdgeOffset, 1);
     ctx.fillStyle = "rgba(80, 120, 170, 0.15)";
     ctx.beginPath();
-    ctx.moveTo(leftFar, horizonY);
-    ctx.lineTo(rightFar, horizonY);
-    ctx.lineTo(rightNear, groundY);
-    ctx.lineTo(leftNear, groundY);
+    ctx.moveTo(focalPoint.x, focalPoint.y);
+    ctx.lineTo(nearTopRight.x, nearTopRight.y);
+    ctx.lineTo(nearBottomRight.x, nearBottomRight.y);
+    ctx.lineTo(nearBottomLeft.x, nearBottomLeft.y);
+    ctx.lineTo(nearTopLeft.x, nearTopLeft.y);
     ctx.closePath();
     ctx.fill();
 
-    ctx.strokeStyle = "rgba(177, 212, 255, 0.28)";
-    ctx.lineWidth = 2;
-    for (const lane of RUNNER_LANES) {
-      const xNear = projectLaneX(lane, 1);
-      const xFar = projectLaneX(lane, 0);
+    ctx.strokeStyle = "rgba(177, 212, 255, 0.24)";
+    ctx.lineWidth = 1.6;
+    for (const trackX of trackOffsets) {
+      for (const trackY of trackOffsets) {
+        const nearPoint = projectTrackPoint(trackX, trackY, 1);
+        ctx.beginPath();
+        ctx.moveTo(focalPoint.x, focalPoint.y);
+        ctx.lineTo(nearPoint.x, nearPoint.y);
+        ctx.stroke();
+      }
+    }
+
+    ctx.strokeStyle = "rgba(137, 193, 255, 0.36)";
+    ctx.lineWidth = 1.2;
+    for (const trackY of trackOffsets) {
       ctx.beginPath();
-      ctx.moveTo(xFar, horizonY);
-      ctx.lineTo(xNear, groundY);
+      for (let index = 0; index < trackOffsets.length; index += 1) {
+        const trackX = trackOffsets[index];
+        const nearPoint = projectTrackPoint(trackX, trackY, 1);
+        if (index === 0) {
+          ctx.moveTo(nearPoint.x, nearPoint.y);
+        } else {
+          ctx.lineTo(nearPoint.x, nearPoint.y);
+        }
+      }
+      ctx.stroke();
+    }
+    for (const trackX of trackOffsets) {
+      ctx.beginPath();
+      for (let index = 0; index < trackOffsets.length; index += 1) {
+        const trackY = trackOffsets[index];
+        const nearPoint = projectTrackPoint(trackX, trackY, 1);
+        if (index === 0) {
+          ctx.moveTo(nearPoint.x, nearPoint.y);
+        } else {
+          ctx.lineTo(nearPoint.x, nearPoint.y);
+        }
+      }
       ctx.stroke();
     }
 
@@ -2806,9 +2916,9 @@ export default function App() {
       if (depthT <= 0) {
         continue;
       }
-      const x = projectLaneX(coin.lane, depthT);
-      const yBase = lerpValue(horizonY, groundY, depthT);
-      const y = yBase - coin.height * lerpValue(0.15, 0.72, depthT);
+      const trackPoint = projectTrackPoint(coin.trackX, coin.trackY, depthT);
+      const x = trackPoint.x;
+      const y = trackPoint.y - coin.height * lerpValue(0.12, 0.66, depthT);
       const radius = lerpValue(4, 18, depthT);
       if (x < -60 || x > width + 60 || y < -60 || y > height + 60) {
         continue;
@@ -2829,8 +2939,9 @@ export default function App() {
       ctx.stroke();
     }
 
-    const runnerX = projectLaneX(state.laneFloat, 1);
-    const runnerY = groundY - state.runnerY * 0.66;
+    const runnerTrackPoint = projectTrackPoint(state.trackXFloat, state.trackYFloat, 1);
+    const runnerX = runnerTrackPoint.x;
+    const runnerY = runnerTrackPoint.y - state.runnerY * 0.66;
     const bodyHeight = 74;
     const bodyWidth = 38;
     ctx.fillStyle = "#6ee7ff";
@@ -2870,9 +2981,13 @@ export default function App() {
     state.lastTimestamp = timestamp;
     state.distance += RUNNER_SPEED * dtSeconds;
 
-    state.laneFloat = lerpValue(state.laneFloat, state.laneTarget, RUNNER_LANE_SMOOTH_ALPHA);
-    if (Math.abs(state.laneFloat - state.laneTarget) < 0.001) {
-      state.laneFloat = state.laneTarget;
+    state.trackXFloat = lerpValue(state.trackXFloat, state.trackXTarget, RUNNER_LANE_SMOOTH_ALPHA);
+    state.trackYFloat = lerpValue(state.trackYFloat, state.trackYTarget, RUNNER_LANE_SMOOTH_ALPHA);
+    if (Math.abs(state.trackXFloat - state.trackXTarget) < 0.001) {
+      state.trackXFloat = state.trackXTarget;
+    }
+    if (Math.abs(state.trackYFloat - state.trackYTarget) < 0.001) {
+      state.trackYFloat = state.trackYTarget;
     }
 
     state.runnerVy -= RUNNER_GRAVITY * dtSeconds;
@@ -2890,11 +3005,12 @@ export default function App() {
 
     for (const coin of state.coins) {
       coin.z -= RUNNER_SPEED * dtSeconds;
-      if (shouldCollectRunnerCoin(coin, state.laneFloat, state.runnerY)) {
+      if (shouldCollectRunnerCoin(coin, state.trackXFloat, state.trackYFloat, state.runnerY)) {
         state.coinsCollected += coin.value ?? 1;
         appLog.info("Runner coin collected", {
           coinsCollected: state.coinsCollected,
-          lane: state.laneTarget,
+          trackCol: state.trackXTargetIndex + 1,
+          trackRow: state.trackYTargetIndex + 1,
           jumpHeight: roundMetric(state.runnerY, 2),
         });
         Object.assign(coin, createRunnerCoin());
@@ -3873,7 +3989,7 @@ export default function App() {
     cursorRef.current = smoothed;
     setCursor(smoothed);
     updateCalibrationInputTestHoverState(smoothed, true, frameId);
-    setRunnerLaneFromNormalizedX(mappedPointerTip.u, true, frameId);
+    setRunnerTrackFromNormalized(mappedPointerTip.u, mappedPointerTip.v, true, frameId);
 
     appLog.debug("Updated raw and smoothed cursor", {
       frameId,
@@ -4195,7 +4311,8 @@ export default function App() {
                 </p>
               ) : (
                 <p className="small-text">
-                  Lane control: move hand left/center/right. Pinch to jump for higher coins.
+                  4x4 track control: move hand across the camera view to pick any converging track.
+                  Pinch to jump for higher coins.
                 </p>
               )}
 
@@ -4471,10 +4588,11 @@ export default function App() {
           <section className="card panel runner-panel">
             <h2>Track Runner</h2>
             <p className="small-text">
-              Three-lane runner: move hand left/center/right to switch tracks and pinch to jump.
+              4x4 converging-track runner: move hand to switch tracks in both directions and pinch
+              to jump.
             </p>
             <p className="small-text">
-              Collect coins on your lane. Air coins require a jump.
+              Collect coins on your selected track. Air coins require a jump.
             </p>
 
             <div className="runner-stage" ref={runnerStageRef}>
@@ -4482,9 +4600,8 @@ export default function App() {
               <div className="runner-hud">
                 <span>Coins: {runnerHud.coins}</span>
                 <span>Distance: {runnerHud.distance.toFixed(0)} u</span>
-                <span>
-                  Lane: {runnerHud.lane === -1 ? "left" : runnerHud.lane === 1 ? "right" : "center"}
-                </span>
+                <span>Track: C{runnerHud.trackCol}/R{runnerHud.trackRow}</span>
+                <span>Node gap: {runnerHud.trackSpacingPx.toFixed(1)} px</span>
                 <span>Jump: {runnerHud.jumping ? `${runnerHud.jumpHeight.toFixed(0)} px` : "grounded"}</span>
               </div>
             </div>
