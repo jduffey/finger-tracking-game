@@ -116,8 +116,9 @@ body {
 .camera-wrap {
   background: #111923;
   border-radius: 10px;
-  flex: 1 1 auto;
-  min-height: 180px;
+  flex: 0 0 auto;
+  max-width: 100%;
+  min-height: 0;
   overflow: hidden;
   position: relative;
   width: 100%;
@@ -225,8 +226,8 @@ body {
 .input-test-grid {
   display: grid;
   gap: var(--input-test-grid-gap, 8px);
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--input-test-grid-cols, 10), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--input-test-grid-rows, 6), minmax(0, 1fr));
   margin-top: 0;
 }
 

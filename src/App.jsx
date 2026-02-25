@@ -49,8 +49,8 @@ const FINGERTIP_OVERLAY_STYLES = {
 const EXTENT_FINGER_NAMES = ["thumb", "index", "middle", "ring", "pinky"];
 const EXTENT_LOG_SAMPLE_INTERVAL = 180;
 const MIN_VISIBLE_SPAN = 1e-6;
-const INPUT_TEST_GRID_ROWS = 3;
-const INPUT_TEST_GRID_COLS = 4;
+const INPUT_TEST_GRID_ROWS = 6;
+const INPUT_TEST_GRID_COLS = 10;
 const INPUT_TEST_CELL_COUNT = INPUT_TEST_GRID_ROWS * INPUT_TEST_GRID_COLS;
 const INPUT_TEST_CELL_GAP = 8;
 
@@ -253,6 +253,7 @@ export default function App() {
 
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState("");
+  const [cameraAspectRatio, setCameraAspectRatio] = useState(4 / 3);
   const [modelReady, setModelReady] = useState(false);
   const [modelError, setModelError] = useState("");
   const [activeBackend, setActiveBackend] = useState("n/a");
@@ -389,6 +390,10 @@ export default function App() {
   useEffect(() => {
     appLog.info("Camera ready state changed", { cameraReady });
   }, [appLog, cameraReady]);
+
+  useEffect(() => {
+    appLog.info("Camera aspect ratio changed", { cameraAspectRatio });
+  }, [appLog, cameraAspectRatio]);
 
   useEffect(() => {
     appLog.info("Model ready state changed", { modelReady });
@@ -612,9 +617,34 @@ export default function App() {
         if (video) {
           video.srcObject = stream;
           await video.play();
+          const primaryTrack = stream.getVideoTracks()[0];
+          const trackSettings = primaryTrack?.getSettings?.() ?? {};
+          const measuredWidth = video.videoWidth || trackSettings.width;
+          const measuredHeight = video.videoHeight || trackSettings.height;
+          if (
+            Number.isFinite(measuredWidth) &&
+            Number.isFinite(measuredHeight) &&
+            measuredWidth > 0 &&
+            measuredHeight > 0
+          ) {
+            const ratio = measuredWidth / measuredHeight;
+            setCameraAspectRatio(ratio);
+            appLog.info("Updated camera display ratio from stream dimensions", {
+              measuredWidth,
+              measuredHeight,
+              ratio: roundMetric(ratio, 6),
+            });
+          } else {
+            appLog.warn("Could not derive camera ratio from metadata; using existing fallback", {
+              measuredWidth,
+              measuredHeight,
+            });
+          }
           appLog.info("Webcam stream attached and playback started", {
             videoWidth: video.videoWidth,
             videoHeight: video.videoHeight,
+            trackWidth: trackSettings.width ?? null,
+            trackHeight: trackSettings.height ?? null,
           });
         } else {
           appLog.warn("Video ref was unavailable after webcam stream setup");
@@ -2031,7 +2061,11 @@ export default function App() {
       <div className={`content-grid ${phase === PHASES.CALIBRATION ? "calibration-layout" : ""}`}>
         <section className="card camera-card">
           <h2>{phase === PHASES.CALIBRATION ? "Camera + Calibration Controls" : "Camera + Tracking"}</h2>
-          <div className="camera-wrap" ref={cameraWrapRef}>
+          <div
+            className="camera-wrap"
+            ref={cameraWrapRef}
+            style={{ aspectRatio: String(cameraAspectRatio) }}
+          >
             <video ref={videoRef} className="camera-video" playsInline muted autoPlay />
             <canvas ref={overlayCanvasRef} className="camera-overlay" />
           </div>
@@ -2116,6 +2150,8 @@ export default function App() {
                     width: `${inputTestGridSize.width}px`,
                     height: `${inputTestGridSize.height}px`,
                     "--input-test-grid-gap": `${INPUT_TEST_CELL_GAP}px`,
+                    "--input-test-grid-cols": String(INPUT_TEST_GRID_COLS),
+                    "--input-test-grid-rows": String(INPUT_TEST_GRID_ROWS),
                   }}
                 >
                   {Array.from({ length: INPUT_TEST_CELL_COUNT }, (_, cellIndex) => {
@@ -2140,7 +2176,7 @@ export default function App() {
 
               <h3>Input Test</h3>
               <p className="small-text">
-                Move over any of the 12 cells to see hover color. Keep hovering and pinch to switch to pinch color.
+                Move over any of the {INPUT_TEST_CELL_COUNT} cells to see hover color. Keep hovering and pinch to switch to pinch color.
               </p>
               <p className="small-text">
                 Hovered cell: {inputTestHoveredCell >= 0 ? inputTestHoveredCell + 1 : "none"} | Pinch:{" "}
