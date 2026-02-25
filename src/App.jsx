@@ -188,6 +188,28 @@ const POSE_KEYPOINT_GROUPS = {
   arms: ["left_elbow", "right_elbow", "left_wrist", "right_wrist"],
   torso: ["left_hip", "right_hip", "left_shoulder", "right_shoulder"],
 };
+const HAND_ROOT_CONNECTIONS = [
+  [0, 1],
+  [0, 5],
+  [0, 9],
+  [0, 13],
+  [0, 17],
+];
+const HAND_FINGER_CHAINS = [
+  [1, 2, 3, 4],
+  [5, 6, 7, 8],
+  [9, 10, 11, 12],
+  [13, 14, 15, 16],
+  [17, 18, 19, 20],
+];
+const HAND_FINGERTIP_INDEXES = [4, 8, 12, 16, 20];
+const FINGERTIP_NAME_BY_INDEX = {
+  4: "thumb",
+  8: "index",
+  12: "middle",
+  16: "ring",
+  20: "pinky",
+};
 
 const GESTURE_LABEL_BY_ID = GESTURE_DEFINITIONS.reduce((accumulator, definition) => {
   accumulator[definition.id] = definition.label;
@@ -452,12 +474,19 @@ function createEmptyPoseStatus() {
     detected: false,
     score: 0,
     keypointsCount: 0,
+    handsCount: 0,
+    fingerCount: 0,
+    fingertipCount: 0,
     parts: {
       head: false,
       eyes: false,
       shoulders: false,
       arms: false,
       torso: false,
+      mouth: false,
+      chin: false,
+      fingers: false,
+      fingertips: false,
     },
   };
 }
@@ -470,6 +499,133 @@ function hasVisiblePoseKeypoints(map, names, minScore = POSE_KEYPOINT_THRESHOLD)
     }
   }
   return false;
+}
+
+function getVisiblePosePoint(map, names, minScore = POSE_KEYPOINT_THRESHOLD) {
+  for (const name of names) {
+    const point = map[name];
+    if (point && Number.isFinite(point.score) && point.score >= minScore) {
+      return point;
+    }
+  }
+  return null;
+}
+
+function clampNormalizedPoint(point) {
+  if (!point || !Number.isFinite(point.u) || !Number.isFinite(point.v)) {
+    return null;
+  }
+  return {
+    ...point,
+    u: clampValue(point.u, 0, 1),
+    v: clampValue(point.v, 0, 1),
+  };
+}
+
+function deriveMouthAndChinFromPoseMap(map) {
+  const nose = getVisiblePosePoint(map, ["nose"]);
+  const leftEye = getVisiblePosePoint(map, ["left_eye"]);
+  const rightEye = getVisiblePosePoint(map, ["right_eye"]);
+  const leftEar = getVisiblePosePoint(map, ["left_ear"]);
+  const rightEar = getVisiblePosePoint(map, ["right_ear"]);
+  const leftShoulder = getVisiblePosePoint(map, ["left_shoulder"]);
+  const rightShoulder = getVisiblePosePoint(map, ["right_shoulder"]);
+  const leftMouth = getVisiblePosePoint(map, ["mouth_left", "left_mouth"], 0.08);
+  const rightMouth = getVisiblePosePoint(map, ["mouth_right", "right_mouth"], 0.08);
+
+  let mouth = null;
+  if (leftMouth && rightMouth) {
+    mouth = clampNormalizedPoint({
+      u: (leftMouth.u + rightMouth.u) * 0.5,
+      v: (leftMouth.v + rightMouth.v) * 0.5,
+      score: (leftMouth.score + rightMouth.score) * 0.5,
+      name: "mouth",
+    });
+  } else if (nose && leftEye && rightEye) {
+    const eyeMid = {
+      u: (leftEye.u + rightEye.u) * 0.5,
+      v: (leftEye.v + rightEye.v) * 0.5,
+    };
+    mouth = clampNormalizedPoint({
+      u: nose.u + (nose.u - eyeMid.u) * 0.3,
+      v: nose.v + (nose.v - eyeMid.v) * 1.1,
+      score: (nose.score + leftEye.score + rightEye.score) / 3,
+      name: "mouth",
+    });
+  } else if (nose && leftShoulder && rightShoulder) {
+    const shoulderMid = {
+      u: (leftShoulder.u + rightShoulder.u) * 0.5,
+      v: (leftShoulder.v + rightShoulder.v) * 0.5,
+    };
+    mouth = clampNormalizedPoint({
+      u: nose.u + (shoulderMid.u - nose.u) * 0.18,
+      v: nose.v + (shoulderMid.v - nose.v) * 0.32,
+      score: (nose.score + leftShoulder.score + rightShoulder.score) / 3,
+      name: "mouth",
+    });
+  }
+
+  let chin = null;
+  if (mouth && nose) {
+    chin = clampNormalizedPoint({
+      u: mouth.u + (mouth.u - nose.u) * 0.26,
+      v: mouth.v + (mouth.v - nose.v) * 1.0,
+      score: Math.min(mouth.score ?? 0.5, nose.score ?? 0.5),
+      name: "chin",
+    });
+  }
+
+  if (chin && leftEar && rightEar) {
+    const earSpan = Math.abs(leftEar.u - rightEar.u);
+    chin = clampNormalizedPoint({
+      ...chin,
+      v: chin.v + earSpan * 0.16,
+    });
+  }
+
+  return {
+    mouth,
+    chin,
+  };
+}
+
+function isValidHandLandmark(point) {
+  return Boolean(point && Number.isFinite(point.u) && Number.isFinite(point.v));
+}
+
+function summarizeFingerVisibilityFromHands(hands) {
+  const summary = {
+    handsCount: Array.isArray(hands) ? hands.length : 0,
+    fingerCount: 0,
+    fingertipCount: 0,
+    fingersVisible: false,
+    fingertipsVisible: false,
+  };
+  if (!Array.isArray(hands) || hands.length === 0) {
+    return summary;
+  }
+
+  for (const hand of hands) {
+    const landmarks = Array.isArray(hand?.landmarks) ? hand.landmarks : [];
+    for (const chain of HAND_FINGER_CHAINS) {
+      const visibleSegments = chain.filter((index) => isValidHandLandmark(landmarks[index])).length;
+      if (visibleSegments >= 3) {
+        summary.fingerCount += 1;
+      }
+    }
+    for (const tipIndex of HAND_FINGERTIP_INDEXES) {
+      const tipFromLandmarks = landmarks[tipIndex];
+      const tipName = FINGERTIP_NAME_BY_INDEX[tipIndex];
+      const tipFromFingerTips = hand?.fingerTips?.[tipName];
+      if (isValidHandLandmark(tipFromFingerTips) || isValidHandLandmark(tipFromLandmarks)) {
+        summary.fingertipCount += 1;
+      }
+    }
+  }
+
+  summary.fingersVisible = summary.fingerCount > 0;
+  summary.fingertipsVisible = summary.fingertipCount > 0;
+  return summary;
 }
 
 function summarizeExtentForLog(extent, canvasWidth, canvasHeight) {
@@ -4273,7 +4429,7 @@ export default function App() {
     }
   }
 
-  function drawPoseOverlay(pose) {
+  function drawPoseOverlay(pose, hands = []) {
     const canvas = overlayCanvasRef.current;
     if (!canvas) {
       return;
@@ -4284,80 +4440,169 @@ export default function App() {
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (!pose || !Array.isArray(pose.keypoints) || pose.keypoints.length === 0) {
-      return;
+    if (pose && Array.isArray(pose.keypoints) && pose.keypoints.length > 0) {
+      const keypointMap = {};
+      for (const keypoint of pose.keypoints) {
+        if (!keypoint?.name || !Number.isFinite(keypoint.u) || !Number.isFinite(keypoint.v)) {
+          continue;
+        }
+        keypointMap[keypoint.name] = keypoint;
+      }
+
+      ctx.lineWidth = 2.8;
+      ctx.strokeStyle = "rgba(128, 202, 255, 0.72)";
+      for (const [startName, endName] of POSE_CONNECTIONS) {
+        const start = keypointMap[startName];
+        const end = keypointMap[endName];
+        if (
+          !start ||
+          !end ||
+          (start.score ?? 0) < POSE_KEYPOINT_THRESHOLD ||
+          (end.score ?? 0) < POSE_KEYPOINT_THRESHOLD
+        ) {
+          continue;
+        }
+        ctx.beginPath();
+        ctx.moveTo(start.u * canvas.width, start.v * canvas.height);
+        ctx.lineTo(end.u * canvas.width, end.v * canvas.height);
+        ctx.stroke();
+      }
+
+      const colorByGroup = {
+        head: "rgba(255, 195, 92, 0.96)",
+        eyes: "rgba(255, 120, 120, 0.96)",
+        shoulders: "rgba(123, 237, 181, 0.96)",
+        arms: "rgba(105, 188, 255, 0.96)",
+        torso: "rgba(198, 153, 255, 0.96)",
+        mouth: "rgba(255, 151, 104, 0.98)",
+        chin: "rgba(255, 215, 148, 0.98)",
+        other: "rgba(223, 232, 248, 0.86)",
+      };
+
+      const resolveGroup = (name) => {
+        if (POSE_KEYPOINT_GROUPS.head.includes(name)) {
+          return "head";
+        }
+        if (POSE_KEYPOINT_GROUPS.eyes.includes(name)) {
+          return "eyes";
+        }
+        if (POSE_KEYPOINT_GROUPS.shoulders.includes(name)) {
+          return "shoulders";
+        }
+        if (POSE_KEYPOINT_GROUPS.arms.includes(name)) {
+          return "arms";
+        }
+        if (POSE_KEYPOINT_GROUPS.torso.includes(name)) {
+          return "torso";
+        }
+        return "other";
+      };
+
+      const faceMarkers = deriveMouthAndChinFromPoseMap(keypointMap);
+      if (faceMarkers.mouth) {
+        keypointMap.mouth = faceMarkers.mouth;
+      }
+      if (faceMarkers.chin) {
+        keypointMap.chin = faceMarkers.chin;
+      }
+
+      for (const keypoint of pose.keypoints) {
+        if (!keypoint?.name || (keypoint.score ?? 0) < POSE_KEYPOINT_THRESHOLD) {
+          continue;
+        }
+        const group = resolveGroup(keypoint.name);
+        const x = keypoint.u * canvas.width;
+        const y = keypoint.v * canvas.height;
+        ctx.fillStyle = colorByGroup[group];
+        ctx.beginPath();
+        ctx.arc(x, y, group === "eyes" ? 4.6 : 5.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(245, 250, 255, 0.9)";
+        ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+        ctx.fillText(keypoint.name.replace("left_", "L-").replace("right_", "R-"), x + 6, y - 6);
+      }
+
+      for (const derivedKey of ["mouth", "chin"]) {
+        const marker = keypointMap[derivedKey];
+        if (!marker || !Number.isFinite(marker.u) || !Number.isFinite(marker.v)) {
+          continue;
+        }
+        const x = marker.u * canvas.width;
+        const y = marker.v * canvas.height;
+        ctx.fillStyle = colorByGroup[derivedKey];
+        ctx.beginPath();
+        ctx.arc(x, y, 6.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(15, 22, 30, 0.8)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(x, y, 8.2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(255, 244, 229, 0.92)";
+        ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+        ctx.fillText(derivedKey, x + 8, y + 4);
+      }
     }
 
-    const keypointMap = {};
-    for (const keypoint of pose.keypoints) {
-      if (!keypoint?.name || !Number.isFinite(keypoint.u) || !Number.isFinite(keypoint.v)) {
+    const safeHands = Array.isArray(hands) ? hands : [];
+    for (let handIndex = 0; handIndex < safeHands.length; handIndex += 1) {
+      const hand = safeHands[handIndex];
+      const landmarks = Array.isArray(hand?.landmarks) ? hand.landmarks : [];
+      if (landmarks.length === 0) {
         continue;
       }
-      keypointMap[keypoint.name] = keypoint;
-    }
+      const strokeColor =
+        handIndex % 2 === 0 ? "rgba(115, 222, 255, 0.82)" : "rgba(255, 171, 118, 0.82)";
+      const fillColor = handIndex % 2 === 0 ? "rgba(110, 204, 255, 0.95)" : "rgba(255, 167, 110, 0.95)";
 
-    ctx.lineWidth = 2.8;
-    ctx.strokeStyle = "rgba(128, 202, 255, 0.72)";
-    for (const [startName, endName] of POSE_CONNECTIONS) {
-      const start = keypointMap[startName];
-      const end = keypointMap[endName];
-      if (
-        !start ||
-        !end ||
-        (start.score ?? 0) < POSE_KEYPOINT_THRESHOLD ||
-        (end.score ?? 0) < POSE_KEYPOINT_THRESHOLD
-      ) {
-        continue;
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = 2.2;
+      for (const [startIndex, endIndex] of HAND_ROOT_CONNECTIONS) {
+        const start = landmarks[startIndex];
+        const end = landmarks[endIndex];
+        if (!isValidHandLandmark(start) || !isValidHandLandmark(end)) {
+          continue;
+        }
+        ctx.beginPath();
+        ctx.moveTo(start.u * canvas.width, start.v * canvas.height);
+        ctx.lineTo(end.u * canvas.width, end.v * canvas.height);
+        ctx.stroke();
       }
-      ctx.beginPath();
-      ctx.moveTo(start.u * canvas.width, start.v * canvas.height);
-      ctx.lineTo(end.u * canvas.width, end.v * canvas.height);
-      ctx.stroke();
-    }
+      for (const chain of HAND_FINGER_CHAINS) {
+        for (let index = 1; index < chain.length; index += 1) {
+          const start = landmarks[chain[index - 1]];
+          const end = landmarks[chain[index]];
+          if (!isValidHandLandmark(start) || !isValidHandLandmark(end)) {
+            continue;
+          }
+          ctx.beginPath();
+          ctx.moveTo(start.u * canvas.width, start.v * canvas.height);
+          ctx.lineTo(end.u * canvas.width, end.v * canvas.height);
+          ctx.stroke();
+        }
+      }
 
-    const colorByGroup = {
-      head: "rgba(255, 195, 92, 0.96)",
-      eyes: "rgba(255, 120, 120, 0.96)",
-      shoulders: "rgba(123, 237, 181, 0.96)",
-      arms: "rgba(105, 188, 255, 0.96)",
-      torso: "rgba(198, 153, 255, 0.96)",
-      other: "rgba(223, 232, 248, 0.86)",
-    };
-
-    const resolveGroup = (name) => {
-      if (POSE_KEYPOINT_GROUPS.head.includes(name)) {
-        return "head";
+      for (const tipIndex of HAND_FINGERTIP_INDEXES) {
+        const tip = landmarks[tipIndex];
+        if (!isValidHandLandmark(tip)) {
+          continue;
+        }
+        const tipX = tip.u * canvas.width;
+        const tipY = tip.v * canvas.height;
+        ctx.fillStyle = fillColor;
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, 5.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(8, 12, 18, 0.82)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, 6.8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(240, 247, 255, 0.92)";
+        ctx.font = "9px ui-monospace, SFMono-Regular, Menlo, monospace";
+        ctx.fillText(FINGERTIP_NAME_BY_INDEX[tipIndex], tipX + 6, tipY - 4);
       }
-      if (POSE_KEYPOINT_GROUPS.eyes.includes(name)) {
-        return "eyes";
-      }
-      if (POSE_KEYPOINT_GROUPS.shoulders.includes(name)) {
-        return "shoulders";
-      }
-      if (POSE_KEYPOINT_GROUPS.arms.includes(name)) {
-        return "arms";
-      }
-      if (POSE_KEYPOINT_GROUPS.torso.includes(name)) {
-        return "torso";
-      }
-      return "other";
-    };
-
-    for (const keypoint of pose.keypoints) {
-      if (!keypoint?.name || (keypoint.score ?? 0) < POSE_KEYPOINT_THRESHOLD) {
-        continue;
-      }
-      const group = resolveGroup(keypoint.name);
-      const x = keypoint.u * canvas.width;
-      const y = keypoint.v * canvas.height;
-      ctx.fillStyle = colorByGroup[group];
-      ctx.beginPath();
-      ctx.arc(x, y, group === "eyes" ? 4.6 : 5.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "rgba(245, 250, 255, 0.9)";
-      ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
-      ctx.fillText(keypoint.name.replace("left_", "L-").replace("right_", "R-"), x + 6, y - 6);
     }
   }
 
@@ -4378,9 +4623,10 @@ export default function App() {
     return frameId;
   }
 
-  function processPoseFrame(pose, timestamp) {
+  function processPoseFrame(pose, timestamp, hands = []) {
     const frameId = updateFrameTiming(timestamp);
     const poseMeta = getLastPoseMeta();
+    const fingerSummary = summarizeFingerVisibilityFromHands(hands);
 
     if (!pose) {
       if (handDetectedRef.current) {
@@ -4388,8 +4634,31 @@ export default function App() {
         setHandDetected(false);
       }
       setPinchActive(false);
-      setPoseStatus((previous) => (previous.detected ? createEmptyPoseStatus() : previous));
-      drawPoseOverlay(null);
+      const nextStatus = {
+        ...createEmptyPoseStatus(),
+        handsCount: fingerSummary.handsCount,
+        fingerCount: fingerSummary.fingerCount,
+        fingertipCount: fingerSummary.fingertipCount,
+        parts: {
+          ...createEmptyPoseStatus().parts,
+          fingers: fingerSummary.fingersVisible,
+          fingertips: fingerSummary.fingertipsVisible,
+        },
+      };
+      setPoseStatus((previous) => {
+        if (
+          previous.detected === nextStatus.detected &&
+          previous.handsCount === nextStatus.handsCount &&
+          previous.fingerCount === nextStatus.fingerCount &&
+          previous.fingertipCount === nextStatus.fingertipCount &&
+          previous.parts.fingers === nextStatus.parts.fingers &&
+          previous.parts.fingertips === nextStatus.parts.fingertips
+        ) {
+          return previous;
+        }
+        return nextStatus;
+      });
+      drawPoseOverlay(null, hands);
       if (frameId % 45 === 0) {
         appLog.debug("Body pose frame without detection", {
           frameId,
@@ -4411,21 +4680,29 @@ export default function App() {
         keypointMap[point.name] = point;
       }
     }
+    const faceMarkers = deriveMouthAndChinFromPoseMap(keypointMap);
 
     const nextPoseStatus = {
       detected: true,
       score: Number.isFinite(pose.score) ? pose.score : 0,
       keypointsCount: pose.keypoints.length,
+      handsCount: fingerSummary.handsCount,
+      fingerCount: fingerSummary.fingerCount,
+      fingertipCount: fingerSummary.fingertipCount,
       parts: {
         head: hasVisiblePoseKeypoints(keypointMap, POSE_KEYPOINT_GROUPS.head),
         eyes: hasVisiblePoseKeypoints(keypointMap, POSE_KEYPOINT_GROUPS.eyes),
         shoulders: hasVisiblePoseKeypoints(keypointMap, POSE_KEYPOINT_GROUPS.shoulders),
         arms: hasVisiblePoseKeypoints(keypointMap, POSE_KEYPOINT_GROUPS.arms),
         torso: hasVisiblePoseKeypoints(keypointMap, POSE_KEYPOINT_GROUPS.torso),
+        mouth: Boolean(faceMarkers.mouth),
+        chin: Boolean(faceMarkers.chin),
+        fingers: fingerSummary.fingersVisible,
+        fingertips: fingerSummary.fingertipsVisible,
       },
     };
     setPoseStatus(nextPoseStatus);
-    drawPoseOverlay(pose);
+    drawPoseOverlay(pose, hands);
 
     if (frameId % 45 === 0) {
       appLog.debug("Body pose frame processed", {
@@ -5064,6 +5341,7 @@ export default function App() {
       if (phaseRef.current === PHASES.BODY_POSE) {
         const video = videoRef.current;
         const poseDetector = poseDetectorRef.current;
+        const handDetector = detectorRef.current;
         if (!poseDetector || !video || video.readyState < 2) {
           if (frameCounterRef.current % 30 === 0) {
             appLog.debug("Skipping body pose frame due to detector/video readiness", {
@@ -5077,7 +5355,7 @@ export default function App() {
             handDetectedRef.current = false;
             setHandDetected(false);
           }
-          drawPoseOverlay(null);
+          drawPoseOverlay(null, []);
           return;
         }
 
@@ -5088,8 +5366,10 @@ export default function App() {
         inferenceBusyRef.current = true;
         try {
           const pose = await detectPose(poseDetector, video);
+          const detectedHands = handDetector ? await detectHands(handDetector, video) : [];
+          const stableHands = assignStableHandLabels(detectedHands).slice(0, TRACKING_MAX_HANDS);
           if (!cancelled && mountedRef.current) {
-            processPoseFrame(pose, timestamp);
+            processPoseFrame(pose, timestamp, stableHands);
           }
         } catch (error) {
           appLog.error("Pose frame inference failed", { error });

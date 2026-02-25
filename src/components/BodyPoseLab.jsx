@@ -6,6 +6,10 @@ export default function BodyPoseLab({ poseStatus }) {
     shoulders: false,
     arms: false,
     torso: false,
+    mouth: false,
+    chin: false,
+    fingers: false,
+    fingertips: false,
   };
 
   return (
@@ -29,18 +33,34 @@ export default function BodyPoseLab({ poseStatus }) {
           <strong>Keypoints</strong>
           <span>{poseStatus?.keypointsCount ?? 0}</span>
         </div>
+        <div>
+          <strong>Hands</strong>
+          <span>{poseStatus?.handsCount ?? 0}</span>
+        </div>
+        <div>
+          <strong>Fingers</strong>
+          <span>{poseStatus?.fingerCount ?? 0}</span>
+        </div>
+        <div>
+          <strong>Finger tips</strong>
+          <span>{poseStatus?.fingertipCount ?? 0}</span>
+        </div>
       </div>
 
       <div className="body-part-list">
         <div className={parts.head ? "active" : "inactive"}>Head</div>
         <div className={parts.eyes ? "active" : "inactive"}>Eyes</div>
+        <div className={parts.mouth ? "active" : "inactive"}>Mouth</div>
+        <div className={parts.chin ? "active" : "inactive"}>Chin</div>
         <div className={parts.shoulders ? "active" : "inactive"}>Shoulders</div>
         <div className={parts.arms ? "active" : "inactive"}>Arms</div>
         <div className={parts.torso ? "active" : "inactive"}>Torso</div>
+        <div className={parts.fingers ? "active" : "inactive"}>Fingers</div>
+        <div className={parts.fingertips ? "active" : "inactive"}>Finger tips</div>
       </div>
 
       <p className="small-text">
-        Tip: step back until your shoulders and wrists are in frame for best arm highlighting.
+        Tip: keep your face and both hands visible to light up mouth/chin and fingertip indicators.
       </p>
     </section>
   );
