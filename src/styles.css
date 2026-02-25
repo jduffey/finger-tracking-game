@@ -573,6 +573,42 @@ body {
   stroke-width: 3.5;
 }
 
+.lab-hand-infobox {
+  background: rgba(9, 17, 27, 0.78);
+  border: 1px solid rgba(111, 170, 220, 0.42);
+  border-radius: 10px;
+  color: #e8f4ff;
+  min-width: 152px;
+  padding: 7px 9px;
+  position: absolute;
+  top: 12px;
+  z-index: 5;
+}
+
+.lab-hand-infobox h5 {
+  font-size: 0.76rem;
+  margin: 0 0 4px;
+}
+
+.lab-hand-infobox p {
+  color: #d2eaff;
+  font-size: 0.69rem;
+  margin: 0 0 2px;
+}
+
+.lab-hand-infobox.left.detected {
+  border-color: rgba(255, 136, 99, 0.75);
+}
+
+.lab-hand-infobox.right.detected {
+  border-color: rgba(102, 194, 255, 0.75);
+}
+
+.lab-hand-infobox.missing {
+  border-color: rgba(147, 166, 185, 0.64);
+  color: #ccdae8;
+}
+
 .gesture-debug-panel {
   background: rgba(7, 12, 18, 0.82);
   border: 1px solid #30455b;

@@ -31,6 +31,11 @@ const SCENES = [
   },
 ];
 
+const HAND_INFO_BOX_DEFAULTS = {
+  Left: { x: 16, y: 16 },
+  Right: { x: 16, y: 16 },
+};
+
 const PANEL_TITLES = [
   "Case Files",
   "Transit Feed",
@@ -293,6 +298,21 @@ export default function MinorityReportLab(props) {
   }, []);
 
   const sceneMeta = useMemo(() => SCENES[sceneIndex] ?? SCENES[0], [sceneIndex]);
+  const handsByLabel = useMemo(() => {
+    const map = {
+      Left: null,
+      Right: null,
+    };
+    const hands = Array.isArray(engineOutput?.hands) ? engineOutput.hands : [];
+    for (const hand of hands) {
+      if (hand?.label === "Left") {
+        map.Left = hand;
+      } else if (hand?.label === "Right") {
+        map.Right = hand;
+      }
+    }
+    return map;
+  }, [engineOutput?.hands]);
 
   useEffect(() => {
     setPanels((previous) => {
@@ -588,6 +608,40 @@ export default function MinorityReportLab(props) {
                 <span>{hand.label ?? hand.id}</span>
               </div>
             ))}
+
+            {["Left", "Right"].map((label) => {
+              const hand = handsByLabel[label];
+              const isDetected = Boolean(hand);
+              return (
+                <div
+                  key={`info-${label}`}
+                  className={`lab-hand-infobox ${label === "Left" ? "left" : "right"} ${
+                    isDetected ? "detected" : "missing"
+                  }`}
+                  style={
+                    label === "Left"
+                      ? {
+                          left: `${HAND_INFO_BOX_DEFAULTS.Left.x}px`,
+                          top: `${HAND_INFO_BOX_DEFAULTS.Left.y}px`,
+                        }
+                      : {
+                          right: `${HAND_INFO_BOX_DEFAULTS.Right.x}px`,
+                          top: `${HAND_INFO_BOX_DEFAULTS.Right.y}px`,
+                        }
+                  }
+                >
+                  <h5>{label} Hand</h5>
+                  <p>Status: {isDetected ? "detected" : "not detected"}</p>
+                  <p>Pinch: {isDetected ? (hand.pinchActive ? "active" : "idle") : "n/a"}</p>
+                  <p>
+                    Pointer:{" "}
+                    {isDetected
+                      ? `${(hand.pointer?.x ?? 0).toFixed(3)}, ${(hand.pointer?.y ?? 0).toFixed(3)}`
+                      : "n/a"}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </div>
 
