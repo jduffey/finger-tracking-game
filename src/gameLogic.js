@@ -1,4 +1,4 @@
-import { createScopedLogger } from "./logger";
+import { createScopedLogger } from "./logger.js";
 
 export const GAME_DURATION_MS = 30_000;
 export const MOLE_VISIBLE_MS = 700;
@@ -98,4 +98,65 @@ export function getRunnerLaneFromNormalizedX(normalizedX, laneDebounce = 0.06) {
   }
   gameLogicLog.debug("Resolved runner lane", { clampedX, lane });
   return lane;
+}
+
+export function canRunnerStartJump(runnerY, runnerVy, airborneHeightThreshold = 2) {
+  gameLogicLog.debug("Checking runner jump eligibility", {
+    runnerY,
+    runnerVy,
+    airborneHeightThreshold,
+  });
+  const eligible =
+    Number.isFinite(runnerY) &&
+    Number.isFinite(runnerVy) &&
+    runnerY <= airborneHeightThreshold &&
+    runnerVy <= 0;
+  gameLogicLog.debug("Runner jump eligibility resolved", { eligible });
+  return eligible;
+}
+
+export function shouldCollectRunnerCoin(
+  coin,
+  laneFloat,
+  runnerY,
+  options = {},
+) {
+  const laneTolerance = options.laneTolerance ?? 0.44;
+  const heightTolerance = options.heightTolerance ?? 56;
+  const nearZMin = options.nearZMin ?? -40;
+  const nearZMax = options.nearZMax ?? 90;
+
+  gameLogicLog.debug("Evaluating runner coin collection eligibility", {
+    coin,
+    laneFloat,
+    runnerY,
+    laneTolerance,
+    heightTolerance,
+    nearZMin,
+    nearZMax,
+  });
+
+  if (!coin || !Number.isFinite(coin.z) || !Number.isFinite(coin.lane) || !Number.isFinite(coin.height)) {
+    gameLogicLog.warn("Coin collection eligibility failed due to invalid coin payload", { coin });
+    return false;
+  }
+  if (!Number.isFinite(laneFloat) || !Number.isFinite(runnerY)) {
+    gameLogicLog.warn("Coin collection eligibility failed due to invalid runner state", {
+      laneFloat,
+      runnerY,
+    });
+    return false;
+  }
+
+  const inCollectionZone = coin.z < nearZMax && coin.z > nearZMin;
+  const laneMatch = Math.abs(coin.lane - laneFloat) < laneTolerance;
+  const heightMatch = Math.abs(coin.height - runnerY) < heightTolerance;
+  const shouldCollect = inCollectionZone && laneMatch && heightMatch;
+  gameLogicLog.debug("Runner coin eligibility resolved", {
+    inCollectionZone,
+    laneMatch,
+    heightMatch,
+    shouldCollect,
+  });
+  return shouldCollect;
 }

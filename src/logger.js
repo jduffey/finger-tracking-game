@@ -8,6 +8,7 @@ const MAX_OBJECT_KEYS = 50;
 const MAX_STRING_LENGTH = 4000;
 
 const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+const isDevRuntime = Boolean(import.meta?.env?.DEV);
 
 let initialized = false;
 let sequence = 0;
@@ -36,7 +37,7 @@ export function initializeLogging() {
 
   emit("INFO", "logger", "Verbose logging initialized", {
     sessionId,
-    endpoint: import.meta.env.DEV ? LOG_ENDPOINT : null,
+    endpoint: isDevRuntime ? LOG_ENDPOINT : null,
     userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "unknown",
   });
 }
@@ -82,7 +83,7 @@ function emit(level, scope, message, data) {
 }
 
 function enqueue(entry) {
-  if (!import.meta.env.DEV) {
+  if (!isDevRuntime) {
     return;
   }
 
@@ -107,7 +108,7 @@ function enqueue(entry) {
 }
 
 async function flushQueue() {
-  if (!import.meta.env.DEV || isFlushing || queue.length === 0) {
+  if (!isDevRuntime || isFlushing || queue.length === 0) {
     return;
   }
 
@@ -188,7 +189,7 @@ function bindGlobalErrorHandlers() {
   });
 
   window.addEventListener("beforeunload", () => {
-    if (!import.meta.env.DEV || queue.length === 0) {
+    if (!isDevRuntime || queue.length === 0) {
       return;
     }
     const payload = JSON.stringify({

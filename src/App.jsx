@@ -13,12 +13,14 @@ import {
 } from "./calibration";
 import {
   buildGridHoles,
+  canRunnerStartJump,
   GAME_DURATION_MS,
   getRunnerLaneFromNormalizedX,
   isPointInCircle,
   MOLE_VISIBLE_MS,
   pickRandomHole,
   randomSpawnDelay,
+  shouldCollectRunnerCoin,
 } from "./gameLogic";
 import {
   detectPrimaryHand,
@@ -2711,7 +2713,7 @@ export default function App() {
     if (!state.initialized) {
       return;
     }
-    if (state.runnerY > 2 || state.runnerVy > 0) {
+    if (!canRunnerStartJump(state.runnerY, state.runnerVy)) {
       appLog.debug("Runner jump ignored because player is already airborne", {
         source,
         runnerY: state.runnerY,
@@ -2888,19 +2890,14 @@ export default function App() {
 
     for (const coin of state.coins) {
       coin.z -= RUNNER_SPEED * dtSeconds;
-      const inCollectionZone = coin.z < 90 && coin.z > -40;
-      if (inCollectionZone) {
-        const laneMatch = Math.abs(coin.lane - state.laneFloat) < 0.44;
-        const heightMatch = Math.abs(coin.height - state.runnerY) < 56;
-        if (laneMatch && heightMatch) {
-          state.coinsCollected += coin.value ?? 1;
-          appLog.info("Runner coin collected", {
-            coinsCollected: state.coinsCollected,
-            lane: state.laneTarget,
-            jumpHeight: roundMetric(state.runnerY, 2),
-          });
-          Object.assign(coin, createRunnerCoin());
-        }
+      if (shouldCollectRunnerCoin(coin, state.laneFloat, state.runnerY)) {
+        state.coinsCollected += coin.value ?? 1;
+        appLog.info("Runner coin collected", {
+          coinsCollected: state.coinsCollected,
+          lane: state.laneTarget,
+          jumpHeight: roundMetric(state.runnerY, 2),
+        });
+        Object.assign(coin, createRunnerCoin());
       }
 
       if (coin.z < RUNNER_NEAR_Z - 80) {
