@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  applyArcCalibration,
   applyAffineTransform,
   clampPoint,
   clearCalibration,
   createCalibrationTargets,
+  evaluateArcCaptureConfidence,
   loadCalibration,
   saveCalibration,
+  solveArcCalibrationFromSamples,
   solveAffineFromPairs,
 } from "./calibration";
 import {
@@ -35,6 +38,8 @@ const PINCH_END_THRESHOLD = 0.06;
 const PINCH_DEBOUNCE_MS = 250;
 const CURSOR_ALPHA = 0.35;
 const CALIBRATION_SAMPLE_FRAMES = 10;
+const ARC_CALIBRATION_READY_CONFIDENCE = 0.86;
+const ARC_CALIBRATION_MAX_CAPTURE_FRAMES = 2400;
 const INVALID_LANDMARK_RECOVERY_THRESHOLD = 45;
 const NO_HAND_RECOVERY_THRESHOLD = 300;
 const HAND_DETECTION_GRACE_MS = 1600;
@@ -215,6 +220,10 @@ function isPointInsideClientRect(point, rect) {
   );
 }
 
+function isArcCalibrationModel(model) {
+  return Boolean(model && typeof model === "object" && model.kind === "arc");
+}
+
 function computeFittedGridSize(containerWidth, containerHeight, columns, rows, gap) {
   if (
     !Number.isFinite(containerWidth) ||
@@ -284,6 +293,9 @@ export default function App() {
   const [calibrationMessage, setCalibrationMessage] = useState(
     "Press Start Calibration to begin.",
   );
+  const [isArcCalibrating, setIsArcCalibrating] = useState(false);
+  const [arcCalibrationProgress, setArcCalibrationProgress] = useState(0);
+  const [arcCalibrationSamples, setArcCalibrationSamples] = useState(0);
   const [inputTestHoveredCell, setInputTestHoveredCell] = useState(-1);
   const [inputTestGridSize, setInputTestGridSize] = useState({
     width: 0,
@@ -338,6 +350,9 @@ export default function App() {
   const calibrationPairsRef = useRef([]);
   const calibrationSampleRef = useRef(null);
   const isCalibratingRef = useRef(isCalibrating);
+  const isArcCalibratingRef = useRef(isArcCalibrating);
+  const arcCalibrationStartRef = useRef(0);
+  const arcCalibrationSamplesRef = useRef([]);
   const inputTestHoveredCellRef = useRef(inputTestHoveredCell);
 
   const holesRef = useRef(holes);
@@ -376,6 +391,14 @@ export default function App() {
   useEffect(() => {
     if (phase === PHASES.CALIBRATION) {
       return;
+    }
+    if (isArcCalibratingRef.current) {
+      isArcCalibratingRef.current = false;
+      arcCalibrationStartRef.current = 0;
+      arcCalibrationSamplesRef.current = [];
+      setIsArcCalibrating(false);
+      setArcCalibrationProgress(0);
+      setArcCalibrationSamples(0);
     }
     if (inputTestHoveredCellRef.current !== -1) {
       inputTestHoveredCellRef.current = -1;
@@ -418,17 +441,23 @@ export default function App() {
   useEffect(() => {
     appLog.debug("Calibration progress changed", {
       isCalibrating,
+      isArcCalibrating,
       calibrationTargetIndex,
       calibrationPairsCount,
       calibrationSampleFrames,
+      arcCalibrationProgress,
+      arcCalibrationSamples,
       calibrationMessage,
     });
   }, [
     appLog,
     isCalibrating,
+    isArcCalibrating,
     calibrationTargetIndex,
     calibrationPairsCount,
     calibrationSampleFrames,
+    arcCalibrationProgress,
+    arcCalibrationSamples,
     calibrationMessage,
   ]);
 
@@ -510,6 +539,10 @@ export default function App() {
   }, [isCalibrating]);
 
   useEffect(() => {
+    isArcCalibratingRef.current = isArcCalibrating;
+  }, [isArcCalibrating]);
+
+  useEffect(() => {
     inputTestHoveredCellRef.current = inputTestHoveredCell;
   }, [inputTestHoveredCell]);
 
@@ -533,7 +566,9 @@ export default function App() {
       transformRef.current = stored;
       setHasSavedCalibration(true);
       setCalibrationMessage(
-        "Saved calibration loaded. Start game or recalibrate anytime.",
+        isArcCalibrationModel(stored)
+          ? "Saved lazy-arc calibration loaded. Start game or recalibrate anytime."
+          : "Saved calibration loaded. Start game or recalibrate anytime.",
       );
       appLog.info("Loaded saved calibration", { stored });
     } else {
@@ -1037,6 +1072,16 @@ export default function App() {
     appLog.info("Calibration input tests reset", { reason });
   }
 
+  function resetArcCalibrationSession(reason = "manual_reset") {
+    arcCalibrationStartRef.current = 0;
+    arcCalibrationSamplesRef.current = [];
+    isArcCalibratingRef.current = false;
+    setIsArcCalibrating(false);
+    setArcCalibrationProgress(0);
+    setArcCalibrationSamples(0);
+    appLog.info("Lazy-arc calibration session reset", { reason });
+  }
+
   function getHoveredInputTestCellIndex(pointerPoint) {
     if (!pointerPoint) {
       return -1;
@@ -1110,6 +1155,7 @@ export default function App() {
     phaseRef.current = PHASES.GAME;
     setIsCalibrating(false);
     isCalibratingRef.current = false;
+    resetArcCalibrationSession("start_game");
     calibrationSampleRef.current = null;
     setCalibrationSampleFrames(0);
     setScore(0);
@@ -1133,6 +1179,7 @@ export default function App() {
   function beginCalibration() {
     appLog.info("Calibration start requested");
     stopGameSession();
+    resetArcCalibrationSession("begin_standard_calibration");
 
     const targets = createCalibrationTargets(viewportRef.current.width, viewportRef.current.height);
     setPhase(PHASES.CALIBRATION);
@@ -1152,6 +1199,79 @@ export default function App() {
       targetCount: targets.length,
       viewport: viewportRef.current,
     });
+  }
+
+  function beginArcCalibration() {
+    appLog.info("Lazy-arc calibration start requested");
+    stopGameSession();
+    resetArcCalibrationSession("begin_arc_calibration");
+    resetCalibrationInputTests("begin_arc_calibration");
+
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setIsCalibrating(false);
+    isCalibratingRef.current = false;
+    calibrationSampleRef.current = null;
+    setCalibrationSampleFrames(0);
+    setCalibrationMessage(
+      "Lazy arc capture started. Keep your elbow planted, sweep forearm in an arc, and move wrist/fingers up/down.",
+    );
+
+    setArcCalibrationProgress(0);
+    setArcCalibrationSamples(0);
+    setIsArcCalibrating(true);
+    isArcCalibratingRef.current = true;
+    appLog.info("Lazy-arc calibration session initialized", {
+      confidenceTarget: ARC_CALIBRATION_READY_CONFIDENCE,
+      maxCaptureFrames: ARC_CALIBRATION_MAX_CAPTURE_FRAMES,
+    });
+  }
+
+  function finalizeArcCalibration(reason, timestamp) {
+    const captured = arcCalibrationSamplesRef.current;
+    const evaluation = evaluateArcCaptureConfidence(captured);
+    resetArcCalibrationSession(`finalize_${reason}`);
+
+    if (!evaluation.ready) {
+      const confidencePercent = Math.round(evaluation.confidence * 100);
+      setCalibrationMessage(
+        `Lazy arc capture incomplete (${confidencePercent}% confidence). Keep elbow fixed, sweep wider, and move all fingers up/down, then retry.`,
+      );
+      appLog.warn("Lazy-arc calibration ended before reaching confidence target", {
+        reason,
+        sampleCount: captured?.length ?? 0,
+        confidence: evaluation.confidence,
+        metrics: evaluation.metrics,
+        confidenceTarget: ARC_CALIBRATION_READY_CONFIDENCE,
+        timestamp,
+      });
+      return;
+    }
+
+    const solved = solveArcCalibrationFromSamples(captured);
+    if (!solved) {
+      setCalibrationMessage(
+        "Lazy arc calibration failed to solve. Try a wider arc plus more wrist up/down movement.",
+      );
+      appLog.error("Lazy-arc calibration solve returned null", {
+        reason,
+        sampleCount: captured.length,
+        metrics: evaluation.metrics,
+      });
+      return;
+    }
+
+    setTransform(solved);
+    transformRef.current = solved;
+    saveCalibration(solved);
+    setHasSavedCalibration(true);
+    setCalibrationMessage("Lazy arc calibration complete. Launching game.");
+    appLog.info("Lazy-arc calibration solved successfully", {
+      reason,
+      sampleCount: captured.length,
+      model: solved,
+    });
+    startGameSession();
   }
 
   function finalizeCalibrationSample() {
@@ -1265,9 +1385,14 @@ export default function App() {
     appLog.debug("Pinch click detected", {
       timestamp,
       isCalibrating: isCalibratingRef.current,
+      isArcCalibrating: isArcCalibratingRef.current,
       phase: phaseRef.current,
       gameRunning: gameRunningRef.current,
     });
+    if (isArcCalibratingRef.current) {
+      appLog.debug("Pinch click ignored because lazy-arc calibration is active");
+      return;
+    }
 
     if (isCalibratingRef.current) {
       if (!handDetectedRef.current) {
@@ -1764,6 +1889,11 @@ export default function App() {
         setPinchActive(false);
         appLog.debug("Pinch state reset because hand is missing", { frameId });
       }
+      if (isArcCalibratingRef.current && frameId % 20 === 0) {
+        setCalibrationMessage(
+          "Lazy arc capture paused: all five fingertips are not visible. Return your hand to continue capture.",
+        );
+      }
       updateCalibrationInputTestHoverState(cursorRef.current, false, frameId);
       drawCameraOverlay(null);
       updateGame(timestamp);
@@ -1783,18 +1913,104 @@ export default function App() {
     const indexTipRawU = Number.isFinite(hand.indexTip?.uRaw) ? hand.indexTip.uRaw : hand.indexTip.u;
     const indexTipRawV = Number.isFinite(hand.indexTip?.vRaw) ? hand.indexTip.vRaw : hand.indexTip.v;
     const visibleIndexTip = normalizeTipToVisibleBounds(indexTipRawU, indexTipRawV, visibleBounds);
-    const mappedIndexTip = visibleIndexTip
-      ? { u: visibleIndexTip.u, v: visibleIndexTip.v }
-      : { u: hand.indexTip.u, v: hand.indexTip.v };
+    const mappedFingerTips = {};
+    for (const fingerName of EXTENT_FINGER_NAMES) {
+      const tip = hand.fingerTips?.[fingerName];
+      if (!tip || !Number.isFinite(tip.u) || !Number.isFinite(tip.v)) {
+        mappedFingerTips[fingerName] = null;
+        continue;
+      }
+      const tipRawU = Number.isFinite(tip.uRaw) ? tip.uRaw : tip.u;
+      const tipRawV = Number.isFinite(tip.vRaw) ? tip.vRaw : tip.v;
+      const normalizedTip = normalizeTipToVisibleBounds(tipRawU, tipRawV, visibleBounds);
+      mappedFingerTips[fingerName] = normalizedTip
+        ? { u: normalizedTip.u, v: normalizedTip.v }
+        : { u: tip.u, v: tip.v };
+    }
+    const mappedIndexTip =
+      mappedFingerTips.index && Number.isFinite(mappedFingerTips.index.u) && Number.isFinite(mappedFingerTips.index.v)
+        ? mappedFingerTips.index
+        : visibleIndexTip
+          ? { u: visibleIndexTip.u, v: visibleIndexTip.v }
+          : { u: hand.indexTip.u, v: hand.indexTip.v };
     updateTrackingExtentsWithHand(hand, frameId, timestamp, visibleBounds);
 
-    const shouldUseTransform = Boolean(transformRef.current) && !isCalibratingRef.current;
-    const mappedPoint = shouldUseTransform
-      ? applyAffineTransform(transformRef.current, mappedIndexTip.u, mappedIndexTip.v)
-      : {
-          x: mappedIndexTip.u * viewportRef.current.width,
-          y: mappedIndexTip.v * viewportRef.current.height,
-        };
+    if (isArcCalibratingRef.current) {
+      if (arcCalibrationStartRef.current === 0) {
+        arcCalibrationStartRef.current = timestamp;
+        appLog.info("Lazy-arc calibration capture timing started", {
+          frameId,
+          timestamp,
+        });
+      }
+
+      const capturedFrames = arcCalibrationSamplesRef.current;
+      if (capturedFrames.length < ARC_CALIBRATION_MAX_CAPTURE_FRAMES) {
+        capturedFrames.push({
+          frameId,
+          timestamp,
+          tips: mappedFingerTips,
+        });
+      }
+
+      const evaluation = evaluateArcCaptureConfidence(capturedFrames);
+      if (frameId % 2 === 0 || evaluation.ready) {
+        setArcCalibrationProgress(evaluation.confidence);
+        setArcCalibrationSamples(evaluation.metrics.validFrameCount);
+      }
+      if (frameId % 18 === 0) {
+        const confidencePercent = Math.round(evaluation.confidence * 100);
+        const fingerSummary = EXTENT_FINGER_NAMES.map((fingerName) => {
+          const metric = evaluation.metrics.fingerMetrics?.[fingerName];
+          return metric && metric.ready ? fingerName[0].toUpperCase() : "_";
+        }).join("");
+        setCalibrationMessage(
+          `Lazy arc confidence: ${confidencePercent}% (${evaluation.metrics.validFrameCount} valid frames). Keep elbow fixed and sweep back/forth + up/down. [${fingerSummary}]`,
+        );
+      }
+
+      if (evaluation.ready) {
+        finalizeArcCalibration("confidence_target_reached", timestamp);
+      } else if (capturedFrames.length >= ARC_CALIBRATION_MAX_CAPTURE_FRAMES) {
+        finalizeArcCalibration("capture_frame_limit_reached", timestamp);
+      }
+    }
+
+    const shouldUseTransform =
+      Boolean(transformRef.current) &&
+      !isCalibratingRef.current &&
+      !isArcCalibratingRef.current;
+    let mappedPoint = {
+      x: mappedIndexTip.u * viewportRef.current.width,
+      y: mappedIndexTip.v * viewportRef.current.height,
+    };
+    let transformMode = "none";
+    let arcMappedPoint = null;
+    if (shouldUseTransform) {
+      if (isArcCalibrationModel(transformRef.current)) {
+        arcMappedPoint = applyArcCalibration(
+          transformRef.current,
+          mappedIndexTip.u,
+          mappedIndexTip.v,
+        );
+        if (arcMappedPoint) {
+          mappedPoint = {
+            x: arcMappedPoint.u * viewportRef.current.width,
+            y: arcMappedPoint.v * viewportRef.current.height,
+          };
+          transformMode = "arc";
+        } else {
+          transformMode = "arc_fallback_identity";
+        }
+      } else {
+        mappedPoint = applyAffineTransform(
+          transformRef.current,
+          mappedIndexTip.u,
+          mappedIndexTip.v,
+        );
+        transformMode = "affine";
+      }
+    }
 
     const rawPoint = clampPoint(mappedPoint, viewportRef.current.width, viewportRef.current.height);
     rawCursorRef.current = rawPoint;
@@ -1819,6 +2035,7 @@ export default function App() {
       previous: prev,
       smoothed,
       usedTransform: shouldUseTransform,
+      transformMode,
       indexTip: {
         uRaw: roundMetric(indexTipRawU),
         vRaw: roundMetric(indexTipRawV),
@@ -1826,6 +2043,7 @@ export default function App() {
         vClamped: roundMetric(hand.indexTip.v),
       },
       mappedIndexTip,
+      arcMappedPoint,
       visibleIndexTip,
       visibleBounds: visibleBounds
         ? {
@@ -2089,17 +2307,31 @@ export default function App() {
             <>
               <p className="small-text">{calibrationMessage}</p>
               <p className="small-text">
-                Captured points: {calibrationPairsCount}/{calibrationTargets.length}
-                {isCalibrating
-                  ? ` | Sampling: ${calibrationSampleFrames}/${CALIBRATION_SAMPLE_FRAMES}`
-                  : ""}
+                {isArcCalibrating
+                  ? `Lazy Arc Confidence: ${Math.round(arcCalibrationProgress * 100)}% (${arcCalibrationSamples} valid frames)`
+                  : `Captured points: ${calibrationPairsCount}/${calibrationTargets.length}${
+                      isCalibrating
+                        ? ` | Sampling: ${calibrationSampleFrames}/${CALIBRATION_SAMPLE_FRAMES}`
+                        : ""
+                    }`}
               </p>
 
               <div className="button-row">
-                <button onClick={beginCalibration} disabled={!cameraReady || !modelReady}>
+                <button
+                  onClick={beginCalibration}
+                  disabled={!cameraReady || !modelReady || isArcCalibrating}
+                >
                   {isCalibrating ? "Restart Calibration" : "Start Calibration"}
                 </button>
-                {hasSavedCalibration && !isCalibrating && (
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={beginArcCalibration}
+                  disabled={!cameraReady || !modelReady || isCalibrating}
+                >
+                  {isArcCalibrating ? "Restart Lazy Arc Calibration" : "Start Lazy Arc Calibration"}
+                </button>
+                {hasSavedCalibration && !isCalibrating && !isArcCalibrating && (
                   <button className="secondary" onClick={startGameSession}>
                     Use Saved Calibration
                   </button>
