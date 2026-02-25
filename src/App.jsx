@@ -45,8 +45,8 @@ const NO_HAND_RECOVERY_THRESHOLD = 300;
 const HAND_DETECTION_GRACE_MS = 1600;
 const INITIAL_TRACKING_RUNTIME = "mediapipe";
 const FINGERTIP_OVERLAY_STYLES = {
-  thumb: { fill: "rgba(255, 122, 89, 0.95)", radius: 4.8 },
-  index: { fill: "rgba(255, 255, 255, 0.98)", radius: 6.2 },
+  thumb: { fill: "rgba(255, 255, 255, 0.98)", radius: 6.2 },
+  index: { fill: "rgba(255, 122, 89, 0.95)", radius: 4.8 },
   middle: { fill: "rgba(111, 245, 164, 0.95)", radius: 4.8 },
   ring: { fill: "rgba(128, 183, 255, 0.95)", radius: 4.8 },
   pinky: { fill: "rgba(226, 153, 255, 0.95)", radius: 4.8 },
@@ -1790,7 +1790,7 @@ export default function App() {
         ctx.arc(x, y, style.radius, 0, Math.PI * 2);
         ctx.fill();
 
-        if (fingerName === "index") {
+        if (fingerName === "thumb") {
           ctx.strokeStyle = "rgba(12, 16, 20, 0.75)";
           ctx.lineWidth = 1.25;
           ctx.beginPath();
@@ -1910,9 +1910,9 @@ export default function App() {
 
     const coverMetrics = computeCameraCoverMetrics();
     const visibleBounds = coverMetrics?.mirroredNormalized ?? null;
-    const indexTipRawU = Number.isFinite(hand.indexTip?.uRaw) ? hand.indexTip.uRaw : hand.indexTip.u;
-    const indexTipRawV = Number.isFinite(hand.indexTip?.vRaw) ? hand.indexTip.vRaw : hand.indexTip.v;
-    const visibleIndexTip = normalizeTipToVisibleBounds(indexTipRawU, indexTipRawV, visibleBounds);
+    const thumbTipRawU = Number.isFinite(hand.thumbTip?.uRaw) ? hand.thumbTip.uRaw : hand.thumbTip.u;
+    const thumbTipRawV = Number.isFinite(hand.thumbTip?.vRaw) ? hand.thumbTip.vRaw : hand.thumbTip.v;
+    const visibleThumbTip = normalizeTipToVisibleBounds(thumbTipRawU, thumbTipRawV, visibleBounds);
     const mappedFingerTips = {};
     for (const fingerName of EXTENT_FINGER_NAMES) {
       const tip = hand.fingerTips?.[fingerName];
@@ -1927,12 +1927,13 @@ export default function App() {
         ? { u: normalizedTip.u, v: normalizedTip.v }
         : { u: tip.u, v: tip.v };
     }
-    const mappedIndexTip =
-      mappedFingerTips.index && Number.isFinite(mappedFingerTips.index.u) && Number.isFinite(mappedFingerTips.index.v)
-        ? mappedFingerTips.index
-        : visibleIndexTip
-          ? { u: visibleIndexTip.u, v: visibleIndexTip.v }
-          : { u: hand.indexTip.u, v: hand.indexTip.v };
+    const mappedThumbTip =
+      mappedFingerTips.thumb && Number.isFinite(mappedFingerTips.thumb.u) && Number.isFinite(mappedFingerTips.thumb.v)
+        ? mappedFingerTips.thumb
+        : visibleThumbTip
+          ? { u: visibleThumbTip.u, v: visibleThumbTip.v }
+          : { u: hand.thumbTip.u, v: hand.thumbTip.v };
+    const mappedPointerTip = mappedThumbTip;
     updateTrackingExtentsWithHand(hand, frameId, timestamp, visibleBounds);
 
     if (isArcCalibratingRef.current) {
@@ -1981,8 +1982,8 @@ export default function App() {
       !isCalibratingRef.current &&
       !isArcCalibratingRef.current;
     let mappedPoint = {
-      x: mappedIndexTip.u * viewportRef.current.width,
-      y: mappedIndexTip.v * viewportRef.current.height,
+      x: mappedPointerTip.u * viewportRef.current.width,
+      y: mappedPointerTip.v * viewportRef.current.height,
     };
     let transformMode = "none";
     let arcMappedPoint = null;
@@ -1990,8 +1991,8 @@ export default function App() {
       if (isArcCalibrationModel(transformRef.current)) {
         arcMappedPoint = applyArcCalibration(
           transformRef.current,
-          mappedIndexTip.u,
-          mappedIndexTip.v,
+          mappedPointerTip.u,
+          mappedPointerTip.v,
         );
         if (arcMappedPoint) {
           mappedPoint = {
@@ -2005,8 +2006,8 @@ export default function App() {
       } else {
         mappedPoint = applyAffineTransform(
           transformRef.current,
-          mappedIndexTip.u,
-          mappedIndexTip.v,
+          mappedPointerTip.u,
+          mappedPointerTip.v,
         );
         transformMode = "affine";
       }
@@ -2036,15 +2037,16 @@ export default function App() {
       smoothed,
       usedTransform: shouldUseTransform,
       transformMode,
-      indexTip: {
-        uRaw: roundMetric(indexTipRawU),
-        vRaw: roundMetric(indexTipRawV),
-        uClamped: roundMetric(hand.indexTip.u),
-        vClamped: roundMetric(hand.indexTip.v),
+      pointerTip: {
+        source: "thumb",
+        uRaw: roundMetric(thumbTipRawU),
+        vRaw: roundMetric(thumbTipRawV),
+        uClamped: roundMetric(hand.thumbTip.u),
+        vClamped: roundMetric(hand.thumbTip.v),
       },
-      mappedIndexTip,
+      mappedPointerTip,
       arcMappedPoint,
-      visibleIndexTip,
+      visiblePointerTip: visibleThumbTip,
       visibleBounds: visibleBounds
         ? {
             uMin: roundMetric(visibleBounds.uMin),
@@ -2056,14 +2058,14 @@ export default function App() {
     });
 
     if (isCalibratingRef.current && calibrationSampleRef.current) {
-      calibrationSampleRef.current.points.push({ u: mappedIndexTip.u, v: mappedIndexTip.v });
+      calibrationSampleRef.current.points.push({ u: mappedPointerTip.u, v: mappedPointerTip.v });
       setCalibrationSampleFrames(calibrationSampleRef.current.points.length);
       appLog.debug("Captured calibration sample frame", {
         frameId,
         targetIndex: calibrationSampleRef.current.targetIndex,
         sampleCount: calibrationSampleRef.current.points.length,
-        mappedIndexTip,
-        visibleIndexTip,
+        mappedPointerTip,
+        visiblePointerTip: visibleThumbTip,
       });
       if (calibrationSampleRef.current.points.length >= CALIBRATION_SAMPLE_FRAMES) {
         finalizeCalibrationSample();
@@ -2289,7 +2291,7 @@ export default function App() {
           </div>
 
           <p className="help-text">Hold one hand up.</p>
-          <p className="help-text">Use your INDEX fingertip as the pointer.</p>
+          <p className="help-text">Use your THUMB tip as the pointer.</p>
           <p className="help-text">Pinch (thumb + index) to "click".</p>
 
           <div className="status-row">
