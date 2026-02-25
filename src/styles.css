@@ -86,7 +86,7 @@ body {
 
 .content-grid.calibration-layout {
   align-items: stretch;
-  grid-template-columns: minmax(300px, 34vw) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 1fr) minmax(0, 5fr);
 }
 
 .card {
