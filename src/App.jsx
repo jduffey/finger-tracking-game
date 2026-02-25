@@ -36,10 +36,12 @@ import MinorityReportLab from "./components/MinorityReportLab.jsx";
 import BodyPoseLab from "./components/BodyPoseLab.jsx";
 import RouletteFingerGame from "./components/RouletteFingerGame.jsx";
 import ConveyorSphereGame from "./components/ConveyorSphereGame.jsx";
+import SpatialGestureMemory from "./components/SpatialGestureMemory.jsx";
 import { createGestureEngine } from "./gestures/gestureEngine.js";
 import {
   ALL_GESTURE_IDS,
   GESTURE_DEFINITIONS,
+  GESTURE_IDS,
   isTwoHandGesture,
 } from "./gestures/constants.js";
 import { createGesturePersonalization } from "./gestures/personalization.js";
@@ -53,6 +55,7 @@ const PHASES = {
   MINORITY_REPORT_LAB: "MINORITY_REPORT_LAB",
   CONVEYOR: "CONVEYOR",
   ROULETTE: "ROULETTE",
+  SPATIAL_GESTURE_MEMORY: "SPATIAL_GESTURE_MEMORY",
   GAME: "GAME",
 };
 
@@ -169,6 +172,23 @@ const LAB_DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
 const LAB_EVENT_LOG_LIMIT = 220;
 const LAB_TRAIN_CAPTURE_FRAMES = 24;
 const LAB_TRAIN_COUNTDOWN_SECONDS = 3;
+const SGM_STORAGE_KEY = "spatial_gesture_memory_stats_v1";
+const SGM_STEP_TIMEOUT_MS = 3600;
+const SGM_GLOBAL_BASE_TIME_MS = 10000;
+const SGM_GESTURE_POOL_EARLY = [
+  GESTURE_IDS.SWIPE_LEFT,
+  GESTURE_IDS.SWIPE_RIGHT,
+  GESTURE_IDS.PINCH_GRAB,
+  GESTURE_IDS.OPEN_PALM,
+  GESTURE_IDS.PUSH_FORWARD,
+  GESTURE_IDS.CIRCLE,
+];
+const SGM_GESTURE_POOL_ADVANCED = [
+  GESTURE_IDS.EXPAND,
+  GESTURE_IDS.COMPRESS,
+  GESTURE_IDS.ROTATE_TWIST,
+  GESTURE_IDS.SYMMETRIC_SWIPE,
+];
 const POSE_KEYPOINT_THRESHOLD = 0.2;
 const HAND_LABEL_MEMORY_MS = 1400;
 const POSE_CONNECTIONS = [
@@ -364,6 +384,92 @@ function createEmptyLabEngineOutput() {
     },
     twoHand: { present: false },
   };
+}
+
+function randomChoice(values) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return null;
+  }
+  const index = Math.floor(Math.random() * values.length);
+  return values[index] ?? values[0];
+}
+
+function formatSgmStepLabel(step) {
+  const ids = Array.isArray(step) ? step : [step];
+  return ids.map((gestureId) => GESTURE_LABEL_BY_ID[gestureId] ?? gestureId).join(" + ");
+}
+
+function createInitialSpatialMemoryState() {
+  return {
+    active: false,
+    status: "idle",
+    round: 1,
+    sequence: [],
+    currentStepIndex: 0,
+    expectedStep: null,
+    expectedLabel: "Press Start",
+    stepDeadline: 0,
+    roundStartAt: 0,
+    elapsedSeconds: 0,
+    message: "Watch the sequence, then reproduce it in order.",
+    lastActionLabel: "—",
+    accuracy: 1,
+    smoothness: 0,
+    score: 0,
+    highScore: 0,
+    bestRound: 1,
+    successRate: 0,
+    totalRounds: 0,
+    completedRounds: 0,
+    difficultyLevel: 1,
+    sequenceLength: 0,
+    recentStepDurations: [],
+  };
+}
+
+function loadSpatialMemoryStats() {
+  try {
+    const raw = window.localStorage.getItem(SGM_STORAGE_KEY);
+    if (!raw) {
+      return { highScore: 0, bestRound: 1, totalRounds: 0, completedRounds: 0 };
+    }
+    const parsed = JSON.parse(raw);
+    return {
+      highScore: Number.isFinite(parsed?.highScore) ? parsed.highScore : 0,
+      bestRound: Number.isFinite(parsed?.bestRound) ? parsed.bestRound : 1,
+      totalRounds: Number.isFinite(parsed?.totalRounds) ? parsed.totalRounds : 0,
+      completedRounds: Number.isFinite(parsed?.completedRounds) ? parsed.completedRounds : 0,
+    };
+  } catch {
+    return { highScore: 0, bestRound: 1, totalRounds: 0, completedRounds: 0 };
+  }
+}
+
+function saveSpatialMemoryStats(stats) {
+  try {
+    window.localStorage.setItem(SGM_STORAGE_KEY, JSON.stringify(stats));
+  } catch {
+    // ignore persistence errors
+  }
+}
+
+function buildSpatialSequence(round, difficultyLevel) {
+  const length = Math.max(2, round + 1);
+  const sequence = [];
+  for (let i = 0; i < length; i += 1) {
+    const shouldUseCombo = difficultyLevel >= 4 && i > 0 && Math.random() < 0.25;
+    if (shouldUseCombo) {
+      const first = randomChoice(SGM_GESTURE_POOL_EARLY);
+      const second = randomChoice([...SGM_GESTURE_POOL_EARLY, ...SGM_GESTURE_POOL_ADVANCED]);
+      sequence.push([first, second]);
+      continue;
+    }
+    const pool = difficultyLevel >= 3 && i >= 2
+      ? [...SGM_GESTURE_POOL_EARLY, ...SGM_GESTURE_POOL_ADVANCED]
+      : SGM_GESTURE_POOL_EARLY;
+    sequence.push(randomChoice(pool));
+  }
+  return sequence;
 }
 
 function createInitialLabTrainingState() {
@@ -1166,6 +1272,15 @@ export default function App() {
     personalizationRef.current.getSampleCounts(),
   );
   const [labTrainingState, setLabTrainingState] = useState(createInitialLabTrainingState);
+  const [spatialMemoryState, setSpatialMemoryState] = useState(() => {
+    const base = createInitialSpatialMemoryState();
+    const persisted = loadSpatialMemoryStats();
+    return {
+      ...base,
+      ...persisted,
+      successRate: persisted.totalRounds > 0 ? persisted.completedRounds / persisted.totalRounds : 0,
+    };
+  });
   const [poseModelReady, setPoseModelReady] = useState(false);
   const [poseModelError, setPoseModelError] = useState("");
   const [poseStatus, setPoseStatus] = useState(createEmptyPoseStatus);
@@ -1237,6 +1352,7 @@ export default function App() {
   const mountedRef = useRef(true);
 
   const phaseRef = useRef(phase);
+  const spatialMemoryRef = useRef(spatialMemoryState);
   const viewportRef = useRef(viewport);
   const transformRef = useRef(transform);
   const cursorRef = useRef(cursor);
@@ -1343,7 +1459,8 @@ export default function App() {
     phase === PHASES.BODY_POSE ||
     phase === PHASES.MINORITY_REPORT_LAB ||
     phase === PHASES.CONVEYOR ||
-    phase === PHASES.ROULETTE;
+    phase === PHASES.ROULETTE ||
+    phase === PHASES.SPATIAL_GESTURE_MEMORY;
   const cameraPanelTitle =
     phase === PHASES.FLIGHT
       ? "Camera + Flight Controls"
@@ -1357,6 +1474,12 @@ export default function App() {
       ? "Camera + Conveyor Toss Controls"
       : phase === PHASES.ROULETTE
       ? "Camera + Roulette Controls"
+      : phase === PHASES.CONVEYOR
+      ? "Camera + Conveyor Toss Controls"
+      : phase === PHASES.ROULETTE
+      ? "Camera + Roulette Controls"
+      : phase === PHASES.SPATIAL_GESTURE_MEMORY
+      ? "Camera + Spatial Memory Controls"
       : phase === PHASES.GAME
       ? "Camera + Tracking"
       : phase === PHASES.SANDBOX
@@ -1466,6 +1589,9 @@ export default function App() {
     }
     if (phase !== PHASES.BODY_POSE) {
       setPoseStatus(createEmptyPoseStatus());
+    }
+    if (phase !== PHASES.SPATIAL_GESTURE_MEMORY && spatialMemoryRef.current?.active) {
+      setSpatialMemoryState((prev) => ({ ...prev, active: false }));
     }
   }, [phase]);
 
@@ -1578,6 +1704,10 @@ export default function App() {
   useEffect(() => {
     appLog.debug("Debug overlay state changed", { debugEnabled });
   }, [appLog, debugEnabled]);
+
+  useEffect(() => {
+    spatialMemoryRef.current = spatialMemoryState;
+  }, [spatialMemoryState]);
 
   useEffect(() => {
     appLog.debug("Calibration transform state changed", {
@@ -3513,6 +3643,36 @@ export default function App() {
     void ensurePoseDetectorInitialized("start_minority_report_lab");
   }
 
+  function startSpatialGestureMemorySession() {
+    appLog.info("Spatial Gesture Memory start requested", {
+      currentPhase: phaseRef.current,
+      cameraReady,
+      modelReady,
+    });
+    stopGameSession();
+    resetArcCalibrationSession("start_spatial_gesture_memory");
+    setIsCalibrating(false);
+    isCalibratingRef.current = false;
+    calibrationSampleRef.current = null;
+    setCalibrationSampleFrames(0);
+    labTrainingSessionRef.current = null;
+    gestureEngineRef.current.reset();
+    setLabEventLog([]);
+    setPhase(PHASES.SPATIAL_GESTURE_MEMORY);
+    phaseRef.current = PHASES.SPATIAL_GESTURE_MEMORY;
+    setCalibrationMessage(
+      "Spatial Gesture Memory active. Reproduce the sequence exactly under time pressure.",
+    );
+    startSpatialGestureMemoryRound();
+  }
+
+  function returnFromSpatialGestureMemorySession() {
+    appLog.info("Returning from Spatial Gesture Memory to calibration input test");
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
   function returnFromMinorityReportLab() {
     appLog.info("Returning from Minority Report Lab to calibration input test");
     labTrainingSessionRef.current = null;
@@ -5395,7 +5555,7 @@ export default function App() {
   }
 
   function processMinorityReportFrame(hands, timestamp) {
-    if (phaseRef.current !== PHASES.MINORITY_REPORT_LAB) {
+    if (phaseRef.current !== PHASES.MINORITY_REPORT_LAB && phaseRef.current !== PHASES.SPATIAL_GESTURE_MEMORY) {
       return;
     }
 
@@ -5410,8 +5570,201 @@ export default function App() {
 
     if (Array.isArray(output?.events) && output.events.length > 0) {
       appendLabEventsToLog(output.events);
+      if (phaseRef.current === PHASES.SPATIAL_GESTURE_MEMORY) {
+        const topEvent = output.events[output.events.length - 1];
+        if (topEvent?.confidence >= labConfidenceThresholdRef.current) {
+          handleSpatialMemoryEvent(topEvent, timestamp);
+        }
+      }
+    }
+    if (phaseRef.current === PHASES.SPATIAL_GESTURE_MEMORY) {
+      updateSpatialMemoryTimeout(timestamp);
     }
     updateLabTrainingSession(timestamp, output);
+  }
+
+
+  function startSpatialGestureMemoryRound() {
+    const previous = spatialMemoryRef.current ?? createInitialSpatialMemoryState();
+    const nextRound = previous.status === "completed" ? previous.round + 1 : previous.round;
+    const successRate = previous.totalRounds > 0 ? previous.completedRounds / previous.totalRounds : 0;
+    const adaptiveBoost = successRate >= 0.75 ? 1 : 0;
+    const adaptivePenalty = successRate < 0.45 ? -1 : 0;
+    const difficultyLevel = Math.max(1, Math.min(6, nextRound + adaptiveBoost + adaptivePenalty));
+    const sequence = buildSpatialSequence(nextRound, difficultyLevel);
+    const now = performance.now();
+    const expected = sequence[0] ?? null;
+    const globalTimeLimitMs = Math.max(4200, SGM_GLOBAL_BASE_TIME_MS - (difficultyLevel - 1) * 650);
+
+    setSpatialMemoryState((prev) => ({
+      ...prev,
+      active: true,
+      status: "playing",
+      round: nextRound,
+      sequence,
+      sequenceLength: sequence.length,
+      currentStepIndex: 0,
+      expectedStep: expected,
+      expectedLabel: formatSgmStepLabel(expected),
+      stepDeadline: now + SGM_STEP_TIMEOUT_MS,
+      roundStartAt: now,
+      elapsedSeconds: 0,
+      message: `Repeat ${sequence.length} gestures in order. Total time limit: ${(globalTimeLimitMs / 1000).toFixed(1)}s.`,
+      lastActionLabel: "—",
+      accuracy: 1,
+      smoothness: 0,
+      difficultyLevel,
+      globalTimeLimitMs,
+      recentStepDurations: [],
+      attempts: 0,
+      correctSteps: 0,
+    }));
+  }
+
+  function resetSpatialGestureMemory() {
+    const persisted = loadSpatialMemoryStats();
+    setSpatialMemoryState({
+      ...createInitialSpatialMemoryState(),
+      ...persisted,
+      successRate: persisted.totalRounds > 0 ? persisted.completedRounds / persisted.totalRounds : 0,
+    });
+  }
+
+  function handleSpatialMemoryEvent(event, timestamp) {
+    setSpatialMemoryState((prev) => {
+      if (!prev.active || prev.status !== "playing") {
+        return prev;
+      }
+      const expected = prev.sequence[prev.currentStepIndex] ?? null;
+      const expectedIds = Array.isArray(expected) ? expected : [expected];
+      const isExpected = expectedIds.includes(event.gestureId);
+      const attempts = (prev.attempts ?? 0) + 1;
+      const elapsedFromRoundStart = Math.max(0, timestamp - prev.roundStartAt);
+      const stepDuration = prev.currentStepIndex === 0
+        ? elapsedFromRoundStart
+        : Math.max(0, elapsedFromRoundStart - prev.recentStepDurations.reduce((sum, value) => sum + value, 0));
+
+      if (!isExpected) {
+        const accuracy = prev.correctSteps / attempts;
+        return {
+          ...prev,
+          status: "failed",
+          active: false,
+          attempts,
+          accuracy,
+          elapsedSeconds: elapsedFromRoundStart / 1000,
+          lastActionLabel: `${GESTURE_LABEL_BY_ID[event.gestureId] ?? event.gestureId} (wrong)`,
+          message: `Wrong gesture. Expected ${formatSgmStepLabel(expected)}.`,
+        };
+      }
+
+      const nextStepIndex = prev.currentStepIndex + 1;
+      const nextDurations = [...prev.recentStepDurations, stepDuration];
+      const correctSteps = (prev.correctSteps ?? 0) + 1;
+      const accuracy = correctSteps / attempts;
+      const avgDuration = nextDurations.reduce((sum, value) => sum + value, 0) / Math.max(1, nextDurations.length);
+      const smoothness = 1 - Math.min(1, avgDuration / SGM_STEP_TIMEOUT_MS);
+
+      if (nextStepIndex >= prev.sequence.length) {
+        const elapsedSeconds = elapsedFromRoundStart / 1000;
+        const speedScore = Math.max(0.25, 1 - elapsedFromRoundStart / Math.max(1, prev.globalTimeLimitMs));
+        const score = prev.score + correctSteps * 100 + accuracy * 90 + smoothness * 70 + speedScore * 110;
+        const totalRounds = (prev.totalRounds ?? 0) + 1;
+        const completedRounds = (prev.completedRounds ?? 0) + 1;
+        const highScore = Math.max(prev.highScore ?? 0, score);
+        const bestRound = Math.max(prev.bestRound ?? 1, prev.round);
+        saveSpatialMemoryStats({ highScore, bestRound, totalRounds, completedRounds });
+        return {
+          ...prev,
+          active: false,
+          status: "completed",
+          attempts,
+          correctSteps,
+          accuracy,
+          smoothness,
+          elapsedSeconds,
+          score,
+          highScore,
+          bestRound,
+          totalRounds,
+          completedRounds,
+          successRate: completedRounds / Math.max(1, totalRounds),
+          lastActionLabel: GESTURE_LABEL_BY_ID[event.gestureId] ?? event.gestureId,
+          message: `Round complete! Great memory + control.`,
+          expectedStep: null,
+          expectedLabel: "Round complete",
+        };
+      }
+
+      const nextExpected = prev.sequence[nextStepIndex] ?? null;
+      return {
+        ...prev,
+        attempts,
+        correctSteps,
+        accuracy,
+        smoothness,
+        currentStepIndex: nextStepIndex,
+        expectedStep: nextExpected,
+        expectedLabel: formatSgmStepLabel(nextExpected),
+        lastActionLabel: GESTURE_LABEL_BY_ID[event.gestureId] ?? event.gestureId,
+        stepDeadline: timestamp + SGM_STEP_TIMEOUT_MS,
+        elapsedSeconds: elapsedFromRoundStart / 1000,
+        message: "Nice. Keep going.",
+        recentStepDurations: nextDurations,
+      };
+    });
+  }
+
+  function updateSpatialMemoryTimeout(timestamp) {
+    setSpatialMemoryState((prev) => {
+      if (!prev.active || prev.status !== "playing") {
+        return prev;
+      }
+      const elapsed = Math.max(0, timestamp - prev.roundStartAt);
+      if (elapsed > prev.globalTimeLimitMs) {
+        const totalRounds = (prev.totalRounds ?? 0) + 1;
+        saveSpatialMemoryStats({
+          highScore: prev.highScore ?? 0,
+          bestRound: prev.bestRound ?? 1,
+          totalRounds,
+          completedRounds: prev.completedRounds ?? 0,
+        });
+        return {
+          ...prev,
+          active: false,
+          status: "failed",
+          totalRounds,
+          successRate: (prev.completedRounds ?? 0) / Math.max(1, totalRounds),
+          message: "Round failed: global speed limit exceeded.",
+          elapsedSeconds: elapsed / 1000,
+        };
+      }
+      if (timestamp <= prev.stepDeadline) {
+        if (Math.abs(prev.elapsedSeconds - elapsed / 1000) < 0.02) {
+          return prev;
+        }
+        return {
+          ...prev,
+          elapsedSeconds: elapsed / 1000,
+        };
+      }
+      const totalRounds = (prev.totalRounds ?? 0) + 1;
+      saveSpatialMemoryStats({
+        highScore: prev.highScore ?? 0,
+        bestRound: prev.bestRound ?? 1,
+        totalRounds,
+        completedRounds: prev.completedRounds ?? 0,
+      });
+      return {
+        ...prev,
+        active: false,
+        status: "failed",
+        totalRounds,
+        successRate: (prev.completedRounds ?? 0) / Math.max(1, totalRounds),
+        elapsedSeconds: elapsed / 1000,
+        message: `Timeout on step ${prev.currentStepIndex + 1}.`,
+      };
+    });
   }
 
   function startLabGestureRecording(gestureId) {
@@ -5940,6 +6293,14 @@ export default function App() {
                     >
                       Open Minority Report Lab
                     </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={startSpatialGestureMemorySession}
+                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
+                    >
+                      Launch Spatial Gesture Memory
+                    </button>
                     {hasSavedCalibration && !isCalibrating && !isArcCalibrating && (
                       <button className="secondary" onClick={startGameSession}>
                         Start Whack-a-Mole
@@ -5991,6 +6352,9 @@ export default function App() {
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
+                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
+                      Launch Spatial Gesture Memory
+                    </button>
                   </>
                 ) : phase === PHASES.FLIGHT ? (
                   <>
@@ -6021,6 +6385,9 @@ export default function App() {
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
+                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
+                      Launch Spatial Gesture Memory
+                    </button>
                   </>
                 ) : phase === PHASES.BODY_POSE ? (
                   <>
@@ -6039,6 +6406,9 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
+                    </button>
+                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
+                      Launch Spatial Gesture Memory
                     </button>
                   </>
                 ) : phase === PHASES.RUNNER ? (
@@ -6082,12 +6452,34 @@ export default function App() {
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
+                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
+                      Launch Spatial Gesture Memory
+                    </button>
+                  </>
+                ) : phase === PHASES.SPATIAL_GESTURE_MEMORY ? (
+                  <>
+                    <button onClick={returnFromSpatialGestureMemorySession}>Back to Input Test</button>
+                    <button className="secondary" onClick={startSpatialGestureMemoryRound}>
+                      Next Round
+                    </button>
+                    <button className="secondary" onClick={resetSpatialGestureMemory}>
+                      Reset Spatial Memory
+                    </button>
+                    <button className="secondary" onClick={startMinorityReportLab}>
+                      Switch to Minority Report Lab
+                    </button>
+                    <button className="secondary" onClick={startRunnerSession}>
+                      Switch to Runner
+                    </button>
                   </>
                 ) : (
                   <>
                     <button onClick={returnFromMinorityReportLab}>Back to Input Test</button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Reset Lab Session
+                    </button>
+                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
+                      Launch Spatial Gesture Memory
                     </button>
                     <button className="secondary" onClick={startRunnerSession}>
                       Switch to Runner
@@ -6341,6 +6733,12 @@ export default function App() {
             onImportSamples={importLabSamples}
             onClearEventLog={clearLabEventLog}
           />
+        ) : phase === PHASES.SPATIAL_GESTURE_MEMORY ? (
+          <SpatialGestureMemory
+            state={spatialMemoryState}
+            onStart={startSpatialGestureMemoryRound}
+            onReset={resetSpatialGestureMemory}
+          />
         ) : (
           <section className="card panel">
             <h2>Whack-a-Mole</h2>
@@ -6381,6 +6779,9 @@ export default function App() {
               <button className="secondary" onClick={startRouletteSession}>
                 Open Roulette Table
               </button>
+              <button className="secondary" onClick={startSpatialGestureMemorySession}>
+                Launch Spatial Gesture Memory
+              </button>
               <button className="secondary" onClick={handleRecalibrate}>
                 Recalibrate
               </button>
@@ -6416,7 +6817,7 @@ export default function App() {
         )}
       </div>
 
-      {phase !== PHASES.MINORITY_REPORT_LAB && phase !== PHASES.BODY_POSE && (
+      {phase !== PHASES.MINORITY_REPORT_LAB && phase !== PHASES.BODY_POSE && phase !== PHASES.SPATIAL_GESTURE_MEMORY && (
         <>
           <div
             className={`tracked-cursor ${handDetected ? "" : "paused"}`}
