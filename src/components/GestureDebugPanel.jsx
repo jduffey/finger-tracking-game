@@ -42,6 +42,23 @@ export default function GestureDebugPanel(props) {
     onImportSamples,
   } = props;
 
+  const handByLabel = {
+    Left: null,
+    Right: null,
+  };
+  const otherHands = [];
+  if (Array.isArray(hands)) {
+    for (const hand of hands) {
+      if (hand?.label === "Left") {
+        handByLabel.Left = hand;
+      } else if (hand?.label === "Right") {
+        handByLabel.Right = hand;
+      } else if (hand) {
+        otherHands.push(hand);
+      }
+    }
+  }
+
   return (
     <aside className="gesture-debug-panel">
       <div className="gesture-debug-section detection-status">
@@ -52,18 +69,31 @@ export default function GestureDebugPanel(props) {
         <p>Tracking: {detectionStatus?.handDetected ? "visible" : "not detected"}</p>
 
         <div className="hand-status-list">
-          {Array.isArray(hands) && hands.length > 0 ? (
-            hands.map((hand) => (
-              <div className="hand-status-item" key={hand.id}>
-                <strong>{hand.label ?? hand.id}</strong>
-                <span>Pinch: {hand.pinchActive ? "active" : "idle"}</span>
-                <span>Pointer: {formatPointer(hand.pointer)}</span>
-                <span>Velocity: {(hand.velocity?.speed ?? 0).toFixed(3)}</span>
+          {["Left", "Right"].map((label) => {
+            const hand = handByLabel[label];
+            const isDetected = Boolean(hand);
+            return (
+              <div
+                className={`hand-status-item ${isDetected ? "detected" : "missing"}`}
+                key={`status-${label}`}
+              >
+                <strong>{label} Hand</strong>
+                <span>Status: {isDetected ? "detected" : "not detected"}</span>
+                <span>Pinch: {isDetected ? (hand.pinchActive ? "active" : "idle") : "n/a"}</span>
+                <span>Pointer: {isDetected ? formatPointer(hand.pointer) : "n/a"}</span>
+                <span>Velocity: {isDetected ? (hand.velocity?.speed ?? 0).toFixed(3) : "n/a"}</span>
               </div>
-            ))
-          ) : (
-            <p className="muted">No hands currently tracked.</p>
-          )}
+            );
+          })}
+          {otherHands.map((hand) => (
+            <div className="hand-status-item" key={`other-${hand.id}`}>
+              <strong>{hand.label ?? hand.id}</strong>
+              <span>Status: detected</span>
+              <span>Pinch: {hand.pinchActive ? "active" : "idle"}</span>
+              <span>Pointer: {formatPointer(hand.pointer)}</span>
+              <span>Velocity: {(hand.velocity?.speed ?? 0).toFixed(3)}</span>
+            </div>
+          ))}
         </div>
       </div>
 

@@ -679,6 +679,15 @@ body {
   padding: 6px;
 }
 
+.hand-status-item.detected {
+  border-color: rgba(126, 187, 238, 0.48);
+}
+
+.hand-status-item.missing {
+  border-color: rgba(131, 150, 170, 0.44);
+  opacity: 0.82;
+}
+
 .hand-status-item strong {
   font-size: 0.78rem;
 }

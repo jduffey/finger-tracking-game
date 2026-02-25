@@ -371,9 +371,12 @@ function assignStableHandLabels(hands) {
 
   for (let index = 0; index < unlabeled.length; index += 1) {
     const hand = unlabeled[index];
+    const handX = hand?.indexTip?.u ?? hand?.thumbTip?.u ?? 0.5;
     const fallbackLabel =
       unlabeled.length === 1
-        ? "Hand A"
+        ? handX <= 0.5
+          ? "Left"
+          : "Right"
         : index === 0
         ? "Left"
         : index === 1
