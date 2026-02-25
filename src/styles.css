@@ -223,16 +223,18 @@ body {
 }
 
 .input-test-cell.hovered {
-  background: #fff7e3;
-  border-color: #d5901b;
-  box-shadow: 0 0 0 3px rgba(213, 144, 27, 0.17);
+  background: #1cac78;
+  border-color: #138a5f;
+  box-shadow: 0 0 0 3px rgba(28, 172, 120, 0.32);
+  color: #ffffff;
   transform: translateY(-1px);
 }
 
 .input-test-cell.pinching {
-  background: #fcdde2;
-  border-color: #bf2642;
-  box-shadow: 0 0 0 3px rgba(191, 38, 66, 0.19);
+  background: #ee204d;
+  border-color: #b7173b;
+  box-shadow: 0 0 0 3px rgba(238, 32, 77, 0.34);
+  color: #ffffff;
   transform: translateY(-1px);
 }
 
