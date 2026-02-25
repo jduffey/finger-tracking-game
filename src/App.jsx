@@ -661,7 +661,7 @@ export default function App() {
     [calibrationTargets, calibrationTargetIndex],
   );
   const isCalibrationLayoutPhase =
-    phase === PHASES.CALIBRATION || phase === PHASES.SANDBOX;
+    phase === PHASES.CALIBRATION || phase === PHASES.SANDBOX || phase === PHASES.FLIGHT;
   const cameraPanelTitle =
     phase === PHASES.FLIGHT
       ? "Camera + Flight Controls"
@@ -2258,7 +2258,7 @@ export default function App() {
     ctx.globalAlpha = 1;
 
     const centerX = width * 0.5;
-    const centerY = height * 0.42;
+    const centerY = height * 0.5;
     const fov = Math.min(width, height) * 1.06;
     const cameraX = state.shipX * 0.66;
     const cameraY = state.shipY * 0.6;
@@ -2322,8 +2322,8 @@ export default function App() {
     ctx.lineTo(centerX, centerY + 12);
     ctx.stroke();
 
-    const shipX = width * 0.5 + state.shipX * 0.68;
-    const shipY = height * 0.79 + state.shipY * 0.4;
+    const shipX = width * 0.5 + state.shipX * 0.38;
+    const shipY = height * 0.5 + state.shipY * 0.3;
     const shipScale = clampValue(Math.min(width, height) / 420, 0.72, 1.34);
     ctx.save();
     ctx.translate(shipX, shipY);
