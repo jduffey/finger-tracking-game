@@ -30,6 +30,7 @@ import { createScopedLogger } from "./logger";
 
 const PHASES = {
   CALIBRATION: "CALIBRATION",
+  SANDBOX: "SANDBOX",
   GAME: "GAME",
 };
 
@@ -58,6 +59,27 @@ const INPUT_TEST_GRID_ROWS = 6;
 const INPUT_TEST_GRID_COLS = 10;
 const INPUT_TEST_CELL_COUNT = INPUT_TEST_GRID_ROWS * INPUT_TEST_GRID_COLS;
 const INPUT_TEST_CELL_GAP = 8;
+const SANDBOX_BLOCK_COUNT = 12;
+const SANDBOX_BLOCK_COLUMNS = 6;
+const SANDBOX_BLOCK_GAP = 8;
+const SANDBOX_GRAVITY = 1850;
+const SANDBOX_BOUNCE = 0.22;
+const SANDBOX_REST_VELOCITY = 26;
+const SANDBOX_MAX_STEP_SECONDS = 0.05;
+const SANDBOX_BLOCK_COLORS = [
+  "#ff7f50",
+  "#1cac78",
+  "#4f86f7",
+  "#ee204d",
+  "#ffb347",
+  "#8b5cf6",
+  "#06b6d4",
+  "#f97316",
+  "#22c55e",
+  "#eab308",
+  "#ef4444",
+  "#3b82f6",
+];
 
 function clampValue(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -251,6 +273,43 @@ function computeFittedGridSize(containerWidth, containerHeight, columns, rows, g
   };
 }
 
+function createSandboxBlocks(stageWidth, stageHeight) {
+  const safeWidth = Math.max(220, stageWidth);
+  const safeHeight = Math.max(180, stageHeight);
+  const columns = SANDBOX_BLOCK_COLUMNS;
+  const rows = Math.ceil(SANDBOX_BLOCK_COUNT / columns);
+  const horizontalPadding = Math.max(14, safeWidth * 0.04);
+  const verticalPadding = Math.max(12, safeHeight * 0.04);
+  const maxWidthCellSize =
+    (safeWidth - horizontalPadding * 2 - SANDBOX_BLOCK_GAP * (columns - 1)) / columns;
+  const maxHeightCellSize =
+    (safeHeight * 0.42 - SANDBOX_BLOCK_GAP * Math.max(0, rows - 1)) / Math.max(1, rows);
+  const blockSize = Math.floor(clampValue(Math.min(maxWidthCellSize, maxHeightCellSize), 28, 66));
+  const baseY =
+    safeHeight -
+    verticalPadding -
+    rows * blockSize -
+    SANDBOX_BLOCK_GAP * Math.max(0, rows - 1);
+
+  const blocks = [];
+  for (let blockIndex = 0; blockIndex < SANDBOX_BLOCK_COUNT; blockIndex += 1) {
+    const column = blockIndex % columns;
+    const row = Math.floor(blockIndex / columns);
+    const x = horizontalPadding + column * (blockSize + SANDBOX_BLOCK_GAP);
+    const y = baseY + row * (blockSize + SANDBOX_BLOCK_GAP);
+    blocks.push({
+      id: blockIndex + 1,
+      x,
+      y,
+      size: blockSize,
+      vx: 0,
+      vy: 0,
+      color: SANDBOX_BLOCK_COLORS[blockIndex % SANDBOX_BLOCK_COLORS.length],
+    });
+  }
+  return blocks;
+}
+
 export default function App() {
   const appLog = useMemo(() => createScopedLogger("app"), []);
 
@@ -302,6 +361,8 @@ export default function App() {
     height: 0,
     cellSize: 0,
   });
+  const [sandboxBlocks, setSandboxBlocks] = useState([]);
+  const [sandboxGrabbedBlockId, setSandboxGrabbedBlockId] = useState(null);
 
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(Math.ceil(GAME_DURATION_MS / 1000));
@@ -314,6 +375,7 @@ export default function App() {
   const cameraWrapRef = useRef(null);
   const boardRef = useRef(null);
   const inputTestStageRef = useRef(null);
+  const sandboxStageRef = useRef(null);
   const inputTestCellRefs = useRef([]);
 
   const detectorRef = useRef(null);
@@ -354,6 +416,10 @@ export default function App() {
   const arcCalibrationStartRef = useRef(0);
   const arcCalibrationSamplesRef = useRef([]);
   const inputTestHoveredCellRef = useRef(inputTestHoveredCell);
+  const sandboxBlocksRef = useRef(sandboxBlocks);
+  const sandboxGrabbedBlockIdRef = useRef(sandboxGrabbedBlockId);
+  const sandboxGrabOffsetRef = useRef({ x: 0, y: 0 });
+  const sandboxLastTickRef = useRef(0);
 
   const holesRef = useRef(holes);
   const hitZonesRef = useRef([]);
@@ -369,6 +435,14 @@ export default function App() {
     () => calibrationTargets[calibrationTargetIndex] ?? null,
     [calibrationTargets, calibrationTargetIndex],
   );
+  const isCalibrationLayoutPhase =
+    phase === PHASES.CALIBRATION || phase === PHASES.SANDBOX;
+  const cameraPanelTitle =
+    phase === PHASES.GAME
+      ? "Camera + Tracking"
+      : phase === PHASES.SANDBOX
+        ? "Camera + Sandbox Controls"
+        : "Camera + Calibration Controls";
   const inputTestPinchingCell =
     phase === PHASES.CALIBRATION && !isCalibrating && pinchActive
       ? inputTestHoveredCell
@@ -403,6 +477,10 @@ export default function App() {
     if (inputTestHoveredCellRef.current !== -1) {
       inputTestHoveredCellRef.current = -1;
       setInputTestHoveredCell(-1);
+    }
+    if (sandboxGrabbedBlockIdRef.current !== null) {
+      sandboxGrabbedBlockIdRef.current = null;
+      setSandboxGrabbedBlockId(null);
     }
   }, [phase]);
 
@@ -460,6 +538,14 @@ export default function App() {
     arcCalibrationSamples,
     calibrationMessage,
   ]);
+
+  useEffect(() => {
+    appLog.debug("Sandbox state changed", {
+      phase,
+      blockCount: sandboxBlocks.length,
+      grabbedBlockId: sandboxGrabbedBlockId,
+    });
+  }, [appLog, phase, sandboxBlocks.length, sandboxGrabbedBlockId]);
 
   useEffect(() => {
     appLog.debug("Calibration input test state changed", {
@@ -545,6 +631,14 @@ export default function App() {
   useEffect(() => {
     inputTestHoveredCellRef.current = inputTestHoveredCell;
   }, [inputTestHoveredCell]);
+
+  useEffect(() => {
+    sandboxBlocksRef.current = sandboxBlocks;
+  }, [sandboxBlocks]);
+
+  useEffect(() => {
+    sandboxGrabbedBlockIdRef.current = sandboxGrabbedBlockId;
+  }, [sandboxGrabbedBlockId]);
 
   useEffect(() => {
     holesRef.current = holes;
@@ -973,6 +1067,51 @@ export default function App() {
     };
   }, [appLog, phase]);
 
+  useEffect(() => {
+    if (phase !== PHASES.SANDBOX) {
+      return undefined;
+    }
+    const stage = sandboxStageRef.current;
+    if (!stage) {
+      appLog.debug("Skipping sandbox stage observer because stage ref is unavailable");
+      return undefined;
+    }
+
+    let rafId = 0;
+    const scheduleReset = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        resetSandboxBlocks("stage_resize_or_open");
+      });
+    };
+
+    scheduleReset();
+
+    if (!window.ResizeObserver) {
+      window.addEventListener("resize", scheduleReset);
+      return () => {
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+        }
+        window.removeEventListener("resize", scheduleReset);
+      };
+    }
+
+    const observer = new ResizeObserver(scheduleReset);
+    observer.observe(stage);
+    window.addEventListener("resize", scheduleReset);
+    return () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+      observer.disconnect();
+      window.removeEventListener("resize", scheduleReset);
+    };
+  }, [appLog, phase]);
+
   function getRecoveryConfig(attempt, reason) {
     const currentRuntime = getCurrentRuntime() || activeRuntime;
     const currentBackend = getCurrentBackend() || activeBackend;
@@ -1080,6 +1219,185 @@ export default function App() {
     setArcCalibrationProgress(0);
     setArcCalibrationSamples(0);
     appLog.info("Lazy-arc calibration session reset", { reason });
+  }
+
+  function resetSandboxBlocks(reason = "manual_reset") {
+    const stage = sandboxStageRef.current;
+    if (!stage) {
+      appLog.debug("Skipping sandbox block reset because stage ref is unavailable", { reason });
+      return;
+    }
+    const rect = stage.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      appLog.debug("Skipping sandbox block reset because stage size is not ready", {
+        reason,
+        width: rect.width,
+        height: rect.height,
+      });
+      return;
+    }
+    const nextBlocks = createSandboxBlocks(rect.width, rect.height);
+    sandboxBlocksRef.current = nextBlocks;
+    setSandboxBlocks(nextBlocks);
+    sandboxLastTickRef.current = performance.now();
+    sandboxGrabbedBlockIdRef.current = null;
+    setSandboxGrabbedBlockId(null);
+    appLog.info("Sandbox blocks reset", {
+      reason,
+      width: rect.width,
+      height: rect.height,
+      blockCount: nextBlocks.length,
+      blockSize: nextBlocks[0]?.size ?? null,
+    });
+  }
+
+  function openSandboxScreen() {
+    appLog.info("Opening pinch drag sandbox screen");
+    stopGameSession();
+    resetArcCalibrationSession("open_sandbox");
+    setIsCalibrating(false);
+    isCalibratingRef.current = false;
+    calibrationSampleRef.current = null;
+    setCalibrationSampleFrames(0);
+    setPhase(PHASES.SANDBOX);
+    phaseRef.current = PHASES.SANDBOX;
+    setCalibrationMessage("Pinch Drag Sandbox active.");
+    requestAnimationFrame(() => resetSandboxBlocks("open_sandbox"));
+  }
+
+  function returnToCalibrationInputTest() {
+    appLog.info("Returning from sandbox to calibration input test");
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
+  function updateSandboxPhysics(timestamp, pointerPoint, hasHand, pinchNow) {
+    if (phaseRef.current !== PHASES.SANDBOX) {
+      return;
+    }
+    const stage = sandboxStageRef.current;
+    if (!stage) {
+      return;
+    }
+    const rect = stage.getBoundingClientRect();
+    if (!Number.isFinite(rect.width) || !Number.isFinite(rect.height) || rect.width <= 0 || rect.height <= 0) {
+      return;
+    }
+
+    if (!Array.isArray(sandboxBlocksRef.current) || sandboxBlocksRef.current.length === 0) {
+      const seededBlocks = createSandboxBlocks(rect.width, rect.height);
+      sandboxBlocksRef.current = seededBlocks;
+      setSandboxBlocks(seededBlocks);
+      sandboxLastTickRef.current = timestamp;
+      return;
+    }
+
+    const dtSeconds = clampValue(
+      (timestamp - (sandboxLastTickRef.current || timestamp)) / 1000,
+      0,
+      SANDBOX_MAX_STEP_SECONDS,
+    );
+    sandboxLastTickRef.current = timestamp;
+
+    const pointerLocal = pointerPoint
+      ? {
+          x: pointerPoint.x - rect.left,
+          y: pointerPoint.y - rect.top,
+        }
+      : null;
+
+    let blocks = sandboxBlocksRef.current.map((block) => ({ ...block }));
+    let grabbedId = sandboxGrabbedBlockIdRef.current;
+
+    if (!pinchNow || !hasHand) {
+      if (grabbedId !== null) {
+        grabbedId = null;
+        sandboxGrabbedBlockIdRef.current = null;
+        setSandboxGrabbedBlockId(null);
+      }
+    }
+
+    if (pinchNow && hasHand && pointerLocal) {
+      if (grabbedId === null) {
+        for (let index = blocks.length - 1; index >= 0; index -= 1) {
+          const block = blocks[index];
+          if (
+            pointerLocal.x >= block.x &&
+            pointerLocal.x <= block.x + block.size &&
+            pointerLocal.y >= block.y &&
+            pointerLocal.y <= block.y + block.size
+          ) {
+            grabbedId = block.id;
+            sandboxGrabbedBlockIdRef.current = grabbedId;
+            setSandboxGrabbedBlockId(grabbedId);
+            sandboxGrabOffsetRef.current = {
+              x: pointerLocal.x - block.x,
+              y: pointerLocal.y - block.y,
+            };
+            const grabbedBlock = blocks.splice(index, 1)[0];
+            blocks.push(grabbedBlock);
+            break;
+          }
+        }
+      }
+
+      if (grabbedId !== null) {
+        const grabbedIndex = blocks.findIndex((block) => block.id === grabbedId);
+        if (grabbedIndex >= 0) {
+          const grabbedBlock = blocks[grabbedIndex];
+          grabbedBlock.x = clampValue(
+            pointerLocal.x - sandboxGrabOffsetRef.current.x,
+            0,
+            rect.width - grabbedBlock.size,
+          );
+          grabbedBlock.y = clampValue(
+            pointerLocal.y - sandboxGrabOffsetRef.current.y,
+            0,
+            rect.height - grabbedBlock.size,
+          );
+          grabbedBlock.vx = 0;
+          grabbedBlock.vy = 0;
+        }
+      }
+    }
+
+    for (const block of blocks) {
+      if (grabbedId !== null && block.id === grabbedId) {
+        continue;
+      }
+
+      block.vy += SANDBOX_GRAVITY * dtSeconds;
+      block.x += block.vx * dtSeconds;
+      block.y += block.vy * dtSeconds;
+
+      if (block.x < 0) {
+        block.x = 0;
+        block.vx = -block.vx * SANDBOX_BOUNCE;
+      } else if (block.x + block.size > rect.width) {
+        block.x = rect.width - block.size;
+        block.vx = -block.vx * SANDBOX_BOUNCE;
+      }
+
+      if (block.y < 0) {
+        block.y = 0;
+        block.vy = Math.abs(block.vy) * SANDBOX_BOUNCE;
+      } else if (block.y + block.size > rect.height) {
+        block.y = rect.height - block.size;
+        block.vy = -Math.abs(block.vy) * SANDBOX_BOUNCE;
+        if (Math.abs(block.vy) < SANDBOX_REST_VELOCITY) {
+          block.vy = 0;
+        }
+      }
+
+      block.vx *= 0.985;
+      if (Math.abs(block.vx) < 0.01) {
+        block.vx = 0;
+      }
+    }
+
+    sandboxBlocksRef.current = blocks;
+    setSandboxBlocks(blocks);
   }
 
   function getHoveredInputTestCellIndex(pointerPoint) {
@@ -1865,6 +2183,7 @@ export default function App() {
           });
         }
         drawCameraOverlay(null);
+        updateSandboxPhysics(timestamp, cursorRef.current, false, false);
         updateGame(timestamp);
         return;
       }
@@ -1896,6 +2215,7 @@ export default function App() {
       }
       updateCalibrationInputTestHoverState(cursorRef.current, false, frameId);
       drawCameraOverlay(null);
+      updateSandboxPhysics(timestamp, cursorRef.current, false, false);
       updateGame(timestamp);
       return;
     }
@@ -2123,6 +2443,7 @@ export default function App() {
       }
     }
 
+    updateSandboxPhysics(timestamp, smoothed, true, pinchStateRef.current);
     drawCameraOverlay(hand);
     updateGame(timestamp);
   }
@@ -2278,9 +2599,9 @@ export default function App() {
         </div>
       </header>
 
-      <div className={`content-grid ${phase === PHASES.CALIBRATION ? "calibration-layout" : ""}`}>
+      <div className={`content-grid ${isCalibrationLayoutPhase ? "calibration-layout" : ""}`}>
         <section className="card camera-card">
-          <h2>{phase === PHASES.CALIBRATION ? "Camera + Calibration Controls" : "Camera + Tracking"}</h2>
+          <h2>{cameraPanelTitle}</h2>
           <div
             className="camera-wrap"
             ref={cameraWrapRef}
@@ -2305,46 +2626,83 @@ export default function App() {
           {cameraError && <p className="error-text">{cameraError}</p>}
           {modelError && <p className="error-text">{modelError}</p>}
 
-          {phase === PHASES.CALIBRATION && (
+          {(phase === PHASES.CALIBRATION || phase === PHASES.SANDBOX) && (
             <>
               <p className="small-text">{calibrationMessage}</p>
-              <p className="small-text">
-                {isArcCalibrating
-                  ? `Lazy Arc Confidence: ${Math.round(arcCalibrationProgress * 100)}% (${arcCalibrationSamples} valid frames)`
-                  : `Captured points: ${calibrationPairsCount}/${calibrationTargets.length}${
-                      isCalibrating
-                        ? ` | Sampling: ${calibrationSampleFrames}/${CALIBRATION_SAMPLE_FRAMES}`
-                        : ""
-                    }`}
-              </p>
+              {phase === PHASES.CALIBRATION ? (
+                <p className="small-text">
+                  {isArcCalibrating
+                    ? `Lazy Arc Confidence: ${Math.round(arcCalibrationProgress * 100)}% (${arcCalibrationSamples} valid frames)`
+                    : `Captured points: ${calibrationPairsCount}/${calibrationTargets.length}${
+                        isCalibrating
+                          ? ` | Sampling: ${calibrationSampleFrames}/${CALIBRATION_SAMPLE_FRAMES}`
+                          : ""
+                      }`}
+                </p>
+              ) : (
+                <p className="small-text">
+                  Pinch over a block to grab it. Keep pinching to drag, then release to drop with
+                  gravity.
+                </p>
+              )}
 
               <div className="button-row">
-                <button
-                  onClick={beginCalibration}
-                  disabled={!cameraReady || !modelReady || isArcCalibrating}
-                >
-                  {isCalibrating ? "Restart Calibration" : "Start Calibration"}
-                </button>
-                <button
-                  className="secondary"
-                  type="button"
-                  onClick={beginArcCalibration}
-                  disabled={!cameraReady || !modelReady || isCalibrating}
-                >
-                  {isArcCalibrating ? "Restart Lazy Arc Calibration" : "Start Lazy Arc Calibration"}
-                </button>
-                {hasSavedCalibration && !isCalibrating && !isArcCalibrating && (
-                  <button className="secondary" onClick={startGameSession}>
-                    Use Saved Calibration
-                  </button>
+                {phase === PHASES.CALIBRATION ? (
+                  <>
+                    <button
+                      onClick={beginCalibration}
+                      disabled={!cameraReady || !modelReady || isArcCalibrating}
+                    >
+                      {isCalibrating ? "Restart Calibration" : "Start Calibration"}
+                    </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={beginArcCalibration}
+                      disabled={!cameraReady || !modelReady || isCalibrating}
+                    >
+                      {isArcCalibrating
+                        ? "Restart Lazy Arc Calibration"
+                        : "Start Lazy Arc Calibration"}
+                    </button>
+                    {hasSavedCalibration && !isCalibrating && !isArcCalibrating && (
+                      <button className="secondary" onClick={startGameSession}>
+                        Use Saved Calibration
+                      </button>
+                    )}
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={openSandboxScreen}
+                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
+                    >
+                      Open Pinch Sandbox
+                    </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={() => resetCalibrationInputTests("manual_button")}
+                    >
+                      Reset Input Test
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={returnToCalibrationInputTest}>Back to Input Test</button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={() => resetSandboxBlocks("manual_button")}
+                    >
+                      Reset Blocks
+                    </button>
+                    {hasSavedCalibration && (
+                      <button className="secondary" onClick={startGameSession}>
+                        Start Game
+                      </button>
+                    )}
+                  </>
                 )}
-                <button
-                  className="secondary"
-                  type="button"
-                  onClick={() => resetCalibrationInputTests("manual_button")}
-                >
-                  Reset Input Test
-                </button>
               </div>
             </>
           )}
@@ -2373,7 +2731,8 @@ export default function App() {
           <section className="card panel calibration-panel">
             <h2>Calibration Input Test</h2>
             <p className="small-text">
-              Primary target area: hover any box, then pinch while hovering to verify input behavior.
+              Primary target area: hover any box, then pinch while hovering to verify input
+              behavior.
             </p>
 
             <div className="input-test-panel input-test-primary">
@@ -2410,13 +2769,49 @@ export default function App() {
 
               <h3>Input Test</h3>
               <p className="small-text">
-                Move over any of the {INPUT_TEST_CELL_COUNT} cells to see hover color. Keep hovering and pinch to switch to pinch color.
+                Move over any of the {INPUT_TEST_CELL_COUNT} cells to see hover color. Keep
+                hovering and pinch to switch to pinch color.
               </p>
               <p className="small-text">
-                Hovered cell: {inputTestHoveredCell >= 0 ? inputTestHoveredCell + 1 : "none"} | Pinch:{" "}
-                {pinchActive ? "active" : "idle"}
+                Hovered cell: {inputTestHoveredCell >= 0 ? inputTestHoveredCell + 1 : "none"} |
+                Pinch: {pinchActive ? "active" : "idle"}
               </p>
             </div>
+          </section>
+        ) : phase === PHASES.SANDBOX ? (
+          <section className="card panel sandbox-panel">
+            <h2>Pinch Drag Sandbox</h2>
+            <p className="small-text">
+              Hover over a block and pinch to grab it. Move while pinching, then release to drop.
+            </p>
+
+            <div className="sandbox-panel-body">
+              <div className="sandbox-stage" ref={sandboxStageRef}>
+                {sandboxBlocks.map((block) => (
+                  <div
+                    key={block.id}
+                    className={`sandbox-block ${
+                      sandboxGrabbedBlockId === block.id ? "grabbed" : ""
+                    }`}
+                    style={{
+                      left: `${block.x}px`,
+                      top: `${block.y}px`,
+                      width: `${block.size}px`,
+                      height: `${block.size}px`,
+                      background: block.color,
+                    }}
+                  >
+                    <span>{block.id}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <p className="small-text">
+              Blocks: {sandboxBlocks.length} | Grabbed:{" "}
+              {sandboxGrabbedBlockId !== null ? sandboxGrabbedBlockId : "none"} | Pinch:{" "}
+              {pinchActive ? "active" : "idle"}
+            </p>
           </section>
         ) : (
           <section className="card panel">
@@ -2437,7 +2832,9 @@ export default function App() {
             </div>
 
             <div className="button-row">
-              <button onClick={startGameSession}>{gameRunning ? "Restart Game" : "Start Game"}</button>
+              <button onClick={startGameSession}>
+                {gameRunning ? "Restart Game" : "Start Game"}
+              </button>
               <button className="secondary" onClick={handleRecalibrate}>
                 Recalibrate
               </button>
