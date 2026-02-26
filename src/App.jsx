@@ -3556,6 +3556,11 @@ export default function App() {
   function startRouletteSession() {
     appLog.info("Roulette mode start requested");
     stopGameSession();
+    resetArcCalibrationSession("open_roulette");
+    setIsCalibrating(false);
+    isCalibratingRef.current = false;
+    calibrationSampleRef.current = null;
+    setCalibrationSampleFrames(0);
     setPhase(PHASES.ROULETTE);
     phaseRef.current = PHASES.ROULETTE;
     setCalibrationMessage("Roulette mode active. Pinch and hold to drag chips with your finger.");
