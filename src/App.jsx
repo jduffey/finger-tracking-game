@@ -34,6 +34,7 @@ import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from ".
 import { createScopedLogger } from "./logger";
 import MinorityReportLab from "./components/MinorityReportLab";
 import BodyPoseLab from "./components/BodyPoseLab";
+import RouletteFingerGame from "./components/RouletteFingerGame";
 import { createGestureEngine } from "./gestures/gestureEngine";
 import {
   ALL_GESTURE_IDS,
@@ -49,6 +50,7 @@ const PHASES = {
   RUNNER: "RUNNER",
   BODY_POSE: "BODY_POSE",
   MINORITY_REPORT_LAB: "MINORITY_REPORT_LAB",
+  ROULETTE: "ROULETTE",
   GAME: "GAME",
 };
 
@@ -1086,7 +1088,8 @@ export default function App() {
     phase === PHASES.FLIGHT ||
     phase === PHASES.RUNNER ||
     phase === PHASES.BODY_POSE ||
-    phase === PHASES.MINORITY_REPORT_LAB;
+    phase === PHASES.MINORITY_REPORT_LAB ||
+    phase === PHASES.ROULETTE;
   const cameraPanelTitle =
     phase === PHASES.FLIGHT
       ? "Camera + Flight Controls"
@@ -1096,6 +1099,8 @@ export default function App() {
       ? "Camera + Body Pose Highlight"
       : phase === PHASES.MINORITY_REPORT_LAB
       ? "Camera + Minority Report Controls"
+      : phase === PHASES.ROULETTE
+      ? "Camera + Roulette Controls"
       : phase === PHASES.GAME
       ? "Camera + Tracking"
       : phase === PHASES.SANDBOX
@@ -3548,6 +3553,14 @@ export default function App() {
     nextSpawnAtRef.current = Number.POSITIVE_INFINITY;
   }
 
+  function startRouletteSession() {
+    appLog.info("Roulette mode start requested");
+    stopGameSession();
+    setPhase(PHASES.ROULETTE);
+    phaseRef.current = PHASES.ROULETTE;
+    setCalibrationMessage("Roulette mode active. Pinch and hold to drag chips with your finger.");
+  }
+
   function startGameSession() {
     appLog.info("Starting game session requested", {
       hasTransform: Boolean(transformRef.current),
@@ -5398,6 +5411,17 @@ export default function App() {
     <div className="app">
       <header className="top-bar">
         <h1>Finger Whack</h1>
+        <div className="button-row">
+          {phase !== PHASES.ROULETTE ? (
+            <button className="secondary" type="button" onClick={startRouletteSession}>
+              Open Roulette Table
+            </button>
+          ) : (
+            <button className="secondary" type="button" onClick={startGameSession}>
+              Back to Main Game
+            </button>
+          )}
+        </div>
         <div className={`tracking-indicator ${handDetected ? "ok" : "warn"}`}>
           {phase === PHASES.BODY_POSE
             ? handDetected
@@ -5837,6 +5861,9 @@ export default function App() {
               <button className="secondary" onClick={startGameSession}>
                 Switch to Whack-a-Mole
               </button>
+              <button className="secondary" onClick={startRouletteSession}>
+                Open Roulette Table
+              </button>
             </div>
           </section>
         ) : phase === PHASES.RUNNER ? (
@@ -5870,8 +5897,17 @@ export default function App() {
               <button className="secondary" onClick={startGameSession}>
                 Switch to Whack-a-Mole
               </button>
+              <button className="secondary" onClick={startRouletteSession}>
+                Open Roulette Table
+              </button>
             </div>
           </section>
+        ) : phase === PHASES.ROULETTE ? (
+          <RouletteFingerGame
+            cursor={cursor}
+            pinchActive={pinchActive}
+            onBack={startGameSession}
+          />
         ) : phase === PHASES.BODY_POSE ? (
           <BodyPoseLab poseStatus={poseStatus} />
         ) : phase === PHASES.MINORITY_REPORT_LAB ? (
@@ -5934,6 +5970,9 @@ export default function App() {
               </button>
               <button className="secondary" onClick={startMinorityReportLab}>
                 Open Minority Report Lab
+              </button>
+              <button className="secondary" onClick={startRouletteSession}>
+                Open Roulette Table
               </button>
               <button className="secondary" onClick={handleRecalibrate}>
                 Recalibrate
