@@ -216,6 +216,7 @@ body {
 .body-pose-status-grid span {
   font-size: 0.96rem;
   font-weight: 700;
+  color: #ffffff;
 }
 
 .body-part-list {
@@ -1299,10 +1300,13 @@ button:disabled {
 
 .roulette-status-row {
   display: flex;
-  gap: 0.8rem;
+  gap: 1.1rem;
   flex-wrap: wrap;
-  margin-bottom: 0.75rem;
-  font-size: 0.9rem;
+  justify-content: center;
+  text-align: center;
+  margin-bottom: 0.9rem;
+  font-size: 1.15rem;
+  font-weight: 700;
 }
 
 .roulette-chip-rack {
@@ -1340,6 +1344,7 @@ button:disabled {
   background: linear-gradient(180deg, rgba(15, 26, 37, 0.82) 0%, rgba(9, 17, 24, 0.92) 100%);
   box-shadow: 0 5px 14px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.14);
   font-weight: 700;
+  color: #ffffff;
 }
 
 .roulette-table-grid {
