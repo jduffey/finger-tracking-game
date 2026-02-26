@@ -192,6 +192,7 @@ export default function RouletteFingerGame({ cursor, pinchActive, onBack }) {
       return;
     }
 
+    const heldChipValue = draggingChip?.value ?? 0;
     const winningNumber = Math.floor(Math.random() * 37);
     const winningColor = getNumberColor(winningNumber);
     let payout = 0;
@@ -207,7 +208,7 @@ export default function RouletteFingerGame({ cursor, pinchActive, onBack }) {
       }
     });
 
-    setBankroll((value) => value + payout);
+    setBankroll((value) => value + payout + heldChipValue);
     setBets({});
     setDraggingChip(null);
     setLastResult({ number: winningNumber, color: winningColor, payout });
