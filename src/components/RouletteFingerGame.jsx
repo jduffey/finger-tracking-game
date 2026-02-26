@@ -68,6 +68,9 @@ export default function RouletteFingerGame({ cursor, pinchActive, onBack }) {
   const betRefs = useRef({});
   const rackRefs = useRef({});
   const rackDropRef = useRef(null);
+  const spinButtonRef = useRef(null);
+  const clearButtonRef = useRef(null);
+  const backButtonRef = useRef(null);
 
   const numberRows = useMemo(() => {
     const rows = [];
@@ -93,6 +96,26 @@ export default function RouletteFingerGame({ cursor, pinchActive, onBack }) {
     const wasPinching = previousPinchRef.current;
 
     if (!wasPinching && pinchActive) {
+      const overSpin = isCursorInsideRect(cursor, spinButtonRef.current?.getBoundingClientRect());
+      const overClear = isCursorInsideRect(cursor, clearButtonRef.current?.getBoundingClientRect());
+      const overBack = isCursorInsideRect(cursor, backButtonRef.current?.getBoundingClientRect());
+
+      if (!draggingChip && overSpin) {
+        spinWheel();
+        previousPinchRef.current = pinchActive;
+        return;
+      }
+      if (!draggingChip && overClear) {
+        clearBets();
+        previousPinchRef.current = pinchActive;
+        return;
+      }
+      if (!draggingChip && overBack) {
+        onBack();
+        previousPinchRef.current = pinchActive;
+        return;
+      }
+
       const rackPick = Object.entries(rackRefs.current).find(([, node]) =>
         isCursorInsideRect(cursor, node?.getBoundingClientRect()),
       );
@@ -223,10 +246,29 @@ export default function RouletteFingerGame({ cursor, pinchActive, onBack }) {
         {lastResult && <span>Last: {lastResult.number} ({lastResult.color})</span>}
       </div>
 
-      <div className="button-row">
-        <button type="button" onClick={spinWheel}>Spin Wheel</button>
-        <button className="secondary" type="button" onClick={clearBets}>Clear Bets</button>
-        <button className="secondary" type="button" onClick={onBack}>Back to Main Game</button>
+      <div className="roulette-spin-row">
+        <button ref={spinButtonRef} className="roulette-spin-button" type="button" onClick={spinWheel}>
+          Spin Wheel
+        </button>
+      </div>
+
+      <div className="button-row roulette-actions-row">
+        <button
+          ref={clearButtonRef}
+          className="secondary"
+          type="button"
+          onClick={clearBets}
+        >
+          Clear Bets
+        </button>
+        <button
+          ref={backButtonRef}
+          className="secondary"
+          type="button"
+          onClick={onBack}
+        >
+          Back to Main Game
+        </button>
       </div>
 
       <p className="small-text">{message}</p>

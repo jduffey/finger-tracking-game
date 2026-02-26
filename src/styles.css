@@ -1358,18 +1358,26 @@ button:disabled {
   border-radius: 6px;
   padding: 0.25rem;
   background: #126c3f;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
 }
 
 .roulette-bet-cell.red {
   background: #8f2a33;
+  color: #ffffff;
 }
 
 .roulette-bet-cell.black {
   background: #2a2a2a;
+  color: #ffffff;
 }
 
 .roulette-bet-cell.zero {
   background: #219c59;
+  color: #ffffff;
 }
 
 .roulette-bet-cell.hovered {
@@ -1399,4 +1407,21 @@ button:disabled {
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 40;
+}
+
+.roulette-spin-row {
+  display: flex;
+  justify-content: center;
+  margin: 0.75rem 0;
+}
+
+.roulette-spin-button {
+  min-width: 240px;
+  min-height: 84px;
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.roulette-actions-row {
+  justify-content: center;
 }
