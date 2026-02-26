@@ -239,11 +239,54 @@ export default function RouletteFingerGame({ cursor, pinchActive, onBack }) {
     <section className="card panel roulette-panel">
       <h2>Finger Roulette</h2>
       <p className="small-text">Pinch and hold to drag chips with your tracked finger, release to drop.</p>
+      <div className="roulette-table-grid">
+        <div className="roulette-zero-column">{renderBetCell("number-0", "0", "zero")}</div>
+        <div className="roulette-number-grid">
+          {numberRows.map((row) => (
+            <div key={`row-${row[0]}`} className="roulette-number-row">
+              {row.map((number) =>
+                renderBetCell(
+                  `number-${number}`,
+                  String(number),
+                  RED_NUMBERS.has(number) ? "red" : "black",
+                ),
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="roulette-outside-grid">
+        {OUTSIDE_BETS.map((bet) => renderBetCell(bet.id, `${bet.label} (${bet.payout}:1)`))}
+      </div>
+
       <div className="roulette-status-row">
         <span>Bankroll: ${bankroll}</span>
         <span>Stake: ${totalStake}</span>
         <span>Pinch: {pinchActive ? "holding" : "released"}</span>
         {lastResult && <span>Last: {lastResult.number} ({lastResult.color})</span>}
+      </div>
+
+      <p className="small-text">{message}</p>
+
+      <div className="roulette-chip-rack">
+        {CHIP_VALUES.map((value) => (
+          <div
+            key={value}
+            ref={(node) => {
+              rackRefs.current[String(value)] = node;
+            }}
+            className="roulette-rack-chip"
+          >
+            ${value}
+          </div>
+        ))}
+        <div
+          ref={rackDropRef}
+          className="roulette-rack-drop"
+        >
+          Release chip here to return
+        </div>
       </div>
 
       <div className="roulette-spin-row">
@@ -269,49 +312,6 @@ export default function RouletteFingerGame({ cursor, pinchActive, onBack }) {
         >
           Back to Main Game
         </button>
-      </div>
-
-      <p className="small-text">{message}</p>
-
-      <div className="roulette-chip-rack">
-        {CHIP_VALUES.map((value) => (
-          <div
-            key={value}
-            ref={(node) => {
-              rackRefs.current[String(value)] = node;
-            }}
-            className="roulette-rack-chip"
-          >
-            ${value}
-          </div>
-        ))}
-        <div
-          ref={rackDropRef}
-          className="roulette-rack-drop"
-        >
-          Release chip here to return
-        </div>
-      </div>
-
-      <div className="roulette-table-grid">
-        <div className="roulette-zero-column">{renderBetCell("number-0", "0", "zero")}</div>
-        <div className="roulette-number-grid">
-          {numberRows.map((row) => (
-            <div key={`row-${row[0]}`} className="roulette-number-row">
-              {row.map((number) =>
-                renderBetCell(
-                  `number-${number}`,
-                  String(number),
-                  RED_NUMBERS.has(number) ? "red" : "black",
-                ),
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="roulette-outside-grid">
-        {OUTSIDE_BETS.map((bet) => renderBetCell(bet.id, `${bet.label} (${bet.payout}:1)`))}
       </div>
 
       {draggingChip && (
