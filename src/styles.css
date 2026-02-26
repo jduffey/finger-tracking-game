@@ -1332,9 +1332,14 @@ button:disabled {
 .roulette-rack-drop {
   display: inline-flex;
   align-items: center;
-  padding: 0.4rem 0.7rem;
-  border: 2px dashed rgba(245, 247, 255, 0.55);
-  border-radius: 8px;
+  justify-content: center;
+  min-height: 56px;
+  padding: 0.5rem 0.95rem;
+  border: 3px solid rgba(255, 255, 255, 0.92);
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(15, 26, 37, 0.82) 0%, rgba(9, 17, 24, 0.92) 100%);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  font-weight: 700;
 }
 
 .roulette-table-grid {
