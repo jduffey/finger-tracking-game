@@ -64,7 +64,7 @@ export default function RouletteFingerGame({ cursor, pinchActive, onBack }) {
   const [draggingChip, setDraggingChip] = useState(null);
   const [hoveredBetId, setHoveredBetId] = useState(null);
 
-  const previousPinchRef = useRef(false);
+  const previousPinchRef = useRef(pinchActive);
   const betRefs = useRef({});
   const rackRefs = useRef({});
   const rackDropRef = useRef(null);
