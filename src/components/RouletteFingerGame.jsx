@@ -123,6 +123,7 @@ export default function RouletteFingerGame({ cursor, pinchActive, onBack }) {
       const rackPick = Object.entries(rackRefs.current).find(([, node]) =>
         isCursorInsideRect(cursor, node?.getBoundingClientRect()),
       );
+      const pickupBetId = getBetIdAtCursor(cursor);
       if (rackPick) {
         const chipValue = Number.parseInt(rackPick[0], 10);
         if (bankroll >= chipValue) {
@@ -137,20 +138,20 @@ export default function RouletteFingerGame({ cursor, pinchActive, onBack }) {
         } else {
           setMessage("Not enough bankroll for that chip.");
         }
-      } else if (hoveredBetId && (bets[hoveredBetId] ?? []).length > 0) {
+      } else if (pickupBetId && (bets[pickupBetId] ?? []).length > 0) {
         setBets((previous) => {
           const next = { ...previous };
-          const chips = [...(next[hoveredBetId] ?? [])];
+          const chips = [...(next[pickupBetId] ?? [])];
           const chip = chips.pop();
           if (!chip) {
             return previous;
           }
-          next[hoveredBetId] = chips;
+          next[pickupBetId] = chips;
           if (chips.length === 0) {
-            delete next[hoveredBetId];
+            delete next[pickupBetId];
           }
-          setDraggingChip({ ...chip, source: "bet", sourceBetId: hoveredBetId });
-          setMessage(`Picked chip from ${hoveredBetId}.`);
+          setDraggingChip({ ...chip, source: "bet", sourceBetId: pickupBetId });
+          setMessage(`Picked chip from ${pickupBetId}.`);
           return next;
         });
       }
