@@ -3559,6 +3559,10 @@ export default function App() {
     resetArcCalibrationSession("open_roulette");
     setIsCalibrating(false);
     isCalibratingRef.current = false;
+    calibrationPairsRef.current = [];
+    calibrationIndexRef.current = 0;
+    setCalibrationTargetIndex(0);
+    setCalibrationPairsCount(0);
     calibrationSampleRef.current = null;
     setCalibrationSampleFrames(0);
     setPhase(PHASES.ROULETTE);
