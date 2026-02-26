@@ -85,11 +85,15 @@ export default function RouletteFingerGame({ cursor, pinchActive, onBack }) {
     [bets],
   );
 
-  useEffect(() => {
+  const getBetIdAtCursor = (cursorPoint) => {
     const hovered = Object.entries(betRefs.current).find(([, node]) =>
-      isCursorInsideRect(cursor, node?.getBoundingClientRect()),
+      isCursorInsideRect(cursorPoint, node?.getBoundingClientRect()),
     );
-    setHoveredBetId(hovered?.[0] ?? null);
+    return hovered?.[0] ?? null;
+  };
+
+  useEffect(() => {
+    setHoveredBetId(getBetIdAtCursor(cursor));
   }, [cursor]);
 
   useEffect(() => {
@@ -153,12 +157,13 @@ export default function RouletteFingerGame({ cursor, pinchActive, onBack }) {
     }
 
     if (wasPinching && !pinchActive && draggingChip) {
-      if (hoveredBetId) {
+      const dropBetId = getBetIdAtCursor(cursor);
+      if (dropBetId) {
         setBets((previous) => ({
           ...previous,
-          [hoveredBetId]: [...(previous[hoveredBetId] ?? []), { id: draggingChip.id, value: draggingChip.value }],
+          [dropBetId]: [...(previous[dropBetId] ?? []), { id: draggingChip.id, value: draggingChip.value }],
         }));
-        setMessage(`Dropped $${draggingChip.value} chip on ${hoveredBetId}.`);
+        setMessage(`Dropped $${draggingChip.value} chip on ${dropBetId}.`);
       } else if (isCursorInsideRect(cursor, rackDropRef.current?.getBoundingClientRect())) {
         setBankroll((value) => value + draggingChip.value);
         setMessage(`Returned $${draggingChip.value} chip to rack.`);
