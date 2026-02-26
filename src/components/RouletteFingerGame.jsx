@@ -215,7 +215,8 @@ export default function RouletteFingerGame({ cursor, pinchActive, onBack }) {
   };
 
   const clearBets = () => {
-    const refund = Object.values(bets).reduce((sum, chips) => sum + sumChipValues(chips), 0);
+    const heldChipValue = draggingChip?.value ?? 0;
+    const refund = Object.values(bets).reduce((sum, chips) => sum + sumChipValues(chips), 0) + heldChipValue;
     setBankroll((value) => value + refund);
     setBets({});
     setDraggingChip(null);
