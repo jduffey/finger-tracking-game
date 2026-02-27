@@ -20,6 +20,7 @@ const MAX_STEP_SECONDS = 0.05;
 const AUTO_THROW_BACK_SPEED = 1580;
 const STRIPE_STEP_Z = 92;
 const WALL_IMPACT_FADE_MS = 3000;
+const MAX_WALL_IMPACTS = 40;
 const GRID_DEPTH_STEPS = 8;
 const GRID_HEIGHT_STEPS = 5;
 const GRID_WIDTH_STEPS = 4;
@@ -177,6 +178,16 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
       );
       state.lastTimestamp = timestamp;
       state.conveyorOffset = (state.conveyorOffset + CONVEYOR_SPEED * dtSeconds) % STRIPE_STEP_Z;
+      const pushWallImpact = (impact) => {
+        state.wallImpacts.push({
+          id: `${impact.wall}-${timestamp}-${Math.random().toString(36).slice(2, 7)}`,
+          createdAt: timestamp,
+          ...impact,
+        });
+        if (state.wallImpacts.length > MAX_WALL_IMPACTS) {
+          state.wallImpacts.splice(0, state.wallImpacts.length - MAX_WALL_IMPACTS);
+        }
+      };
 
       const pointerGlobal = cursorRef.current;
       const pointerInside =
@@ -283,14 +294,30 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
         }
 
         if (sphere.x < -X_BOUND) {
+          const hitSpeed = sphere.vx;
           sphere.x = -X_BOUND;
-          if (sphere.vx < 0) {
-            sphere.vx = -sphere.vx * SIDE_BOUNCE;
+          if (hitSpeed < 0) {
+            pushWallImpact({
+              wall: "left",
+              x: -X_BOUND,
+              y: clampValue(sphere.y, sphere.radius, WORLD_TOP_Y),
+              z: clampValue(sphere.z, SCREEN_SURFACE_Z, BACK_WALL_Z),
+              strength: clampValue(Math.abs(hitSpeed) / 720, 0.2, 1.4),
+            });
+            sphere.vx = -hitSpeed * SIDE_BOUNCE;
           }
         } else if (sphere.x > X_BOUND) {
+          const hitSpeed = sphere.vx;
           sphere.x = X_BOUND;
-          if (sphere.vx > 0) {
-            sphere.vx = -sphere.vx * SIDE_BOUNCE;
+          if (hitSpeed > 0) {
+            pushWallImpact({
+              wall: "right",
+              x: X_BOUND,
+              y: clampValue(sphere.y, sphere.radius, WORLD_TOP_Y),
+              z: clampValue(sphere.z, SCREEN_SURFACE_Z, BACK_WALL_Z),
+              strength: clampValue(Math.abs(hitSpeed) / 720, 0.2, 1.4),
+            });
+            sphere.vx = -hitSpeed * SIDE_BOUNCE;
           }
         }
 
@@ -300,17 +327,13 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
             sphere.vz = -sphere.vz * 0.22;
           }
         } else if (sphere.z > BACK_WALL_Z) {
-          const impactStrength = clampValue(Math.abs(sphere.vz) / AUTO_THROW_BACK_SPEED, 0.2, 1.6);
-          state.wallImpacts.push({
-            id: `${sphere.id}-${timestamp}-${Math.random().toString(36).slice(2, 7)}`,
+          pushWallImpact({
+            wall: "back",
             x: sphere.x,
             y: clampValue(sphere.y, sphere.radius, WORLD_TOP_Y),
-            createdAt: timestamp,
-            strength: impactStrength,
+            z: BACK_WALL_Z,
+            strength: clampValue(Math.abs(sphere.vz) / AUTO_THROW_BACK_SPEED, 0.2, 1.6),
           });
-          if (state.wallImpacts.length > 28) {
-            state.wallImpacts.splice(0, state.wallImpacts.length - 28);
-          }
 
           sphere.z = BACK_WALL_Z;
           if (sphere.vz > 0) {
@@ -335,6 +358,8 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
       const backWallTopRight = projectWorldPoint(X_BOUND, WORLD_TOP_Y, BACK_WALL_Z, width, height);
       const nearLeft = projectWorldPoint(-X_BOUND, 0, NEAR_WORLD_Z, width, height);
       const nearRight = projectWorldPoint(X_BOUND, 0, NEAR_WORLD_Z, width, height);
+      const nearWallTopLeft = projectWorldPoint(-X_BOUND, WORLD_TOP_Y, NEAR_WORLD_Z, width, height);
+      const nearWallTopRight = projectWorldPoint(X_BOUND, WORLD_TOP_Y, NEAR_WORLD_Z, width, height);
 
       context.fillStyle = "#2b4161";
       context.beginPath();
@@ -345,6 +370,54 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
       context.closePath();
       context.fill();
 
+      context.fillStyle = "rgba(38, 59, 89, 0.92)";
+      context.beginPath();
+      context.moveTo(nearWallTopLeft.x, nearWallTopLeft.y);
+      context.lineTo(backWallTopLeft.x, backWallTopLeft.y);
+      context.lineTo(farLeft.x, farLeft.groundY);
+      context.lineTo(nearLeft.x, nearLeft.groundY);
+      context.closePath();
+      context.fill();
+
+      context.fillStyle = "rgba(35, 54, 82, 0.92)";
+      context.beginPath();
+      context.moveTo(nearWallTopRight.x, nearWallTopRight.y);
+      context.lineTo(backWallTopRight.x, backWallTopRight.y);
+      context.lineTo(farRight.x, farRight.groundY);
+      context.lineTo(nearRight.x, nearRight.groundY);
+      context.closePath();
+      context.fill();
+
+      const drawProjectedWallCircle = (wallX, centerY, centerZ, radiusWorld, fill) => {
+        const segmentCount = 28;
+        context.beginPath();
+        for (let segment = 0; segment <= segmentCount; segment += 1) {
+          const angle = (segment / segmentCount) * Math.PI * 2;
+          const sampleY = clampValue(
+            centerY + Math.sin(angle) * radiusWorld,
+            BASE_SPHERE_RADIUS,
+            WORLD_TOP_Y,
+          );
+          const sampleZ = clampValue(
+            centerZ + Math.cos(angle) * radiusWorld,
+            SCREEN_SURFACE_Z,
+            BACK_WALL_Z,
+          );
+          const point = projectWorldPoint(wallX, sampleY, sampleZ, width, height);
+          if (segment === 0) {
+            context.moveTo(point.x, point.y);
+          } else {
+            context.lineTo(point.x, point.y);
+          }
+        }
+        context.closePath();
+        if (fill) {
+          context.fill();
+          return;
+        }
+        context.stroke();
+      };
+
       const activeImpacts = [];
       for (const impact of state.wallImpacts) {
         const ageMs = timestamp - impact.createdAt;
@@ -352,11 +425,34 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
           continue;
         }
         activeImpacts.push(impact);
+        const wall = impact.wall || "back";
         const t = ageMs / WALL_IMPACT_FADE_MS;
         const alpha = 1 - t;
+        if (wall === "left" || wall === "right") {
+          const wallX = wall === "left" ? -X_BOUND : X_BOUND;
+          const centerY = clampValue(impact.y, BASE_SPHERE_RADIUS, WORLD_TOP_Y);
+          const centerZ = clampValue(impact.z, SCREEN_SURFACE_Z, BACK_WALL_Z);
+          const centerPoint = projectWorldPoint(wallX, centerY, centerZ, width, height);
+          const baseWorldRadius = lerpValue(
+            BASE_SPHERE_RADIUS * 0.46,
+            BASE_SPHERE_RADIUS * 0.96,
+            clampValue(impact.strength, 0, 1.8),
+          );
+          const ringWorldRadius = lerpValue(baseWorldRadius * 0.32, baseWorldRadius * 2.2, t);
+          context.strokeStyle = `rgba(229, 245, 255, ${(0.86 * alpha).toFixed(3)})`;
+          context.lineWidth = Math.max(1, lerpValue(4.1, 1.2, t) * centerPoint.radiusScale);
+          drawProjectedWallCircle(wallX, centerY, centerZ, ringWorldRadius, false);
+          context.fillStyle = `rgba(176, 222, 255, ${(0.2 * alpha).toFixed(3)})`;
+          drawProjectedWallCircle(wallX, centerY, centerZ, ringWorldRadius * 0.45, true);
+          continue;
+        }
+
         const impactPoint = projectWorldPoint(impact.x, impact.y, BACK_WALL_Z, width, height);
         const depthRadiusScale = impactPoint.radiusScale;
-        const baseRadius = Math.max(10, depthRadiusScale * lerpValue(42, 86, impact.strength));
+        const baseRadius = Math.max(
+          10,
+          depthRadiusScale * lerpValue(42, 86, clampValue(impact.strength, 0, 1.8)),
+        );
         const ringRadius = lerpValue(baseRadius * 0.35, baseRadius * 2.4, t);
         context.strokeStyle = `rgba(229, 245, 255, ${(0.88 * alpha).toFixed(3)})`;
         context.lineWidth = Math.max(1, lerpValue(4.2, 1.1, t) * depthRadiusScale);
@@ -392,9 +488,9 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
       context.stroke();
 
       for (let stripeIndex = 0; stripeIndex < 18; stripeIndex += 1) {
-        const stripeZ =
-          NEAR_WORLD_Z +
-          ((stripeIndex * STRIPE_STEP_Z + state.conveyorOffset) % (FAR_WORLD_Z - NEAR_WORLD_Z));
+        const stripeTravel =
+          (stripeIndex * STRIPE_STEP_Z + state.conveyorOffset) % (FAR_WORLD_Z - NEAR_WORLD_Z);
+        const stripeZ = FAR_WORLD_Z - stripeTravel;
         const stripeLeft = projectWorldPoint(-X_BOUND, 0, stripeZ, width, height);
         const stripeRight = projectWorldPoint(X_BOUND, 0, stripeZ, width, height);
         context.strokeStyle = `rgba(145, 196, 255, ${lerpValue(0.1, 0.42, stripeLeft.depthT).toFixed(
