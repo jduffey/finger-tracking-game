@@ -15,9 +15,13 @@ const FLOOR_BOUNCE = 0.72;
 const FLOOR_FRICTION = 0.94;
 const SIDE_BOUNCE = 0.78;
 const X_BOUND = 260;
+const WORLD_TOP_Y = BASE_SPHERE_RADIUS * 11.2;
 const MAX_STEP_SECONDS = 0.05;
 const AUTO_THROW_BACK_SPEED = 1580;
 const STRIPE_STEP_Z = 92;
+const GRID_DEPTH_STEPS = 8;
+const GRID_HEIGHT_STEPS = 5;
+const GRID_WIDTH_STEPS = 4;
 const SPHERE_COLORS = ["#ff7540", "#5ec8ff", "#7ce488", "#f6d462"];
 
 function clampValue(value, min, max) {
@@ -220,10 +224,11 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
             targetZ / MAX_WORLD_Z,
           );
           const targetX = ((pointerLocal.x / width) - 0.5) * 2 * horizontalSpan;
+          const maxLiftY = Math.max(WORLD_TOP_Y, grabbedSphere.radius * 11);
           const targetY = clampValue(
-            lerpValue(240, grabbedSphere.radius + 22, pointerLocal.y / height),
+            lerpValue(maxLiftY, grabbedSphere.radius + 22, pointerLocal.y / height),
             grabbedSphere.radius + 8,
-            280,
+            maxLiftY,
           );
 
           const safeStep = Math.max(1 / 120, dtSeconds);
@@ -266,6 +271,11 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
           }
           if (Math.abs(sphere.vy) < 28) {
             sphere.vy = 0;
+          }
+        } else if (sphere.y > WORLD_TOP_Y) {
+          sphere.y = WORLD_TOP_Y;
+          if (sphere.vy > 0) {
+            sphere.vy = -sphere.vy * 0.42;
           }
         }
 
@@ -354,6 +364,76 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
         context.moveTo(laneFar.x, laneFar.groundY);
         context.lineTo(laneNear.x, laneNear.groundY);
         context.stroke();
+      }
+
+      const drawGridLine = (a, b, alpha = 0.2, widthPx = 1) => {
+        context.strokeStyle = `rgba(206, 232, 255, ${alpha})`;
+        context.lineWidth = widthPx;
+        context.beginPath();
+        context.moveTo(a.x, a.y);
+        context.lineTo(b.x, b.y);
+        context.stroke();
+      };
+
+      // Wireframe cage: shows full 3D simulation volume.
+      const nearZ = SCREEN_SURFACE_Z;
+      const farZ = FAR_WORLD_Z;
+      const nearBottomLeft = projectWorldPoint(-X_BOUND, 0, nearZ, width, height);
+      const nearBottomRight = projectWorldPoint(X_BOUND, 0, nearZ, width, height);
+      const farBottomLeft = projectWorldPoint(-X_BOUND, 0, farZ, width, height);
+      const farBottomRight = projectWorldPoint(X_BOUND, 0, farZ, width, height);
+      const nearTopLeft = projectWorldPoint(-X_BOUND, WORLD_TOP_Y, nearZ, width, height);
+      const nearTopRight = projectWorldPoint(X_BOUND, WORLD_TOP_Y, nearZ, width, height);
+      const farTopLeft = projectWorldPoint(-X_BOUND, WORLD_TOP_Y, farZ, width, height);
+      const farTopRight = projectWorldPoint(X_BOUND, WORLD_TOP_Y, farZ, width, height);
+
+      drawGridLine(nearBottomLeft, nearBottomRight, 0.27, 1.5);
+      drawGridLine(farBottomLeft, farBottomRight, 0.19, 1.1);
+      drawGridLine(nearTopLeft, nearTopRight, 0.26, 1.3);
+      drawGridLine(farTopLeft, farTopRight, 0.18, 1.0);
+      drawGridLine(nearBottomLeft, nearTopLeft, 0.24, 1.2);
+      drawGridLine(nearBottomRight, nearTopRight, 0.24, 1.2);
+      drawGridLine(farBottomLeft, farTopLeft, 0.17, 1.0);
+      drawGridLine(farBottomRight, farTopRight, 0.17, 1.0);
+      drawGridLine(nearBottomLeft, farBottomLeft, 0.22, 1.1);
+      drawGridLine(nearBottomRight, farBottomRight, 0.22, 1.1);
+      drawGridLine(nearTopLeft, farTopLeft, 0.2, 1.0);
+      drawGridLine(nearTopRight, farTopRight, 0.2, 1.0);
+
+      for (let depthStep = 1; depthStep < GRID_DEPTH_STEPS; depthStep += 1) {
+        const depthT = depthStep / GRID_DEPTH_STEPS;
+        const z = lerpValue(nearZ, farZ, depthT);
+        const alpha = lerpValue(0.22, 0.08, depthT);
+        const floorLeft = projectWorldPoint(-X_BOUND, 0, z, width, height);
+        const floorRight = projectWorldPoint(X_BOUND, 0, z, width, height);
+        const topLeft = projectWorldPoint(-X_BOUND, WORLD_TOP_Y, z, width, height);
+        const topRight = projectWorldPoint(X_BOUND, WORLD_TOP_Y, z, width, height);
+        drawGridLine(floorLeft, floorRight, alpha, 1);
+        drawGridLine(topLeft, topRight, alpha * 0.95, 1);
+      }
+
+      for (let heightStep = 1; heightStep < GRID_HEIGHT_STEPS; heightStep += 1) {
+        const heightT = heightStep / GRID_HEIGHT_STEPS;
+        const y = lerpValue(0, WORLD_TOP_Y, heightT);
+        const alpha = lerpValue(0.2, 0.1, heightT);
+        const leftNear = projectWorldPoint(-X_BOUND, y, nearZ, width, height);
+        const leftFar = projectWorldPoint(-X_BOUND, y, farZ, width, height);
+        const rightNear = projectWorldPoint(X_BOUND, y, nearZ, width, height);
+        const rightFar = projectWorldPoint(X_BOUND, y, farZ, width, height);
+        drawGridLine(leftNear, leftFar, alpha, 1);
+        drawGridLine(rightNear, rightFar, alpha, 1);
+      }
+
+      for (let widthStep = 1; widthStep < GRID_WIDTH_STEPS; widthStep += 1) {
+        const widthT = widthStep / GRID_WIDTH_STEPS;
+        const x = lerpValue(-X_BOUND, X_BOUND, widthT);
+        const alpha = 0.11;
+        const floorNear = projectWorldPoint(x, 0, nearZ, width, height);
+        const floorFar = projectWorldPoint(x, 0, farZ, width, height);
+        const topNear = projectWorldPoint(x, WORLD_TOP_Y, nearZ, width, height);
+        const topFar = projectWorldPoint(x, WORLD_TOP_Y, farZ, width, height);
+        drawGridLine(floorNear, floorFar, alpha, 1);
+        drawGridLine(topNear, topFar, alpha, 1);
       }
 
       const farToNear = [...state.spheres].sort((first, second) => second.z - first.z);
