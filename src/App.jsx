@@ -35,6 +35,7 @@ import { createScopedLogger } from "./logger";
 import MinorityReportLab from "./components/MinorityReportLab";
 import BodyPoseLab from "./components/BodyPoseLab";
 import RouletteFingerGame from "./components/RouletteFingerGame";
+import ConveyorSphereGame from "./components/ConveyorSphereGame";
 import { createGestureEngine } from "./gestures/gestureEngine";
 import {
   ALL_GESTURE_IDS,
@@ -50,6 +51,7 @@ const PHASES = {
   RUNNER: "RUNNER",
   BODY_POSE: "BODY_POSE",
   MINORITY_REPORT_LAB: "MINORITY_REPORT_LAB",
+  CONVEYOR: "CONVEYOR",
   ROULETTE: "ROULETTE",
   GAME: "GAME",
 };
@@ -1118,6 +1120,7 @@ export default function App() {
     phase === PHASES.RUNNER ||
     phase === PHASES.BODY_POSE ||
     phase === PHASES.MINORITY_REPORT_LAB ||
+    phase === PHASES.CONVEYOR ||
     phase === PHASES.ROULETTE;
   const cameraPanelTitle =
     phase === PHASES.FLIGHT
@@ -1128,6 +1131,8 @@ export default function App() {
       ? "Camera + Body Pose Highlight"
       : phase === PHASES.MINORITY_REPORT_LAB
       ? "Camera + Minority Report Controls"
+      : phase === PHASES.CONVEYOR
+      ? "Camera + Conveyor Toss Controls"
       : phase === PHASES.ROULETTE
       ? "Camera + Roulette Controls"
       : phase === PHASES.GAME
@@ -3185,8 +3190,34 @@ export default function App() {
     requestAnimationFrame(() => resetRunnerSession("start_runner"));
   }
 
+  function startConveyorSession() {
+    appLog.info("Conveyor sphere toss start requested", {
+      currentPhase: phaseRef.current,
+      cameraReady,
+      modelReady,
+    });
+    stopGameSession();
+    resetArcCalibrationSession("start_conveyor");
+    setIsCalibrating(false);
+    isCalibratingRef.current = false;
+    calibrationSampleRef.current = null;
+    setCalibrationSampleFrames(0);
+    setPhase(PHASES.CONVEYOR);
+    phaseRef.current = PHASES.CONVEYOR;
+    setCalibrationMessage(
+      "Conveyor sphere toss active. Pinch to grab and release with a fast flick to throw.",
+    );
+  }
+
   function returnFromRunnerSession() {
     appLog.info("Returning from runner mode to calibration input test");
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
+  function returnFromConveyorSession() {
+    appLog.info("Returning from conveyor mode to calibration input test");
     setPhase(PHASES.CALIBRATION);
     phaseRef.current = PHASES.CALIBRATION;
     setCalibrationMessage("Back on Calibration Input Test.");
@@ -5464,10 +5495,15 @@ export default function App() {
       <header className="top-bar">
         <h1>Finger Whack</h1>
         <div className="button-row">
-          {phase !== PHASES.ROULETTE ? (
-            <button className="secondary" type="button" onClick={startRouletteSession}>
-              Open Roulette Table
-            </button>
+          {phase !== PHASES.ROULETTE && phase !== PHASES.CONVEYOR ? (
+            <>
+              <button className="secondary" type="button" onClick={startRouletteSession}>
+                Open Roulette Table
+              </button>
+              <button className="secondary" type="button" onClick={startConveyorSession}>
+                Open Conveyor Toss
+              </button>
+            </>
           ) : (
             <button className="secondary" type="button" onClick={startGameSession}>
               Back to Main Game
@@ -5519,6 +5555,8 @@ export default function App() {
               ? "No pinch input needed; pose keypoints are highlighted directly."
               : phase === PHASES.MINORITY_REPORT_LAB
               ? "Pinch to grab/release. Swipes/push/circle and two-hand gestures trigger lab actions."
+              : phase === PHASES.CONVEYOR
+              ? "Pinch to grab spheres, then release with a fast flick to throw."
               : 'Pinch (thumb + index) to "click".'}
           </p>
 
@@ -5542,6 +5580,7 @@ export default function App() {
             phase === PHASES.FLIGHT ||
             phase === PHASES.BODY_POSE ||
             phase === PHASES.RUNNER ||
+            phase === PHASES.CONVEYOR ||
             phase === PHASES.MINORITY_REPORT_LAB) && (
             <>
               <p className="small-text">{calibrationMessage}</p>
@@ -5571,6 +5610,11 @@ export default function App() {
                 <p className="small-text">
                   Body pose mode tracks head/eyes/shoulders/arms/torso and highlights keypoints on
                   the webcam overlay.
+                </p>
+              ) : phase === PHASES.CONVEYOR ? (
+                <p className="small-text">
+                  Conveyor toss mode: pinch to grab a sphere, then release with a fast flick to
+                  add forward throw speed.
                 </p>
               ) : phase === PHASES.MINORITY_REPORT_LAB ? (
                 <p className="small-text">
@@ -5617,6 +5661,14 @@ export default function App() {
                       disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
                     >
                       Launch Flight Game
+                    </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={startConveyorSession}
+                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
+                    >
+                      Launch Conveyor Toss
                     </button>
                     <button
                       className="secondary"
@@ -5676,6 +5728,9 @@ export default function App() {
                     <button className="secondary" onClick={startFlightSession}>
                       Launch Flight Game
                     </button>
+                    <button className="secondary" onClick={startConveyorSession}>
+                      Launch Conveyor Toss
+                    </button>
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
                     </button>
@@ -5703,6 +5758,9 @@ export default function App() {
                     <button className="secondary" onClick={startRunnerSession}>
                       Switch to Runner
                     </button>
+                    <button className="secondary" onClick={startConveyorSession}>
+                      Open Conveyor Toss
+                    </button>
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
                     </button>
@@ -5718,6 +5776,9 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startRunnerSession}>
                       Switch to Runner
+                    </button>
+                    <button className="secondary" onClick={startConveyorSession}>
+                      Open Conveyor Toss
                     </button>
                     <button className="secondary" onClick={startFlightSession}>
                       Switch to Flight
@@ -5735,6 +5796,28 @@ export default function App() {
                       onClick={() => resetRunnerSession("manual_button")}
                     >
                       Reset Runner
+                    </button>
+                    <button className="secondary" onClick={startFlightSession}>
+                      Switch to Flight
+                    </button>
+                    <button className="secondary" onClick={startConveyorSession}>
+                      Open Conveyor Toss
+                    </button>
+                    <button className="secondary" onClick={startBodyPoseLab}>
+                      Open Body Pose Lab
+                    </button>
+                    <button className="secondary" onClick={startMinorityReportLab}>
+                      Open Minority Report Lab
+                    </button>
+                  </>
+                ) : phase === PHASES.CONVEYOR ? (
+                  <>
+                    <button onClick={returnFromConveyorSession}>Back to Input Test</button>
+                    <button className="secondary" onClick={startConveyorSession}>
+                      Restart Conveyor Toss
+                    </button>
+                    <button className="secondary" onClick={startRunnerSession}>
+                      Switch to Runner
                     </button>
                     <button className="secondary" onClick={startFlightSession}>
                       Switch to Flight
@@ -5757,6 +5840,9 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startFlightSession}>
                       Switch to Flight
+                    </button>
+                    <button className="secondary" onClick={startConveyorSession}>
+                      Open Conveyor Toss
                     </button>
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
@@ -5913,6 +5999,9 @@ export default function App() {
               <button className="secondary" onClick={startGameSession}>
                 Switch to Whack-a-Mole
               </button>
+              <button className="secondary" onClick={startConveyorSession}>
+                Open Conveyor Toss
+              </button>
               <button className="secondary" onClick={startRouletteSession}>
                 Open Roulette Table
               </button>
@@ -5946,6 +6035,9 @@ export default function App() {
               <button className="secondary" onClick={startBodyPoseLab}>
                 Open Body Pose Lab
               </button>
+              <button className="secondary" onClick={startConveyorSession}>
+                Open Conveyor Toss
+              </button>
               <button className="secondary" onClick={startGameSession}>
                 Switch to Whack-a-Mole
               </button>
@@ -5954,6 +6046,12 @@ export default function App() {
               </button>
             </div>
           </section>
+        ) : phase === PHASES.CONVEYOR ? (
+          <ConveyorSphereGame
+            cursor={cursor}
+            pinchActive={pinchActive}
+            onBack={startGameSession}
+          />
         ) : phase === PHASES.ROULETTE ? (
           <RouletteFingerGame
             cursor={cursor}
@@ -6022,6 +6120,9 @@ export default function App() {
               </button>
               <button className="secondary" onClick={startMinorityReportLab}>
                 Open Minority Report Lab
+              </button>
+              <button className="secondary" onClick={startConveyorSession}>
+                Open Conveyor Toss
               </button>
               <button className="secondary" onClick={startRouletteSession}>
                 Open Roulette Table
