@@ -605,6 +605,35 @@ function isPointInsideClientRect(point, rect) {
   );
 }
 
+function clickButtonAtPoint(point, options = {}) {
+  const { excludeInsideSelector = null } = options;
+  if (!point) {
+    return false;
+  }
+
+  const buttons = Array.from(document.querySelectorAll("button"));
+  for (let index = buttons.length - 1; index >= 0; index -= 1) {
+    const button = buttons[index];
+    if (!button || button.disabled) {
+      continue;
+    }
+    if (excludeInsideSelector && button.closest(excludeInsideSelector)) {
+      continue;
+    }
+
+    const rect = button.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      continue;
+    }
+    if (isPointInsideClientRect(point, rect)) {
+      button.click();
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function isArcCalibrationModel(model) {
   return Boolean(model && typeof model === "object" && model.kind === "arc");
 }
@@ -3823,6 +3852,20 @@ export default function App() {
       phase: phaseRef.current,
       gameRunning: gameRunningRef.current,
     });
+    const excludeInsideSelector =
+      phaseRef.current === PHASES.ROULETTE ? ".roulette-panel" : null;
+    const clickedButton = clickButtonAtPoint(cursorRef.current, {
+      excludeInsideSelector,
+    });
+    if (clickedButton) {
+      appLog.info("Pinch click triggered button", {
+        timestamp,
+        phase: phaseRef.current,
+        cursor: cursorRef.current,
+      });
+      return;
+    }
+
     if (isArcCalibratingRef.current) {
       appLog.debug("Pinch click ignored because lazy-arc calibration is active");
       return;
