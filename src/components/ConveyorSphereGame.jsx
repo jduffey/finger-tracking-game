@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
 const SPHERE_COUNT = 4;
-const BASE_SPHERE_RADIUS = 24;
+const BASE_SPHERE_RADIUS = 72;
 const MAX_WORLD_Z = 1500;
 const NEAR_WORLD_Z = 120;
 const FAR_WORLD_Z = 1320;
+const SCREEN_SURFACE_Z = NEAR_WORLD_Z;
+const BACK_STOP_Z = FAR_WORLD_Z + 520;
 const CONVEYOR_SPEED = 190;
 const GRAVITY = 880;
 const AIR_DRAG = 0.994;
@@ -48,19 +50,9 @@ function createSphere(index) {
     vx: randomBetween(-22, 22),
     vy: 0,
     vz: 0,
-    radius: BASE_SPHERE_RADIUS + randomBetween(-3.5, 3.5),
+    radius: BASE_SPHERE_RADIUS + randomBetween(-10, 10),
     color: SPHERE_COLORS[index % SPHERE_COLORS.length],
   };
-}
-
-function respawnSphere(sphere, index) {
-  const respawnZ = FAR_WORLD_Z + index * 95 + randomBetween(60, 220);
-  sphere.x = randomBetween(-X_BOUND * 0.72, X_BOUND * 0.72);
-  sphere.y = sphere.radius;
-  sphere.z = respawnZ;
-  sphere.vx = randomBetween(-20, 20);
-  sphere.vy = 0;
-  sphere.vz = 0;
 }
 
 function projectWorldPoint(x, y, z, width, height) {
@@ -161,7 +153,7 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
     setMessage(
       reason === "manual_reset"
         ? "Conveyor reset. Grab a sphere, then release with a fast flick to throw it."
-        : "Pinch a sphere to grab it. Flick and release to throw toward the screen.",
+        : "Pinch a sphere to grab it. Flick and release to throw toward the screen. Spheres stop at the front surface.",
     );
   };
 
@@ -337,8 +329,7 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
 
       previousPinchRef.current = nowPinching;
 
-      for (let index = 0; index < state.spheres.length; index += 1) {
-        const sphere = state.spheres[index];
+      for (const sphere of state.spheres) {
         if (sphere.id === state.grabbedId) {
           continue;
         }
@@ -377,11 +368,16 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
           }
         }
 
-        if (sphere.z < NEAR_WORLD_Z - 140) {
-          respawnSphere(sphere, index);
-        }
-        if (sphere.z > FAR_WORLD_Z + 720) {
-          sphere.z = FAR_WORLD_Z + randomBetween(70, 300);
+        if (sphere.z < SCREEN_SURFACE_Z) {
+          sphere.z = SCREEN_SURFACE_Z;
+          if (sphere.vz < 0) {
+            sphere.vz = -sphere.vz * 0.22;
+          }
+        } else if (sphere.z > BACK_STOP_Z) {
+          sphere.z = BACK_STOP_Z;
+          if (sphere.vz > 0) {
+            sphere.vz = -sphere.vz * 0.45;
+          }
         }
       }
 
