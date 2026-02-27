@@ -16,12 +16,7 @@ const FLOOR_FRICTION = 0.94;
 const SIDE_BOUNCE = 0.78;
 const X_BOUND = 260;
 const MAX_STEP_SECONDS = 0.05;
-const HISTORY_WINDOW_MS = 220;
-const THROW_DETECTION_SPEED = 800;
-const THROW_FORWARD_MIN = 520;
-const THROW_FORWARD_MAX = 1320;
-const MIN_GRAB_Z = 180;
-const MAX_GRAB_Z = 1060;
+const AUTO_THROW_BACK_SPEED = 1580;
 const STRIPE_STEP_Z = 92;
 const SPHERE_COLORS = ["#ff7540", "#5ec8ff", "#7ce488", "#f6d462"];
 
@@ -73,22 +68,6 @@ function projectWorldPoint(x, y, z, width, height) {
   };
 }
 
-function getPointerVelocity(history) {
-  if (!Array.isArray(history) || history.length < 2) {
-    return { vx: 0, vy: 0, speed: 0 };
-  }
-  const first = history[0];
-  const last = history[history.length - 1];
-  const elapsed = Math.max(1 / 120, (last.timestamp - first.timestamp) / 1000);
-  const vx = (last.x - first.x) / elapsed;
-  const vy = (last.y - first.y) / elapsed;
-  return {
-    vx,
-    vy,
-    speed: Math.hypot(vx, vy),
-  };
-}
-
 export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
   const stageRef = useRef(null);
   const canvasRef = useRef(null);
@@ -98,26 +77,21 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
   const simulationRef = useRef({
     spheres: [],
     grabbedId: null,
-    pointerHistory: [],
     lastTimestamp: 0,
     conveyorOffset: 0,
     throwCount: 0,
-    lastReleaseSpeed: 0,
-    lastForwardBoost: 0,
-    lastThrowDetected: false,
+    lastBackLaunch: 0,
     hudTimestamp: 0,
   });
 
   const [hud, setHud] = useState({
     grabbedId: null,
     throwCount: 0,
-    releaseSpeed: 0,
-    forwardBoost: 0,
-    throwDetected: false,
+    lastBackLaunch: 0,
     pinchActive: false,
   });
   const [message, setMessage] = useState(
-    "Pinch a sphere to grab it. Flick and release to throw toward the screen.",
+    "Pinch a sphere to grab it. Release to auto-throw it toward the back of the conveyor.",
   );
 
   useEffect(() => {
@@ -132,28 +106,23 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
     simulationRef.current = {
       spheres: Array.from({ length: SPHERE_COUNT }, (_, index) => createSphere(index)),
       grabbedId: null,
-      pointerHistory: [],
       lastTimestamp: 0,
       conveyorOffset: 0,
       throwCount: 0,
-      lastReleaseSpeed: 0,
-      lastForwardBoost: 0,
-      lastThrowDetected: false,
+      lastBackLaunch: 0,
       hudTimestamp: 0,
     };
     previousPinchRef.current = pinchRef.current;
     setHud({
       grabbedId: null,
       throwCount: 0,
-      releaseSpeed: 0,
-      forwardBoost: 0,
-      throwDetected: false,
+      lastBackLaunch: 0,
       pinchActive: Boolean(pinchRef.current),
     });
     setMessage(
       reason === "manual_reset"
-        ? "Conveyor reset. Grab a sphere, then release with a fast flick to throw it."
-        : "Pinch a sphere to grab it. Flick and release to throw toward the screen. Spheres stop at the front surface.",
+        ? "Conveyor reset. Grab a sphere, then release to auto-throw it toward the back."
+        : "Pinch a sphere to grab it. Release to auto-throw it toward the back. Spheres stop at the front surface.",
     );
   };
 
@@ -213,25 +182,6 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
         y: clampValue(pointerGlobal.y - rect.top, 0, height),
       };
 
-      if (pointerInside) {
-        state.pointerHistory.push({
-          x: pointerLocal.x,
-          y: pointerLocal.y,
-          timestamp,
-        });
-      } else {
-        state.pointerHistory = [];
-      }
-      while (
-        state.pointerHistory.length > 0 &&
-        timestamp - state.pointerHistory[0].timestamp > HISTORY_WINDOW_MS
-      ) {
-        state.pointerHistory.shift();
-      }
-      while (state.pointerHistory.length > 8) {
-        state.pointerHistory.shift();
-      }
-
       const wasPinching = previousPinchRef.current;
       const nowPinching = Boolean(pinchRef.current);
 
@@ -252,46 +202,10 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
       if (wasPinching && !nowPinching && state.grabbedId !== null) {
         const releasedSphere = state.spheres.find((sphere) => sphere.id === state.grabbedId);
         if (releasedSphere) {
-          const pointerVelocity = getPointerVelocity(state.pointerHistory);
-          const throwDetected = pointerVelocity.speed >= THROW_DETECTION_SPEED;
-          const throwStrength = clampValue(
-            (pointerVelocity.speed - THROW_DETECTION_SPEED) / 1200,
-            0,
-            1,
-          );
-          const downwardBias = clampValue((pointerVelocity.vy + 280) / 1100, 0, 1);
-          const forwardBoost = throwDetected
-            ? lerpValue(
-                THROW_FORWARD_MIN,
-                THROW_FORWARD_MAX,
-                throwStrength * 0.65 + downwardBias * 0.35,
-              )
-            : 0;
-
-          const lateralImpulse = clampValue(pointerVelocity.vx * 0.18, -560, 560);
-          const verticalImpulse = clampValue(-pointerVelocity.vy * 0.23, -360, 720);
-
-          releasedSphere.vx = clampValue(releasedSphere.vx * 0.42 + lateralImpulse, -900, 900);
-          releasedSphere.vy = clampValue(releasedSphere.vy * 0.42 + verticalImpulse, -760, 920);
-          releasedSphere.vz = clampValue(
-            releasedSphere.vz * 0.38 - forwardBoost,
-            -THROW_FORWARD_MAX * 1.25,
-            540,
-          );
-
-          state.lastReleaseSpeed = pointerVelocity.speed;
-          state.lastForwardBoost = forwardBoost;
-          state.lastThrowDetected = throwDetected;
-          if (throwDetected) {
-            state.throwCount += 1;
-            setMessage(
-              `Throw detected at ${Math.round(pointerVelocity.speed)} px/s. Sphere launched forward.`,
-            );
-          } else {
-            setMessage(
-              `Release speed ${Math.round(pointerVelocity.speed)} px/s. Flick faster to throw farther.`,
-            );
-          }
+          releasedSphere.vz = AUTO_THROW_BACK_SPEED;
+          state.lastBackLaunch = AUTO_THROW_BACK_SPEED;
+          state.throwCount += 1;
+          setMessage("Auto-throw triggered: sphere launched to the back lane.");
         }
         state.grabbedId = null;
       }
@@ -299,12 +213,12 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
       if (nowPinching && state.grabbedId !== null && pointerInside) {
         const grabbedSphere = state.spheres.find((sphere) => sphere.id === state.grabbedId);
         if (grabbedSphere) {
-          const targetZ = clampValue(
-            lerpValue(MAX_GRAB_Z, MIN_GRAB_Z, pointerLocal.y / height),
-            MIN_GRAB_Z,
-            MAX_GRAB_Z,
+          const targetZ = SCREEN_SURFACE_Z;
+          const horizontalSpan = lerpValue(
+            X_BOUND * 0.48,
+            X_BOUND * 1.14,
+            targetZ / MAX_WORLD_Z,
           );
-          const horizontalSpan = lerpValue(X_BOUND * 0.48, X_BOUND * 1.14, targetZ / MAX_WORLD_Z);
           const targetX = ((pointerLocal.x / width) - 0.5) * 2 * horizontalSpan;
           const targetY = clampValue(
             lerpValue(240, grabbedSphere.radius + 22, pointerLocal.y / height),
@@ -315,11 +229,10 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
           const safeStep = Math.max(1 / 120, dtSeconds);
           const nextVx = (targetX - grabbedSphere.x) / safeStep;
           const nextVy = (targetY - grabbedSphere.y) / safeStep;
-          const nextVz = (targetZ - grabbedSphere.z) / safeStep;
 
           grabbedSphere.vx = clampValue(lerpValue(grabbedSphere.vx, nextVx, 0.62), -920, 920);
           grabbedSphere.vy = clampValue(lerpValue(grabbedSphere.vy, nextVy, 0.62), -920, 920);
-          grabbedSphere.vz = clampValue(lerpValue(grabbedSphere.vz, nextVz, 0.62), -920, 920);
+          grabbedSphere.vz = 0;
 
           grabbedSphere.x = targetX;
           grabbedSphere.y = targetY;
@@ -507,9 +420,7 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
         setHud({
           grabbedId: state.grabbedId,
           throwCount: state.throwCount,
-          releaseSpeed: Math.round(state.lastReleaseSpeed),
-          forwardBoost: Math.round(state.lastForwardBoost),
-          throwDetected: state.lastThrowDetected,
+          lastBackLaunch: Math.round(state.lastBackLaunch),
           pinchActive: nowPinching,
         });
       }
@@ -531,7 +442,7 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
     <section className="card panel conveyor-panel">
       <h2>Conveyor Sphere Toss</h2>
       <p className="small-text">
-        Conveyor floor drifts toward you continuously. Pinch to grab, move, and release with a fast flick to throw.
+        Conveyor floor drifts toward you continuously. Pinch to grab on the front plane, then release to auto-throw backward.
       </p>
       <p className="small-text">{message}</p>
 
@@ -540,9 +451,8 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
         <div className="conveyor-hud">
           <span>Throws: {hud.throwCount}</span>
           <span>Grabbed: {hud.grabbedId ?? "none"}</span>
-          <span>Release: {hud.releaseSpeed} px/s</span>
-          <span>Forward: {hud.forwardBoost}</span>
-          <span>Throw: {hud.throwDetected ? "detected" : "idle"}</span>
+          <span>Back Launch: {hud.lastBackLaunch}</span>
+          <span>Throw: auto</span>
           <span>Pinch: {hud.pinchActive ? "active" : "idle"}</span>
         </div>
       </div>
