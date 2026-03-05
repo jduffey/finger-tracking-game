@@ -143,9 +143,39 @@ function formatLogFileName(date) {
   return `${year}-${month}-${day}-${hour}-${minute}-${second}`;
 }
 
+function sanitizeChunkName(value) {
+  return value.replace(/^@/, "").replaceAll("/", "-");
+}
+
+function resolveVendorChunk(id) {
+  const normalizedId = id.replaceAll("\\", "/");
+  const nodeModulesMarker = "/node_modules/";
+  const nodeModulesIndex = normalizedId.lastIndexOf(nodeModulesMarker);
+  if (nodeModulesIndex < 0) {
+    return undefined;
+  }
+
+  const packagePath = normalizedId.slice(nodeModulesIndex + nodeModulesMarker.length);
+  const segments = packagePath.split("/");
+  const packageName =
+    segments[0]?.startsWith("@") && segments.length > 1
+      ? `${segments[0]}/${segments[1]}`
+      : segments[0];
+
+  return packageName ? sanitizeChunkName(packageName) : undefined;
+}
+
 export default defineConfig(({ command }) => ({
   plugins:
     command === "serve"
       ? [react(), createVerboseLogWriterPlugin()]
       : [react()],
+  build: {
+    chunkSizeWarningLimit: 550,
+    rollupOptions: {
+      output: {
+        manualChunks: resolveVendorChunk,
+      },
+    },
+  },
 }));
