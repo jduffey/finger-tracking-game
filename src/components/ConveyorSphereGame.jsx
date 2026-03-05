@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import {
+  computeConveyorBackLaunchSpeed,
+  CONVEYOR_AUTO_THROW_BACK_SPEED,
+} from "../conveyorGame";
 
 const SPHERE_COUNT = 4;
 const BASE_SPHERE_RADIUS = 72;
@@ -17,7 +21,6 @@ const SIDE_BOUNCE = 0.78;
 const X_BOUND = 260;
 const WORLD_TOP_Y = BASE_SPHERE_RADIUS * 11.2;
 const MAX_STEP_SECONDS = 0.05;
-const AUTO_THROW_BACK_SPEED = 1580;
 const STRIPE_STEP_Z = 92;
 const WALL_IMPACT_FADE_MS = 3000;
 const MAX_WALL_IMPACTS = 40;
@@ -98,7 +101,7 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
     pinchActive: false,
   });
   const [message, setMessage] = useState(
-    "Pinch a sphere to grab it. Release to auto-throw it toward the back of the conveyor.",
+    "Pinch a sphere to grab it. Release to auto-throw it toward the back; faster flicks add speed.",
   );
 
   useEffect(() => {
@@ -130,7 +133,7 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
     setMessage(
       reason === "manual_reset"
         ? "Conveyor reset. Grab a sphere, then release to auto-throw it toward the back."
-        : "Pinch a sphere to grab it. Release to auto-throw it toward the back. Spheres stop at the front surface.",
+        : "Pinch a sphere to grab it. Release to auto-throw it toward the back; faster flicks add speed.",
     );
   };
 
@@ -211,7 +214,7 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
           const distance = Math.hypot(pointerLocal.x - projected.x, pointerLocal.y - projected.y);
           if (distance <= radiusPx * 1.12) {
             state.grabbedId = sphere.id;
-            setMessage(`Sphere ${sphere.id} grabbed. Flick and release to throw.`);
+            setMessage(`Sphere ${sphere.id} grabbed. Release to throw; faster flicks add speed.`);
             break;
           }
         }
@@ -220,10 +223,14 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
       if (wasPinching && !nowPinching && state.grabbedId !== null) {
         const releasedSphere = state.spheres.find((sphere) => sphere.id === state.grabbedId);
         if (releasedSphere) {
-          releasedSphere.vz = AUTO_THROW_BACK_SPEED;
-          state.lastBackLaunch = AUTO_THROW_BACK_SPEED;
+          const backLaunchSpeed = computeConveyorBackLaunchSpeed(
+            releasedSphere.vx,
+            releasedSphere.vy,
+          );
+          releasedSphere.vz = backLaunchSpeed;
+          state.lastBackLaunch = backLaunchSpeed;
           state.throwCount += 1;
-          setMessage("Auto-throw triggered: sphere launched to the back lane.");
+          setMessage(`Auto-throw triggered: launched at ${backLaunchSpeed} u/s.`);
         }
         state.grabbedId = null;
       }
@@ -332,7 +339,11 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
             x: sphere.x,
             y: clampValue(sphere.y, sphere.radius, WORLD_TOP_Y),
             z: BACK_WALL_Z,
-            strength: clampValue(Math.abs(sphere.vz) / AUTO_THROW_BACK_SPEED, 0.2, 1.6),
+            strength: clampValue(
+              Math.abs(sphere.vz) / CONVEYOR_AUTO_THROW_BACK_SPEED,
+              0.2,
+              1.6,
+            ),
           });
 
           sphere.z = BACK_WALL_Z;
@@ -671,7 +682,8 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
     <section className="card panel conveyor-panel">
       <h2>Conveyor Sphere Toss</h2>
       <p className="small-text">
-        Conveyor floor drifts toward you continuously. Pinch to grab on the front plane, then release to auto-throw backward.
+        Conveyor floor drifts toward you continuously. Pinch to grab on the front plane, then
+        release to auto-throw backward. Faster flicks add launch speed.
       </p>
       <p className="small-text">{message}</p>
 

@@ -3200,12 +3200,16 @@ export default function App() {
     resetArcCalibrationSession("start_conveyor");
     setIsCalibrating(false);
     isCalibratingRef.current = false;
+    calibrationPairsRef.current = [];
+    calibrationIndexRef.current = 0;
+    setCalibrationTargetIndex(0);
+    setCalibrationPairsCount(0);
     calibrationSampleRef.current = null;
     setCalibrationSampleFrames(0);
     setPhase(PHASES.CONVEYOR);
     phaseRef.current = PHASES.CONVEYOR;
     setCalibrationMessage(
-      "Conveyor sphere toss active. Pinch to grab and release with a fast flick to throw.",
+      "Conveyor sphere toss active. Pinch to grab, then release to throw. Faster flicks add speed.",
     );
   }
 
@@ -5556,7 +5560,7 @@ export default function App() {
               : phase === PHASES.MINORITY_REPORT_LAB
               ? "Pinch to grab/release. Swipes/push/circle and two-hand gestures trigger lab actions."
               : phase === PHASES.CONVEYOR
-              ? "Pinch to grab spheres, then release with a fast flick to throw."
+              ? "Pinch to grab spheres, then release to throw. Faster flicks add speed."
               : 'Pinch (thumb + index) to "click".'}
           </p>
 
@@ -5613,8 +5617,8 @@ export default function App() {
                 </p>
               ) : phase === PHASES.CONVEYOR ? (
                 <p className="small-text">
-                  Conveyor toss mode: pinch to grab a sphere, then release with a fast flick to
-                  add forward throw speed.
+                  Conveyor toss mode: pinch to grab a sphere, then release to throw. Faster flicks
+                  add back-launch speed.
                 </p>
               ) : phase === PHASES.MINORITY_REPORT_LAB ? (
                 <p className="small-text">
