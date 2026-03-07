@@ -642,6 +642,9 @@ export default function MinorityReportLab(props) {
       <h2>Minority Report Lab</h2>
       <p className="small-text">Two-hand pinch controls the global stage transform (translate/scale/rotate).</p>
       <p className="small-text">
+        Keep your wrist and forearm visible when using one hand so the lab can stabilize left/right coloring.
+      </p>
+      <p className="small-text">
         Scene: <strong>{sceneMeta.name}</strong> | {sceneMeta.description}
       </p>
 

@@ -200,6 +200,7 @@ const HAND_ROOT_CONNECTIONS = [
   [0, 13],
   [0, 17],
 ];
+const HAND_WRIST_INDEX = 0;
 const HAND_FINGER_CHAINS = [
   [1, 2, 3, 4],
   [5, 6, 7, 8],
@@ -396,6 +397,79 @@ function getHandPointerX(hand) {
   return hand?.indexTip?.u ?? hand?.thumbTip?.u ?? 0.5;
 }
 
+function getHandAnchorPoint(hand) {
+  const wrist = hand?.landmarks?.[HAND_WRIST_INDEX];
+  if (wrist && Number.isFinite(wrist.u) && Number.isFinite(wrist.v)) {
+    return { x: wrist.u, y: wrist.v };
+  }
+
+  if (
+    Number.isFinite(hand?.indexTip?.u) &&
+    Number.isFinite(hand?.indexTip?.v) &&
+    Number.isFinite(hand?.thumbTip?.u) &&
+    Number.isFinite(hand?.thumbTip?.v)
+  ) {
+    return {
+      x: (hand.indexTip.u + hand.thumbTip.u) * 0.5,
+      y: (hand.indexTip.v + hand.thumbTip.v) * 0.5,
+    };
+  }
+
+  return {
+    x: getHandPointerX(hand),
+    y: hand?.indexTip?.v ?? hand?.thumbTip?.v ?? 0.5,
+  };
+}
+
+function getVisiblePoseKeypoint(pose, name, minScore = POSE_KEYPOINT_THRESHOLD) {
+  const keypoints = Array.isArray(pose?.keypoints) ? pose.keypoints : [];
+  for (const point of keypoints) {
+    if (
+      point?.name === name &&
+      Number.isFinite(point.u) &&
+      Number.isFinite(point.v) &&
+      Number.isFinite(point.score) &&
+      point.score >= minScore
+    ) {
+      return point;
+    }
+  }
+  return null;
+}
+
+function extractPoseArmAnchors(pose) {
+  return {
+    Left: {
+      elbow: getVisiblePoseKeypoint(pose, "left_elbow"),
+      wrist: getVisiblePoseKeypoint(pose, "left_wrist"),
+    },
+    Right: {
+      elbow: getVisiblePoseKeypoint(pose, "right_elbow"),
+      wrist: getVisiblePoseKeypoint(pose, "right_wrist"),
+    },
+  };
+}
+
+function pointToSegmentDistance(point, start, end) {
+  if (!point || !start || !end) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const segmentLengthSquared = dx * dx + dy * dy;
+  if (segmentLengthSquared <= 1e-9) {
+    return Math.hypot(point.x - start.x, point.y - start.y);
+  }
+
+  const projection =
+    ((point.x - start.x) * dx + (point.y - start.y) * dy) / segmentLengthSquared;
+  const t = clampValue(projection, 0, 1);
+  const projectedX = start.x + dx * t;
+  const projectedY = start.y + dy * t;
+  return Math.hypot(point.x - projectedX, point.y - projectedY);
+}
+
 function pruneHandLabelMemory(memory, timestamp) {
   if (!memory?.byLabel || typeof memory.byLabel !== "object") {
     return;
@@ -415,23 +489,65 @@ function pruneHandLabelMemory(memory, timestamp) {
   }
 }
 
-function computeFallbackLabelCost(label, handX, memoryByLabel) {
+function computePoseArmLabelCost(label, hand, poseArmAnchors) {
+  if (label !== "Left" && label !== "Right") {
+    return null;
+  }
+
+  const arm = poseArmAnchors?.[label];
+  if (!arm?.wrist) {
+    return null;
+  }
+
+  const handPoint = getHandAnchorPoint(hand);
+  const wristPoint = { x: arm.wrist.u, y: arm.wrist.v };
+  const elbowPoint =
+    arm.elbow && Number.isFinite(arm.elbow.u) && Number.isFinite(arm.elbow.v)
+      ? { x: arm.elbow.u, y: arm.elbow.v }
+      : null;
+
+  const wristDistance = Math.hypot(handPoint.x - wristPoint.x, handPoint.y - wristPoint.y);
+  const forearmDistance = elbowPoint
+    ? pointToSegmentDistance(handPoint, elbowPoint, wristPoint)
+    : wristDistance;
+  const xAlignment = Math.abs(getHandPointerX(hand) - wristPoint.x);
+
+  return forearmDistance * 0.7 + wristDistance * 0.2 + xAlignment * 0.1;
+}
+
+function computeFallbackLabelCost(label, hand, memoryByLabel, poseArmAnchors) {
+  const handX = getHandPointerX(hand);
   const memoryEntry = memoryByLabel?.[label];
+  let cost;
   if (memoryEntry && Number.isFinite(memoryEntry.x)) {
-    return Math.abs(handX - memoryEntry.x);
+    cost = Math.abs(handX - memoryEntry.x);
+  } else if (label === "Left") {
+    cost = Math.abs(handX - 0.25) + 0.12;
+  } else if (label === "Right") {
+    cost = Math.abs(handX - 0.75) + 0.12;
+  } else {
+    cost = 0.65;
   }
-  if (label === "Left") {
-    return Math.abs(handX - 0.25) + 0.12;
+
+  const poseCost = computePoseArmLabelCost(label, hand, poseArmAnchors);
+  if (Number.isFinite(poseCost)) {
+    cost = cost * 0.2 + poseCost * 0.8;
   }
-  if (label === "Right") {
-    return Math.abs(handX - 0.75) + 0.12;
+
+  const handednessHint = resolveHandLabelFromHint(hand?.handedness);
+  if (handednessHint === label) {
+    cost = Math.max(0, cost - 0.035);
+  } else if (handednessHint && (label === "Left" || label === "Right")) {
+    cost += 0.08;
   }
-  return 0.65;
+
+  return cost;
 }
 
 function assignStableHandLabels(hands, options = {}) {
   const memory = options?.memory && typeof options.memory === "object" ? options.memory : null;
   const timestamp = Number.isFinite(options?.timestamp) ? options.timestamp : Date.now();
+  const poseArmAnchors = extractPoseArmAnchors(options?.pose);
   if (memory && (!memory.byLabel || typeof memory.byLabel !== "object")) {
     memory.byLabel = {};
   }
@@ -444,22 +560,8 @@ function assignStableHandLabels(hands, options = {}) {
 
   const sortedByScore = [...hands].sort((a, b) => (b?.score ?? 0) - (a?.score ?? 0));
   const labeled = [];
-  const unlabeled = [];
+  const unlabeled = [...sortedByScore];
   const takenLabels = new Set();
-
-  for (const hand of sortedByScore) {
-    const handedness = resolveHandLabelFromHint(hand?.handedness);
-    if (handedness && !takenLabels.has(handedness)) {
-      takenLabels.add(handedness);
-      labeled.push({
-        ...hand,
-        label: handedness,
-        id: handedness,
-      });
-    } else {
-      unlabeled.push(hand);
-    }
-  }
 
   unlabeled.sort((first, second) => {
     const firstX = getHandPointerX(first);
@@ -495,8 +597,8 @@ function assignStableHandLabels(hands, options = {}) {
         const firstLabel = fallbackLabelPool[firstIndex];
         const secondLabel = fallbackLabelPool[secondIndex];
         const totalCost =
-          computeFallbackLabelCost(firstLabel, getHandPointerX(unlabeled[0]), memoryByLabel) +
-          computeFallbackLabelCost(secondLabel, getHandPointerX(unlabeled[1]), memoryByLabel);
+          computeFallbackLabelCost(firstLabel, unlabeled[0], memoryByLabel, poseArmAnchors) +
+          computeFallbackLabelCost(secondLabel, unlabeled[1], memoryByLabel, poseArmAnchors);
         if (!best || totalCost < best.cost) {
           best = {
             cost: totalCost,
@@ -517,14 +619,18 @@ function assignStableHandLabels(hands, options = {}) {
     if (assignedLabels[index]) {
       continue;
     }
-    const handX = getHandPointerX(unlabeled[index]);
     let chosenLabel = null;
     let bestCost = Number.POSITIVE_INFINITY;
     for (const candidateLabel of fallbackLabelPool) {
       if (consumedFallbackLabels.has(candidateLabel)) {
         continue;
       }
-      const cost = computeFallbackLabelCost(candidateLabel, handX, memoryByLabel);
+      const cost = computeFallbackLabelCost(
+        candidateLabel,
+        unlabeled[index],
+        memoryByLabel,
+        poseArmAnchors,
+      );
       if (cost < bestCost) {
         bestCost = cost;
         chosenLabel = candidateLabel;
@@ -2147,8 +2253,10 @@ export default function App() {
   }, [appLog, phase]);
 
   useEffect(() => {
-    if (phase === PHASES.BODY_POSE) {
-      void ensurePoseDetectorInitialized("enter_body_pose");
+    if (phase === PHASES.BODY_POSE || phase === PHASES.MINORITY_REPORT_LAB) {
+      void ensurePoseDetectorInitialized(
+        phase === PHASES.BODY_POSE ? "enter_body_pose" : "enter_minority_report_lab",
+      );
     }
   }, [phase]);
 
@@ -3400,8 +3508,9 @@ export default function App() {
     setPhase(PHASES.MINORITY_REPORT_LAB);
     phaseRef.current = PHASES.MINORITY_REPORT_LAB;
     setCalibrationMessage(
-      "Minority Report Lab active. Use one-hand pinch to grab panels and two-hand pinch to transform stage.",
+      "Minority Report Lab active. Keep your forearm visible for steadier left/right hand labeling.",
     );
+    void ensurePoseDetectorInitialized("start_minority_report_lab");
   }
 
   function returnFromMinorityReportLab() {
@@ -5469,6 +5578,7 @@ export default function App() {
           const stableHands = assignStableHandLabels(detectedHands, {
             memory: handLabelMemoryRef.current,
             timestamp,
+            pose,
           }).slice(0, TRACKING_MAX_HANDS);
           if (!cancelled && mountedRef.current) {
             processPoseFrame(pose, timestamp, stableHands);
@@ -5530,6 +5640,10 @@ export default function App() {
       inferenceBusyRef.current = true;
       try {
         const detectedHands = await detectHands(detector, video);
+        const minorityReportPose =
+          phaseRef.current === PHASES.MINORITY_REPORT_LAB && poseDetectorRef.current
+            ? await detectPose(poseDetectorRef.current, video)
+            : null;
         const detectionMeta = getLastDetectionMeta();
 
         if (detectionMeta.invalid) {
@@ -5589,6 +5703,7 @@ export default function App() {
           const stableHands = assignStableHandLabels(detectedHands, {
             memory: handLabelMemoryRef.current,
             timestamp,
+            pose: minorityReportPose,
           }).slice(0, TRACKING_MAX_HANDS);
           const primaryHand = stableHands[0] ?? null;
           processTrackingFrame(primaryHand, timestamp);
