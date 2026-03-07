@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { GESTURE_DEFINITIONS } from "../gestures/constants";
+import { GESTURE_DEFINITIONS } from "../gestures/constants.js";
 
 function formatPercent(value) {
   const safe = Number.isFinite(value) ? value : 0;

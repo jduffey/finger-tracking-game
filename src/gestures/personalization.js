@@ -1,9 +1,9 @@
-import { createScopedLogger } from "../logger";
+import { createScopedLogger } from "../logger.js";
 import {
   ALL_GESTURE_IDS,
   PERSONALIZATION_STORAGE_KEY,
   PERSONALIZATION_VERSION,
-} from "./constants";
+} from "./constants.js";
 
 function createEmptySamples() {
   return ALL_GESTURE_IDS.reduce((accumulator, gestureId) => {

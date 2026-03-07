@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   computeConveyorBackLaunchSpeed,
   CONVEYOR_AUTO_THROW_BACK_SPEED,
-} from "../conveyorGame";
+} from "../conveyorGame.js";
 
 const SPHERE_COUNT = 4;
 const BASE_SPHERE_RADIUS = 72;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import GestureDebugPanel from "./GestureDebugPanel";
-import { GESTURE_IDS } from "../gestures/constants";
+import GestureDebugPanel from "./GestureDebugPanel.jsx";
+import { GESTURE_IDS } from "../gestures/constants.js";
 
 const PANEL_WIDTH = 196;
 const PANEL_HEIGHT = 124;

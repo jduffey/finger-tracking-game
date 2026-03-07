@@ -10,7 +10,7 @@ import {
   saveCalibration,
   solveArcCalibrationFromSamples,
   solveAffineFromPairs,
-} from "./calibration";
+} from "./calibration.js";
 import {
   buildGridHoles,
   computeRunnerTrackGridLayout,
@@ -22,27 +22,27 @@ import {
   pickRandomHole,
   randomSpawnDelay,
   shouldCollectRunnerCoin,
-} from "./gameLogic";
+} from "./gameLogic.js";
 import {
   detectHands,
   getCurrentBackend,
   getCurrentRuntime,
   getLastDetectionMeta,
   initHandTracking,
-} from "./handTracking";
-import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from "./poseTracking";
-import { createScopedLogger } from "./logger";
-import MinorityReportLab from "./components/MinorityReportLab";
-import BodyPoseLab from "./components/BodyPoseLab";
-import RouletteFingerGame from "./components/RouletteFingerGame";
-import ConveyorSphereGame from "./components/ConveyorSphereGame";
-import { createGestureEngine } from "./gestures/gestureEngine";
+} from "./handTracking.js";
+import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from "./poseTracking.js";
+import { createScopedLogger } from "./logger.js";
+import MinorityReportLab from "./components/MinorityReportLab.jsx";
+import BodyPoseLab from "./components/BodyPoseLab.jsx";
+import RouletteFingerGame from "./components/RouletteFingerGame.jsx";
+import ConveyorSphereGame from "./components/ConveyorSphereGame.jsx";
+import { createGestureEngine } from "./gestures/gestureEngine.js";
 import {
   ALL_GESTURE_IDS,
   GESTURE_DEFINITIONS,
   isTwoHandGesture,
-} from "./gestures/constants";
-import { createGesturePersonalization } from "./gestures/personalization";
+} from "./gestures/constants.js";
+import { createGesturePersonalization } from "./gestures/personalization.js";
 
 const PHASES = {
   CALIBRATION: "CALIBRATION",

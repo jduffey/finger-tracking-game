@@ -2,7 +2,7 @@ import * as tf from "@tensorflow/tfjs-core";
 import "@tensorflow/tfjs-backend-webgl";
 import "@tensorflow/tfjs-backend-cpu";
 import * as handPoseDetection from "@tensorflow-models/hand-pose-detection";
-import { createScopedLogger } from "./logger";
+import { createScopedLogger } from "./logger.js";
 
 const HAND_MODEL = handPoseDetection.SupportedModels.MediaPipeHands;
 const trackingLog = createScopedLogger("handTracking");
