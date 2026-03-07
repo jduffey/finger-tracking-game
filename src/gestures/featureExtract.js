@@ -151,24 +151,19 @@ function getFingerTip(hand, landmarks, name, landmarkIndex) {
   return getPoint(landmarks, landmarkIndex);
 }
 
-function computePointer(indexTip, thumbTip, pinchDistance) {
+function computePointer(indexTip, thumbTip) {
   const fallback = {
-    x: safeNumber(indexTip?.u, safeNumber(thumbTip?.u, 0.5)),
-    y: safeNumber(indexTip?.v, safeNumber(thumbTip?.v, 0.5)),
+    x: safeNumber(thumbTip?.u, safeNumber(indexTip?.u, 0.5)),
+    y: safeNumber(thumbTip?.v, safeNumber(indexTip?.v, 0.5)),
   };
 
-  if (!indexTip || !thumbTip) {
+  if (!thumbTip) {
     return fallback;
   }
 
-  const midpoint = {
-    x: (indexTip.u + thumbTip.u) * 0.5,
-    y: (indexTip.v + thumbTip.v) * 0.5,
-  };
-  const pinchBlend = clamp((0.08 - pinchDistance) / 0.05, 0, 1);
   return {
-    x: indexTip.u * (1 - pinchBlend) + midpoint.x * pinchBlend,
-    y: indexTip.v * (1 - pinchBlend) + midpoint.y * pinchBlend,
+    x: thumbTip.u,
+    y: thumbTip.v,
   };
 }
 
@@ -188,7 +183,7 @@ export function extractSingleHandFeature(hand, previousFeature, dtSeconds) {
     ? hand.pinchDistance
     : distance2d(thumbTip, indexTip);
 
-  const pointer = computePointer(indexTip, thumbTip, pinchDistance);
+  const pointer = computePointer(indexTip, thumbTip);
   const handScale = estimateHandScale(landmarks, wrist, middleMcp);
   const openness = computeOpenness(landmarks, palmCenter, handScale);
 

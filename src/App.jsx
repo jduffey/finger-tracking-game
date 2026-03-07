@@ -5799,7 +5799,7 @@ export default function App() {
               : phase === PHASES.BODY_POSE
               ? "Body mode: keep head, shoulders, elbows, and wrists in view."
               : phase === PHASES.MINORITY_REPORT_LAB
-              ? "In lab mode, index tips drive pointers; active pinch uses thumb-index midpoint."
+              ? "In lab mode, thumb tips drive pointers."
               : "Use your THUMB tip as the pointer."}
           </p>
           <p className="help-text">
