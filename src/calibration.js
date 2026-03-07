@@ -1,4 +1,4 @@
-import { createScopedLogger } from "./logger";
+import { createScopedLogger } from "./logger.js";
 
 export const CALIBRATION_STORAGE_KEY = "fingerWhack.calibration.v2";
 const calibrationLog = createScopedLogger("calibration");
@@ -480,8 +480,13 @@ export function clampPoint(point, width, height) {
 
 export function loadCalibration() {
   calibrationLog.info("Loading calibration from localStorage");
+  const storage = getCalibrationStorage();
+  if (!storage) {
+    calibrationLog.info("No calibration storage available");
+    return null;
+  }
   try {
-    const raw = localStorage.getItem(CALIBRATION_STORAGE_KEY);
+    const raw = storage.getItem(CALIBRATION_STORAGE_KEY);
     if (!raw) {
       calibrationLog.info("No calibration data in localStorage");
       return null;
@@ -510,13 +515,31 @@ export function saveCalibration(model) {
     calibrationLog.warn("Skipped saving invalid calibration model", { model });
     return;
   }
-  localStorage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(normalized));
-  calibrationLog.info("Calibration saved");
+  const storage = getCalibrationStorage();
+  if (!storage) {
+    calibrationLog.warn("Skipped saving calibration because localStorage is unavailable");
+    return;
+  }
+  try {
+    storage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(normalized));
+    calibrationLog.info("Calibration saved");
+  } catch (error) {
+    calibrationLog.warn("Failed to save calibration to localStorage", { error });
+  }
 }
 
 export function clearCalibration() {
   calibrationLog.info("Clearing calibration from localStorage");
-  localStorage.removeItem(CALIBRATION_STORAGE_KEY);
+  const storage = getCalibrationStorage();
+  if (!storage) {
+    calibrationLog.warn("Skipped clearing calibration because localStorage is unavailable");
+    return;
+  }
+  try {
+    storage.removeItem(CALIBRATION_STORAGE_KEY);
+  } catch (error) {
+    calibrationLog.warn("Failed to clear calibration from localStorage", { error });
+  }
 }
 
 export function isValidArcModel(model) {
@@ -598,6 +621,15 @@ function normalizeCalibrationModel(model) {
   }
 
   return null;
+}
+
+function getCalibrationStorage() {
+  try {
+    return globalThis?.localStorage ?? null;
+  } catch (error) {
+    calibrationLog.warn("localStorage is unavailable for calibration access", { error });
+    return null;
+  }
 }
 
 function pickAffineFields(model) {
