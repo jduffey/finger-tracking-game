@@ -249,6 +249,7 @@ export default function MinorityReportLab(props) {
   const [stageTransform, setStageTransform] = useState(DEFAULT_STAGE_TRANSFORM);
   const [panels, setPanels] = useState(() => createPanels(0, STAGE_DEFAULT_SIZE));
   const [selectedPanelId, setSelectedPanelId] = useState(null);
+  const [draggedPanelId, setDraggedPanelId] = useState(null);
   const [pointerTrails, setPointerTrails] = useState({});
   const [handInfoBoxPositions, setHandInfoBoxPositions] = useState(HAND_INFO_BOX_DEFAULTS);
 
@@ -403,6 +404,7 @@ export default function MinorityReportLab(props) {
             setStageTransform(DEFAULT_STAGE_TRANSFORM);
             stageTransformRef.current = DEFAULT_STAGE_TRANSFORM;
             grabRef.current = null;
+            setDraggedPanelId(null);
             twoHandManipRef.current = { active: false, base: null };
           }
           return nextIndex;
@@ -461,6 +463,7 @@ export default function MinorityReportLab(props) {
           const throwDistanceY = (event.meta?.velocity?.y ?? 0) * 160;
           const grabbed = grabRef.current;
           grabRef.current = null;
+          setDraggedPanelId(null);
 
           setPanels((currentPanels) =>
             currentPanels.map((panel) => {
@@ -508,6 +511,7 @@ export default function MinorityReportLab(props) {
       setStageTransform(nextTransform);
       stageTransformRef.current = nextTransform;
       grabRef.current = null;
+      setDraggedPanelId(null);
     } else {
       twoHandManipRef.current = { active: false, base: null };
     }
@@ -521,6 +525,7 @@ export default function MinorityReportLab(props) {
       const hand = handStates.find((candidate) => candidate.id === currentGrab.handId) ?? null;
       if (!hand || !hand.pinchActive) {
         grabRef.current = null;
+        setDraggedPanelId(null);
       } else {
         const localPointer = pointerToLocal(hand.pointer, stageSize, stageTransformRef.current);
         if (localPointer) {
@@ -561,11 +566,23 @@ export default function MinorityReportLab(props) {
         offsetX: localPointer.x - nearest.panel.x,
         offsetY: localPointer.y - nearest.panel.y,
       };
+      setDraggedPanelId(nearest.panel.id);
       setSelectedPanelId(nearest.panel.id);
       setPanels((currentPanels) =>
         currentPanels.map((panel) => ({
-          ...panel,
-          selected: panel.id === nearest.panel.id,
+          ...(panel.id === nearest.panel.id
+            ? clampPanelPosition(
+                {
+                  ...panel,
+                  selected: true,
+                  throwingUntil: 0,
+                },
+                stageSize,
+              )
+            : {
+                ...panel,
+                selected: false,
+              }),
         })),
       );
       break;
@@ -663,7 +680,9 @@ export default function MinorityReportLab(props) {
                     top: `${panel.y}px`,
                     transform: `translate(-50%, -50%) rotate(${panel.rotation}rad) scale(${panel.scale})`,
                     transition:
-                      panel.throwingUntil > Date.now()
+                      draggedPanelId === panel.id
+                        ? "none"
+                        : panel.throwingUntil > Date.now()
                         ? "left 620ms cubic-bezier(.09,.67,.22,.98), top 620ms cubic-bezier(.09,.67,.22,.98), transform 620ms cubic-bezier(.09,.67,.22,.98), box-shadow 220ms ease"
                         : "left 120ms linear, top 120ms linear, transform 120ms linear, box-shadow 150ms ease",
                   }}
