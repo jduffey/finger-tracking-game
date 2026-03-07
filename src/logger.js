@@ -71,15 +71,32 @@ function emit(level, scope, message, data) {
   };
   sequence += 1;
 
+  if (!initialized) {
+    return;
+  }
+
   enqueue(entry);
+
+  if (!shouldMirrorToConsole(level)) {
+    return;
+  }
 
   const method = level === "ERROR" ? "error" : level === "WARN" ? "warn" : "debug";
   internalConsoleWrite = true;
   try {
-    nativeConsole[method](`[${scope}] ${message}`, entry.data);
+    const prefix = `[${scope}] ${message}`;
+    if (entry.data === null || entry.data === undefined) {
+      nativeConsole[method](prefix);
+    } else {
+      nativeConsole[method](prefix, entry.data);
+    }
   } finally {
     internalConsoleWrite = false;
   }
+}
+
+function shouldMirrorToConsole(level) {
+  return isDevRuntime || level === "WARN" || level === "ERROR";
 }
 
 function enqueue(entry) {
