@@ -3343,6 +3343,13 @@ export default function App() {
     setCalibrationMessage("Back on Calibration Input Test.");
   }
 
+  function returnFromRouletteSession() {
+    appLog.info("Returning from roulette mode to calibration input test");
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
   function startBodyPoseLab() {
     appLog.info("Body pose lab start requested", {
       currentPhase: phaseRef.current,
@@ -5631,8 +5638,14 @@ export default function App() {
               </button>
             </>
           ) : (
-            <button className="secondary" type="button" onClick={startGameSession}>
-              Back to Main Game
+            <button
+              className="secondary"
+              type="button"
+              onClick={
+                phase === PHASES.ROULETTE ? returnFromRouletteSession : returnFromConveyorSession
+              }
+            >
+              Back to Input Test
             </button>
           )}
         </div>
@@ -6176,13 +6189,13 @@ export default function App() {
           <ConveyorSphereGame
             cursor={cursor}
             pinchActive={pinchActive}
-            onBack={startGameSession}
+            onBack={returnFromConveyorSession}
           />
         ) : phase === PHASES.ROULETTE ? (
           <RouletteFingerGame
             cursor={cursor}
             pinchActive={pinchActive}
-            onBack={startGameSession}
+            onBack={returnFromRouletteSession}
           />
         ) : phase === PHASES.BODY_POSE ? (
           <BodyPoseLab poseStatus={poseStatus} />

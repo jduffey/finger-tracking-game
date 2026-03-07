@@ -700,7 +700,7 @@ export default function ConveyorSphereGame({ cursor, pinchActive, onBack }) {
 
       <div className="button-row">
         <button type="button" onClick={() => resetSimulation("manual_reset")}>Reset Spheres</button>
-        <button className="secondary" type="button" onClick={onBack}>Back to Main Game</button>
+        <button className="secondary" type="button" onClick={onBack}>Back to Input Test</button>
       </div>
     </section>
   );

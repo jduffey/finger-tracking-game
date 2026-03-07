@@ -318,7 +318,7 @@ export default function RouletteFingerGame({ cursor, pinchActive, onBack }) {
           type="button"
           onClick={onBack}
         >
-          Back to Main Game
+          Back to Input Test
         </button>
       </div>
 
