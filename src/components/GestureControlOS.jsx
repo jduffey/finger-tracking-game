@@ -300,6 +300,29 @@ export default function GestureControlOS(props) {
     };
 
     for (const event of events) {
+      const isDragSwipe =
+        dragRef.current &&
+        (event.gestureId === GESTURE_IDS.SWIPE_LEFT || event.gestureId === GESTURE_IDS.SWIPE_RIGHT) &&
+        event.handId === dragRef.current.handId;
+
+      if (isDragSwipe) {
+        const direction = event.gestureId === GESTURE_IDS.SWIPE_LEFT ? -1 : 1;
+        setWindows((current) =>
+          current.map((windowItem) =>
+            windowItem.id === dragRef.current.windowId
+              ? {
+                  ...windowItem,
+                  x: clamp(windowItem.x + direction * 220, 10, stageSize.width - windowItem.width - 10),
+                  y: clamp(windowItem.y - 80, 10, stageSize.height - windowItem.height - 10),
+                  rotation: wrapAngle(windowItem.rotation + direction * 0.28),
+                  throwingUntil: Date.now() + 520,
+                }
+              : windowItem,
+          ),
+        );
+        continue;
+      }
+
       if (event.gestureId === GESTURE_IDS.SWIPE_LEFT) {
         setActiveDesktopId((previous) => (previous - 1 + DESKTOP_COUNT) % DESKTOP_COUNT);
       } else if (event.gestureId === GESTURE_IDS.SWIPE_RIGHT) {
@@ -329,27 +352,6 @@ export default function GestureControlOS(props) {
         palmHoldRef.current.Left = null;
         palmHoldRef.current.Right = null;
         setWindowMenu({ open: false, windowId: null, selectedIndex: 0 });
-      }
-
-      if (
-        dragRef.current &&
-        (event.gestureId === GESTURE_IDS.SWIPE_LEFT || event.gestureId === GESTURE_IDS.SWIPE_RIGHT) &&
-        event.handId === dragRef.current.handId
-      ) {
-        const direction = event.gestureId === GESTURE_IDS.SWIPE_LEFT ? -1 : 1;
-        setWindows((current) =>
-          current.map((windowItem) =>
-            windowItem.id === dragRef.current.windowId
-              ? {
-                  ...windowItem,
-                  x: clamp(windowItem.x + direction * 220, 10, stageSize.width - windowItem.width - 10),
-                  y: clamp(windowItem.y - 80, 10, stageSize.height - windowItem.height - 10),
-                  rotation: wrapAngle(windowItem.rotation + direction * 0.28),
-                  throwingUntil: Date.now() + 520,
-                }
-              : windowItem,
-          ),
-        );
       }
     }
 
