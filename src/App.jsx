@@ -1296,6 +1296,7 @@ export default function App() {
   const [analyticsTimestamp, setAnalyticsTimestamp] = useState(0);
   const [gestureArtHands, setGestureArtHands] = useState([]);
   const [gestureArtSessionKey, setGestureArtSessionKey] = useState(0);
+  const [gestureControlOSSessionKey, setGestureControlOSSessionKey] = useState(0);
   const [poseModelReady, setPoseModelReady] = useState(false);
   const [poseModelError, setPoseModelError] = useState("");
   const [poseStatus, setPoseStatus] = useState(createEmptyPoseStatus);
@@ -3787,6 +3788,7 @@ export default function App() {
     setLabEventLog([]);
     setLabSampleCounts(personalizationRef.current.getSampleCounts());
     setLabTrainingState(createInitialLabTrainingState());
+    setGestureControlOSSessionKey((value) => value + 1);
     setPhase(PHASES.GESTURE_CONTROL_OS);
     phaseRef.current = PHASES.GESTURE_CONTROL_OS;
     setCalibrationMessage(
@@ -7092,6 +7094,7 @@ export default function App() {
           />
         ) : phase === PHASES.GESTURE_CONTROL_OS ? (
           <GestureControlOS
+            key={gestureControlOSSessionKey}
             fps={fps}
             engineOutput={labEngineOutput}
             eventLog={labEventLog}
