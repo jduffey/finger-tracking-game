@@ -372,9 +372,13 @@ export default function GestureControlOS(props) {
       if (!hand?.pinchActive) {
         dragRef.current = null;
       } else {
+        const now = Date.now();
         setWindows((current) =>
           current.map((windowItem) => {
             if (windowItem.id !== currentDrag.windowId || !hand.pointer) return windowItem;
+            if (windowItem.throwingUntil > now) {
+              return windowItem;
+            }
             return {
               ...windowItem,
               x: clamp(hand.pointer.x * stageSize.width - currentDrag.offsetX, 6, stageSize.width - windowItem.width - 6),
