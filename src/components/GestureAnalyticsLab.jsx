@@ -387,6 +387,16 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
 
   const replayProgress = replayDurationMs > 0 ? replayCursor / replayDurationMs : 0;
 
+  function toggleReplayPlayback() {
+    if (!replaySession) {
+      return;
+    }
+    if (!isReplaying && replayCursor >= replayDurationMs) {
+      setReplayCursor(0);
+    }
+    setIsReplaying((value) => !value);
+  }
+
   return (
     <section className="card panel gesture-analytics-lab">
       <h2>Gesture Analytics Lab</h2>
@@ -445,7 +455,7 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
             ))}
           </select>
         </label>
-        <button type="button" className="secondary" disabled={!replaySession} onClick={() => setIsReplaying((value) => !value)}>
+        <button type="button" className="secondary" disabled={!replaySession} onClick={toggleReplayPlayback}>
           {isReplaying ? "Pause Replay" : "Play Replay"}
         </button>
         <input
