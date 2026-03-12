@@ -233,6 +233,17 @@ export default function GestureControlOS(props) {
     const now = performance.now();
     const hands = Array.isArray(engineOutput?.hands) ? engineOutput.hands : [];
     const events = Array.isArray(engineOutput?.events) ? engineOutput.events : [];
+    const detectedLabels = new Set(
+      hands
+        .map((hand) => (hand?.label === "Left" || hand?.label === "Right" ? hand.label : null))
+        .filter(Boolean),
+    );
+
+    for (const label of ["Left", "Right"]) {
+      if (!detectedLabels.has(label)) {
+        palmHoldRef.current[label] = null;
+      }
+    }
 
     for (const hand of hands) {
       const label = hand.label === "Left" ? "Left" : hand.label === "Right" ? "Right" : null;
