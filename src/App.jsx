@@ -6362,6 +6362,8 @@ export default function App() {
             phase === PHASES.RUNNER ||
             phase === PHASES.CONVEYOR ||
             phase === PHASES.MINORITY_REPORT_LAB ||
+            phase === PHASES.SPATIAL_GESTURE_MEMORY ||
+            phase === PHASES.GESTURE_ANALYTICS_LAB ||
             phase === PHASES.GESTURE_ART_LAB ||
             phase === PHASES.GESTURE_CONTROL_OS) && (
             <>
