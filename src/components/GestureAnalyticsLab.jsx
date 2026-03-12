@@ -272,7 +272,7 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
   const replayStartRef = useRef(0);
 
   useEffect(() => {
-    if (isReplaying || !Number.isFinite(liveTimestamp)) {
+    if (isReplaying || !recording || !Number.isFinite(liveTimestamp)) {
       return;
     }
     setFrames((previous) => {
@@ -293,7 +293,7 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
       const cutoff = liveTimestamp - 120000;
       return next.filter((frame) => frame.t >= cutoff);
     });
-  }, [isReplaying, liveHands, liveTimestamp]);
+  }, [isReplaying, liveHands, liveTimestamp, recording]);
 
   const activeMetrics = useMemo(() => {
     if (frames.length < 2) {
@@ -399,13 +399,20 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
         <button
           type="button"
           onClick={() => {
-            setRecording((value) => !value);
-            setFrames([]);
+            setRecording((value) => {
+              const next = !value;
+              if (next) {
+                setFrames([]);
+                setIsReplaying(false);
+                setReplayCursor(0);
+              }
+              return next;
+            });
           }}
         >
           {recording ? "Stop & Keep Buffer" : "Start Live Capture"}
         </button>
-        <button type="button" className="secondary" onClick={saveSession} disabled={!recording || frames.length < 5}>
+        <button type="button" className="secondary" onClick={saveSession} disabled={frames.length < 5}>
           Save Session
         </button>
         <button type="button" className="secondary" onClick={exportMetricsJson}>

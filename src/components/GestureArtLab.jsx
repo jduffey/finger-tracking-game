@@ -177,7 +177,7 @@ export default function GestureArtLab({ hands, fps, handDetected }) {
   };
 
   const toggleReplay = () => {
-    if (recordedFrames.length === 0) {
+    if (recording || recordedFrames.length === 0) {
       return;
     }
     setReplaying((previous) => {
@@ -255,7 +255,11 @@ export default function GestureArtLab({ hands, fps, handDetected }) {
           <button onClick={startRecording} disabled={recording}>
             {recording ? "Recording..." : "Record 10s"}
           </button>
-          <button className="secondary" onClick={toggleReplay} disabled={recordedFrames.length === 0}>
+          <button
+            className="secondary"
+            onClick={toggleReplay}
+            disabled={recording || recordedFrames.length === 0}
+          >
             {replaying ? "Stop Replay" : "Replay Loop"}
           </button>
         </div>
