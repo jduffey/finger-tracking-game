@@ -20,6 +20,7 @@ import {
   isPointInCircle,
   MOLE_VISIBLE_MS,
   pickRandomHole,
+  pickDistinctRandomChoice,
   randomSpawnDelay,
   shouldCollectRunnerCoin,
 } from "./gameLogic.js";
@@ -467,7 +468,10 @@ function buildSpatialSequence(round, difficultyLevel) {
     const shouldUseCombo = difficultyLevel >= 4 && i > 0 && Math.random() < 0.25;
     if (shouldUseCombo) {
       const first = randomChoice(SGM_GESTURE_POOL_EARLY);
-      const second = randomChoice([...SGM_GESTURE_POOL_EARLY, ...SGM_GESTURE_POOL_ADVANCED]);
+      const second = pickDistinctRandomChoice(
+        [...SGM_GESTURE_POOL_EARLY, ...SGM_GESTURE_POOL_ADVANCED],
+        first,
+      );
       sequence.push([first, second]);
       continue;
     }

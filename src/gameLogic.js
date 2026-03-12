@@ -61,6 +61,24 @@ export function randomSpawnDelay() {
   return delay;
 }
 
+export function pickDistinctRandomChoice(values, excludedValue) {
+  gameLogicLog.debug("Picking distinct random choice", { values, excludedValue });
+  if (!Array.isArray(values) || values.length === 0) {
+    gameLogicLog.warn("No values available for distinct random choice", { values, excludedValue });
+    return null;
+  }
+
+  const distinctValues = values.filter((value) => value !== excludedValue);
+  const candidateValues = distinctValues.length > 0 ? distinctValues : values;
+  const nextValue = candidateValues[Math.floor(Math.random() * candidateValues.length)];
+  gameLogicLog.debug("Picked distinct random choice", {
+    excludedValue,
+    nextValue,
+    candidateCount: candidateValues.length,
+  });
+  return nextValue;
+}
+
 export function isPointInCircle(point, circle) {
   gameLogicLog.debug("Checking point-circle collision", { point, circle });
   if (!point || !circle) {
