@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#182845" />
+      <stop offset="1" stop-color="#0b1220" />
+    </linearGradient>
+    <linearGradient id="finger" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#ffd95f" />
+      <stop offset="1" stop-color="#ff7540" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#bg)" />
+  <circle cx="46" cy="18" r="8" fill="#5ec8ff" opacity="0.95" />
+  <path
+    d="M20 47c0-4.2 2.5-7.8 6.2-9.4V18.8c0-2.6 2.1-4.8 4.8-4.8s4.8 2.1 4.8 4.8v11.6h2.2V23
+      c0-2.2 1.8-4 4-4s4 1.8 4 4v12.9c0 7.8-6.3 14.1-14.1 14.1H29c-5 0-9-4-9-9Z"
+    fill="url(#finger)"
+  />
+</svg>
