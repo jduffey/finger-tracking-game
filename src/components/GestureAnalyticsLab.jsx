@@ -322,7 +322,8 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
     return calculateMetrics(replayFrames, elapsedMs);
   }, [replayFrames, replaySession]);
 
-  const visibleMetrics = isReplaying ? replayMetrics : activeMetrics;
+  const isReplaySessionSelected = Boolean(replaySession);
+  const visibleMetrics = isReplaySessionSelected ? replayMetrics : activeMetrics;
 
   const replayDurationMs =
     replayFrames.length > 1 ? replayFrames[replayFrames.length - 1].t - replayFrames[0].t : 0;
@@ -371,7 +372,7 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
   function exportMetricsJson() {
     const payload = {
       generatedAt: new Date().toISOString(),
-      source: isReplaying ? "replay" : "live",
+      source: isReplaySessionSelected ? "replay" : "live",
       metrics: visibleMetrics,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
