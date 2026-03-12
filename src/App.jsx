@@ -406,6 +406,15 @@ function formatSgmStepLabel(step) {
   return ids.map((gestureId) => GESTURE_LABEL_BY_ID[gestureId] ?? gestureId).join(" + ");
 }
 
+function createInitialSpatialMemoryStats() {
+  return {
+    highScore: 0,
+    bestRound: 1,
+    totalRounds: 0,
+    completedRounds: 0,
+  };
+}
+
 function createInitialSpatialMemoryState() {
   return {
     active: false,
@@ -424,11 +433,8 @@ function createInitialSpatialMemoryState() {
     accuracy: 1,
     smoothness: 0,
     score: 0,
-    highScore: 0,
-    bestRound: 1,
+    ...createInitialSpatialMemoryStats(),
     successRate: 0,
-    totalRounds: 0,
-    completedRounds: 0,
     difficultyLevel: 1,
     sequenceLength: 0,
     recentStepDurations: [],
@@ -439,7 +445,7 @@ function loadSpatialMemoryStats() {
   try {
     const raw = window.localStorage.getItem(SGM_STORAGE_KEY);
     if (!raw) {
-      return { highScore: 0, bestRound: 1, totalRounds: 0, completedRounds: 0 };
+      return createInitialSpatialMemoryStats();
     }
     const parsed = JSON.parse(raw);
     return {
@@ -449,7 +455,7 @@ function loadSpatialMemoryStats() {
       completedRounds: Number.isFinite(parsed?.completedRounds) ? parsed.completedRounds : 0,
     };
   } catch {
-    return { highScore: 0, bestRound: 1, totalRounds: 0, completedRounds: 0 };
+    return createInitialSpatialMemoryStats();
   }
 }
 
@@ -5743,11 +5749,11 @@ export default function App() {
   }
 
   function resetSpatialGestureMemory() {
-    const persisted = loadSpatialMemoryStats();
+    const nextStats = createInitialSpatialMemoryStats();
+    saveSpatialMemoryStats(nextStats);
     setSpatialMemoryState({
       ...createInitialSpatialMemoryState(),
-      ...persisted,
-      successRate: persisted.totalRounds > 0 ? persisted.completedRounds / persisted.totalRounds : 0,
+      ...nextStats,
     });
   }
 
