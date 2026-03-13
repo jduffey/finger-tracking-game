@@ -75,6 +75,7 @@ const CURSOR_TRAIL_DURATION_MS = 1000;
 const CURSOR_TRAIL_SAMPLE_INTERVAL_MS = 34;
 const CURSOR_TRAIL_MIN_DISTANCE_PX = 6;
 const FULLSCREEN_GRID_SIZE_PX = 48;
+const FULLSCREEN_HEX_RADIUS_PX = 28;
 const CALIBRATION_SAMPLE_FRAMES = 10;
 const ARC_CALIBRATION_READY_CONFIDENCE = 0.86;
 const ARC_CALIBRATION_MAX_CAPTURE_FRAMES = 2400;
@@ -380,6 +381,78 @@ function getCameraObjectFitForPhase(phase) {
 
 function pruneCursorTrail(trail, now) {
   return trail.filter((point) => now - point.timestamp <= CURSOR_TRAIL_DURATION_MS);
+}
+
+function createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio) {
+  let width = stageWidth;
+  let height = width / aspectRatio;
+  if (height > stageHeight) {
+    height = stageHeight;
+    width = height * aspectRatio;
+  }
+
+  const left = (stageWidth - width) / 2;
+  const top = (stageHeight - height) / 2;
+
+  return {
+    left,
+    top,
+    width,
+    height,
+    style: {
+      left: `${left}px`,
+      top: `${top}px`,
+      width: `${width}px`,
+      height: `${height}px`,
+    },
+  };
+}
+
+function buildFullscreenHexCells(width, height, radius = FULLSCREEN_HEX_RADIUS_PX) {
+  const hexWidth = Math.sqrt(3) * radius;
+  const hexHeight = radius * 2;
+  const verticalStep = radius * 1.5;
+  const rows = Math.ceil(height / verticalStep) + 2;
+  const cols = Math.ceil(width / hexWidth) + 2;
+  const cells = [];
+  const cellMap = new Map();
+
+  for (let row = 0; row < rows; row += 1) {
+    const centerY = radius + row * verticalStep;
+    const rowOffsetX = (row % 2) * (hexWidth / 2);
+    for (let col = 0; col < cols; col += 1) {
+      const centerX = hexWidth / 2 + rowOffsetX + col * hexWidth;
+      const left = centerX - hexWidth / 2;
+      const top = centerY - radius;
+      if (left >= width || top >= height || left + hexWidth <= 0 || top + hexHeight <= 0) {
+        continue;
+      }
+
+      const q = col - ((row - (row & 1)) >> 1);
+      const r = row;
+      const key = `${q},${r}`;
+      const cell = {
+        key,
+        q,
+        r,
+        centerX,
+        centerY,
+        style: {
+          left: `${left}px`,
+          top: `${top}px`,
+          width: `${hexWidth}px`,
+          height: `${hexHeight}px`,
+        },
+      };
+      cells.push(cell);
+      cellMap.set(key, cell);
+    }
+  }
+
+  return {
+    cells,
+    cellMap,
+  };
 }
 
 function createEmptyLabConfidenceMap() {
@@ -1320,6 +1393,7 @@ export default function App() {
   const [gestureArtSessionKey, setGestureArtSessionKey] = useState(0);
   const [gestureControlOSSessionKey, setGestureControlOSSessionKey] = useState(0);
   const [fullscreenIndexPoints, setFullscreenIndexPoints] = useState([]);
+  const [fullscreenGridMode, setFullscreenGridMode] = useState("square");
   const [poseModelReady, setPoseModelReady] = useState(false);
   const [poseModelError, setPoseModelError] = useState("");
   const [poseStatus, setPoseStatus] = useState(createEmptyPoseStatus);
@@ -1542,7 +1616,7 @@ export default function App() {
       : -1;
   const isBodyPosePhase = phase === PHASES.BODY_POSE;
   const cameraObjectFit = getCameraObjectFitForPhase(phase);
-  const fullscreenCameraGridMetrics = useMemo(() => {
+  const fullscreenCameraViewport = useMemo(() => {
     if (!isFullscreenCameraPhase) {
       return null;
     }
@@ -1551,16 +1625,15 @@ export default function App() {
     const stageHeight = viewport.height;
     const aspectRatio =
       Number.isFinite(cameraAspectRatio) && cameraAspectRatio > 0 ? cameraAspectRatio : 4 / 3;
+    return createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio);
+  }, [cameraAspectRatio, isFullscreenCameraPhase, viewport.height, viewport.width]);
 
-    let width = stageWidth;
-    let height = width / aspectRatio;
-    if (height > stageHeight) {
-      height = stageHeight;
-      width = height * aspectRatio;
+  const fullscreenCameraGridMetrics = useMemo(() => {
+    if (!fullscreenCameraViewport) {
+      return null;
     }
 
-    const left = (stageWidth - width) / 2;
-    const top = (stageHeight - height) / 2;
+    const { left, top, width, height, style } = fullscreenCameraViewport;
     const colCount = Math.ceil(width / FULLSCREEN_GRID_SIZE_PX);
     const rowCount = Math.ceil(height / FULLSCREEN_GRID_SIZE_PX);
     const cellPriority = {
@@ -1637,17 +1710,104 @@ export default function App() {
     }
 
     return {
-      style: {
-        left: `${left}px`,
-        top: `${top}px`,
-        width: `${width}px`,
-        height: `${height}px`,
-      },
+      style,
       highlight,
       neighbors,
       outerRing,
     };
-  }, [cameraAspectRatio, fullscreenIndexPoints, isFullscreenCameraPhase, viewport.height, viewport.width]);
+  }, [fullscreenCameraViewport, fullscreenIndexPoints]);
+
+  const fullscreenHexGridMetrics = useMemo(() => {
+    if (!fullscreenCameraViewport) {
+      return null;
+    }
+
+    const { left, top, width, height, style } = fullscreenCameraViewport;
+    const { cells, cellMap } = buildFullscreenHexCells(width, height);
+    const cellPriority = {
+      outer: 1,
+      neighbor: 2,
+      highlight: 3,
+    };
+    const highlightedCellMap = new Map();
+
+    const registerCell = (cell, type) => {
+      if (!cell) {
+        return;
+      }
+      const existing = highlightedCellMap.get(cell.key);
+      if (existing && cellPriority[existing.type] >= cellPriority[type]) {
+        return;
+      }
+      highlightedCellMap.set(cell.key, {
+        key: cell.key,
+        type,
+        style: cell.style,
+      });
+    };
+
+    for (const point of fullscreenIndexPoints) {
+      const isPointInside =
+        Number.isFinite(point?.x) &&
+        Number.isFinite(point?.y) &&
+        point.x >= left &&
+        point.x <= left + width &&
+        point.y >= top &&
+        point.y <= top + height;
+      if (!isPointInside) {
+        continue;
+      }
+
+      let nearestCell = null;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      for (const cell of cells) {
+        const dx = point.x - (left + cell.centerX);
+        const dy = point.y - (top + cell.centerY);
+        const distance = dx * dx + dy * dy;
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestCell = cell;
+        }
+      }
+      if (!nearestCell) {
+        continue;
+      }
+
+      registerCell(nearestCell, "highlight");
+
+      for (const candidate of cells) {
+        const dq = candidate.q - nearestCell.q;
+        const dr = candidate.r - nearestCell.r;
+        const distance = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
+        if (distance === 1) {
+          registerCell(candidate, "neighbor");
+        } else if (distance === 2) {
+          registerCell(candidate, "outer");
+        }
+      }
+    }
+
+    const highlight = [];
+    const neighbors = [];
+    const outerRing = [];
+    for (const cell of highlightedCellMap.values()) {
+      if (cell.type === "highlight") {
+        highlight.push(cell);
+      } else if (cell.type === "neighbor") {
+        neighbors.push(cell);
+      } else {
+        outerRing.push(cell);
+      }
+    }
+
+    return {
+      style,
+      cells,
+      highlight,
+      neighbors,
+      outerRing,
+    };
+  }, [fullscreenCameraViewport, fullscreenIndexPoints]);
 
   async function attachStreamToVideoElement(video, reason) {
     const stream = streamRef.current;
@@ -6704,29 +6864,62 @@ export default function App() {
             autoPlay
           />
           <canvas ref={overlayCanvasRef} className="camera-overlay" />
-          <div className="fullscreen-camera-grid" style={fullscreenCameraGridMetrics?.style ?? undefined}>
-            {fullscreenCameraGridMetrics?.outerRing?.map((cell) => (
-              <div
-                key={`fullscreen-grid-outer-${cell.key}`}
-                className="fullscreen-camera-grid-outer-ring"
-                style={cell.style}
-              />
-            ))}
-            {fullscreenCameraGridMetrics?.neighbors?.map((cell) => (
-              <div
-                key={`fullscreen-grid-neighbor-${cell.key}`}
-                className="fullscreen-camera-grid-neighbor"
-                style={cell.style}
-              />
-            ))}
-            {fullscreenCameraGridMetrics?.highlight?.map((cell) => (
-              <div
-                key={`fullscreen-grid-highlight-${cell.key}`}
-                className="fullscreen-camera-grid-highlight"
-                style={cell.style}
-              />
-            ))}
-          </div>
+          {fullscreenGridMode === "hex" ? (
+            <div className="fullscreen-camera-hex-grid" style={fullscreenHexGridMetrics?.style ?? undefined}>
+              {fullscreenHexGridMetrics?.cells?.map((cell) => (
+                <div
+                  key={`fullscreen-hex-cell-${cell.key}`}
+                  className="fullscreen-camera-hex-cell"
+                  style={cell.style}
+                />
+              ))}
+              {fullscreenHexGridMetrics?.outerRing?.map((cell) => (
+                <div
+                  key={`fullscreen-hex-outer-${cell.key}`}
+                  className="fullscreen-camera-grid-outer-ring fullscreen-camera-hex-cell fullscreen-camera-hex-highlight"
+                  style={cell.style}
+                />
+              ))}
+              {fullscreenHexGridMetrics?.neighbors?.map((cell) => (
+                <div
+                  key={`fullscreen-hex-neighbor-${cell.key}`}
+                  className="fullscreen-camera-grid-neighbor fullscreen-camera-hex-cell fullscreen-camera-hex-highlight"
+                  style={cell.style}
+                />
+              ))}
+              {fullscreenHexGridMetrics?.highlight?.map((cell) => (
+                <div
+                  key={`fullscreen-hex-highlight-${cell.key}`}
+                  className="fullscreen-camera-grid-highlight fullscreen-camera-hex-cell fullscreen-camera-hex-highlight"
+                  style={cell.style}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="fullscreen-camera-grid" style={fullscreenCameraGridMetrics?.style ?? undefined}>
+              {fullscreenCameraGridMetrics?.outerRing?.map((cell) => (
+                <div
+                  key={`fullscreen-grid-outer-${cell.key}`}
+                  className="fullscreen-camera-grid-outer-ring"
+                  style={cell.style}
+                />
+              ))}
+              {fullscreenCameraGridMetrics?.neighbors?.map((cell) => (
+                <div
+                  key={`fullscreen-grid-neighbor-${cell.key}`}
+                  className="fullscreen-camera-grid-neighbor"
+                  style={cell.style}
+                />
+              ))}
+              {fullscreenCameraGridMetrics?.highlight?.map((cell) => (
+                <div
+                  key={`fullscreen-grid-highlight-${cell.key}`}
+                  className="fullscreen-camera-grid-highlight"
+                  style={cell.style}
+                />
+              ))}
+            </div>
+          )}
 
           <div className="fullscreen-camera-hud">
             <div className="fullscreen-camera-meta">
@@ -6739,6 +6932,15 @@ export default function App() {
               <span className="fullscreen-camera-note">
                 Camera fits the window without cropping. Press `Esc` to close.
               </span>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  setFullscreenGridMode((value) => (value === "square" ? "hex" : "square"))
+                }
+              >
+                {fullscreenGridMode === "square" ? "Use Hex Grid" : "Use Square Grid"}
+              </button>
               <button type="button" className="secondary" onClick={returnFromFullscreenCameraScreen}>
                 Back to Input Test
               </button>
