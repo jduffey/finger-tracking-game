@@ -71,11 +71,10 @@ const PINCH_START_THRESHOLD = 0.045;
 const PINCH_END_THRESHOLD = 0.06;
 const PINCH_DEBOUNCE_MS = 250;
 const CURSOR_ALPHA = 0.35;
-const CURSOR_TRAIL_DURATION_MS = 1000;
-const CURSOR_TRAIL_SAMPLE_INTERVAL_MS = 34;
-const CURSOR_TRAIL_MIN_DISTANCE_PX = 6;
 const FULLSCREEN_GRID_SIZE_PX = 48;
 const FULLSCREEN_HEX_RADIUS_PX = 28;
+const FULLSCREEN_RING_TRAIL_DURATION_MS = 2000;
+const FULLSCREEN_RING_TRAIL_SAMPLE_INTERVAL_MS = 34;
 const FULLSCREEN_RING_LAYERS = [
   { diameter: 44, color: "#ff0000" },
   { diameter: 80, color: "#ff8d00" },
@@ -387,7 +386,7 @@ function getCameraObjectFitForPhase(phase) {
 }
 
 function pruneCursorTrail(trail, now) {
-  return trail.filter((point) => now - point.timestamp <= CURSOR_TRAIL_DURATION_MS);
+  return trail.filter((point) => now - point.timestamp <= FULLSCREEN_RING_TRAIL_DURATION_MS);
 }
 
 function createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio) {
@@ -1369,8 +1368,6 @@ export default function App() {
     x: window.innerWidth / 2,
     y: window.innerHeight / 2,
   }));
-  const [cursorTrail, setCursorTrail] = useState([]);
-  const [cursorTrailNow, setCursorTrailNow] = useState(() => performance.now());
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [labConfidenceThreshold, setLabConfidenceThreshold] = useState(
     LAB_DEFAULT_CONFIDENCE_THRESHOLD,
@@ -1401,6 +1398,8 @@ export default function App() {
   const [gestureControlOSSessionKey, setGestureControlOSSessionKey] = useState(0);
   const [fullscreenIndexPoints, setFullscreenIndexPoints] = useState([]);
   const [fullscreenGridMode, setFullscreenGridMode] = useState("square");
+  const [fullscreenRingTrail, setFullscreenRingTrail] = useState([]);
+  const [fullscreenRingTrailNow, setFullscreenRingTrailNow] = useState(() => performance.now());
   const [poseModelReady, setPoseModelReady] = useState(false);
   const [poseModelError, setPoseModelError] = useState("");
   const [poseStatus, setPoseStatus] = useState(createEmptyPoseStatus);
@@ -1478,8 +1477,8 @@ export default function App() {
   const transformRef = useRef(transform);
   const cursorRef = useRef(cursor);
   const rawCursorRef = useRef(rawCursor);
-  const cursorTrailRef = useRef([]);
-  const cursorTrailLastSampleAtRef = useRef(0);
+  const fullscreenRingTrailRef = useRef([]);
+  const fullscreenRingTrailLastSampleAtRef = useRef(0);
   const debugRef = useRef(debugEnabled);
   const labConfidenceThresholdRef = useRef(labConfidenceThreshold);
   const labShowSkeletonRef = useRef(labShowSkeleton);
@@ -1975,6 +1974,7 @@ export default function App() {
     }
     if (phase !== PHASES.FULLSCREEN_CAMERA) {
       setFullscreenIndexPoints([]);
+      setFullscreenRingTrail([]);
     }
   }, [phase]);
 
@@ -1996,54 +1996,67 @@ export default function App() {
   }, [phase]);
 
   useEffect(() => {
-    const now = performance.now();
-
-    if (!handDetected) {
-      const pruned = pruneCursorTrail(cursorTrailRef.current, now);
-      if (pruned.length !== cursorTrailRef.current.length) {
-        cursorTrailRef.current = pruned;
-        setCursorTrail(pruned);
+    if (fullscreenGridMode !== "rings") {
+      fullscreenRingTrailRef.current = [];
+      fullscreenRingTrailLastSampleAtRef.current = 0;
+      if (fullscreenRingTrail.length > 0) {
+        setFullscreenRingTrail([]);
       }
       return undefined;
     }
 
-    const previousPoint = cursorTrailRef.current[cursorTrailRef.current.length - 1] ?? null;
-    const elapsed = now - cursorTrailLastSampleAtRef.current;
-    const distance = previousPoint ? Math.hypot(cursor.x - previousPoint.x, cursor.y - previousPoint.y) : Number.POSITIVE_INFINITY;
-    if (elapsed < CURSOR_TRAIL_SAMPLE_INTERVAL_MS && distance < CURSOR_TRAIL_MIN_DISTANCE_PX) {
+    const now = performance.now();
+    const normalizedPoints = fullscreenIndexPoints
+      .filter((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y))
+      .map((point) => ({
+        id: point.id,
+        x: point.x,
+        y: point.y,
+      }));
+    const pruned = pruneCursorTrail(fullscreenRingTrailRef.current, now);
+    const elapsed = now - fullscreenRingTrailLastSampleAtRef.current;
+
+    if (normalizedPoints.length === 0) {
+      if (pruned.length !== fullscreenRingTrailRef.current.length) {
+        fullscreenRingTrailRef.current = pruned;
+        setFullscreenRingTrail(pruned);
+      }
       return undefined;
     }
 
-    cursorTrailLastSampleAtRef.current = now;
+    if (elapsed < FULLSCREEN_RING_TRAIL_SAMPLE_INTERVAL_MS) {
+      return undefined;
+    }
+
+    fullscreenRingTrailLastSampleAtRef.current = now;
     const nextTrail = pruneCursorTrail(
       [
-        ...cursorTrailRef.current,
+        ...pruned,
         {
-          x: cursor.x,
-          y: cursor.y,
           timestamp: now,
+          points: normalizedPoints,
         },
       ],
       now,
     );
-    cursorTrailRef.current = nextTrail;
-    setCursorTrail(nextTrail);
-    setCursorTrailNow(now);
+    fullscreenRingTrailRef.current = nextTrail;
+    setFullscreenRingTrail(nextTrail);
+    setFullscreenRingTrailNow(now);
     return undefined;
-  }, [cursor, handDetected]);
+  }, [fullscreenGridMode, fullscreenIndexPoints, fullscreenRingTrail.length]);
 
   useEffect(() => {
-    if (cursorTrail.length === 0) {
+    if (fullscreenGridMode !== "rings" || fullscreenRingTrail.length === 0) {
       return undefined;
     }
 
     let frameId = 0;
     const tick = () => {
       const now = performance.now();
-      const pruned = pruneCursorTrail(cursorTrailRef.current, now);
-      cursorTrailRef.current = pruned;
-      setCursorTrailNow(now);
-      setCursorTrail((previous) => (previous.length === pruned.length ? previous : pruned));
+      const pruned = pruneCursorTrail(fullscreenRingTrailRef.current, now);
+      fullscreenRingTrailRef.current = pruned;
+      setFullscreenRingTrailNow(now);
+      setFullscreenRingTrail((previous) => (previous.length === pruned.length ? previous : pruned));
       if (pruned.length > 0) {
         frameId = window.requestAnimationFrame(tick);
       }
@@ -2055,7 +2068,7 @@ export default function App() {
         window.cancelAnimationFrame(frameId);
       }
     };
-  }, [cursorTrail.length]);
+  }, [fullscreenGridMode, fullscreenRingTrail.length]);
 
   useEffect(() => {
     appLog.debug("Viewport changed", viewport);
@@ -2200,8 +2213,8 @@ export default function App() {
   }, [rawCursor]);
 
   useEffect(() => {
-    cursorTrailRef.current = cursorTrail;
-  }, [cursorTrail]);
+    fullscreenRingTrailRef.current = fullscreenRingTrail;
+  }, [fullscreenRingTrail]);
 
   useEffect(() => {
     debugRef.current = debugEnabled;
@@ -6816,45 +6829,35 @@ export default function App() {
     };
   }, [appLog, cameraReady, modelReady]);
 
-  function renderTrackedCursorLayer() {
+  function renderFullscreenRingGroup(point, opacity, keyPrefix) {
+    if (!fullscreenCameraViewport || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
+      return null;
+    }
+
     return (
-      <>
-        {cursorTrail.map((point, index) => {
-          const age = Math.max(0, cursorTrailNow - point.timestamp);
-          const progress = 1 - Math.min(1, age / CURSOR_TRAIL_DURATION_MS);
-          if (progress <= 0) {
-            return null;
-          }
-          return (
+      <div
+        key={`${keyPrefix}-${point.id}`}
+        className="fullscreen-camera-ring-group"
+        style={{
+          left: `${point.x - fullscreenCameraViewport.left}px`,
+          top: `${point.y - fullscreenCameraViewport.top}px`,
+          opacity,
+        }}
+      >
+        {FULLSCREEN_RING_LAYERS.slice()
+          .reverse()
+          .map((layer) => (
             <div
-              key={`cursor-trail-${point.timestamp}-${index}`}
-              className="tracked-cursor-trail"
+              key={`${keyPrefix}-${point.id}-${layer.color}`}
+              className="fullscreen-camera-ring-layer"
               style={{
-                left: `${point.x}px`,
-                top: `${point.y}px`,
-                opacity: progress * 0.75,
-                transform: `translate(-50%, -50%) scale(${0.42 + progress * 0.5})`,
+                width: `${layer.diameter}px`,
+                height: `${layer.diameter}px`,
+                backgroundColor: layer.color,
               }}
             />
-          );
-        })}
-        <div
-          className={`tracked-cursor ${handDetected ? "" : "paused"}`}
-          style={{
-            left: `${cursor.x}px`,
-            top: `${cursor.y}px`,
-          }}
-        />
-        {debugEnabled && (
-          <div
-            className="raw-cursor"
-            style={{
-              left: `${rawCursor.x}px`,
-              top: `${rawCursor.y}px`,
-            }}
-          />
-        )}
-      </>
+          ))}
+      </div>
     );
   }
 
@@ -6907,31 +6910,26 @@ export default function App() {
               className="fullscreen-camera-rings"
               style={fullscreenCameraViewport?.style ?? undefined}
             >
-              {fullscreenIndexPoints.map((point) => (
-                <div
-                  key={`fullscreen-fingertip-rings-${point.id}`}
-                  className="fullscreen-camera-ring-group"
-                  style={{
-                    left: `${point.x - fullscreenCameraViewport.left}px`,
-                    top: `${point.y - fullscreenCameraViewport.top}px`,
-                  }}
-                >
-                  {FULLSCREEN_RING_LAYERS.slice()
-                    .reverse()
-                    .map((layer) => (
-                    <div
-                      key={`${point.id}-${layer.color}`}
-                      className="fullscreen-camera-ring-layer"
-                      style={{
-                        width: `${layer.diameter}px`,
-                        height: `${layer.diameter}px`,
-                        backgroundColor: layer.color,
-                        opacity: 0.9,
-                      }}
-                    />
-                    ))}
-                </div>
-              ))}
+              {fullscreenRingTrail.map((snapshot, snapshotIndex) => {
+                const age = Math.max(0, fullscreenRingTrailNow - snapshot.timestamp);
+                if (age < FULLSCREEN_RING_TRAIL_SAMPLE_INTERVAL_MS) {
+                  return null;
+                }
+                const progress = 1 - Math.min(1, age / FULLSCREEN_RING_TRAIL_DURATION_MS);
+                if (progress <= 0) {
+                  return null;
+                }
+                return snapshot.points.map((point) =>
+                  renderFullscreenRingGroup(
+                    point,
+                    progress * 0.9,
+                    `fullscreen-ring-trail-${snapshot.timestamp}-${snapshotIndex}`,
+                  ),
+                );
+              })}
+              {fullscreenIndexPoints.map((point) =>
+                renderFullscreenRingGroup(point, 0.9, "fullscreen-ring-current"),
+              )}
             </div>
           ) : (
             <div className="fullscreen-camera-grid" style={fullscreenCameraGridMetrics?.style ?? undefined}>
@@ -7005,8 +7003,6 @@ export default function App() {
             )}
           </div>
         </div>
-
-        {renderTrackedCursorLayer()}
       </div>
     );
   }
@@ -7978,15 +7974,6 @@ export default function App() {
           </section>
         )}
       </div>
-
-      {phase !== PHASES.MINORITY_REPORT_LAB &&
-        phase !== PHASES.GESTURE_ANALYTICS_LAB &&
-        phase !== PHASES.BODY_POSE &&
-        phase !== PHASES.SPATIAL_GESTURE_MEMORY &&
-        phase !== PHASES.GESTURE_ART_LAB &&
-        phase !== PHASES.GESTURE_CONTROL_OS && (
-        renderTrackedCursorLayer()
-      )}
 
       {phase === PHASES.CALIBRATION && isCalibrating && currentTarget && (
         <div className="calibration-layer">

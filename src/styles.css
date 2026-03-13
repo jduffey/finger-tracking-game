@@ -1426,46 +1426,6 @@ button:disabled {
   transform: translate(-50%, -50%);
 }
 
-.tracked-cursor-trail,
-.tracked-cursor,
-.raw-cursor {
-  border-radius: 50%;
-  pointer-events: none;
-  position: fixed;
-  transform: translate(-50%, -50%);
-  z-index: 22;
-}
-
-.tracked-cursor-trail {
-  background: rgba(255, 255, 255, 0.28);
-  border: 2px solid rgba(239, 43, 43, 0.78);
-  box-shadow: 0 0 0 4px rgba(239, 43, 43, 0.12);
-  height: 18px;
-  width: 18px;
-  z-index: 21;
-}
-
-.tracked-cursor {
-  background: rgba(255, 255, 255, 0.95);
-  border: 3px solid #ef2b2b;
-  box-shadow: 0 0 0 5px rgba(239, 43, 43, 0.2);
-  height: 22px;
-  width: 22px;
-}
-
-.tracked-cursor.paused {
-  border-color: #7f8da0;
-  box-shadow: 0 0 0 5px rgba(127, 141, 160, 0.16);
-  opacity: 0.6;
-}
-
-.raw-cursor {
-  background: rgba(46, 181, 255, 0.35);
-  border: 2px solid #2db6ff;
-  height: 14px;
-  width: 14px;
-}
-
 .calibration-layer {
   inset: 0;
   pointer-events: none;
