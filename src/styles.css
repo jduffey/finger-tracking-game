@@ -320,6 +320,95 @@ body {
   padding: 18px 24px;
  }
 
+.fullscreen-camera-invaders {
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.fullscreen-camera-invaders-ship,
+.fullscreen-camera-invaders-enemy,
+.fullscreen-camera-invaders-shot {
+  position: absolute;
+}
+
+.fullscreen-camera-invaders-ship {
+  background:
+    linear-gradient(180deg, rgba(255, 249, 196, 0.98), rgba(255, 209, 102, 0.92)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.36), transparent);
+  border: 3px solid rgba(16, 18, 24, 0.96);
+  clip-path: polygon(50% 0, 100% 100%, 70% 100%, 58% 72%, 42% 72%, 30% 100%, 0 100%);
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.32));
+}
+
+.fullscreen-camera-invaders-enemy {
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.12) 38%, transparent 40%),
+    linear-gradient(180deg, rgba(125, 255, 183, 0.98), rgba(44, 214, 132, 0.94));
+  border: 3px solid rgba(9, 17, 27, 0.94);
+  border-radius: 12px 12px 9px 9px;
+  box-shadow: 0 10px 24px rgba(3, 16, 10, 0.26);
+  clip-path: polygon(12% 0, 88% 0, 100% 30%, 92% 70%, 76% 70%, 76% 100%, 58% 100%, 50% 78%, 42% 100%, 24% 100%, 24% 70%, 8% 70%, 0 30%);
+}
+
+.fullscreen-camera-invaders-shot.player {
+  background: linear-gradient(180deg, rgba(255, 249, 196, 0.98), rgba(255, 120, 77, 0.95));
+  border: 2px solid rgba(16, 18, 24, 0.95);
+  border-radius: 999px;
+  box-shadow: 0 0 14px rgba(255, 220, 135, 0.65);
+}
+
+.fullscreen-camera-invaders-shot.enemy {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(110, 210, 255, 0.94));
+  border: 2px solid rgba(9, 17, 27, 0.95);
+  border-radius: 999px;
+  box-shadow: 0 0 14px rgba(110, 210, 255, 0.5);
+}
+
+.fullscreen-camera-invaders-scoreboard,
+.fullscreen-camera-invaders-legend {
+  background: rgba(9, 17, 27, 0.72);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 14px;
+  color: #f4f7fb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  left: 18px;
+  padding: 10px 14px;
+  position: absolute;
+}
+
+.fullscreen-camera-invaders-scoreboard {
+  font-size: 0.95rem;
+  font-weight: 700;
+  top: 18px;
+}
+
+.fullscreen-camera-invaders-legend {
+  bottom: 18px;
+  font-size: 0.82rem;
+}
+
+.fullscreen-camera-invaders-banner {
+  background: rgba(9, 17, 27, 0.76);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 20px;
+  color: #fffdf7;
+  font-size: clamp(1.25rem, 3.6vw, 2.5rem);
+  font-weight: 900;
+  left: 50%;
+  letter-spacing: 0.04em;
+  max-width: min(86vw, 680px);
+  padding: 16px 22px;
+  position: absolute;
+  text-align: center;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
 .fullscreen-camera-ring-group {
   left: 0;
   position: absolute;
@@ -1717,17 +1806,21 @@ button:disabled {
   }
 
   .fullscreen-camera-breakout-scoreboard,
-  .fullscreen-camera-breakout-legend {
+  .fullscreen-camera-breakout-legend,
+  .fullscreen-camera-invaders-scoreboard,
+  .fullscreen-camera-invaders-legend {
     gap: 8px;
     left: 12px;
     padding: 8px 10px;
   }
 
-  .fullscreen-camera-breakout-scoreboard {
+  .fullscreen-camera-breakout-scoreboard,
+  .fullscreen-camera-invaders-scoreboard {
     right: 12px;
   }
 
-  .fullscreen-camera-breakout-legend {
+  .fullscreen-camera-breakout-legend,
+  .fullscreen-camera-invaders-legend {
     bottom: 12px;
     right: auto;
   }

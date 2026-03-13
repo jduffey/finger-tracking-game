@@ -32,6 +32,11 @@ import {
   stepBreakoutGame,
 } from "./breakoutGame.js";
 import {
+  SPACE_INVADERS_ENEMY_SCORE,
+  createSpaceInvadersGame,
+  stepSpaceInvadersGame,
+} from "./spaceInvadersGame.js";
+import {
   detectHands,
   getCurrentBackend,
   getCurrentRuntime,
@@ -1610,6 +1615,7 @@ export default function App() {
   const [fullscreenPulseBursts, setFullscreenPulseBursts] = useState([]);
   const [fullscreenPulseNow, setFullscreenPulseNow] = useState(() => performance.now());
   const [fullscreenBreakoutState, setFullscreenBreakoutState] = useState(null);
+  const [fullscreenInvadersState, setFullscreenInvadersState] = useState(null);
   const [poseModelReady, setPoseModelReady] = useState(false);
   const [poseModelError, setPoseModelError] = useState("");
   const [poseStatus, setPoseStatus] = useState(createEmptyPoseStatus);
@@ -1695,8 +1701,10 @@ export default function App() {
   const fullscreenPulseLastEmitByIdRef = useRef({});
   const fullscreenGridModeRef = useRef(fullscreenGridMode);
   const fullscreenBreakoutStateRef = useRef(null);
+  const fullscreenInvadersStateRef = useRef(null);
   const fullscreenBreakoutViewportRef = useRef(null);
   const fullscreenBreakoutLastTickRef = useRef(0);
+  const fullscreenInvadersLastTickRef = useRef(0);
   const debugRef = useRef(debugEnabled);
   const labConfidenceThresholdRef = useRef(labConfidenceThreshold);
   const labShowSkeletonRef = useRef(labShowSkeleton);
@@ -1794,6 +1802,8 @@ export default function App() {
   const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
   const isFullscreenBreakoutMode =
     isFullscreenCameraPhase && fullscreenGridMode === "breakout" && Boolean(fullscreenBreakoutState);
+  const isFullscreenInvadersMode =
+    isFullscreenCameraPhase && fullscreenGridMode === "invaders" && Boolean(fullscreenInvadersState);
   const isCalibrationLayoutPhase =
     phase === PHASES.CALIBRATION ||
     phase === PHASES.FULLSCREEN_CAMERA ||
@@ -2244,6 +2254,8 @@ export default function App() {
       setFullscreenTipPoints([]);
       setFullscreenRingTrail([]);
       setFullscreenPulseBursts([]);
+      setFullscreenBreakoutState(null);
+      setFullscreenInvadersState(null);
     }
   }, [phase]);
 
@@ -2254,6 +2266,10 @@ export default function App() {
   useEffect(() => {
     fullscreenBreakoutStateRef.current = fullscreenBreakoutState;
   }, [fullscreenBreakoutState]);
+
+  useEffect(() => {
+    fullscreenInvadersStateRef.current = fullscreenInvadersState;
+  }, [fullscreenInvadersState]);
 
   useEffect(() => {
     fullscreenBreakoutViewportRef.current = fullscreenCameraViewport;
@@ -2297,6 +2313,30 @@ export default function App() {
     fullscreenBreakoutLastTickRef.current = 0;
     fullscreenBreakoutStateRef.current = nextGame;
     setFullscreenBreakoutState(nextGame);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== "invaders" ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenInvadersLastTickRef.current = 0;
+      if (fullscreenInvadersStateRef.current) {
+        fullscreenInvadersStateRef.current = null;
+        setFullscreenInvadersState(null);
+      }
+      return undefined;
+    }
+
+    const nextGame = createSpaceInvadersGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenInvadersLastTickRef.current = 0;
+    fullscreenInvadersStateRef.current = nextGame;
+    setFullscreenInvadersState(nextGame);
     return undefined;
   }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
@@ -6145,7 +6185,10 @@ export default function App() {
     const tipPoints = getFullscreenTipOverlayPoints(hands);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (fullscreenGridModeRef.current === "breakout") {
+    if (
+      fullscreenGridModeRef.current === "breakout" ||
+      fullscreenGridModeRef.current === "invaders"
+    ) {
       return {
         indexPoints,
         tipPoints,
@@ -6213,6 +6256,47 @@ export default function App() {
     );
     fullscreenBreakoutStateRef.current = nextState;
     setFullscreenBreakoutState(nextState);
+  }
+
+  function updateFullscreenInvadersSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== "invaders" ||
+      !fullscreenInvadersStateRef.current
+    ) {
+      fullscreenInvadersLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenBreakoutViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenInvadersLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenInvadersLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenInvadersLastTickRef.current = timestamp;
+
+    const fallbackShipX =
+      fullscreenInvadersStateRef.current?.ship?.x ?? viewportMetrics.width / 2;
+    const pointerX =
+      handDetectedRef.current && Number.isFinite(cursorRef.current?.x)
+        ? cursorRef.current.x - viewportMetrics.left
+        : fallbackShipX;
+    const nextState = stepSpaceInvadersGame(
+      fullscreenInvadersStateRef.current,
+      deltaSeconds,
+      pointerX,
+      handDetectedRef.current && pinchStateRef.current,
+    );
+    fullscreenInvadersStateRef.current = nextState;
+    setFullscreenInvadersState(nextState);
+  }
+
+  function updateFullscreenCameraGameSimulation(timestamp) {
+    updateFullscreenBreakoutSimulation(timestamp);
+    updateFullscreenInvadersSimulation(timestamp);
   }
 
   function updateFrameTiming(timestamp) {
@@ -6354,7 +6438,7 @@ export default function App() {
         updateSandboxPhysics(timestamp, cursorRef.current, false, false);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
+        updateFullscreenCameraGameSimulation(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -6390,7 +6474,7 @@ export default function App() {
       updateSandboxPhysics(timestamp, cursorRef.current, false, false);
       updateFlightSimulation(timestamp);
       updateRunnerSimulation(timestamp);
-      updateFullscreenBreakoutSimulation(timestamp);
+      updateFullscreenCameraGameSimulation(timestamp);
       updateGame(timestamp);
       return;
     }
@@ -6654,7 +6738,7 @@ export default function App() {
     drawCameraOverlay(hand);
     updateFlightSimulation(timestamp);
     updateRunnerSimulation(timestamp);
-    updateFullscreenBreakoutSimulation(timestamp);
+    updateFullscreenCameraGameSimulation(timestamp);
     updateGame(timestamp);
   }
 
@@ -7237,7 +7321,7 @@ export default function App() {
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
+        updateFullscreenCameraGameSimulation(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -7253,7 +7337,7 @@ export default function App() {
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
+        updateFullscreenCameraGameSimulation(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -7270,7 +7354,7 @@ export default function App() {
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
+        updateFullscreenCameraGameSimulation(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -7374,7 +7458,7 @@ export default function App() {
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
+        updateFullscreenCameraGameSimulation(timestamp);
         updateGame(timestamp);
       } finally {
         inferenceBusyRef.current = false;
@@ -7943,6 +8027,78 @@ export default function App() {
                 <div className="fullscreen-camera-breakout-banner">All bricks cleared</div>
               ) : null}
             </div>
+          ) : fullscreenGridMode === "invaders" ? (
+            <div
+              className="fullscreen-camera-invaders"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenInvadersState?.enemies
+                ?.filter((enemy) => enemy.alive)
+                .map((enemy) => (
+                  <div
+                    key={enemy.id}
+                    className="fullscreen-camera-invaders-enemy"
+                    style={{
+                      left: `${enemy.x}px`,
+                      top: `${enemy.y}px`,
+                      width: `${enemy.width}px`,
+                      height: `${enemy.height}px`,
+                    }}
+                  />
+                ))}
+              {fullscreenInvadersState?.playerShots?.map((shot) => (
+                <div
+                  key={shot.id}
+                  className="fullscreen-camera-invaders-shot player"
+                  style={{
+                    left: `${shot.x}px`,
+                    top: `${shot.y}px`,
+                    width: `${shot.width}px`,
+                    height: `${shot.height}px`,
+                  }}
+                />
+              ))}
+              {fullscreenInvadersState?.enemyShots?.map((shot) => (
+                <div
+                  key={shot.id}
+                  className="fullscreen-camera-invaders-shot enemy"
+                  style={{
+                    left: `${shot.x}px`,
+                    top: `${shot.y}px`,
+                    width: `${shot.width}px`,
+                    height: `${shot.height}px`,
+                  }}
+                />
+              ))}
+              {fullscreenInvadersState?.ship && (
+                <div
+                  className="fullscreen-camera-invaders-ship"
+                  style={{
+                    left: `${fullscreenInvadersState.ship.x - fullscreenInvadersState.ship.width / 2}px`,
+                    top: `${fullscreenInvadersState.ship.y - fullscreenInvadersState.ship.height / 2}px`,
+                    width: `${fullscreenInvadersState.ship.width}px`,
+                    height: `${fullscreenInvadersState.ship.height}px`,
+                  }}
+                />
+              )}
+              <div className="fullscreen-camera-invaders-scoreboard">
+                <span>Score {fullscreenInvadersState?.score ?? 0}</span>
+                <span>
+                  Enemies {fullscreenInvadersState?.enemies?.filter((enemy) => enemy.alive).length ?? 0}
+                </span>
+                <span>Status {fullscreenInvadersState?.status ?? "idle"}</span>
+              </div>
+              <div className="fullscreen-camera-invaders-legend">
+                <span>Enemy +{SPACE_INVADERS_ENEMY_SCORE}</span>
+                <span>Pinch fires</span>
+                <span>Pinch after loss restarts</span>
+              </div>
+              {isFullscreenInvadersMode && fullscreenInvadersState?.message ? (
+                <div className="fullscreen-camera-invaders-banner">
+                  {fullscreenInvadersState.message}
+                </div>
+              ) : null}
+            </div>
           ) : (
             <div className="fullscreen-camera-grid" style={fullscreenCameraGridMetrics?.style ?? undefined}>
               {fullscreenCameraGridMetrics?.outerRing?.map((cell) => (
@@ -7980,6 +8136,8 @@ export default function App() {
               <span className="fullscreen-camera-note">
                 {fullscreenGridMode === "breakout"
                   ? `Index fingertip steers the paddle left and right. Bricks use the Rings palette, the launch countdown is ${BREAKOUT_COUNTDOWN_MS / 1000} seconds, and each capsule adds one extra ball.`
+                  : fullscreenGridMode === "invaders"
+                    ? "Index fingertip steers the ship with the existing fullscreen smoothing. Pinch fires on a short cooldown, enemies descend in arcade sweeps, and pinch restarts the wave after a loss."
                   : "Camera fits the window without cropping. Press `Esc` to close."}
               </span>
               <div className="button-row compact fullscreen-camera-mode-row">
@@ -8045,6 +8203,13 @@ export default function App() {
                   onClick={() => setFullscreenGridMode("breakout")}
                 >
                   Breakout
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "invaders" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("invaders")}
+                >
+                  Invaders
                 </button>
               </div>
               <button type="button" className="secondary" onClick={returnFromFullscreenCameraScreen}>
