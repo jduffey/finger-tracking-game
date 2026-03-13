@@ -2081,6 +2081,11 @@ export default function App() {
         reason,
         error,
       });
+      throw (
+        error instanceof Error
+          ? error
+          : new Error("Camera video playback could not be started.")
+      );
     }
 
     attachedVideoElementRef.current = video;
@@ -2942,7 +2947,17 @@ export default function App() {
       return;
     }
 
-    void attachStreamToVideoElement(activeVideoElement, "phase_video_swap");
+    void attachStreamToVideoElement(activeVideoElement, "phase_video_swap").catch((error) => {
+      appLog.error("Failed to attach camera stream after active video element changed", {
+        phase,
+        error,
+      });
+      setCameraError(
+        error instanceof Error
+          ? error.message
+          : "Camera video playback could not be started.",
+      );
+    });
   }, [cameraReady, phase]);
 
   useEffect(() => {
