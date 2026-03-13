@@ -1319,6 +1319,7 @@ export default function App() {
   const [gestureArtHands, setGestureArtHands] = useState([]);
   const [gestureArtSessionKey, setGestureArtSessionKey] = useState(0);
   const [gestureControlOSSessionKey, setGestureControlOSSessionKey] = useState(0);
+  const [fullscreenIndexPoints, setFullscreenIndexPoints] = useState([]);
   const [poseModelReady, setPoseModelReady] = useState(false);
   const [poseModelError, setPoseModelError] = useState("");
   const [poseStatus, setPoseStatus] = useState(createEmptyPoseStatus);
@@ -1560,29 +1561,52 @@ export default function App() {
 
     const left = (stageWidth - width) / 2;
     const top = (stageHeight - height) / 2;
-    const isCursorInside =
-      handDetected &&
-      cursor.x >= left &&
-      cursor.x <= left + width &&
-      cursor.y >= top &&
-      cursor.y <= top + height;
+    const colCount = Math.ceil(width / FULLSCREEN_GRID_SIZE_PX);
+    const rowCount = Math.ceil(height / FULLSCREEN_GRID_SIZE_PX);
+    const cellPriority = {
+      outer: 1,
+      neighbor: 2,
+      highlight: 3,
+    };
+    const cellMap = new Map();
+    const registerCell = (col, row, type) => {
+      if (col < 0 || row < 0 || col >= colCount || row >= rowCount) {
+        return;
+      }
+      const key = `${col}-${row}`;
+      const existing = cellMap.get(key);
+      if (existing && cellPriority[existing.type] >= cellPriority[type]) {
+        return;
+      }
+      const cellLeft = col * FULLSCREEN_GRID_SIZE_PX;
+      const cellTop = row * FULLSCREEN_GRID_SIZE_PX;
+      cellMap.set(key, {
+        key,
+        type,
+        style: {
+          left: `${cellLeft}px`,
+          top: `${cellTop}px`,
+          width: `${Math.min(FULLSCREEN_GRID_SIZE_PX, width - cellLeft)}px`,
+          height: `${Math.min(FULLSCREEN_GRID_SIZE_PX, height - cellTop)}px`,
+        },
+      });
+    };
 
-    let highlight = null;
-    let neighbors = [];
-    let outerRing = [];
-    if (isCursorInside) {
-      const colCount = Math.ceil(width / FULLSCREEN_GRID_SIZE_PX);
-      const rowCount = Math.ceil(height / FULLSCREEN_GRID_SIZE_PX);
-      const col = Math.min(Math.floor((cursor.x - left) / FULLSCREEN_GRID_SIZE_PX), colCount - 1);
-      const row = Math.min(Math.floor((cursor.y - top) / FULLSCREEN_GRID_SIZE_PX), rowCount - 1);
-      const highlightLeft = col * FULLSCREEN_GRID_SIZE_PX;
-      const highlightTop = row * FULLSCREEN_GRID_SIZE_PX;
-      highlight = {
-        left: `${highlightLeft}px`,
-        top: `${highlightTop}px`,
-        width: `${Math.min(FULLSCREEN_GRID_SIZE_PX, width - highlightLeft)}px`,
-        height: `${Math.min(FULLSCREEN_GRID_SIZE_PX, height - highlightTop)}px`,
-      };
+    for (const point of fullscreenIndexPoints) {
+      const isPointInside =
+        Number.isFinite(point?.x) &&
+        Number.isFinite(point?.y) &&
+        point.x >= left &&
+        point.x <= left + width &&
+        point.y >= top &&
+        point.y <= top + height;
+      if (!isPointInside) {
+        continue;
+      }
+
+      const col = Math.min(Math.floor((point.x - left) / FULLSCREEN_GRID_SIZE_PX), colCount - 1);
+      const row = Math.min(Math.floor((point.y - top) / FULLSCREEN_GRID_SIZE_PX), rowCount - 1);
+      registerCell(col, row, "highlight");
 
       for (let rowOffset = -2; rowOffset <= 2; rowOffset += 1) {
         for (let colOffset = -2; colOffset <= 2; colOffset += 1) {
@@ -1590,30 +1614,25 @@ export default function App() {
           if (distance === 0) {
             continue;
           }
-          const targetCol = col + colOffset;
-          const targetRow = row + rowOffset;
-          if (
-            targetCol < 0 ||
-            targetRow < 0 ||
-            targetCol >= colCount ||
-            targetRow >= rowCount
-          ) {
-            continue;
-          }
-          const targetLeft = targetCol * FULLSCREEN_GRID_SIZE_PX;
-          const targetTop = targetRow * FULLSCREEN_GRID_SIZE_PX;
-          const targetStyle = {
-            left: `${targetLeft}px`,
-            top: `${targetTop}px`,
-            width: `${Math.min(FULLSCREEN_GRID_SIZE_PX, width - targetLeft)}px`,
-            height: `${Math.min(FULLSCREEN_GRID_SIZE_PX, height - targetTop)}px`,
-          };
           if (distance === 1) {
-            neighbors.push(targetStyle);
+            registerCell(col + colOffset, row + rowOffset, "neighbor");
           } else if (distance === 2) {
-            outerRing.push(targetStyle);
+            registerCell(col + colOffset, row + rowOffset, "outer");
           }
         }
+      }
+    }
+
+    const highlight = [];
+    const neighbors = [];
+    const outerRing = [];
+    for (const cell of cellMap.values()) {
+      if (cell.type === "highlight") {
+        highlight.push(cell);
+      } else if (cell.type === "neighbor") {
+        neighbors.push(cell);
+      } else {
+        outerRing.push(cell);
       }
     }
 
@@ -1628,7 +1647,7 @@ export default function App() {
       neighbors,
       outerRing,
     };
-  }, [cameraAspectRatio, cursor.x, cursor.y, handDetected, isFullscreenCameraPhase, viewport.height, viewport.width]);
+  }, [cameraAspectRatio, fullscreenIndexPoints, isFullscreenCameraPhase, viewport.height, viewport.width]);
 
   async function attachStreamToVideoElement(video, reason) {
     const stream = streamRef.current;
@@ -1786,6 +1805,9 @@ export default function App() {
     }
     if (phase !== PHASES.GESTURE_ART_LAB) {
       setGestureArtHands([]);
+    }
+    if (phase !== PHASES.FULLSCREEN_CAMERA) {
+      setFullscreenIndexPoints([]);
     }
   }, [phase]);
 
@@ -5411,6 +5433,55 @@ export default function App() {
     }
   }
 
+  function getFullscreenIndexOverlayPoints(hands) {
+    const renderMetrics = computeCameraRenderMetrics("contain");
+    const safeHands = Array.isArray(hands) ? hands : [];
+    return safeHands
+      .map((hand, handIndex) => {
+        const indexTip = hand?.fingerTips?.index ?? hand?.indexTip ?? null;
+        const projectedPoint = projectCameraPointToCanvas(indexTip, renderMetrics);
+        if (!projectedPoint) {
+          return null;
+        }
+        return {
+          id: hand?.id ?? hand?.label ?? `hand-${handIndex}`,
+          label: hand?.label ?? `Hand ${handIndex + 1}`,
+          x: projectedPoint.x,
+          y: projectedPoint.y,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function drawFullscreenIndexOverlay(hands) {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) {
+      return [];
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return [];
+    }
+
+    const overlayPoints = getFullscreenIndexOverlayPoints(hands);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (const point of overlayPoints) {
+      ctx.fillStyle = FINGERTIP_OVERLAY_STYLES.index.fill;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, FINGERTIP_OVERLAY_STYLES.index.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, FINGERTIP_OVERLAY_STYLES.index.radius + 3.2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    return overlayPoints;
+  }
+
   function updateFrameTiming(timestamp) {
     frameCounterRef.current += 1;
     const frameId = frameCounterRef.current;
@@ -6531,6 +6602,10 @@ export default function App() {
           }).slice(0, TRACKING_MAX_HANDS);
           const primaryHand = stableHands[0] ?? null;
           processTrackingFrame(primaryHand, timestamp);
+          if (phaseRef.current === PHASES.FULLSCREEN_CAMERA) {
+            const overlayPoints = drawFullscreenIndexOverlay(stableHands);
+            setFullscreenIndexPoints(overlayPoints);
+          }
           processMinorityReportFrame(stableHands, timestamp);
           if (phaseRef.current === PHASES.GESTURE_ANALYTICS_LAB) {
             setAnalyticsHands(stableHands);
@@ -6630,26 +6705,27 @@ export default function App() {
           />
           <canvas ref={overlayCanvasRef} className="camera-overlay" />
           <div className="fullscreen-camera-grid" style={fullscreenCameraGridMetrics?.style ?? undefined}>
-            {fullscreenCameraGridMetrics?.outerRing?.map((ringStyle, index) => (
+            {fullscreenCameraGridMetrics?.outerRing?.map((cell) => (
               <div
-                key={`fullscreen-grid-outer-${index}`}
+                key={`fullscreen-grid-outer-${cell.key}`}
                 className="fullscreen-camera-grid-outer-ring"
-                style={ringStyle}
+                style={cell.style}
               />
             ))}
-            {fullscreenCameraGridMetrics?.neighbors?.map((neighborStyle, index) => (
+            {fullscreenCameraGridMetrics?.neighbors?.map((cell) => (
               <div
-                key={`fullscreen-grid-neighbor-${index}`}
+                key={`fullscreen-grid-neighbor-${cell.key}`}
                 className="fullscreen-camera-grid-neighbor"
-                style={neighborStyle}
+                style={cell.style}
               />
             ))}
-            {fullscreenCameraGridMetrics?.highlight && (
+            {fullscreenCameraGridMetrics?.highlight?.map((cell) => (
               <div
+                key={`fullscreen-grid-highlight-${cell.key}`}
                 className="fullscreen-camera-grid-highlight"
-                style={fullscreenCameraGridMetrics.highlight}
+                style={cell.style}
               />
-            )}
+            ))}
           </div>
 
           <div className="fullscreen-camera-hud">
