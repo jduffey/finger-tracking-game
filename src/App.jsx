@@ -76,6 +76,13 @@ const CURSOR_TRAIL_SAMPLE_INTERVAL_MS = 34;
 const CURSOR_TRAIL_MIN_DISTANCE_PX = 6;
 const FULLSCREEN_GRID_SIZE_PX = 48;
 const FULLSCREEN_HEX_RADIUS_PX = 28;
+const FULLSCREEN_RING_LAYERS = [
+  { diameter: 22, color: "#ff0000" },
+  { diameter: 40, color: "#ff8d00" },
+  { diameter: 58, color: "#ffdb00" },
+  { diameter: 76, color: "#00d619" },
+  { diameter: 94, color: "#009fff" },
+];
 const CALIBRATION_SAMPLE_FRAMES = 10;
 const ARC_CALIBRATION_READY_CONFIDENCE = 0.86;
 const ARC_CALIBRATION_MAX_CAPTURE_FRAMES = 2400;
@@ -6895,6 +6902,35 @@ export default function App() {
                 />
               ))}
             </div>
+          ) : fullscreenGridMode === "rings" ? (
+            <div
+              className="fullscreen-camera-rings"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenIndexPoints.map((point) => (
+                <div
+                  key={`fullscreen-fingertip-rings-${point.id}`}
+                  className="fullscreen-camera-ring-group"
+                  style={{
+                    left: `${point.x - fullscreenCameraViewport.left}px`,
+                    top: `${point.y - fullscreenCameraViewport.top}px`,
+                  }}
+                >
+                  {FULLSCREEN_RING_LAYERS.map((layer) => (
+                    <div
+                      key={`${point.id}-${layer.color}`}
+                      className="fullscreen-camera-ring-layer"
+                      style={{
+                        width: `${layer.diameter}px`,
+                        height: `${layer.diameter}px`,
+                        borderColor: layer.color,
+                        opacity: 0.9,
+                      }}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="fullscreen-camera-grid" style={fullscreenCameraGridMetrics?.style ?? undefined}>
               {fullscreenCameraGridMetrics?.outerRing?.map((cell) => (
@@ -6932,15 +6968,29 @@ export default function App() {
               <span className="fullscreen-camera-note">
                 Camera fits the window without cropping. Press `Esc` to close.
               </span>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() =>
-                  setFullscreenGridMode((value) => (value === "square" ? "hex" : "square"))
-                }
-              >
-                {fullscreenGridMode === "square" ? "Use Hex Grid" : "Use Square Grid"}
-              </button>
+              <div className="button-row compact fullscreen-camera-mode-row">
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "square" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("square")}
+                >
+                  Squares
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "hex" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("hex")}
+                >
+                  Hex
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "rings" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("rings")}
+                >
+                  Rings
+                </button>
+              </div>
               <button type="button" className="secondary" onClick={returnFromFullscreenCameraScreen}>
                 Back to Input Test
               </button>
