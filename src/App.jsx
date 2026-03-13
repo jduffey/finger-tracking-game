@@ -71,6 +71,9 @@ const PINCH_START_THRESHOLD = 0.045;
 const PINCH_END_THRESHOLD = 0.06;
 const PINCH_DEBOUNCE_MS = 250;
 const CURSOR_ALPHA = 0.35;
+const CURSOR_TRAIL_DURATION_MS = 1000;
+const CURSOR_TRAIL_SAMPLE_INTERVAL_MS = 34;
+const CURSOR_TRAIL_MIN_DISTANCE_PX = 6;
 const CALIBRATION_SAMPLE_FRAMES = 10;
 const ARC_CALIBRATION_READY_CONFIDENCE = 0.86;
 const ARC_CALIBRATION_MAX_CAPTURE_FRAMES = 2400;
@@ -372,6 +375,10 @@ function normalizeTipToVisibleBounds(uRaw, vRaw, visibleBounds) {
 
 function getCameraObjectFitForPhase(phase) {
   return phase === PHASES.FULLSCREEN_CAMERA ? "contain" : "cover";
+}
+
+function pruneCursorTrail(trail, now) {
+  return trail.filter((point) => now - point.timestamp <= CURSOR_TRAIL_DURATION_MS);
 }
 
 function createEmptyLabConfidenceMap() {
@@ -1281,6 +1288,8 @@ export default function App() {
     x: window.innerWidth / 2,
     y: window.innerHeight / 2,
   }));
+  const [cursorTrail, setCursorTrail] = useState([]);
+  const [cursorTrailNow, setCursorTrailNow] = useState(() => performance.now());
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [labConfidenceThreshold, setLabConfidenceThreshold] = useState(
     LAB_DEFAULT_CONFIDENCE_THRESHOLD,
@@ -1386,6 +1395,8 @@ export default function App() {
   const transformRef = useRef(transform);
   const cursorRef = useRef(cursor);
   const rawCursorRef = useRef(rawCursor);
+  const cursorTrailRef = useRef([]);
+  const cursorTrailLastSampleAtRef = useRef(0);
   const debugRef = useRef(debugEnabled);
   const labConfidenceThresholdRef = useRef(labConfidenceThreshold);
   const labShowSkeletonRef = useRef(labShowSkeleton);
@@ -1707,6 +1718,68 @@ export default function App() {
   }, [phase]);
 
   useEffect(() => {
+    const now = performance.now();
+
+    if (!handDetected) {
+      const pruned = pruneCursorTrail(cursorTrailRef.current, now);
+      if (pruned.length !== cursorTrailRef.current.length) {
+        cursorTrailRef.current = pruned;
+        setCursorTrail(pruned);
+      }
+      return undefined;
+    }
+
+    const previousPoint = cursorTrailRef.current[cursorTrailRef.current.length - 1] ?? null;
+    const elapsed = now - cursorTrailLastSampleAtRef.current;
+    const distance = previousPoint ? Math.hypot(cursor.x - previousPoint.x, cursor.y - previousPoint.y) : Number.POSITIVE_INFINITY;
+    if (elapsed < CURSOR_TRAIL_SAMPLE_INTERVAL_MS && distance < CURSOR_TRAIL_MIN_DISTANCE_PX) {
+      return undefined;
+    }
+
+    cursorTrailLastSampleAtRef.current = now;
+    const nextTrail = pruneCursorTrail(
+      [
+        ...cursorTrailRef.current,
+        {
+          x: cursor.x,
+          y: cursor.y,
+          timestamp: now,
+        },
+      ],
+      now,
+    );
+    cursorTrailRef.current = nextTrail;
+    setCursorTrail(nextTrail);
+    setCursorTrailNow(now);
+    return undefined;
+  }, [cursor, handDetected]);
+
+  useEffect(() => {
+    if (cursorTrail.length === 0) {
+      return undefined;
+    }
+
+    let frameId = 0;
+    const tick = () => {
+      const now = performance.now();
+      const pruned = pruneCursorTrail(cursorTrailRef.current, now);
+      cursorTrailRef.current = pruned;
+      setCursorTrailNow(now);
+      setCursorTrail((previous) => (previous.length === pruned.length ? previous : pruned));
+      if (pruned.length > 0) {
+        frameId = window.requestAnimationFrame(tick);
+      }
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [cursorTrail.length]);
+
+  useEffect(() => {
     appLog.debug("Viewport changed", viewport);
   }, [appLog, viewport]);
 
@@ -1847,6 +1920,10 @@ export default function App() {
   useEffect(() => {
     rawCursorRef.current = rawCursor;
   }, [rawCursor]);
+
+  useEffect(() => {
+    cursorTrailRef.current = cursorTrail;
+  }, [cursorTrail]);
 
   useEffect(() => {
     debugRef.current = debugEnabled;
@@ -6398,6 +6475,48 @@ export default function App() {
     };
   }, [appLog, cameraReady, modelReady]);
 
+  function renderTrackedCursorLayer() {
+    return (
+      <>
+        {cursorTrail.map((point, index) => {
+          const age = Math.max(0, cursorTrailNow - point.timestamp);
+          const progress = 1 - Math.min(1, age / CURSOR_TRAIL_DURATION_MS);
+          if (progress <= 0) {
+            return null;
+          }
+          return (
+            <div
+              key={`cursor-trail-${point.timestamp}-${index}`}
+              className="tracked-cursor-trail"
+              style={{
+                left: `${point.x}px`,
+                top: `${point.y}px`,
+                opacity: progress * 0.75,
+                transform: `translate(-50%, -50%) scale(${0.42 + progress * 0.5})`,
+              }}
+            />
+          );
+        })}
+        <div
+          className={`tracked-cursor ${handDetected ? "" : "paused"}`}
+          style={{
+            left: `${cursor.x}px`,
+            top: `${cursor.y}px`,
+          }}
+        />
+        {debugEnabled && (
+          <div
+            className="raw-cursor"
+            style={{
+              left: `${rawCursor.x}px`,
+              top: `${rawCursor.y}px`,
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
   if (isFullscreenCameraPhase) {
     return (
       <div className="app fullscreen-camera-app">
@@ -6436,22 +6555,7 @@ export default function App() {
           </div>
         </div>
 
-        <div
-          className={`tracked-cursor ${handDetected ? "" : "paused"}`}
-          style={{
-            left: `${cursor.x}px`,
-            top: `${cursor.y}px`,
-          }}
-        />
-        {debugEnabled && (
-          <div
-            className="raw-cursor"
-            style={{
-              left: `${rawCursor.x}px`,
-              top: `${rawCursor.y}px`,
-            }}
-          />
-        )}
+        {renderTrackedCursorLayer()}
       </div>
     );
   }
@@ -7430,24 +7534,7 @@ export default function App() {
         phase !== PHASES.SPATIAL_GESTURE_MEMORY &&
         phase !== PHASES.GESTURE_ART_LAB &&
         phase !== PHASES.GESTURE_CONTROL_OS && (
-        <>
-          <div
-            className={`tracked-cursor ${handDetected ? "" : "paused"}`}
-            style={{
-              left: `${cursor.x}px`,
-              top: `${cursor.y}px`,
-            }}
-          />
-          {debugEnabled && (
-            <div
-              className="raw-cursor"
-              style={{
-                left: `${rawCursor.x}px`,
-                top: `${rawCursor.y}px`,
-              }}
-            />
-          )}
-        </>
+        renderTrackedCursorLayer()
       )}
 
       {phase === PHASES.CALIBRATION && isCalibrating && currentTarget && (
