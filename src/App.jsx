@@ -75,6 +75,8 @@ const FULLSCREEN_GRID_SIZE_PX = 48;
 const FULLSCREEN_HEX_RADIUS_PX = 28;
 const FULLSCREEN_RING_TRAIL_DURATION_MS = 2000;
 const FULLSCREEN_RING_TRAIL_SAMPLE_INTERVAL_MS = 34;
+const FULLSCREEN_PULSE_RING_DURATION_MS = 1800;
+const FULLSCREEN_PULSE_RING_INTERVAL_MS = 260;
 const FULLSCREEN_RING_LAYERS = [
   { diameter: 44, color: "#ff0000" },
   { diameter: 80, color: "#ff8d00" },
@@ -387,6 +389,10 @@ function getCameraObjectFitForPhase(phase) {
 
 function pruneCursorTrail(trail, now) {
   return trail.filter((point) => now - point.timestamp <= FULLSCREEN_RING_TRAIL_DURATION_MS);
+}
+
+function prunePulseBursts(bursts, now) {
+  return bursts.filter((burst) => now - burst.startTime <= FULLSCREEN_PULSE_RING_DURATION_MS);
 }
 
 function createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio) {
@@ -1400,6 +1406,8 @@ export default function App() {
   const [fullscreenGridMode, setFullscreenGridMode] = useState("square");
   const [fullscreenRingTrail, setFullscreenRingTrail] = useState([]);
   const [fullscreenRingTrailNow, setFullscreenRingTrailNow] = useState(() => performance.now());
+  const [fullscreenPulseBursts, setFullscreenPulseBursts] = useState([]);
+  const [fullscreenPulseNow, setFullscreenPulseNow] = useState(() => performance.now());
   const [poseModelReady, setPoseModelReady] = useState(false);
   const [poseModelError, setPoseModelError] = useState("");
   const [poseStatus, setPoseStatus] = useState(createEmptyPoseStatus);
@@ -1479,6 +1487,8 @@ export default function App() {
   const rawCursorRef = useRef(rawCursor);
   const fullscreenRingTrailRef = useRef([]);
   const fullscreenRingTrailLastSampleAtRef = useRef(0);
+  const fullscreenPulseBurstsRef = useRef([]);
+  const fullscreenPulseLastEmitByIdRef = useRef({});
   const debugRef = useRef(debugEnabled);
   const labConfidenceThresholdRef = useRef(labConfidenceThreshold);
   const labShowSkeletonRef = useRef(labShowSkeleton);
@@ -1975,6 +1985,7 @@ export default function App() {
     if (phase !== PHASES.FULLSCREEN_CAMERA) {
       setFullscreenIndexPoints([]);
       setFullscreenRingTrail([]);
+      setFullscreenPulseBursts([]);
     }
   }, [phase]);
 
@@ -2069,6 +2080,89 @@ export default function App() {
       }
     };
   }, [fullscreenGridMode, fullscreenRingTrail.length]);
+
+  useEffect(() => {
+    if (fullscreenGridMode !== "pulse" || !fullscreenCameraViewport) {
+      fullscreenPulseBurstsRef.current = [];
+      fullscreenPulseLastEmitByIdRef.current = {};
+      if (fullscreenPulseBursts.length > 0) {
+        setFullscreenPulseBursts([]);
+      }
+      return undefined;
+    }
+
+    const now = performance.now();
+    const pruned = prunePulseBursts(fullscreenPulseBurstsRef.current, now);
+    const nextBursts = [...pruned];
+    const nextLastEmitById = { ...fullscreenPulseLastEmitByIdRef.current };
+    const largestRingRadius =
+      (FULLSCREEN_RING_LAYERS[FULLSCREEN_RING_LAYERS.length - 1]?.diameter ?? 0) / 2;
+
+    for (const point of fullscreenIndexPoints) {
+      if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
+        continue;
+      }
+
+      const lastEmitAt = nextLastEmitById[point.id] ?? 0;
+      if (now - lastEmitAt < FULLSCREEN_PULSE_RING_INTERVAL_MS) {
+        continue;
+      }
+
+      const localX = point.x - fullscreenCameraViewport.left;
+      const localY = point.y - fullscreenCameraViewport.top;
+      const maxRadius = Math.max(
+        Math.hypot(localX, localY),
+        Math.hypot(fullscreenCameraViewport.width - localX, localY),
+        Math.hypot(localX, fullscreenCameraViewport.height - localY),
+        Math.hypot(
+          fullscreenCameraViewport.width - localX,
+          fullscreenCameraViewport.height - localY,
+        ),
+      );
+
+      nextLastEmitById[point.id] = now;
+      nextBursts.push({
+        id: `${point.id}-${now}`,
+        pointId: point.id,
+        x: point.x,
+        y: point.y,
+        startTime: now,
+        startRadius: largestRingRadius,
+        maxRadius,
+      });
+    }
+
+    fullscreenPulseBurstsRef.current = nextBursts;
+    fullscreenPulseLastEmitByIdRef.current = nextLastEmitById;
+    setFullscreenPulseBursts(nextBursts);
+    setFullscreenPulseNow(now);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, fullscreenIndexPoints, fullscreenPulseBursts.length]);
+
+  useEffect(() => {
+    if (fullscreenGridMode !== "pulse" || fullscreenPulseBursts.length === 0) {
+      return undefined;
+    }
+
+    let frameId = 0;
+    const tick = () => {
+      const now = performance.now();
+      const pruned = prunePulseBursts(fullscreenPulseBurstsRef.current, now);
+      fullscreenPulseBurstsRef.current = pruned;
+      setFullscreenPulseNow(now);
+      setFullscreenPulseBursts((previous) => (previous.length === pruned.length ? previous : pruned));
+      if (pruned.length > 0) {
+        frameId = window.requestAnimationFrame(tick);
+      }
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [fullscreenGridMode, fullscreenPulseBursts.length]);
 
   useEffect(() => {
     appLog.debug("Viewport changed", viewport);
@@ -2215,6 +2309,10 @@ export default function App() {
   useEffect(() => {
     fullscreenRingTrailRef.current = fullscreenRingTrail;
   }, [fullscreenRingTrail]);
+
+  useEffect(() => {
+    fullscreenPulseBurstsRef.current = fullscreenPulseBursts;
+  }, [fullscreenPulseBursts]);
 
   useEffect(() => {
     debugRef.current = debugEnabled;
@@ -6861,6 +6959,33 @@ export default function App() {
     );
   }
 
+  function renderFullscreenPulseBurst(burst, keyPrefix) {
+    if (!fullscreenCameraViewport || !Number.isFinite(burst?.x) || !Number.isFinite(burst?.y)) {
+      return null;
+    }
+
+    const elapsed = Math.max(0, fullscreenPulseNow - burst.startTime);
+    const progress = Math.min(1, elapsed / FULLSCREEN_PULSE_RING_DURATION_MS);
+    if (progress <= 0 || progress >= 1) {
+      return null;
+    }
+
+    const radius = burst.startRadius + (burst.maxRadius - burst.startRadius) * progress;
+    return (
+      <div
+        key={`${keyPrefix}-${burst.id}`}
+        className="fullscreen-camera-pulse-ring"
+        style={{
+          left: `${burst.x - fullscreenCameraViewport.left}px`,
+          top: `${burst.y - fullscreenCameraViewport.top}px`,
+          width: `${radius * 2}px`,
+          height: `${radius * 2}px`,
+          opacity: (1 - progress) * 0.9,
+        }}
+      />
+    );
+  }
+
   if (isFullscreenCameraPhase) {
     return (
       <div className="app fullscreen-camera-app">
@@ -6931,6 +7056,18 @@ export default function App() {
                 renderFullscreenRingGroup(point, 0.9, "fullscreen-ring-current"),
               )}
             </div>
+          ) : fullscreenGridMode === "pulse" ? (
+            <div
+              className="fullscreen-camera-rings"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenPulseBursts.map((burst) =>
+                renderFullscreenPulseBurst(burst, "fullscreen-pulse-burst"),
+              )}
+              {fullscreenIndexPoints.map((point) =>
+                renderFullscreenRingGroup(point, 0.9, "fullscreen-pulse-current"),
+              )}
+            </div>
           ) : (
             <div className="fullscreen-camera-grid" style={fullscreenCameraGridMetrics?.style ?? undefined}>
               {fullscreenCameraGridMetrics?.outerRing?.map((cell) => (
@@ -6989,6 +7126,13 @@ export default function App() {
                   onClick={() => setFullscreenGridMode("rings")}
                 >
                   Rings
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "pulse" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("pulse")}
+                >
+                  Pulse
                 </button>
               </div>
               <button type="button" className="secondary" onClick={returnFromFullscreenCameraScreen}>
