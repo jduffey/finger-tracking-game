@@ -45,7 +45,9 @@ To use it with the local Symphony tracker setup:
 4. Run `npm run symphony` from this repository to launch Symphony against `WORKFLOW.md`.
 
 The local launcher defaults `TRACKER_API_KEY` to `dev-key` and uses dashboard
-port `4101` so it can run alongside the `codex-casino` setup on `4100`.
+port `4101` so it can run alongside the `codex-casino` setup on `4100`. It
+also auto-resolves Codex from `CODEX_BIN`, then `codex` on `PATH`, then
+`/Applications/Codex.app/Contents/Resources/codex`.
 
 ## Verbose Logs
 
