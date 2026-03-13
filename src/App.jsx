@@ -32,6 +32,7 @@ import {
   stepBreakoutGame,
 } from "./breakoutGame.js";
 import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
+import { runFullscreenOverlayGameUpdates } from "./fullscreenOverlayGames.js";
 import {
   detectHands,
   getCurrentBackend,
@@ -6296,8 +6297,10 @@ export default function App() {
   }
 
   function updateFullscreenOverlayGames(timestamp) {
-    updateFullscreenOverlayGames(timestamp);
-    updateFullscreenFlappySimulation(timestamp);
+    runFullscreenOverlayGameUpdates(timestamp, {
+      updateFullscreenBreakoutSimulation,
+      updateFullscreenFlappySimulation,
+    });
   }
 
   function updateFrameTiming(timestamp) {
