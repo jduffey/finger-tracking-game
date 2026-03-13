@@ -89,6 +89,13 @@ const FULLSCREEN_RING_LAYERS = [
   { diameter: 152, color: "#00d619" },
   { diameter: 188, color: "#009fff" },
 ];
+const FULLSCREEN_TIP_RIPPLE_COLORS = [
+  FULLSCREEN_RING_LAYERS[1]?.color ?? "#ff8d00",
+  FULLSCREEN_RING_LAYERS[2]?.color ?? "#ffdb00",
+  FULLSCREEN_RING_LAYERS[3]?.color ?? "#00d619",
+  FULLSCREEN_RING_LAYERS[4]?.color ?? "#009fff",
+  FULLSCREEN_RING_LAYERS[0]?.color ?? "#ff0000",
+];
 const FULLSCREEN_VORONOI_DOT_RADIUS = 4.5;
 
 function clipPolygonToHalfPlane(polygon, normalX, normalY, offset) {
@@ -7432,6 +7439,73 @@ export default function App() {
     );
   }
 
+  function renderFullscreenTipRippleSet(point, keyPrefix) {
+    if (!fullscreenCameraViewport || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
+      return null;
+    }
+
+    const localX = point.x - fullscreenCameraViewport.left;
+    const localY = point.y - fullscreenCameraViewport.top;
+    const viewportRadius = Math.max(
+      Math.hypot(localX, localY),
+      Math.hypot(fullscreenCameraViewport.width - localX, localY),
+      Math.hypot(localX, fullscreenCameraViewport.height - localY),
+      Math.hypot(
+        fullscreenCameraViewport.width - localX,
+        fullscreenCameraViewport.height - localY,
+      ),
+    );
+    const maxDiameter = viewportRadius * 2;
+    const startDiameter =
+      (FULLSCREEN_RING_LAYERS[0]?.diameter ?? 0) + FULLSCREEN_STATIC_RING_STEP_PX;
+    const diameters = [];
+    const clipPath = getStaticRippleClipPath(
+      point,
+      fullscreenTipPoints,
+      fullscreenCameraViewport,
+    );
+    for (
+      let diameter = startDiameter;
+      diameter <= maxDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
+      diameter += FULLSCREEN_STATIC_RING_STEP_PX
+    ) {
+      diameters.push(diameter);
+    }
+
+    return (
+      <div
+        key={`${keyPrefix}-${point.id}`}
+        className="fullscreen-camera-static-ripple-field"
+        style={{
+          clipPath,
+        }}
+      >
+        {diameters.map((diameter, index) => {
+          if (index % 2 === 0) {
+            return null;
+          }
+          const color =
+            FULLSCREEN_TIP_RIPPLE_COLORS[
+              Math.floor(index / 2) % FULLSCREEN_TIP_RIPPLE_COLORS.length
+            ];
+          return (
+            <div
+              key={`${keyPrefix}-${point.id}-${diameter}`}
+              className="fullscreen-camera-static-ring"
+              style={{
+                left: `${point.x - fullscreenCameraViewport.left}px`,
+                top: `${point.y - fullscreenCameraViewport.top}px`,
+                width: `${diameter}px`,
+                height: `${diameter}px`,
+                borderColor: color,
+              }}
+            />
+          );
+        })}
+      </div>
+    );
+  }
+
   function renderFullscreenStaticCenter(point, keyPrefix) {
     if (!fullscreenCameraViewport || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
       return null;
@@ -7575,6 +7649,18 @@ export default function App() {
                 renderFullscreenRingGroup(point, 0.9, "fullscreen-pulse-current"),
               )}
             </div>
+          ) : fullscreenGridMode === "tip-ripples" ? (
+            <div
+              className="fullscreen-camera-rings"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenTipPoints.map((point) =>
+                renderFullscreenTipRippleSet(point, "fullscreen-tip-ripple-rings"),
+              )}
+              {fullscreenTipPoints.map((point) =>
+                renderFullscreenStaticCenter(point, "fullscreen-tip-ripple-center"),
+              )}
+            </div>
           ) : fullscreenGridMode === "static" ? (
             <div
               className="fullscreen-camera-rings"
@@ -7660,6 +7746,13 @@ export default function App() {
                   onClick={() => setFullscreenGridMode("pulse")}
                 >
                   Pulse
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "tip-ripples" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("tip-ripples")}
+                >
+                  Tip Ripples
                 </button>
                 <button
                   type="button"
