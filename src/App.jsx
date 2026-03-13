@@ -31,6 +31,7 @@ import {
   createBreakoutGame,
   stepBreakoutGame,
 } from "./breakoutGame.js";
+import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
 import {
   detectHands,
   getCurrentBackend,
@@ -1610,6 +1611,7 @@ export default function App() {
   const [fullscreenPulseBursts, setFullscreenPulseBursts] = useState([]);
   const [fullscreenPulseNow, setFullscreenPulseNow] = useState(() => performance.now());
   const [fullscreenBreakoutState, setFullscreenBreakoutState] = useState(null);
+  const [fullscreenFlappyState, setFullscreenFlappyState] = useState(null);
   const [poseModelReady, setPoseModelReady] = useState(false);
   const [poseModelError, setPoseModelError] = useState("");
   const [poseStatus, setPoseStatus] = useState(createEmptyPoseStatus);
@@ -1697,6 +1699,9 @@ export default function App() {
   const fullscreenBreakoutStateRef = useRef(null);
   const fullscreenBreakoutViewportRef = useRef(null);
   const fullscreenBreakoutLastTickRef = useRef(0);
+  const fullscreenFlappyStateRef = useRef(null);
+  const fullscreenFlappyViewportRef = useRef(null);
+  const fullscreenFlappyLastTickRef = useRef(0);
   const debugRef = useRef(debugEnabled);
   const labConfidenceThresholdRef = useRef(labConfidenceThreshold);
   const labShowSkeletonRef = useRef(labShowSkeleton);
@@ -1794,6 +1799,8 @@ export default function App() {
   const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
   const isFullscreenBreakoutMode =
     isFullscreenCameraPhase && fullscreenGridMode === "breakout" && Boolean(fullscreenBreakoutState);
+  const isFullscreenFlappyMode =
+    isFullscreenCameraPhase && fullscreenGridMode === "flappy" && Boolean(fullscreenFlappyState);
   const isCalibrationLayoutPhase =
     phase === PHASES.CALIBRATION ||
     phase === PHASES.FULLSCREEN_CAMERA ||
@@ -2260,6 +2267,14 @@ export default function App() {
   }, [fullscreenCameraViewport]);
 
   useEffect(() => {
+    fullscreenFlappyStateRef.current = fullscreenFlappyState;
+  }, [fullscreenFlappyState]);
+
+  useEffect(() => {
+    fullscreenFlappyViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
+
+  useEffect(() => {
     if (phase !== PHASES.FULLSCREEN_CAMERA) {
       return undefined;
     }
@@ -2297,6 +2312,30 @@ export default function App() {
     fullscreenBreakoutLastTickRef.current = 0;
     fullscreenBreakoutStateRef.current = nextGame;
     setFullscreenBreakoutState(nextGame);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== "flappy" ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenFlappyLastTickRef.current = 0;
+      if (fullscreenFlappyStateRef.current) {
+        fullscreenFlappyStateRef.current = null;
+        setFullscreenFlappyState(null);
+      }
+      return undefined;
+    }
+
+    const nextGame = createFlappyGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenFlappyLastTickRef.current = 0;
+    fullscreenFlappyStateRef.current = nextGame;
+    setFullscreenFlappyState(nextGame);
     return undefined;
   }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
@@ -5380,6 +5419,17 @@ export default function App() {
       return;
     }
 
+    if (phaseRef.current === PHASES.FULLSCREEN_CAMERA && fullscreenGridModeRef.current === "flappy") {
+      if (!fullscreenFlappyStateRef.current) {
+        return;
+      }
+      const nextState = flapFlappyGame(fullscreenFlappyStateRef.current);
+      fullscreenFlappyStateRef.current = nextState;
+      fullscreenFlappyLastTickRef.current = timestamp;
+      setFullscreenFlappyState(nextState);
+      return;
+    }
+
     if (phaseRef.current !== PHASES.GAME || !gameRunningRef.current) {
       appLog.debug("Pinch click ignored because game is not actively running");
       return;
@@ -6145,7 +6195,10 @@ export default function App() {
     const tipPoints = getFullscreenTipOverlayPoints(hands);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (fullscreenGridModeRef.current === "breakout") {
+    if (
+      fullscreenGridModeRef.current === "breakout" ||
+      fullscreenGridModeRef.current === "flappy"
+    ) {
       return {
         indexPoints,
         tipPoints,
@@ -6213,6 +6266,38 @@ export default function App() {
     );
     fullscreenBreakoutStateRef.current = nextState;
     setFullscreenBreakoutState(nextState);
+  }
+
+  function updateFullscreenFlappySimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== "flappy" ||
+      !fullscreenFlappyStateRef.current
+    ) {
+      fullscreenFlappyLastTickRef.current = timestamp;
+      return;
+    }
+
+    if (!fullscreenFlappyViewportRef.current) {
+      fullscreenFlappyLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenFlappyLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenFlappyLastTickRef.current = timestamp;
+
+    const nextState = stepFlappyGame(
+      fullscreenFlappyStateRef.current,
+      deltaSeconds,
+    );
+    fullscreenFlappyStateRef.current = nextState;
+    setFullscreenFlappyState(nextState);
+  }
+
+  function updateFullscreenOverlayGames(timestamp) {
+    updateFullscreenOverlayGames(timestamp);
+    updateFullscreenFlappySimulation(timestamp);
   }
 
   function updateFrameTiming(timestamp) {
@@ -6354,7 +6439,7 @@ export default function App() {
         updateSandboxPhysics(timestamp, cursorRef.current, false, false);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -6390,7 +6475,7 @@ export default function App() {
       updateSandboxPhysics(timestamp, cursorRef.current, false, false);
       updateFlightSimulation(timestamp);
       updateRunnerSimulation(timestamp);
-      updateFullscreenBreakoutSimulation(timestamp);
+      updateFullscreenOverlayGames(timestamp);
       updateGame(timestamp);
       return;
     }
@@ -6654,7 +6739,7 @@ export default function App() {
     drawCameraOverlay(hand);
     updateFlightSimulation(timestamp);
     updateRunnerSimulation(timestamp);
-    updateFullscreenBreakoutSimulation(timestamp);
+    updateFullscreenOverlayGames(timestamp);
     updateGame(timestamp);
   }
 
@@ -7237,7 +7322,7 @@ export default function App() {
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -7253,7 +7338,7 @@ export default function App() {
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -7270,7 +7355,7 @@ export default function App() {
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -7374,7 +7459,7 @@ export default function App() {
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
         updateGame(timestamp);
       } finally {
         inferenceBusyRef.current = false;
@@ -7943,6 +8028,65 @@ export default function App() {
                 <div className="fullscreen-camera-breakout-banner">All bricks cleared</div>
               ) : null}
             </div>
+          ) : fullscreenGridMode === "flappy" ? (
+            <div
+              className="fullscreen-camera-flappy"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenFlappyState?.pipes?.map((pipe) => (
+                <div key={pipe.id}>
+                  <div
+                    className="fullscreen-camera-flappy-pipe"
+                    style={{
+                      left: `${pipe.x}px`,
+                      top: "0px",
+                      width: `${pipe.width}px`,
+                      height: `${pipe.gapTop}px`,
+                    }}
+                  />
+                  <div
+                    className="fullscreen-camera-flappy-pipe"
+                    style={{
+                      left: `${pipe.x}px`,
+                      top: `${pipe.gapTop + pipe.gapHeight}px`,
+                      width: `${pipe.width}px`,
+                      height: `${Math.max(
+                        0,
+                        (fullscreenFlappyState?.layout?.playfieldHeight ?? 0) -
+                          (pipe.gapTop + pipe.gapHeight),
+                      )}px`,
+                    }}
+                  />
+                </div>
+              ))}
+              <div
+                className="fullscreen-camera-flappy-bird"
+                style={{
+                  left: `${(fullscreenFlappyState?.bird?.x ?? 0) - (fullscreenFlappyState?.bird?.radius ?? 0)}px`,
+                  top: `${(fullscreenFlappyState?.bird?.y ?? 0) - (fullscreenFlappyState?.bird?.radius ?? 0)}px`,
+                  width: `${(fullscreenFlappyState?.bird?.radius ?? 0) * 2}px`,
+                  height: `${(fullscreenFlappyState?.bird?.radius ?? 0) * 2}px`,
+                  transform: `rotate(${fullscreenFlappyState?.bird?.rotation ?? 0}deg)`,
+                }}
+              />
+              <div
+                className="fullscreen-camera-flappy-ground"
+                style={{ height: `${fullscreenFlappyState?.layout?.groundHeight ?? 0}px` }}
+              />
+              <div className="fullscreen-camera-flappy-scoreboard">
+                <span>Score {fullscreenFlappyState?.score ?? 0}</span>
+                <span>Status {fullscreenFlappyState?.status ?? "ready"}</span>
+              </div>
+              <div className="fullscreen-camera-flappy-legend">
+                <span>Pinch = flap</span>
+                <span>Pass a gap = +1</span>
+              </div>
+              {isFullscreenFlappyMode && fullscreenFlappyState?.message ? (
+                <div className="fullscreen-camera-flappy-banner">
+                  {fullscreenFlappyState.message}
+                </div>
+              ) : null}
+            </div>
           ) : (
             <div className="fullscreen-camera-grid" style={fullscreenCameraGridMetrics?.style ?? undefined}>
               {fullscreenCameraGridMetrics?.outerRing?.map((cell) => (
@@ -7980,6 +8124,8 @@ export default function App() {
               <span className="fullscreen-camera-note">
                 {fullscreenGridMode === "breakout"
                   ? `Index fingertip steers the paddle left and right. Bricks use the Rings palette, the launch countdown is ${BREAKOUT_COUNTDOWN_MS / 1000} seconds, and each capsule adds one extra ball.`
+                  : fullscreenGridMode === "flappy"
+                  ? "Flappy overlay uses pinch rising edges only. Each distinct pinch flaps once, holding a pinch does not retrigger, and pinching after a crash restarts the round."
                   : "Camera fits the window without cropping. Press `Esc` to close."}
               </span>
               <div className="button-row compact fullscreen-camera-mode-row">
@@ -8045,6 +8191,13 @@ export default function App() {
                   onClick={() => setFullscreenGridMode("breakout")}
                 >
                   Breakout
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "flappy" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("flappy")}
+                >
+                  Flappy
                 </button>
               </div>
               <button type="button" className="secondary" onClick={returnFromFullscreenCameraScreen}>
