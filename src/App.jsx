@@ -77,11 +77,11 @@ const CURSOR_TRAIL_MIN_DISTANCE_PX = 6;
 const FULLSCREEN_GRID_SIZE_PX = 48;
 const FULLSCREEN_HEX_RADIUS_PX = 28;
 const FULLSCREEN_RING_LAYERS = [
-  { diameter: 22, color: "#ff0000" },
-  { diameter: 40, color: "#ff8d00" },
-  { diameter: 58, color: "#ffdb00" },
-  { diameter: 76, color: "#00d619" },
-  { diameter: 94, color: "#009fff" },
+  { diameter: 44, color: "#ff0000" },
+  { diameter: 80, color: "#ff8d00" },
+  { diameter: 116, color: "#ffdb00" },
+  { diameter: 152, color: "#00d619" },
+  { diameter: 188, color: "#009fff" },
 ];
 const CALIBRATION_SAMPLE_FRAMES = 10;
 const ARC_CALIBRATION_READY_CONFIDENCE = 0.86;
@@ -6916,18 +6916,20 @@ export default function App() {
                     top: `${point.y - fullscreenCameraViewport.top}px`,
                   }}
                 >
-                  {FULLSCREEN_RING_LAYERS.map((layer) => (
+                  {FULLSCREEN_RING_LAYERS.slice()
+                    .reverse()
+                    .map((layer) => (
                     <div
                       key={`${point.id}-${layer.color}`}
                       className="fullscreen-camera-ring-layer"
                       style={{
                         width: `${layer.diameter}px`,
                         height: `${layer.diameter}px`,
-                        borderColor: layer.color,
+                        backgroundColor: layer.color,
                         opacity: 0.9,
                       }}
                     />
-                  ))}
+                    ))}
                 </div>
               ))}
             </div>
