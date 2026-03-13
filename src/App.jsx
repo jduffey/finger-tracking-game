@@ -86,6 +86,7 @@ const FULLSCREEN_RING_LAYERS = [
   { diameter: 152, color: "#00d619" },
   { diameter: 188, color: "#009fff" },
 ];
+const FULLSCREEN_VORONOI_DOT_RADIUS = 4.5;
 
 function clipPolygonToHalfPlane(polygon, normalX, normalY, offset) {
   if (!Array.isArray(polygon) || polygon.length === 0) {
@@ -1579,6 +1580,7 @@ export default function App() {
   const [gestureArtSessionKey, setGestureArtSessionKey] = useState(0);
   const [gestureControlOSSessionKey, setGestureControlOSSessionKey] = useState(0);
   const [fullscreenIndexPoints, setFullscreenIndexPoints] = useState([]);
+  const [fullscreenTipPoints, setFullscreenTipPoints] = useState([]);
   const [fullscreenGridMode, setFullscreenGridMode] = useState("square");
   const [fullscreenRingTrail, setFullscreenRingTrail] = useState([]);
   const [fullscreenRingTrailNow, setFullscreenRingTrailNow] = useState(() => performance.now());
@@ -1665,6 +1667,7 @@ export default function App() {
   const fullscreenRingTrailLastSampleAtRef = useRef(0);
   const fullscreenPulseBurstsRef = useRef([]);
   const fullscreenPulseLastEmitByIdRef = useRef({});
+  const fullscreenGridModeRef = useRef(fullscreenGridMode);
   const debugRef = useRef(debugEnabled);
   const labConfidenceThresholdRef = useRef(labConfidenceThreshold);
   const labShowSkeletonRef = useRef(labShowSkeleton);
@@ -2001,6 +2004,48 @@ export default function App() {
     };
   }, [fullscreenCameraViewport, fullscreenIndexPoints]);
 
+  const fullscreenVoronoiMetrics = useMemo(() => {
+    if (!fullscreenCameraViewport) {
+      return null;
+    }
+
+    const { left, top, width, height, style } = fullscreenCameraViewport;
+    const sites = fullscreenTipPoints.filter(
+      (point) =>
+        Number.isFinite(point?.x) &&
+        Number.isFinite(point?.y) &&
+        point.x >= left &&
+        point.x <= left + width &&
+        point.y >= top &&
+        point.y <= top + height,
+    );
+
+    const cells = sites
+      .map((point) => {
+        const polygon = buildStaticRippleClipPolygon(point, sites, fullscreenCameraViewport);
+        if (!polygon || polygon.length < 3) {
+          return null;
+        }
+        return {
+          key: point.id,
+          polygon,
+        };
+      })
+      .filter(Boolean);
+
+    return {
+      style,
+      cells,
+      sites: sites.map((point) => ({
+        id: point.id,
+        x: point.x - left,
+        y: point.y - top,
+      })),
+      width,
+      height,
+    };
+  }, [fullscreenCameraViewport, fullscreenTipPoints]);
+
   async function attachStreamToVideoElement(video, reason) {
     const stream = streamRef.current;
     if (!video || !stream) {
@@ -2160,10 +2205,15 @@ export default function App() {
     }
     if (phase !== PHASES.FULLSCREEN_CAMERA) {
       setFullscreenIndexPoints([]);
+      setFullscreenTipPoints([]);
       setFullscreenRingTrail([]);
       setFullscreenPulseBursts([]);
     }
   }, [phase]);
+
+  useEffect(() => {
+    fullscreenGridModeRef.current = fullscreenGridMode;
+  }, [fullscreenGridMode]);
 
   useEffect(() => {
     if (phase !== PHASES.FULLSCREEN_CAMERA) {
@@ -5907,33 +5957,74 @@ export default function App() {
       .filter(Boolean);
   }
 
-  function drawFullscreenIndexOverlay(hands) {
+  function getFullscreenTipOverlayPoints(hands) {
+    const renderMetrics = computeCameraRenderMetrics("contain");
+    const safeHands = Array.isArray(hands) ? hands : [];
+    return safeHands.flatMap((hand, handIndex) => {
+      const handId = hand?.id ?? hand?.label ?? `hand-${handIndex}`;
+      return EXTENT_FINGER_NAMES.map((fingerName) => {
+        const tip = hand?.fingerTips?.[fingerName] ?? hand?.[`${fingerName}Tip`] ?? null;
+        const projectedPoint = projectCameraPointToCanvas(tip, renderMetrics);
+        if (!projectedPoint) {
+          return null;
+        }
+        return {
+          id: `${handId}-${fingerName}`,
+          handId,
+          fingerName,
+          x: projectedPoint.x,
+          y: projectedPoint.y,
+        };
+      }).filter(Boolean);
+    });
+  }
+
+  function drawFullscreenOverlay(hands) {
     const canvas = overlayCanvasRef.current;
     if (!canvas) {
-      return [];
+      return {
+        indexPoints: [],
+        tipPoints: [],
+      };
     }
     const ctx = canvas.getContext("2d");
     if (!ctx) {
-      return [];
+      return {
+        indexPoints: [],
+        tipPoints: [],
+      };
     }
 
-    const overlayPoints = getFullscreenIndexOverlayPoints(hands);
+    const indexPoints = getFullscreenIndexOverlayPoints(hands);
+    const tipPoints = getFullscreenTipOverlayPoints(hands);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    for (const point of overlayPoints) {
-      ctx.fillStyle = FINGERTIP_OVERLAY_STYLES.index.fill;
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, FINGERTIP_OVERLAY_STYLES.index.radius, 0, Math.PI * 2);
-      ctx.fill();
+    if (fullscreenGridModeRef.current === "voronoi") {
+      for (const point of tipPoints) {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.98)";
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, FULLSCREEN_VORONOI_DOT_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      for (const point of indexPoints) {
+        ctx.fillStyle = FINGERTIP_OVERLAY_STYLES.index.fill;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, FINGERTIP_OVERLAY_STYLES.index.radius, 0, Math.PI * 2);
+        ctx.fill();
 
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, FINGERTIP_OVERLAY_STYLES.index.radius + 3.2, 0, Math.PI * 2);
-      ctx.stroke();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, FINGERTIP_OVERLAY_STYLES.index.radius + 3.2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
 
-    return overlayPoints;
+    return {
+      indexPoints,
+      tipPoints,
+    };
   }
 
   function updateFrameTiming(timestamp) {
@@ -7057,8 +7148,9 @@ export default function App() {
           const primaryHand = stableHands[0] ?? null;
           processTrackingFrame(primaryHand, timestamp);
           if (phaseRef.current === PHASES.FULLSCREEN_CAMERA) {
-            const overlayPoints = drawFullscreenIndexOverlay(stableHands);
-            setFullscreenIndexPoints(overlayPoints);
+            const overlayPoints = drawFullscreenOverlay(stableHands);
+            setFullscreenIndexPoints(overlayPoints.indexPoints);
+            setFullscreenTipPoints(overlayPoints.tipPoints);
           }
           processMinorityReportFrame(stableHands, timestamp);
           if (phaseRef.current === PHASES.GESTURE_ANALYTICS_LAB) {
@@ -7309,6 +7401,21 @@ export default function App() {
                 />
               ))}
             </div>
+          ) : fullscreenGridMode === "voronoi" ? (
+            <svg
+              className="fullscreen-camera-voronoi"
+              style={fullscreenVoronoiMetrics?.style ?? undefined}
+              viewBox={`0 0 ${fullscreenVoronoiMetrics?.width ?? 0} ${fullscreenVoronoiMetrics?.height ?? 0}`}
+              preserveAspectRatio="none"
+            >
+              {fullscreenVoronoiMetrics?.cells.map((cell) => (
+                <polygon
+                  key={`fullscreen-voronoi-cell-${cell.key}`}
+                  className="fullscreen-camera-voronoi-cell"
+                  points={cell.polygon.map((point) => `${point.x},${point.y}`).join(" ")}
+                />
+              ))}
+            </svg>
           ) : fullscreenGridMode === "rings" ? (
             <div
               className="fullscreen-camera-rings"
@@ -7411,6 +7518,13 @@ export default function App() {
                   onClick={() => setFullscreenGridMode("hex")}
                 >
                   Hex
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "voronoi" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("voronoi")}
+                >
+                  Voronoi
                 </button>
                 <button
                   type="button"

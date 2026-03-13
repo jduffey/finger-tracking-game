@@ -219,6 +219,19 @@ body {
   z-index: 2;
 }
 
+.fullscreen-camera-voronoi {
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.fullscreen-camera-voronoi-cell {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-width: 1.5;
+}
+
 .fullscreen-camera-ring-group {
   left: 0;
   position: absolute;
