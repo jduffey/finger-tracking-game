@@ -42,7 +42,10 @@ To use it with the local Symphony tracker setup:
 1. Ensure the tracker project slug is `finger-tracking-game`.
 2. Set `TRACKER_API_KEY` for the tracker service.
 3. Optionally set `TARGET_REPO_URL`; otherwise the workflow defaults to `git@github.com:jduffey/finger-tracking-game.git`.
-4. Launch Symphony from this repository with `WORKFLOW.md`.
+4. Run `npm run symphony` from this repository to launch Symphony against `WORKFLOW.md`.
+
+The local launcher defaults `TRACKER_API_KEY` to `dev-key` and uses dashboard
+port `4101` so it can run alongside the `codex-casino` setup on `4100`.
 
 ## Verbose Logs
 
