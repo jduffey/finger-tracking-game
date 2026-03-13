@@ -52,6 +52,7 @@ import { createGesturePersonalization } from "./gestures/personalization.js";
 
 const PHASES = {
   CALIBRATION: "CALIBRATION",
+  FULLSCREEN_CAMERA: "FULLSCREEN_CAMERA",
   SANDBOX: "SANDBOX",
   FLIGHT: "FLIGHT",
   RUNNER: "RUNNER",
@@ -367,6 +368,10 @@ function normalizeTipToVisibleBounds(uRaw, vRaw, visibleBounds) {
       vRaw <= visibleBounds.vMax,
     wasClamped: uVisible !== uVisibleRaw || vVisible !== vVisibleRaw,
   };
+}
+
+function getCameraObjectFitForPhase(phase) {
+  return phase === PHASES.FULLSCREEN_CAMERA ? "contain" : "cover";
 }
 
 function createEmptyLabConfidenceMap() {
@@ -1370,6 +1375,7 @@ export default function App() {
   const poseDetectorRef = useRef(null);
   const poseInitPromiseRef = useRef(null);
   const streamRef = useRef(null);
+  const attachedVideoElementRef = useRef(null);
   const rafRef = useRef(0);
   const inferenceBusyRef = useRef(false);
   const mountedRef = useRef(true);
@@ -1474,8 +1480,10 @@ export default function App() {
     () => calibrationTargets[calibrationTargetIndex] ?? null,
     [calibrationTargets, calibrationTargetIndex],
   );
+  const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
   const isCalibrationLayoutPhase =
     phase === PHASES.CALIBRATION ||
+    phase === PHASES.FULLSCREEN_CAMERA ||
     phase === PHASES.SANDBOX ||
     phase === PHASES.FLIGHT ||
     phase === PHASES.RUNNER ||
@@ -1488,7 +1496,9 @@ export default function App() {
     phase === PHASES.GESTURE_ART_LAB ||
     phase === PHASES.GESTURE_CONTROL_OS;
   const cameraPanelTitle =
-    phase === PHASES.FLIGHT
+    phase === PHASES.FULLSCREEN_CAMERA
+      ? "Fullscreen Camera"
+      : phase === PHASES.FLIGHT
       ? "Camera + Flight Controls"
       : phase === PHASES.RUNNER
       ? "Camera + Runner Controls"
@@ -1518,6 +1528,59 @@ export default function App() {
       ? inputTestHoveredCell
       : -1;
   const isBodyPosePhase = phase === PHASES.BODY_POSE;
+  const cameraObjectFit = getCameraObjectFitForPhase(phase);
+
+  async function attachStreamToVideoElement(video, reason) {
+    const stream = streamRef.current;
+    if (!video || !stream) {
+      return false;
+    }
+
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+
+    try {
+      await video.play();
+    } catch (error) {
+      appLog.warn("Video playback could not be resumed for active camera element", {
+        reason,
+        error,
+      });
+    }
+
+    attachedVideoElementRef.current = video;
+
+    const primaryTrack = stream.getVideoTracks()[0];
+    const trackSettings = primaryTrack?.getSettings?.() ?? {};
+    const measuredWidth = video.videoWidth || trackSettings.width;
+    const measuredHeight = video.videoHeight || trackSettings.height;
+    if (
+      Number.isFinite(measuredWidth) &&
+      Number.isFinite(measuredHeight) &&
+      measuredWidth > 0 &&
+      measuredHeight > 0
+    ) {
+      const ratio = measuredWidth / measuredHeight;
+      setCameraAspectRatio(ratio);
+      appLog.info("Camera stream attached to active video element", {
+        reason,
+        measuredWidth,
+        measuredHeight,
+        ratio: roundMetric(ratio, 6),
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight,
+      });
+    } else {
+      appLog.warn("Camera stream attached but dimensions are not ready yet", {
+        reason,
+        measuredWidth,
+        measuredHeight,
+      });
+    }
+
+    return true;
+  }
 
   useEffect(() => {
     appLog.info("App mounted", {
@@ -1624,6 +1687,23 @@ export default function App() {
     if (phase !== PHASES.GESTURE_ART_LAB) {
       setGestureArtHands([]);
     }
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== PHASES.FULLSCREEN_CAMERA) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        returnFromFullscreenCameraScreen();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [phase]);
 
   useEffect(() => {
@@ -1916,37 +1996,7 @@ export default function App() {
         streamRef.current = stream;
         const video = videoRef.current;
         if (video) {
-          video.srcObject = stream;
-          await video.play();
-          const primaryTrack = stream.getVideoTracks()[0];
-          const trackSettings = primaryTrack?.getSettings?.() ?? {};
-          const measuredWidth = video.videoWidth || trackSettings.width;
-          const measuredHeight = video.videoHeight || trackSettings.height;
-          if (
-            Number.isFinite(measuredWidth) &&
-            Number.isFinite(measuredHeight) &&
-            measuredWidth > 0 &&
-            measuredHeight > 0
-          ) {
-            const ratio = measuredWidth / measuredHeight;
-            setCameraAspectRatio(ratio);
-            appLog.info("Updated camera display ratio from stream dimensions", {
-              measuredWidth,
-              measuredHeight,
-              ratio: roundMetric(ratio, 6),
-            });
-          } else {
-            appLog.warn("Could not derive camera ratio from metadata; using existing fallback", {
-              measuredWidth,
-              measuredHeight,
-            });
-          }
-          appLog.info("Webcam stream attached and playback started", {
-            videoWidth: video.videoWidth,
-            videoHeight: video.videoHeight,
-            trackWidth: trackSettings.width ?? null,
-            trackHeight: trackSettings.height ?? null,
-          });
+          await attachStreamToVideoElement(video, "camera_init");
         } else {
           appLog.warn("Video ref was unavailable after webcam stream setup");
         }
@@ -1977,6 +2027,7 @@ export default function App() {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
+      attachedVideoElementRef.current = null;
     };
   }, [appLog]);
 
@@ -2098,7 +2149,23 @@ export default function App() {
       observer.disconnect();
       window.removeEventListener("resize", syncCanvasSize);
     };
-  }, [appLog]);
+  }, [appLog, phase]);
+
+  useEffect(() => {
+    const activeVideoElement = videoRef.current;
+    if (!cameraReady || !activeVideoElement || !streamRef.current) {
+      return;
+    }
+
+    if (
+      attachedVideoElementRef.current === activeVideoElement &&
+      activeVideoElement.srcObject === streamRef.current
+    ) {
+      return;
+    }
+
+    void attachStreamToVideoElement(activeVideoElement, "phase_video_swap");
+  }, [cameraReady, phase]);
 
   useEffect(() => {
     if (phase !== PHASES.GAME) {
@@ -2638,6 +2705,21 @@ export default function App() {
     requestAnimationFrame(() => resetSandboxBlocks("open_sandbox"));
   }
 
+  function openFullscreenCameraScreen() {
+    appLog.info("Opening fullscreen camera screen");
+    stopGameSession();
+    resetArcCalibrationSession("open_fullscreen_camera");
+    setIsCalibrating(false);
+    isCalibratingRef.current = false;
+    calibrationSampleRef.current = null;
+    setCalibrationSampleFrames(0);
+    setPhase(PHASES.FULLSCREEN_CAMERA);
+    phaseRef.current = PHASES.FULLSCREEN_CAMERA;
+    setCalibrationMessage(
+      "Fullscreen camera active. Webcam view fits the entire browser window without cropping.",
+    );
+  }
+
   function returnToCalibrationInputTest() {
     appLog.info("Returning from sandbox to calibration input test");
     sandboxGrabbedBlockIdRef.current = null;
@@ -2645,6 +2727,13 @@ export default function App() {
     sandboxGrabVelocityRef.current = { vx: 0, vy: 0 };
     sandboxGrabLastPositionRef.current = { x: 0, y: 0, timestamp: 0 };
     setSandboxGrabbedBlockId(null);
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
+  function returnFromFullscreenCameraScreen() {
+    appLog.info("Returning from fullscreen camera to calibration input test");
     setPhase(PHASES.CALIBRATION);
     phaseRef.current = PHASES.CALIBRATION;
     setCalibrationMessage("Back on Calibration Input Test.");
@@ -4549,7 +4638,7 @@ export default function App() {
     }
   }
 
-  function computeCameraCoverMetrics() {
+  function computeCameraRenderMetrics(objectFit = getCameraObjectFitForPhase(phaseRef.current)) {
     const video = videoRef.current;
     const canvas = overlayCanvasRef.current;
     if (!video || !canvas || !video.videoWidth || !video.videoHeight || !canvas.width || !canvas.height) {
@@ -4560,7 +4649,10 @@ export default function App() {
     const videoHeight = video.videoHeight;
     const canvasWidth = canvas.width;
     const canvasHeight = canvas.height;
-    const scale = Math.max(canvasWidth / videoWidth, canvasHeight / videoHeight);
+    const scale =
+      objectFit === "contain"
+        ? Math.min(canvasWidth / videoWidth, canvasHeight / videoHeight)
+        : Math.max(canvasWidth / videoWidth, canvasHeight / videoHeight);
     const renderedWidth = videoWidth * scale;
     const renderedHeight = videoHeight * scale;
     const offsetX = (canvasWidth - renderedWidth) / 2;
@@ -4597,6 +4689,7 @@ export default function App() {
         height: videoHeight,
       },
       render: {
+        objectFit,
         scale,
         renderedWidth,
         renderedHeight,
@@ -4614,11 +4707,30 @@ export default function App() {
     };
   }
 
+  function projectCameraPointToCanvas(point, renderMetrics) {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas || !Number.isFinite(point?.u) || !Number.isFinite(point?.v)) {
+      return null;
+    }
+
+    if (!renderMetrics) {
+      return {
+        x: point.u * canvas.width,
+        y: point.v * canvas.height,
+      };
+    }
+
+    return {
+      x: renderMetrics.render.offsetX + point.u * renderMetrics.render.renderedWidth,
+      y: renderMetrics.render.offsetY + point.v * renderMetrics.render.renderedHeight,
+    };
+  }
+
   function logTrackingExtentsSnapshot(reason) {
     const extentState = trackingExtentsRef.current;
-    const coverMetrics = computeCameraCoverMetrics();
-    const canvasWidth = coverMetrics?.canvas.width ?? 0;
-    const canvasHeight = coverMetrics?.canvas.height ?? 0;
+    const renderMetrics = computeCameraRenderMetrics();
+    const canvasWidth = renderMetrics?.canvas.width ?? 0;
+    const canvasHeight = renderMetrics?.canvas.height ?? 0;
 
     const fingerExtents = EXTENT_FINGER_NAMES.reduce((accumulator, fingerName) => {
       accumulator[fingerName] = summarizeFingerExtentStats(
@@ -4629,17 +4741,17 @@ export default function App() {
       return accumulator;
     }, {});
 
-    const visibleMirroredBounds = coverMetrics
+    const visibleMirroredBounds = renderMetrics
       ? {
-          uMin: roundMetric(coverMetrics.mirroredNormalized.uMin),
-          uMax: roundMetric(coverMetrics.mirroredNormalized.uMax),
-          vMin: roundMetric(coverMetrics.mirroredNormalized.vMin),
-          vMax: roundMetric(coverMetrics.mirroredNormalized.vMax),
+          uMin: roundMetric(renderMetrics.mirroredNormalized.uMin),
+          uMax: roundMetric(renderMetrics.mirroredNormalized.uMax),
+          vMin: roundMetric(renderMetrics.mirroredNormalized.vMin),
+          vMax: roundMetric(renderMetrics.mirroredNormalized.vMax),
           uSpan: roundMetric(
-            coverMetrics.mirroredNormalized.uMax - coverMetrics.mirroredNormalized.uMin,
+            renderMetrics.mirroredNormalized.uMax - renderMetrics.mirroredNormalized.uMin,
           ),
           vSpan: roundMetric(
-            coverMetrics.mirroredNormalized.vMax - coverMetrics.mirroredNormalized.vMin,
+            renderMetrics.mirroredNormalized.vMax - renderMetrics.mirroredNormalized.vMin,
           ),
         }
       : null;
@@ -4682,22 +4794,23 @@ export default function App() {
               vMax: roundMetric(extentState.lastVisibleBounds.vMax),
             }
           : null,
-      cameraCoverMetrics: coverMetrics
+      cameraCoverMetrics: renderMetrics
         ? {
-            canvas: coverMetrics.canvas,
-            video: coverMetrics.video,
+            canvas: renderMetrics.canvas,
+            video: renderMetrics.video,
             render: {
-              scale: roundMetric(coverMetrics.render.scale, 5),
-              renderedWidth: roundMetric(coverMetrics.render.renderedWidth, 2),
-              renderedHeight: roundMetric(coverMetrics.render.renderedHeight, 2),
-              offsetX: roundMetric(coverMetrics.render.offsetX, 2),
-              offsetY: roundMetric(coverMetrics.render.offsetY, 2),
+              objectFit: renderMetrics.render.objectFit,
+              scale: roundMetric(renderMetrics.render.scale, 5),
+              renderedWidth: roundMetric(renderMetrics.render.renderedWidth, 2),
+              renderedHeight: roundMetric(renderMetrics.render.renderedHeight, 2),
+              offsetX: roundMetric(renderMetrics.render.offsetX, 2),
+              offsetY: roundMetric(renderMetrics.render.offsetY, 2),
             },
             visibleSourcePixels: {
-              x: roundMetric(coverMetrics.visibleSourcePixels.x, 2),
-              y: roundMetric(coverMetrics.visibleSourcePixels.y, 2),
-              width: roundMetric(coverMetrics.visibleSourcePixels.width, 2),
-              height: roundMetric(coverMetrics.visibleSourcePixels.height, 2),
+              x: roundMetric(renderMetrics.visibleSourcePixels.x, 2),
+              y: roundMetric(renderMetrics.visibleSourcePixels.y, 2),
+              width: roundMetric(renderMetrics.visibleSourcePixels.width, 2),
+              height: roundMetric(renderMetrics.visibleSourcePixels.height, 2),
             },
           }
         : null,
@@ -4809,15 +4922,16 @@ export default function App() {
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const renderMetrics = computeCameraRenderMetrics();
 
     if (hand?.fingerTips) {
       for (const [fingerName, style] of Object.entries(FINGERTIP_OVERLAY_STYLES)) {
         const tip = hand.fingerTips[fingerName];
-        if (!tip) {
+        const projectedTip = projectCameraPointToCanvas(tip, renderMetrics);
+        if (!projectedTip) {
           continue;
         }
-        const x = tip.u * canvas.width;
-        const y = tip.v * canvas.height;
+        const { x, y } = projectedTip;
 
         ctx.fillStyle = style.fill;
         ctx.beginPath();
@@ -4833,17 +4947,25 @@ export default function App() {
         }
       }
     } else if (hand?.thumbTip) {
+      const projectedThumbTip = projectCameraPointToCanvas(hand.thumbTip, renderMetrics);
+      if (!projectedThumbTip) {
+        return;
+      }
       ctx.fillStyle = "rgba(255, 255, 255, 0.98)";
       ctx.beginPath();
-      ctx.arc(hand.thumbTip.u * canvas.width, hand.thumbTip.v * canvas.height, 6.2, 0, Math.PI * 2);
+      ctx.arc(projectedThumbTip.x, projectedThumbTip.y, 6.2, 0, Math.PI * 2);
       ctx.fill();
     }
 
     if (debugRef.current && hand?.landmarks) {
       ctx.fillStyle = "rgba(111, 245, 164, 0.9)";
       for (const point of hand.landmarks) {
+        const projectedPoint = projectCameraPointToCanvas(point, renderMetrics);
+        if (!projectedPoint) {
+          continue;
+        }
         ctx.beginPath();
-        ctx.arc(point.u * canvas.width, point.v * canvas.height, 2.8, 0, Math.PI * 2);
+        ctx.arc(projectedPoint.x, projectedPoint.y, 2.8, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -4871,6 +4993,7 @@ export default function App() {
     if (!options.showSkeleton) {
       return;
     }
+    const renderMetrics = computeCameraRenderMetrics();
 
     const safeHands = Array.isArray(hands) ? hands : [];
     const handStyles = [
@@ -4898,31 +5021,33 @@ export default function App() {
       if (Array.isArray(hand.landmarks) && hand.landmarks.length > 0) {
         ctx.fillStyle = style.point;
         for (const point of hand.landmarks) {
-          if (!Number.isFinite(point?.u) || !Number.isFinite(point?.v)) {
+          const projectedPoint = projectCameraPointToCanvas(point, renderMetrics);
+          if (!projectedPoint) {
             continue;
           }
           ctx.beginPath();
-          ctx.arc(point.u * canvas.width, point.v * canvas.height, 2.2, 0, Math.PI * 2);
+          ctx.arc(projectedPoint.x, projectedPoint.y, 2.2, 0, Math.PI * 2);
           ctx.fill();
         }
       }
 
       for (const fingerName of EXTENT_FINGER_NAMES) {
         const tip = fingerTips[fingerName];
-        if (!tip || !Number.isFinite(tip.u) || !Number.isFinite(tip.v)) {
+        const projectedTip = projectCameraPointToCanvas(tip, renderMetrics);
+        if (!projectedTip) {
           continue;
         }
-        const x = tip.u * canvas.width;
-        const y = tip.v * canvas.height;
+        const { x, y } = projectedTip;
         ctx.fillStyle = style.point;
         ctx.beginPath();
         ctx.arc(x, y, fingerName === "thumb" ? 6 : 5, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      if (pointerTip && Number.isFinite(pointerTip.u) && Number.isFinite(pointerTip.v)) {
-        const pointerX = pointerTip.u * canvas.width;
-        const pointerY = pointerTip.v * canvas.height;
+      const projectedPointerTip = projectCameraPointToCanvas(pointerTip, renderMetrics);
+      if (projectedPointerTip) {
+        const pointerX = projectedPointerTip.x;
+        const pointerY = projectedPointerTip.y;
         ctx.strokeStyle = style.ring;
         ctx.lineWidth = 6;
         ctx.beginPath();
@@ -4965,6 +5090,7 @@ export default function App() {
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const renderMetrics = computeCameraRenderMetrics();
     if (pose && Array.isArray(pose.keypoints) && pose.keypoints.length > 0) {
       const keypointMap = {};
       for (const keypoint of pose.keypoints) {
@@ -4979,17 +5105,21 @@ export default function App() {
       for (const [startName, endName] of POSE_CONNECTIONS) {
         const start = keypointMap[startName];
         const end = keypointMap[endName];
+        const projectedStart = projectCameraPointToCanvas(start, renderMetrics);
+        const projectedEnd = projectCameraPointToCanvas(end, renderMetrics);
         if (
           !start ||
           !end ||
+          !projectedStart ||
+          !projectedEnd ||
           (start.score ?? 0) < POSE_KEYPOINT_THRESHOLD ||
           (end.score ?? 0) < POSE_KEYPOINT_THRESHOLD
         ) {
           continue;
         }
         ctx.beginPath();
-        ctx.moveTo(start.u * canvas.width, start.v * canvas.height);
-        ctx.lineTo(end.u * canvas.width, end.v * canvas.height);
+        ctx.moveTo(projectedStart.x, projectedStart.y);
+        ctx.lineTo(projectedEnd.x, projectedEnd.y);
         ctx.stroke();
       }
 
@@ -5022,12 +5152,12 @@ export default function App() {
       };
 
       for (const keypoint of pose.keypoints) {
-        if (!keypoint?.name || (keypoint.score ?? 0) < POSE_KEYPOINT_THRESHOLD) {
+        const projectedKeypoint = projectCameraPointToCanvas(keypoint, renderMetrics);
+        if (!keypoint?.name || !projectedKeypoint || (keypoint.score ?? 0) < POSE_KEYPOINT_THRESHOLD) {
           continue;
         }
         const group = resolveGroup(keypoint.name);
-        const x = keypoint.u * canvas.width;
-        const y = keypoint.v * canvas.height;
+        const { x, y } = projectedKeypoint;
         ctx.fillStyle = colorByGroup[group];
         ctx.beginPath();
         ctx.arc(x, y, group === "eyes" ? 4.6 : 5.8, 0, Math.PI * 2);
@@ -5055,35 +5185,40 @@ export default function App() {
       for (const [startIndex, endIndex] of HAND_ROOT_CONNECTIONS) {
         const start = landmarks[startIndex];
         const end = landmarks[endIndex];
-        if (!isValidHandLandmark(start) || !isValidHandLandmark(end)) {
+        const projectedStart = projectCameraPointToCanvas(start, renderMetrics);
+        const projectedEnd = projectCameraPointToCanvas(end, renderMetrics);
+        if (!projectedStart || !projectedEnd) {
           continue;
         }
         ctx.beginPath();
-        ctx.moveTo(start.u * canvas.width, start.v * canvas.height);
-        ctx.lineTo(end.u * canvas.width, end.v * canvas.height);
+        ctx.moveTo(projectedStart.x, projectedStart.y);
+        ctx.lineTo(projectedEnd.x, projectedEnd.y);
         ctx.stroke();
       }
       for (const chain of HAND_FINGER_CHAINS) {
         for (let index = 1; index < chain.length; index += 1) {
           const start = landmarks[chain[index - 1]];
           const end = landmarks[chain[index]];
-          if (!isValidHandLandmark(start) || !isValidHandLandmark(end)) {
+          const projectedStart = projectCameraPointToCanvas(start, renderMetrics);
+          const projectedEnd = projectCameraPointToCanvas(end, renderMetrics);
+          if (!projectedStart || !projectedEnd) {
             continue;
           }
           ctx.beginPath();
-          ctx.moveTo(start.u * canvas.width, start.v * canvas.height);
-          ctx.lineTo(end.u * canvas.width, end.v * canvas.height);
+          ctx.moveTo(projectedStart.x, projectedStart.y);
+          ctx.lineTo(projectedEnd.x, projectedEnd.y);
           ctx.stroke();
         }
       }
 
       for (const tipIndex of HAND_FINGERTIP_INDEXES) {
         const tip = landmarks[tipIndex];
-        if (!isValidHandLandmark(tip)) {
+        const projectedTip = projectCameraPointToCanvas(tip, renderMetrics);
+        if (!projectedTip) {
           continue;
         }
-        const tipX = tip.u * canvas.width;
-        const tipY = tip.v * canvas.height;
+        const tipX = projectedTip.x;
+        const tipY = projectedTip.y;
         ctx.fillStyle = fillColor;
         ctx.beginPath();
         ctx.arc(tipX, tipY, 5.3, 0, Math.PI * 2);
@@ -5286,8 +5421,8 @@ export default function App() {
     lastValidHandTimestampRef.current = timestamp;
     handGraceFrameCounterRef.current = 0;
 
-    const coverMetrics = computeCameraCoverMetrics();
-    const visibleBounds = coverMetrics?.mirroredNormalized ?? null;
+    const renderMetrics = computeCameraRenderMetrics();
+    const visibleBounds = renderMetrics?.mirroredNormalized ?? null;
     const thumbTipRawU = Number.isFinite(hand.thumbTip?.uRaw) ? hand.thumbTip.uRaw : hand.thumbTip?.u;
     const thumbTipRawV = Number.isFinite(hand.thumbTip?.vRaw) ? hand.thumbTip.vRaw : hand.thumbTip?.v;
     const indexTipRawU = Number.isFinite(hand.indexTip?.uRaw) ? hand.indexTip.uRaw : hand.indexTip?.u;
@@ -5322,12 +5457,13 @@ export default function App() {
           : Number.isFinite(hand.indexTip?.u) && Number.isFinite(hand.indexTip?.v)
             ? { u: hand.indexTip.u, v: hand.indexTip.v }
             : null;
-    const runnerUsesIndexPointer = phaseRef.current === PHASES.RUNNER;
+    const usesIndexPointer =
+      phaseRef.current === PHASES.RUNNER || phaseRef.current === PHASES.FULLSCREEN_CAMERA;
     const mappedPointerTip =
-      runnerUsesIndexPointer && mappedIndexTip
+      usesIndexPointer && mappedIndexTip
         ? mappedIndexTip
         : mappedThumbTip;
-    const pointerSource = runnerUsesIndexPointer && mappedIndexTip ? "index" : "thumb";
+    const pointerSource = usesIndexPointer && mappedIndexTip ? "index" : "thumb";
     const pointerRawU = pointerSource === "index" ? indexTipRawU : thumbTipRawU;
     const pointerRawV = pointerSource === "index" ? indexTipRawV : thumbTipRawV;
     const pointerClampedU = pointerSource === "index" ? hand.indexTip?.u : hand.thumbTip?.u;
@@ -5381,10 +5517,14 @@ export default function App() {
       Boolean(transformRef.current) &&
       !isCalibratingRef.current &&
       !isArcCalibratingRef.current;
-    let mappedPoint = {
-      x: mappedPointerTip.u * viewportRef.current.width,
-      y: mappedPointerTip.v * viewportRef.current.height,
-    };
+    const renderedPointerPoint = projectCameraPointToCanvas(mappedPointerTip, renderMetrics);
+    let mappedPoint =
+      phaseRef.current === PHASES.FULLSCREEN_CAMERA && renderedPointerPoint
+        ? renderedPointerPoint
+        : {
+            x: mappedPointerTip.u * viewportRef.current.width,
+            y: mappedPointerTip.v * viewportRef.current.height,
+          };
     let transformMode = "none";
     let arcMappedPoint = null;
     if (shouldUseTransform) {
@@ -6258,6 +6398,64 @@ export default function App() {
     };
   }, [appLog, cameraReady, modelReady]);
 
+  if (isFullscreenCameraPhase) {
+    return (
+      <div className="app fullscreen-camera-app">
+        <div className="fullscreen-camera-stage" ref={cameraWrapRef}>
+          <video
+            ref={videoRef}
+            className="camera-video fullscreen-camera-video"
+            style={{ objectFit: cameraObjectFit }}
+            playsInline
+            muted
+            autoPlay
+          />
+          <canvas ref={overlayCanvasRef} className="camera-overlay" />
+
+          <div className="fullscreen-camera-hud">
+            <div className="fullscreen-camera-meta">
+              <span className="fullscreen-camera-chip">{cameraPanelTitle}</span>
+              <span className={`tracking-indicator ${handDetected ? "ok" : "warn"}`}>
+                {handDetected ? "Hand detected" : "Hand not detected"} | FPS: {fps.toFixed(1)}
+              </span>
+            </div>
+            <div className="fullscreen-camera-meta fullscreen-camera-actions">
+              <span className="fullscreen-camera-note">
+                Camera fits the window without cropping. Press `Esc` to close.
+              </span>
+              <button type="button" className="secondary" onClick={returnFromFullscreenCameraScreen}>
+                Back to Input Test
+              </button>
+            </div>
+            {(cameraError || modelError) && (
+              <div className="fullscreen-camera-errors">
+                {cameraError && <p className="error-text">{cameraError}</p>}
+                {modelError && <p className="error-text">{modelError}</p>}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div
+          className={`tracked-cursor ${handDetected ? "" : "paused"}`}
+          style={{
+            left: `${cursor.x}px`,
+            top: `${cursor.y}px`,
+          }}
+        />
+        {debugEnabled && (
+          <div
+            className="raw-cursor"
+            style={{
+              left: `${rawCursor.x}px`,
+              top: `${rawCursor.y}px`,
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <header className="top-bar">
@@ -6526,6 +6724,14 @@ export default function App() {
                       disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
                     >
                       Open Pinch Sandbox
+                    </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={openFullscreenCameraScreen}
+                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
+                    >
+                      Open Fullscreen Camera
                     </button>
                     <button
                       className="secondary"

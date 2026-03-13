@@ -42,6 +42,12 @@ body {
   width: 100%;
 }
 
+.fullscreen-camera-app {
+  background: #02070d;
+  overflow: hidden;
+  padding: 0;
+}
+
 .top-bar {
   align-items: center;
   display: flex;
@@ -135,6 +141,16 @@ body {
   width: 100%;
 }
 
+.fullscreen-camera-stage {
+  background:
+    radial-gradient(circle at 50% 12%, rgba(27, 57, 94, 0.42), transparent 34%),
+    #03070c;
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
+  width: 100vw;
+}
+
 .camera-video,
 .camera-overlay {
   height: 100%;
@@ -149,8 +165,75 @@ body {
   transform: scaleX(-1);
 }
 
+.fullscreen-camera-video {
+  background: transparent;
+}
+
 .camera-overlay {
   pointer-events: none;
+}
+
+.fullscreen-camera-hud {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  inset: 0;
+  justify-content: space-between;
+  padding: 18px;
+  pointer-events: none;
+  position: absolute;
+  z-index: 6;
+}
+
+.fullscreen-camera-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.fullscreen-camera-actions {
+  align-items: flex-end;
+  flex-direction: column;
+}
+
+.fullscreen-camera-chip {
+  background: rgba(7, 13, 21, 0.76);
+  border: 1px solid rgba(168, 190, 215, 0.22);
+  border-radius: 999px;
+  color: #f1f7ff;
+  font-size: 0.92rem;
+  font-weight: 700;
+  padding: 8px 12px;
+}
+
+.fullscreen-camera-note {
+  background: rgba(7, 13, 21, 0.76);
+  border: 1px solid rgba(168, 190, 215, 0.22);
+  border-radius: 12px;
+  color: #dfeaf7;
+  max-width: min(460px, 100%);
+  padding: 10px 12px;
+}
+
+.fullscreen-camera-hud button {
+  pointer-events: auto;
+}
+
+.fullscreen-camera-errors {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fullscreen-camera-errors .error-text {
+  background: rgba(76, 10, 10, 0.84);
+  border: 1px solid rgba(255, 166, 166, 0.28);
+  border-radius: 10px;
+  color: #ffe4e4;
+  margin: 0;
+  padding: 10px 12px;
 }
 
 .help-text {
@@ -1371,6 +1454,18 @@ button:disabled {
   .content-grid.body-layout .camera-card,
   .body-pose-panel {
     width: 100%;
+  }
+
+  .fullscreen-camera-hud {
+    padding: 14px;
+  }
+
+  .fullscreen-camera-actions {
+    align-items: stretch;
+  }
+
+  .fullscreen-camera-note {
+    max-width: 100%;
   }
 
   .body-pose-status-grid {
