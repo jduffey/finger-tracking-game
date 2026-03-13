@@ -78,6 +78,7 @@ const FULLSCREEN_RING_TRAIL_SAMPLE_INTERVAL_MS = 34;
 const FULLSCREEN_PULSE_RING_DURATION_MS = 1800;
 const FULLSCREEN_PULSE_RING_INTERVAL_MS = 260;
 const FULLSCREEN_RING_STEP_PX = 36;
+const FULLSCREEN_STATIC_RING_STEP_PX = FULLSCREEN_RING_STEP_PX * 2;
 const FULLSCREEN_RING_LAYERS = [
   { diameter: 44, color: "#ff0000" },
   { diameter: 80, color: "#ff8d00" },
@@ -85,6 +86,180 @@ const FULLSCREEN_RING_LAYERS = [
   { diameter: 152, color: "#00d619" },
   { diameter: 188, color: "#009fff" },
 ];
+
+function clipPolygonToHalfPlane(polygon, normalX, normalY, offset) {
+  if (!Array.isArray(polygon) || polygon.length === 0) {
+    return [];
+  }
+
+  const clipped = [];
+  const isInside = (point) => normalX * point.x + normalY * point.y <= offset + 1e-6;
+  const getIntersection = (start, end) => {
+    const deltaX = end.x - start.x;
+    const deltaY = end.y - start.y;
+    const denominator = normalX * deltaX + normalY * deltaY;
+    if (Math.abs(denominator) < 1e-6) {
+      return end;
+    }
+    const t = (offset - normalX * start.x - normalY * start.y) / denominator;
+    return {
+      x: start.x + deltaX * t,
+      y: start.y + deltaY * t,
+    };
+  };
+
+  for (let index = 0; index < polygon.length; index += 1) {
+    const start = polygon[index];
+    const end = polygon[(index + 1) % polygon.length];
+    const startInside = isInside(start);
+    const endInside = isInside(end);
+
+    if (startInside && endInside) {
+      clipped.push(end);
+    } else if (startInside && !endInside) {
+      clipped.push(getIntersection(start, end));
+    } else if (!startInside && endInside) {
+      clipped.push(getIntersection(start, end), end);
+    }
+  }
+
+  return clipped;
+}
+
+function buildStaticRippleClipPolygon(point, points, viewport) {
+  if (
+    !viewport ||
+    !Number.isFinite(point?.x) ||
+    !Number.isFinite(point?.y) ||
+    !Number.isFinite(viewport.width) ||
+    !Number.isFinite(viewport.height)
+  ) {
+    return null;
+  }
+
+  const localPoint = {
+    x: point.x - viewport.left,
+    y: point.y - viewport.top,
+  };
+  let polygon = [
+    { x: 0, y: 0 },
+    { x: viewport.width, y: 0 },
+    { x: viewport.width, y: viewport.height },
+    { x: 0, y: viewport.height },
+  ];
+
+  for (const candidate of points) {
+    if (
+      candidate?.id === point.id ||
+      !Number.isFinite(candidate?.x) ||
+      !Number.isFinite(candidate?.y)
+    ) {
+      continue;
+    }
+
+    const candidateLocal = {
+      x: candidate.x - viewport.left,
+      y: candidate.y - viewport.top,
+    };
+    const normalX = candidateLocal.x - localPoint.x;
+    const normalY = candidateLocal.y - localPoint.y;
+    const offset =
+      (candidateLocal.x * candidateLocal.x +
+        candidateLocal.y * candidateLocal.y -
+        localPoint.x * localPoint.x -
+        localPoint.y * localPoint.y) /
+      2;
+
+    polygon = clipPolygonToHalfPlane(polygon, normalX, normalY, offset);
+    if (polygon.length === 0) {
+      return null;
+    }
+  }
+
+  return polygon;
+}
+
+function getStaticRippleClipPath(point, points, viewport) {
+  const polygon = buildStaticRippleClipPolygon(point, points, viewport);
+  if (!polygon || polygon.length < 3) {
+    return null;
+  }
+
+  return `polygon(${polygon
+    .map(({ x, y }) => `${x.toFixed(2)}px ${y.toFixed(2)}px`)
+    .join(", ")})`;
+}
+
+function getStaticRippleSeam(pointA, pointB, viewport) {
+  if (
+    !viewport ||
+    !Number.isFinite(pointA?.x) ||
+    !Number.isFinite(pointA?.y) ||
+    !Number.isFinite(pointB?.x) ||
+    !Number.isFinite(pointB?.y)
+  ) {
+    return null;
+  }
+
+  const a = {
+    x: pointA.x - viewport.left,
+    y: pointA.y - viewport.top,
+  };
+  const b = {
+    x: pointB.x - viewport.left,
+    y: pointB.y - viewport.top,
+  };
+  const normalX = b.x - a.x;
+  const normalY = b.y - a.y;
+  const offset = (b.x * b.x + b.y * b.y - a.x * a.x - a.y * a.y) / 2;
+  const intersections = [];
+  const registerPoint = (x, y) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return;
+    }
+    if (x < -1e-6 || x > viewport.width + 1e-6 || y < -1e-6 || y > viewport.height + 1e-6) {
+      return;
+    }
+    const roundedX = Math.min(viewport.width, Math.max(0, x));
+    const roundedY = Math.min(viewport.height, Math.max(0, y));
+    const alreadyRegistered = intersections.some(
+      (point) =>
+        Math.abs(point.x - roundedX) < 0.5 && Math.abs(point.y - roundedY) < 0.5,
+    );
+    if (!alreadyRegistered) {
+      intersections.push({ x: roundedX, y: roundedY });
+    }
+  };
+
+  if (Math.abs(normalY) >= 1e-6) {
+    registerPoint(0, offset / normalY);
+    registerPoint(viewport.width, (offset - normalX * viewport.width) / normalY);
+  }
+  if (Math.abs(normalX) >= 1e-6) {
+    registerPoint(offset / normalX, 0);
+    registerPoint((offset - normalY * viewport.height) / normalX, viewport.height);
+  }
+
+  if (intersections.length < 2) {
+    return null;
+  }
+
+  let bestPair = null;
+  let bestDistance = -1;
+  for (let firstIndex = 0; firstIndex < intersections.length; firstIndex += 1) {
+    for (let secondIndex = firstIndex + 1; secondIndex < intersections.length; secondIndex += 1) {
+      const first = intersections[firstIndex];
+      const second = intersections[secondIndex];
+      const distance = Math.hypot(second.x - first.x, second.y - first.y);
+      if (distance > bestDistance) {
+        bestDistance = distance;
+        bestPair = { x1: first.x, y1: first.y, x2: second.x, y2: second.y };
+      }
+    }
+  }
+
+  return bestPair;
+}
 const CALIBRATION_SAMPLE_FRAMES = 10;
 const ARC_CALIBRATION_READY_CONFIDENCE = 0.86;
 const ARC_CALIBRATION_MAX_CAPTURE_FRAMES = 2400;
@@ -6994,7 +7169,7 @@ export default function App() {
 
     const localX = point.x - fullscreenCameraViewport.left;
     const localY = point.y - fullscreenCameraViewport.top;
-    const maxRadius = Math.max(
+    const viewportRadius = Math.max(
       Math.hypot(localX, localY),
       Math.hypot(fullscreenCameraViewport.width - localX, localY),
       Math.hypot(localX, fullscreenCameraViewport.height - localY),
@@ -7003,27 +7178,91 @@ export default function App() {
         fullscreenCameraViewport.height - localY,
       ),
     );
-    const maxDiameter = maxRadius * 2;
+    const maxDiameter = viewportRadius * 2;
     const startDiameter =
-      (FULLSCREEN_RING_LAYERS[FULLSCREEN_RING_LAYERS.length - 1]?.diameter ?? 0) +
-      FULLSCREEN_RING_STEP_PX;
+      (FULLSCREEN_RING_LAYERS[0]?.diameter ?? 0) + FULLSCREEN_STATIC_RING_STEP_PX;
     const diameters = [];
-    for (let diameter = startDiameter; diameter <= maxDiameter + FULLSCREEN_RING_STEP_PX; diameter += FULLSCREEN_RING_STEP_PX) {
+    const clipPath = getStaticRippleClipPath(
+      point,
+      fullscreenIndexPoints,
+      fullscreenCameraViewport,
+    );
+    for (
+      let diameter = startDiameter;
+      diameter <= maxDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
+      diameter += FULLSCREEN_STATIC_RING_STEP_PX
+    ) {
       diameters.push(diameter);
     }
 
-    return diameters.map((diameter) => (
+    return (
       <div
-        key={`${keyPrefix}-${point.id}-${diameter}`}
-        className="fullscreen-camera-static-ring"
+        key={`${keyPrefix}-${point.id}`}
+        className="fullscreen-camera-static-ripple-field"
+        style={{
+          clipPath,
+        }}
+      >
+        {diameters.map((diameter) => (
+          <div
+            key={`${keyPrefix}-${point.id}-${diameter}`}
+            className="fullscreen-camera-static-ring"
+            style={{
+              left: `${point.x - fullscreenCameraViewport.left}px`,
+              top: `${point.y - fullscreenCameraViewport.top}px`,
+              width: `${diameter}px`,
+              height: `${diameter}px`,
+            }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  function renderFullscreenStaticCenter(point, keyPrefix) {
+    if (!fullscreenCameraViewport || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
+      return null;
+    }
+
+    const centerDiameter = FULLSCREEN_RING_LAYERS[0]?.diameter ?? 44;
+    return (
+      <div
+        key={`${keyPrefix}-${point.id}`}
+        className="fullscreen-camera-static-center"
         style={{
           left: `${point.x - fullscreenCameraViewport.left}px`,
           top: `${point.y - fullscreenCameraViewport.top}px`,
-          width: `${diameter}px`,
-          height: `${diameter}px`,
+          width: `${centerDiameter}px`,
+          height: `${centerDiameter}px`,
         }}
       />
-    ));
+    );
+  }
+
+  function renderFullscreenStaticSeam(keyPrefix) {
+    if (!fullscreenCameraViewport || fullscreenIndexPoints.length !== 2) {
+      return null;
+    }
+
+    const seam = getStaticRippleSeam(
+      fullscreenIndexPoints[0],
+      fullscreenIndexPoints[1],
+      fullscreenCameraViewport,
+    );
+    if (!seam) {
+      return null;
+    }
+
+    return (
+      <svg
+        key={keyPrefix}
+        className="fullscreen-camera-static-seam"
+        viewBox={`0 0 ${fullscreenCameraViewport.width} ${fullscreenCameraViewport.height}`}
+        preserveAspectRatio="none"
+      >
+        <line x1={seam.x1} y1={seam.y1} x2={seam.x2} y2={seam.y2} />
+      </svg>
+    );
   }
 
   if (isFullscreenCameraPhase) {
@@ -7116,8 +7355,9 @@ export default function App() {
               {fullscreenIndexPoints.map((point) =>
                 renderFullscreenStaticRingSet(point, "fullscreen-static-rings"),
               )}
+              {renderFullscreenStaticSeam("fullscreen-static-seam")}
               {fullscreenIndexPoints.map((point) =>
-                renderFullscreenRingGroup(point, 0.9, "fullscreen-static-current"),
+                renderFullscreenStaticCenter(point, "fullscreen-static-center"),
               )}
             </div>
           ) : (
