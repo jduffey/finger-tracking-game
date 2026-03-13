@@ -7506,6 +7506,73 @@ export default function App() {
     );
   }
 
+  function renderFullscreenTipRippleBandSet(point, keyPrefix) {
+    if (!fullscreenCameraViewport || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
+      return null;
+    }
+
+    const localX = point.x - fullscreenCameraViewport.left;
+    const localY = point.y - fullscreenCameraViewport.top;
+    const viewportRadius = Math.max(
+      Math.hypot(localX, localY),
+      Math.hypot(fullscreenCameraViewport.width - localX, localY),
+      Math.hypot(localX, fullscreenCameraViewport.height - localY),
+      Math.hypot(
+        fullscreenCameraViewport.width - localX,
+        fullscreenCameraViewport.height - localY,
+      ),
+    );
+    const maxDiameter = viewportRadius * 2;
+    const centerDiameter = FULLSCREEN_RING_LAYERS[0]?.diameter ?? 44;
+    const clipPath = getStaticRippleClipPath(
+      point,
+      fullscreenTipPoints,
+      fullscreenCameraViewport,
+    );
+    const bands = [];
+
+    for (
+      let bandIndex = 0, innerDiameter = centerDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
+      innerDiameter < maxDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
+      bandIndex += 1, innerDiameter += FULLSCREEN_STATIC_RING_STEP_PX * 2
+    ) {
+      const outerDiameter = innerDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
+      const borderWidth = (outerDiameter - innerDiameter) / 2;
+      const color =
+        FULLSCREEN_TIP_RIPPLE_COLORS[bandIndex % FULLSCREEN_TIP_RIPPLE_COLORS.length];
+      bands.push({
+        innerDiameter,
+        borderWidth,
+        color,
+      });
+    }
+
+    return (
+      <div
+        key={`${keyPrefix}-${point.id}`}
+        className="fullscreen-camera-static-ripple-field"
+        style={{
+          clipPath,
+        }}
+      >
+        {bands.map((band) => (
+          <div
+            key={`${keyPrefix}-${point.id}-${band.innerDiameter}`}
+            className="fullscreen-camera-tip-ripple-band"
+            style={{
+              left: `${point.x - fullscreenCameraViewport.left}px`,
+              top: `${point.y - fullscreenCameraViewport.top}px`,
+              width: `${band.innerDiameter}px`,
+              height: `${band.innerDiameter}px`,
+              borderWidth: `${band.borderWidth}px`,
+              borderColor: band.color,
+            }}
+          />
+        ))}
+      </div>
+    );
+  }
+
   function renderFullscreenStaticCenter(point, keyPrefix) {
     if (!fullscreenCameraViewport || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
       return null;
@@ -7661,6 +7728,18 @@ export default function App() {
                 renderFullscreenStaticCenter(point, "fullscreen-tip-ripple-center"),
               )}
             </div>
+          ) : fullscreenGridMode === "tip-ripples-v2" ? (
+            <div
+              className="fullscreen-camera-rings"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenTipPoints.map((point) =>
+                renderFullscreenTipRippleBandSet(point, "fullscreen-tip-ripple-v2-bands"),
+              )}
+              {fullscreenTipPoints.map((point) =>
+                renderFullscreenStaticCenter(point, "fullscreen-tip-ripple-v2-center"),
+              )}
+            </div>
           ) : fullscreenGridMode === "static" ? (
             <div
               className="fullscreen-camera-rings"
@@ -7753,6 +7832,13 @@ export default function App() {
                   onClick={() => setFullscreenGridMode("tip-ripples")}
                 >
                   Tip Ripples
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "tip-ripples-v2" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("tip-ripples-v2")}
+                >
+                  Tip Ripples v2
                 </button>
                 <button
                   type="button"

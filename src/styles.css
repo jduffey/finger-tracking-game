@@ -266,6 +266,16 @@ body {
   transform: translate(-50%, -50%);
 }
 
+.fullscreen-camera-tip-ripple-band {
+  border-radius: 50%;
+  border-style: solid;
+  box-sizing: content-box;
+  left: 0;
+  position: absolute;
+  top: 0;
+  transform: translate(-50%, -50%);
+}
+
 .fullscreen-camera-static-ripple-field {
   inset: 0;
   pointer-events: none;
