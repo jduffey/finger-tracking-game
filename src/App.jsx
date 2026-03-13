@@ -6408,6 +6408,7 @@ export default function App() {
 
     const shouldUseTransform =
       Boolean(transformRef.current) &&
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA &&
       !isCalibratingRef.current &&
       !isArcCalibratingRef.current;
     const renderedPointerPoint = projectCameraPointToCanvas(mappedPointerTip, renderMetrics);
@@ -6418,7 +6419,10 @@ export default function App() {
             x: mappedPointerTip.u * viewportRef.current.width,
             y: mappedPointerTip.v * viewportRef.current.height,
           };
-    let transformMode = "none";
+    let transformMode =
+      phaseRef.current === PHASES.FULLSCREEN_CAMERA && renderedPointerPoint
+        ? "fullscreen_rendered_camera_space"
+        : "none";
     let arcMappedPoint = null;
     if (shouldUseTransform) {
       if (isArcCalibrationModel(transformRef.current)) {
