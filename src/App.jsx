@@ -52,6 +52,7 @@ import { createGesturePersonalization } from "./gestures/personalization.js";
 
 const PHASES = {
   CALIBRATION: "CALIBRATION",
+  FULLSCREEN_CAMERA: "FULLSCREEN_CAMERA",
   SANDBOX: "SANDBOX",
   FLIGHT: "FLIGHT",
   RUNNER: "RUNNER",
@@ -70,6 +71,206 @@ const PINCH_START_THRESHOLD = 0.045;
 const PINCH_END_THRESHOLD = 0.06;
 const PINCH_DEBOUNCE_MS = 250;
 const CURSOR_ALPHA = 0.35;
+const CURSOR_TRAIL_DURATION_MS = 1000;
+const CURSOR_TRAIL_SAMPLE_INTERVAL_MS = 34;
+const CURSOR_TRAIL_MIN_DISTANCE_PX = 6;
+const FULLSCREEN_GRID_SIZE_PX = 48;
+const FULLSCREEN_HEX_RADIUS_PX = 28;
+const FULLSCREEN_RING_TRAIL_DURATION_MS = 2000;
+const FULLSCREEN_RING_TRAIL_SAMPLE_INTERVAL_MS = 34;
+const FULLSCREEN_PULSE_RING_DURATION_MS = 1800;
+const FULLSCREEN_PULSE_RING_INTERVAL_MS = 260;
+const FULLSCREEN_RING_STEP_PX = 36;
+const FULLSCREEN_STATIC_RING_STEP_PX = FULLSCREEN_RING_STEP_PX * 2;
+const FULLSCREEN_RING_LAYERS = [
+  { diameter: 44, color: "#ff0000" },
+  { diameter: 80, color: "#ff8d00" },
+  { diameter: 116, color: "#ffdb00" },
+  { diameter: 152, color: "#00d619" },
+  { diameter: 188, color: "#009fff" },
+];
+const FULLSCREEN_TIP_RIPPLE_COLORS = [
+  FULLSCREEN_RING_LAYERS[1]?.color ?? "#ff8d00",
+  FULLSCREEN_RING_LAYERS[2]?.color ?? "#ffdb00",
+  FULLSCREEN_RING_LAYERS[3]?.color ?? "#00d619",
+  FULLSCREEN_RING_LAYERS[4]?.color ?? "#009fff",
+  FULLSCREEN_RING_LAYERS[0]?.color ?? "#ff0000",
+];
+const FULLSCREEN_VORONOI_DOT_RADIUS = 4.5;
+
+function clipPolygonToHalfPlane(polygon, normalX, normalY, offset) {
+  if (!Array.isArray(polygon) || polygon.length === 0) {
+    return [];
+  }
+
+  const clipped = [];
+  const isInside = (point) => normalX * point.x + normalY * point.y <= offset + 1e-6;
+  const getIntersection = (start, end) => {
+    const deltaX = end.x - start.x;
+    const deltaY = end.y - start.y;
+    const denominator = normalX * deltaX + normalY * deltaY;
+    if (Math.abs(denominator) < 1e-6) {
+      return end;
+    }
+    const t = (offset - normalX * start.x - normalY * start.y) / denominator;
+    return {
+      x: start.x + deltaX * t,
+      y: start.y + deltaY * t,
+    };
+  };
+
+  for (let index = 0; index < polygon.length; index += 1) {
+    const start = polygon[index];
+    const end = polygon[(index + 1) % polygon.length];
+    const startInside = isInside(start);
+    const endInside = isInside(end);
+
+    if (startInside && endInside) {
+      clipped.push(end);
+    } else if (startInside && !endInside) {
+      clipped.push(getIntersection(start, end));
+    } else if (!startInside && endInside) {
+      clipped.push(getIntersection(start, end), end);
+    }
+  }
+
+  return clipped;
+}
+
+function buildStaticRippleClipPolygon(point, points, viewport) {
+  if (
+    !viewport ||
+    !Number.isFinite(point?.x) ||
+    !Number.isFinite(point?.y) ||
+    !Number.isFinite(viewport.width) ||
+    !Number.isFinite(viewport.height)
+  ) {
+    return null;
+  }
+
+  const localPoint = {
+    x: point.x - viewport.left,
+    y: point.y - viewport.top,
+  };
+  let polygon = [
+    { x: 0, y: 0 },
+    { x: viewport.width, y: 0 },
+    { x: viewport.width, y: viewport.height },
+    { x: 0, y: viewport.height },
+  ];
+
+  for (const candidate of points) {
+    if (
+      candidate?.id === point.id ||
+      !Number.isFinite(candidate?.x) ||
+      !Number.isFinite(candidate?.y)
+    ) {
+      continue;
+    }
+
+    const candidateLocal = {
+      x: candidate.x - viewport.left,
+      y: candidate.y - viewport.top,
+    };
+    const normalX = candidateLocal.x - localPoint.x;
+    const normalY = candidateLocal.y - localPoint.y;
+    const offset =
+      (candidateLocal.x * candidateLocal.x +
+        candidateLocal.y * candidateLocal.y -
+        localPoint.x * localPoint.x -
+        localPoint.y * localPoint.y) /
+      2;
+
+    polygon = clipPolygonToHalfPlane(polygon, normalX, normalY, offset);
+    if (polygon.length === 0) {
+      return null;
+    }
+  }
+
+  return polygon;
+}
+
+function getStaticRippleClipPath(point, points, viewport) {
+  const polygon = buildStaticRippleClipPolygon(point, points, viewport);
+  if (!polygon || polygon.length < 3) {
+    return null;
+  }
+
+  return `polygon(${polygon
+    .map(({ x, y }) => `${x.toFixed(2)}px ${y.toFixed(2)}px`)
+    .join(", ")})`;
+}
+
+function getStaticRippleSeam(pointA, pointB, viewport) {
+  if (
+    !viewport ||
+    !Number.isFinite(pointA?.x) ||
+    !Number.isFinite(pointA?.y) ||
+    !Number.isFinite(pointB?.x) ||
+    !Number.isFinite(pointB?.y)
+  ) {
+    return null;
+  }
+
+  const a = {
+    x: pointA.x - viewport.left,
+    y: pointA.y - viewport.top,
+  };
+  const b = {
+    x: pointB.x - viewport.left,
+    y: pointB.y - viewport.top,
+  };
+  const normalX = b.x - a.x;
+  const normalY = b.y - a.y;
+  const offset = (b.x * b.x + b.y * b.y - a.x * a.x - a.y * a.y) / 2;
+  const intersections = [];
+  const registerPoint = (x, y) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return;
+    }
+    if (x < -1e-6 || x > viewport.width + 1e-6 || y < -1e-6 || y > viewport.height + 1e-6) {
+      return;
+    }
+    const roundedX = Math.min(viewport.width, Math.max(0, x));
+    const roundedY = Math.min(viewport.height, Math.max(0, y));
+    const alreadyRegistered = intersections.some(
+      (point) =>
+        Math.abs(point.x - roundedX) < 0.5 && Math.abs(point.y - roundedY) < 0.5,
+    );
+    if (!alreadyRegistered) {
+      intersections.push({ x: roundedX, y: roundedY });
+    }
+  };
+
+  if (Math.abs(normalY) >= 1e-6) {
+    registerPoint(0, offset / normalY);
+    registerPoint(viewport.width, (offset - normalX * viewport.width) / normalY);
+  }
+  if (Math.abs(normalX) >= 1e-6) {
+    registerPoint(offset / normalX, 0);
+    registerPoint((offset - normalY * viewport.height) / normalX, viewport.height);
+  }
+
+  if (intersections.length < 2) {
+    return null;
+  }
+
+  let bestPair = null;
+  let bestDistance = -1;
+  for (let firstIndex = 0; firstIndex < intersections.length; firstIndex += 1) {
+    for (let secondIndex = firstIndex + 1; secondIndex < intersections.length; secondIndex += 1) {
+      const first = intersections[firstIndex];
+      const second = intersections[secondIndex];
+      const distance = Math.hypot(second.x - first.x, second.y - first.y);
+      if (distance > bestDistance) {
+        bestDistance = distance;
+        bestPair = { x1: first.x, y1: first.y, x2: second.x, y2: second.y };
+      }
+    }
+  }
+
+  return bestPair;
+}
 const CALIBRATION_SAMPLE_FRAMES = 10;
 const ARC_CALIBRATION_READY_CONFIDENCE = 0.86;
 const ARC_CALIBRATION_MAX_CAPTURE_FRAMES = 2400;
@@ -366,6 +567,94 @@ function normalizeTipToVisibleBounds(uRaw, vRaw, visibleBounds) {
       vRaw >= visibleBounds.vMin &&
       vRaw <= visibleBounds.vMax,
     wasClamped: uVisible !== uVisibleRaw || vVisible !== vVisibleRaw,
+  };
+}
+
+function getCameraObjectFitForPhase(phase) {
+  return phase === PHASES.FULLSCREEN_CAMERA ? "contain" : "cover";
+}
+
+function pruneCursorTrail(trail, now) {
+  return trail.filter((point) => now - point.timestamp <= FULLSCREEN_RING_TRAIL_DURATION_MS);
+}
+
+function pruneTrackedCursorTrail(trail, now) {
+  return trail.filter((point) => now - point.timestamp <= CURSOR_TRAIL_DURATION_MS);
+}
+
+function prunePulseBursts(bursts, now) {
+  return bursts.filter((burst) => now - burst.startTime <= FULLSCREEN_PULSE_RING_DURATION_MS);
+}
+
+function createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio) {
+  let width = stageWidth;
+  let height = width / aspectRatio;
+  if (height > stageHeight) {
+    height = stageHeight;
+    width = height * aspectRatio;
+  }
+
+  const left = (stageWidth - width) / 2;
+  const top = (stageHeight - height) / 2;
+
+  return {
+    left,
+    top,
+    width,
+    height,
+    style: {
+      left: `${left}px`,
+      top: `${top}px`,
+      width: `${width}px`,
+      height: `${height}px`,
+    },
+  };
+}
+
+function buildFullscreenHexCells(width, height, radius = FULLSCREEN_HEX_RADIUS_PX) {
+  const hexWidth = Math.sqrt(3) * radius;
+  const hexHeight = radius * 2;
+  const verticalStep = radius * 1.5;
+  const rows = Math.ceil(height / verticalStep) + 2;
+  const cols = Math.ceil(width / hexWidth) + 2;
+  const cells = [];
+  const cellMap = new Map();
+
+  for (let row = 0; row < rows; row += 1) {
+    const centerY = radius + row * verticalStep;
+    const rowOffsetX = (row % 2) * (hexWidth / 2);
+    for (let col = 0; col < cols; col += 1) {
+      const centerX = hexWidth / 2 + rowOffsetX + col * hexWidth;
+      const left = centerX - hexWidth / 2;
+      const top = centerY - radius;
+      if (left >= width || top >= height || left + hexWidth <= 0 || top + hexHeight <= 0) {
+        continue;
+      }
+
+      const q = col - ((row - (row & 1)) >> 1);
+      const r = row;
+      const key = `${q},${r}`;
+      const cell = {
+        key,
+        q,
+        r,
+        centerX,
+        centerY,
+        style: {
+          left: `${left}px`,
+          top: `${top}px`,
+          width: `${hexWidth}px`,
+          height: `${hexHeight}px`,
+        },
+      };
+      cells.push(cell);
+      cellMap.set(key, cell);
+    }
+  }
+
+  return {
+    cells,
+    cellMap,
   };
 }
 
@@ -1276,6 +1565,8 @@ export default function App() {
     x: window.innerWidth / 2,
     y: window.innerHeight / 2,
   }));
+  const [cursorTrail, setCursorTrail] = useState([]);
+  const [cursorTrailNow, setCursorTrailNow] = useState(() => performance.now());
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [labConfidenceThreshold, setLabConfidenceThreshold] = useState(
     LAB_DEFAULT_CONFIDENCE_THRESHOLD,
@@ -1304,6 +1595,13 @@ export default function App() {
   const [gestureArtHands, setGestureArtHands] = useState([]);
   const [gestureArtSessionKey, setGestureArtSessionKey] = useState(0);
   const [gestureControlOSSessionKey, setGestureControlOSSessionKey] = useState(0);
+  const [fullscreenIndexPoints, setFullscreenIndexPoints] = useState([]);
+  const [fullscreenTipPoints, setFullscreenTipPoints] = useState([]);
+  const [fullscreenGridMode, setFullscreenGridMode] = useState("square");
+  const [fullscreenRingTrail, setFullscreenRingTrail] = useState([]);
+  const [fullscreenRingTrailNow, setFullscreenRingTrailNow] = useState(() => performance.now());
+  const [fullscreenPulseBursts, setFullscreenPulseBursts] = useState([]);
+  const [fullscreenPulseNow, setFullscreenPulseNow] = useState(() => performance.now());
   const [poseModelReady, setPoseModelReady] = useState(false);
   const [poseModelError, setPoseModelError] = useState("");
   const [poseStatus, setPoseStatus] = useState(createEmptyPoseStatus);
@@ -1370,6 +1668,7 @@ export default function App() {
   const poseDetectorRef = useRef(null);
   const poseInitPromiseRef = useRef(null);
   const streamRef = useRef(null);
+  const attachedVideoElementRef = useRef(null);
   const rafRef = useRef(0);
   const inferenceBusyRef = useRef(false);
   const mountedRef = useRef(true);
@@ -1380,6 +1679,13 @@ export default function App() {
   const transformRef = useRef(transform);
   const cursorRef = useRef(cursor);
   const rawCursorRef = useRef(rawCursor);
+  const cursorTrailRef = useRef([]);
+  const cursorTrailLastSampleAtRef = useRef(0);
+  const fullscreenRingTrailRef = useRef([]);
+  const fullscreenRingTrailLastSampleAtRef = useRef(0);
+  const fullscreenPulseBurstsRef = useRef([]);
+  const fullscreenPulseLastEmitByIdRef = useRef({});
+  const fullscreenGridModeRef = useRef(fullscreenGridMode);
   const debugRef = useRef(debugEnabled);
   const labConfidenceThresholdRef = useRef(labConfidenceThreshold);
   const labShowSkeletonRef = useRef(labShowSkeleton);
@@ -1474,8 +1780,10 @@ export default function App() {
     () => calibrationTargets[calibrationTargetIndex] ?? null,
     [calibrationTargets, calibrationTargetIndex],
   );
+  const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
   const isCalibrationLayoutPhase =
     phase === PHASES.CALIBRATION ||
+    phase === PHASES.FULLSCREEN_CAMERA ||
     phase === PHASES.SANDBOX ||
     phase === PHASES.FLIGHT ||
     phase === PHASES.RUNNER ||
@@ -1488,7 +1796,9 @@ export default function App() {
     phase === PHASES.GESTURE_ART_LAB ||
     phase === PHASES.GESTURE_CONTROL_OS;
   const cameraPanelTitle =
-    phase === PHASES.FLIGHT
+    phase === PHASES.FULLSCREEN_CAMERA
+      ? "Fullscreen Camera"
+      : phase === PHASES.FLIGHT
       ? "Camera + Flight Controls"
       : phase === PHASES.RUNNER
       ? "Camera + Runner Controls"
@@ -1518,6 +1828,298 @@ export default function App() {
       ? inputTestHoveredCell
       : -1;
   const isBodyPosePhase = phase === PHASES.BODY_POSE;
+  const cameraObjectFit = getCameraObjectFitForPhase(phase);
+  const fullscreenCameraViewport = useMemo(() => {
+    if (!isFullscreenCameraPhase) {
+      return null;
+    }
+
+    const stageWidth = viewport.width;
+    const stageHeight = viewport.height;
+    const aspectRatio =
+      Number.isFinite(cameraAspectRatio) && cameraAspectRatio > 0 ? cameraAspectRatio : 4 / 3;
+    return createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio);
+  }, [cameraAspectRatio, isFullscreenCameraPhase, viewport.height, viewport.width]);
+
+  const fullscreenCameraGridMetrics = useMemo(() => {
+    if (!fullscreenCameraViewport) {
+      return null;
+    }
+
+    const { left, top, width, height, style } = fullscreenCameraViewport;
+    const colCount = Math.ceil(width / FULLSCREEN_GRID_SIZE_PX);
+    const rowCount = Math.ceil(height / FULLSCREEN_GRID_SIZE_PX);
+    const cellPriority = {
+      outer: 1,
+      neighbor: 2,
+      highlight: 3,
+    };
+    const cellMap = new Map();
+    const registerCell = (col, row, type) => {
+      if (col < 0 || row < 0 || col >= colCount || row >= rowCount) {
+        return;
+      }
+      const key = `${col}-${row}`;
+      const existing = cellMap.get(key);
+      if (existing && cellPriority[existing.type] >= cellPriority[type]) {
+        return;
+      }
+      const cellLeft = col * FULLSCREEN_GRID_SIZE_PX;
+      const cellTop = row * FULLSCREEN_GRID_SIZE_PX;
+      cellMap.set(key, {
+        key,
+        type,
+        style: {
+          left: `${cellLeft}px`,
+          top: `${cellTop}px`,
+          width: `${Math.min(FULLSCREEN_GRID_SIZE_PX, width - cellLeft)}px`,
+          height: `${Math.min(FULLSCREEN_GRID_SIZE_PX, height - cellTop)}px`,
+        },
+      });
+    };
+
+    for (const point of fullscreenIndexPoints) {
+      const isPointInside =
+        Number.isFinite(point?.x) &&
+        Number.isFinite(point?.y) &&
+        point.x >= left &&
+        point.x <= left + width &&
+        point.y >= top &&
+        point.y <= top + height;
+      if (!isPointInside) {
+        continue;
+      }
+
+      const col = Math.min(Math.floor((point.x - left) / FULLSCREEN_GRID_SIZE_PX), colCount - 1);
+      const row = Math.min(Math.floor((point.y - top) / FULLSCREEN_GRID_SIZE_PX), rowCount - 1);
+      registerCell(col, row, "highlight");
+
+      for (let rowOffset = -2; rowOffset <= 2; rowOffset += 1) {
+        for (let colOffset = -2; colOffset <= 2; colOffset += 1) {
+          const distance = Math.max(Math.abs(rowOffset), Math.abs(colOffset));
+          if (distance === 0) {
+            continue;
+          }
+          if (distance === 1) {
+            registerCell(col + colOffset, row + rowOffset, "neighbor");
+          } else if (distance === 2) {
+            registerCell(col + colOffset, row + rowOffset, "outer");
+          }
+        }
+      }
+    }
+
+    const highlight = [];
+    const neighbors = [];
+    const outerRing = [];
+    for (const cell of cellMap.values()) {
+      if (cell.type === "highlight") {
+        highlight.push(cell);
+      } else if (cell.type === "neighbor") {
+        neighbors.push(cell);
+      } else {
+        outerRing.push(cell);
+      }
+    }
+
+    return {
+      style,
+      highlight,
+      neighbors,
+      outerRing,
+    };
+  }, [fullscreenCameraViewport, fullscreenIndexPoints]);
+
+  const fullscreenHexGridMetrics = useMemo(() => {
+    if (!fullscreenCameraViewport) {
+      return null;
+    }
+
+    const { left, top, width, height, style } = fullscreenCameraViewport;
+    const { cells, cellMap } = buildFullscreenHexCells(width, height);
+    const cellPriority = {
+      outer: 1,
+      neighbor: 2,
+      highlight: 3,
+    };
+    const highlightedCellMap = new Map();
+
+    const registerCell = (cell, type) => {
+      if (!cell) {
+        return;
+      }
+      const existing = highlightedCellMap.get(cell.key);
+      if (existing && cellPriority[existing.type] >= cellPriority[type]) {
+        return;
+      }
+      highlightedCellMap.set(cell.key, {
+        key: cell.key,
+        type,
+        style: cell.style,
+      });
+    };
+
+    for (const point of fullscreenIndexPoints) {
+      const isPointInside =
+        Number.isFinite(point?.x) &&
+        Number.isFinite(point?.y) &&
+        point.x >= left &&
+        point.x <= left + width &&
+        point.y >= top &&
+        point.y <= top + height;
+      if (!isPointInside) {
+        continue;
+      }
+
+      let nearestCell = null;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      for (const cell of cells) {
+        const dx = point.x - (left + cell.centerX);
+        const dy = point.y - (top + cell.centerY);
+        const distance = dx * dx + dy * dy;
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestCell = cell;
+        }
+      }
+      if (!nearestCell) {
+        continue;
+      }
+
+      registerCell(nearestCell, "highlight");
+
+      for (const candidate of cells) {
+        const dq = candidate.q - nearestCell.q;
+        const dr = candidate.r - nearestCell.r;
+        const distance = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
+        if (distance === 1) {
+          registerCell(candidate, "neighbor");
+        } else if (distance === 2) {
+          registerCell(candidate, "outer");
+        }
+      }
+    }
+
+    const highlight = [];
+    const neighbors = [];
+    const outerRing = [];
+    for (const cell of highlightedCellMap.values()) {
+      if (cell.type === "highlight") {
+        highlight.push(cell);
+      } else if (cell.type === "neighbor") {
+        neighbors.push(cell);
+      } else {
+        outerRing.push(cell);
+      }
+    }
+
+    return {
+      style,
+      cells,
+      highlight,
+      neighbors,
+      outerRing,
+    };
+  }, [fullscreenCameraViewport, fullscreenIndexPoints]);
+
+  const fullscreenVoronoiMetrics = useMemo(() => {
+    if (!fullscreenCameraViewport) {
+      return null;
+    }
+
+    const { left, top, width, height, style } = fullscreenCameraViewport;
+    const sites = fullscreenTipPoints.filter(
+      (point) =>
+        Number.isFinite(point?.x) &&
+        Number.isFinite(point?.y) &&
+        point.x >= left &&
+        point.x <= left + width &&
+        point.y >= top &&
+        point.y <= top + height,
+    );
+
+    const cells = sites
+      .map((point) => {
+        const polygon = buildStaticRippleClipPolygon(point, sites, fullscreenCameraViewport);
+        if (!polygon || polygon.length < 3) {
+          return null;
+        }
+        return {
+          key: point.id,
+          polygon,
+        };
+      })
+      .filter(Boolean);
+
+    return {
+      style,
+      cells,
+      sites: sites.map((point) => ({
+        id: point.id,
+        x: point.x - left,
+        y: point.y - top,
+      })),
+      width,
+      height,
+    };
+  }, [fullscreenCameraViewport, fullscreenTipPoints]);
+
+  async function attachStreamToVideoElement(video, reason) {
+    const stream = streamRef.current;
+    if (!video || !stream) {
+      return false;
+    }
+
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+
+    try {
+      await video.play();
+    } catch (error) {
+      appLog.warn("Video playback could not be resumed for active camera element", {
+        reason,
+        error,
+      });
+      throw (
+        error instanceof Error
+          ? error
+          : new Error("Camera video playback could not be started.")
+      );
+    }
+
+    attachedVideoElementRef.current = video;
+
+    const primaryTrack = stream.getVideoTracks()[0];
+    const trackSettings = primaryTrack?.getSettings?.() ?? {};
+    const measuredWidth = video.videoWidth || trackSettings.width;
+    const measuredHeight = video.videoHeight || trackSettings.height;
+    if (
+      Number.isFinite(measuredWidth) &&
+      Number.isFinite(measuredHeight) &&
+      measuredWidth > 0 &&
+      measuredHeight > 0
+    ) {
+      const ratio = measuredWidth / measuredHeight;
+      setCameraAspectRatio(ratio);
+      appLog.info("Camera stream attached to active video element", {
+        reason,
+        measuredWidth,
+        measuredHeight,
+        ratio: roundMetric(ratio, 6),
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight,
+      });
+    } else {
+      appLog.warn("Camera stream attached but dimensions are not ready yet", {
+        reason,
+        measuredWidth,
+        measuredHeight,
+      });
+    }
+
+    return true;
+  }
 
   useEffect(() => {
     appLog.info("App mounted", {
@@ -1624,7 +2226,256 @@ export default function App() {
     if (phase !== PHASES.GESTURE_ART_LAB) {
       setGestureArtHands([]);
     }
+    if (phase !== PHASES.FULLSCREEN_CAMERA) {
+      setFullscreenIndexPoints([]);
+      setFullscreenTipPoints([]);
+      setFullscreenRingTrail([]);
+      setFullscreenPulseBursts([]);
+    }
   }, [phase]);
+
+  useEffect(() => {
+    fullscreenGridModeRef.current = fullscreenGridMode;
+  }, [fullscreenGridMode]);
+
+  useEffect(() => {
+    if (phase !== PHASES.FULLSCREEN_CAMERA) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        returnFromFullscreenCameraScreen();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [phase]);
+
+  useEffect(() => {
+    const now = performance.now();
+
+    if (!handDetected) {
+      const pruned = pruneTrackedCursorTrail(cursorTrailRef.current, now);
+      if (pruned.length !== cursorTrailRef.current.length) {
+        cursorTrailRef.current = pruned;
+        setCursorTrail(pruned);
+      }
+      return undefined;
+    }
+
+    const previousPoint = cursorTrailRef.current[cursorTrailRef.current.length - 1] ?? null;
+    const elapsed = now - cursorTrailLastSampleAtRef.current;
+    const distance = previousPoint
+      ? Math.hypot(cursor.x - previousPoint.x, cursor.y - previousPoint.y)
+      : Number.POSITIVE_INFINITY;
+    if (elapsed < CURSOR_TRAIL_SAMPLE_INTERVAL_MS && distance < CURSOR_TRAIL_MIN_DISTANCE_PX) {
+      return undefined;
+    }
+
+    cursorTrailLastSampleAtRef.current = now;
+    const nextTrail = pruneTrackedCursorTrail(
+      [
+        ...cursorTrailRef.current,
+        {
+          x: cursor.x,
+          y: cursor.y,
+          timestamp: now,
+        },
+      ],
+      now,
+    );
+    cursorTrailRef.current = nextTrail;
+    setCursorTrail(nextTrail);
+    setCursorTrailNow(now);
+    return undefined;
+  }, [cursor, handDetected]);
+
+  useEffect(() => {
+    if (cursorTrail.length === 0) {
+      return undefined;
+    }
+
+    let frameId = 0;
+    const tick = () => {
+      const now = performance.now();
+      const pruned = pruneTrackedCursorTrail(cursorTrailRef.current, now);
+      cursorTrailRef.current = pruned;
+      setCursorTrailNow(now);
+      setCursorTrail((previous) => (previous.length === pruned.length ? previous : pruned));
+      if (pruned.length > 0) {
+        frameId = window.requestAnimationFrame(tick);
+      }
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [cursorTrail.length]);
+
+  useEffect(() => {
+    if (fullscreenGridMode !== "rings") {
+      fullscreenRingTrailRef.current = [];
+      fullscreenRingTrailLastSampleAtRef.current = 0;
+      if (fullscreenRingTrail.length > 0) {
+        setFullscreenRingTrail([]);
+      }
+      return undefined;
+    }
+
+    const now = performance.now();
+    const normalizedPoints = fullscreenIndexPoints
+      .filter((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y))
+      .map((point) => ({
+        id: point.id,
+        x: point.x,
+        y: point.y,
+      }));
+    const pruned = pruneCursorTrail(fullscreenRingTrailRef.current, now);
+    const elapsed = now - fullscreenRingTrailLastSampleAtRef.current;
+
+    if (normalizedPoints.length === 0) {
+      if (pruned.length !== fullscreenRingTrailRef.current.length) {
+        fullscreenRingTrailRef.current = pruned;
+        setFullscreenRingTrail(pruned);
+      }
+      return undefined;
+    }
+
+    if (elapsed < FULLSCREEN_RING_TRAIL_SAMPLE_INTERVAL_MS) {
+      return undefined;
+    }
+
+    fullscreenRingTrailLastSampleAtRef.current = now;
+    const nextTrail = pruneCursorTrail(
+      [
+        ...pruned,
+        {
+          timestamp: now,
+          points: normalizedPoints,
+        },
+      ],
+      now,
+    );
+    fullscreenRingTrailRef.current = nextTrail;
+    setFullscreenRingTrail(nextTrail);
+    setFullscreenRingTrailNow(now);
+    return undefined;
+  }, [fullscreenGridMode, fullscreenIndexPoints, fullscreenRingTrail.length]);
+
+  useEffect(() => {
+    if (fullscreenGridMode !== "rings" || fullscreenRingTrail.length === 0) {
+      return undefined;
+    }
+
+    let frameId = 0;
+    const tick = () => {
+      const now = performance.now();
+      const pruned = pruneCursorTrail(fullscreenRingTrailRef.current, now);
+      fullscreenRingTrailRef.current = pruned;
+      setFullscreenRingTrailNow(now);
+      setFullscreenRingTrail((previous) => (previous.length === pruned.length ? previous : pruned));
+      if (pruned.length > 0) {
+        frameId = window.requestAnimationFrame(tick);
+      }
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [fullscreenGridMode, fullscreenRingTrail.length]);
+
+  useEffect(() => {
+    if (fullscreenGridMode !== "pulse" || !fullscreenCameraViewport) {
+      fullscreenPulseBurstsRef.current = [];
+      fullscreenPulseLastEmitByIdRef.current = {};
+      if (fullscreenPulseBursts.length > 0) {
+        setFullscreenPulseBursts([]);
+      }
+      return undefined;
+    }
+
+    const now = performance.now();
+    const pruned = prunePulseBursts(fullscreenPulseBurstsRef.current, now);
+    const nextBursts = [...pruned];
+    const nextLastEmitById = { ...fullscreenPulseLastEmitByIdRef.current };
+    const largestRingRadius =
+      (FULLSCREEN_RING_LAYERS[FULLSCREEN_RING_LAYERS.length - 1]?.diameter ?? 0) / 2;
+
+    for (const point of fullscreenIndexPoints) {
+      if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
+        continue;
+      }
+
+      const lastEmitAt = nextLastEmitById[point.id] ?? 0;
+      if (now - lastEmitAt < FULLSCREEN_PULSE_RING_INTERVAL_MS) {
+        continue;
+      }
+
+      const localX = point.x - fullscreenCameraViewport.left;
+      const localY = point.y - fullscreenCameraViewport.top;
+      const maxRadius = Math.max(
+        Math.hypot(localX, localY),
+        Math.hypot(fullscreenCameraViewport.width - localX, localY),
+        Math.hypot(localX, fullscreenCameraViewport.height - localY),
+        Math.hypot(
+          fullscreenCameraViewport.width - localX,
+          fullscreenCameraViewport.height - localY,
+        ),
+      );
+
+      nextLastEmitById[point.id] = now;
+      nextBursts.push({
+        id: `${point.id}-${now}`,
+        pointId: point.id,
+        x: point.x,
+        y: point.y,
+        startTime: now,
+        startRadius: largestRingRadius,
+        maxRadius,
+      });
+    }
+
+    fullscreenPulseBurstsRef.current = nextBursts;
+    fullscreenPulseLastEmitByIdRef.current = nextLastEmitById;
+    setFullscreenPulseBursts(nextBursts);
+    setFullscreenPulseNow(now);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, fullscreenIndexPoints, fullscreenPulseBursts.length]);
+
+  useEffect(() => {
+    if (fullscreenGridMode !== "pulse" || fullscreenPulseBursts.length === 0) {
+      return undefined;
+    }
+
+    let frameId = 0;
+    const tick = () => {
+      const now = performance.now();
+      const pruned = prunePulseBursts(fullscreenPulseBurstsRef.current, now);
+      fullscreenPulseBurstsRef.current = pruned;
+      setFullscreenPulseNow(now);
+      setFullscreenPulseBursts((previous) => (previous.length === pruned.length ? previous : pruned));
+      if (pruned.length > 0) {
+        frameId = window.requestAnimationFrame(tick);
+      }
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [fullscreenGridMode, fullscreenPulseBursts.length]);
 
   useEffect(() => {
     appLog.debug("Viewport changed", viewport);
@@ -1767,6 +2618,18 @@ export default function App() {
   useEffect(() => {
     rawCursorRef.current = rawCursor;
   }, [rawCursor]);
+
+  useEffect(() => {
+    cursorTrailRef.current = cursorTrail;
+  }, [cursorTrail]);
+
+  useEffect(() => {
+    fullscreenRingTrailRef.current = fullscreenRingTrail;
+  }, [fullscreenRingTrail]);
+
+  useEffect(() => {
+    fullscreenPulseBurstsRef.current = fullscreenPulseBursts;
+  }, [fullscreenPulseBursts]);
 
   useEffect(() => {
     debugRef.current = debugEnabled;
@@ -1916,37 +2779,7 @@ export default function App() {
         streamRef.current = stream;
         const video = videoRef.current;
         if (video) {
-          video.srcObject = stream;
-          await video.play();
-          const primaryTrack = stream.getVideoTracks()[0];
-          const trackSettings = primaryTrack?.getSettings?.() ?? {};
-          const measuredWidth = video.videoWidth || trackSettings.width;
-          const measuredHeight = video.videoHeight || trackSettings.height;
-          if (
-            Number.isFinite(measuredWidth) &&
-            Number.isFinite(measuredHeight) &&
-            measuredWidth > 0 &&
-            measuredHeight > 0
-          ) {
-            const ratio = measuredWidth / measuredHeight;
-            setCameraAspectRatio(ratio);
-            appLog.info("Updated camera display ratio from stream dimensions", {
-              measuredWidth,
-              measuredHeight,
-              ratio: roundMetric(ratio, 6),
-            });
-          } else {
-            appLog.warn("Could not derive camera ratio from metadata; using existing fallback", {
-              measuredWidth,
-              measuredHeight,
-            });
-          }
-          appLog.info("Webcam stream attached and playback started", {
-            videoWidth: video.videoWidth,
-            videoHeight: video.videoHeight,
-            trackWidth: trackSettings.width ?? null,
-            trackHeight: trackSettings.height ?? null,
-          });
+          await attachStreamToVideoElement(video, "camera_init");
         } else {
           appLog.warn("Video ref was unavailable after webcam stream setup");
         }
@@ -1977,6 +2810,7 @@ export default function App() {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
+      attachedVideoElementRef.current = null;
     };
   }, [appLog]);
 
@@ -2098,7 +2932,33 @@ export default function App() {
       observer.disconnect();
       window.removeEventListener("resize", syncCanvasSize);
     };
-  }, [appLog]);
+  }, [appLog, phase]);
+
+  useEffect(() => {
+    const activeVideoElement = videoRef.current;
+    if (!cameraReady || !activeVideoElement || !streamRef.current) {
+      return;
+    }
+
+    if (
+      attachedVideoElementRef.current === activeVideoElement &&
+      activeVideoElement.srcObject === streamRef.current
+    ) {
+      return;
+    }
+
+    void attachStreamToVideoElement(activeVideoElement, "phase_video_swap").catch((error) => {
+      appLog.error("Failed to attach camera stream after active video element changed", {
+        phase,
+        error,
+      });
+      setCameraError(
+        error instanceof Error
+          ? error.message
+          : "Camera video playback could not be started.",
+      );
+    });
+  }, [cameraReady, phase]);
 
   useEffect(() => {
     if (phase !== PHASES.GAME) {
@@ -2638,6 +3498,21 @@ export default function App() {
     requestAnimationFrame(() => resetSandboxBlocks("open_sandbox"));
   }
 
+  function openFullscreenCameraScreen() {
+    appLog.info("Opening fullscreen camera screen");
+    stopGameSession();
+    resetArcCalibrationSession("open_fullscreen_camera");
+    setIsCalibrating(false);
+    isCalibratingRef.current = false;
+    calibrationSampleRef.current = null;
+    setCalibrationSampleFrames(0);
+    setPhase(PHASES.FULLSCREEN_CAMERA);
+    phaseRef.current = PHASES.FULLSCREEN_CAMERA;
+    setCalibrationMessage(
+      "Fullscreen camera active. Webcam view fits the entire browser window without cropping.",
+    );
+  }
+
   function returnToCalibrationInputTest() {
     appLog.info("Returning from sandbox to calibration input test");
     sandboxGrabbedBlockIdRef.current = null;
@@ -2645,6 +3520,13 @@ export default function App() {
     sandboxGrabVelocityRef.current = { vx: 0, vy: 0 };
     sandboxGrabLastPositionRef.current = { x: 0, y: 0, timestamp: 0 };
     setSandboxGrabbedBlockId(null);
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
+  function returnFromFullscreenCameraScreen() {
+    appLog.info("Returning from fullscreen camera to calibration input test");
     setPhase(PHASES.CALIBRATION);
     phaseRef.current = PHASES.CALIBRATION;
     setCalibrationMessage("Back on Calibration Input Test.");
@@ -4549,7 +5431,7 @@ export default function App() {
     }
   }
 
-  function computeCameraCoverMetrics() {
+  function computeCameraRenderMetrics(objectFit = getCameraObjectFitForPhase(phaseRef.current)) {
     const video = videoRef.current;
     const canvas = overlayCanvasRef.current;
     if (!video || !canvas || !video.videoWidth || !video.videoHeight || !canvas.width || !canvas.height) {
@@ -4560,7 +5442,10 @@ export default function App() {
     const videoHeight = video.videoHeight;
     const canvasWidth = canvas.width;
     const canvasHeight = canvas.height;
-    const scale = Math.max(canvasWidth / videoWidth, canvasHeight / videoHeight);
+    const scale =
+      objectFit === "contain"
+        ? Math.min(canvasWidth / videoWidth, canvasHeight / videoHeight)
+        : Math.max(canvasWidth / videoWidth, canvasHeight / videoHeight);
     const renderedWidth = videoWidth * scale;
     const renderedHeight = videoHeight * scale;
     const offsetX = (canvasWidth - renderedWidth) / 2;
@@ -4597,6 +5482,7 @@ export default function App() {
         height: videoHeight,
       },
       render: {
+        objectFit,
         scale,
         renderedWidth,
         renderedHeight,
@@ -4614,11 +5500,30 @@ export default function App() {
     };
   }
 
+  function projectCameraPointToCanvas(point, renderMetrics) {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas || !Number.isFinite(point?.u) || !Number.isFinite(point?.v)) {
+      return null;
+    }
+
+    if (!renderMetrics) {
+      return {
+        x: point.u * canvas.width,
+        y: point.v * canvas.height,
+      };
+    }
+
+    return {
+      x: renderMetrics.render.offsetX + point.u * renderMetrics.render.renderedWidth,
+      y: renderMetrics.render.offsetY + point.v * renderMetrics.render.renderedHeight,
+    };
+  }
+
   function logTrackingExtentsSnapshot(reason) {
     const extentState = trackingExtentsRef.current;
-    const coverMetrics = computeCameraCoverMetrics();
-    const canvasWidth = coverMetrics?.canvas.width ?? 0;
-    const canvasHeight = coverMetrics?.canvas.height ?? 0;
+    const renderMetrics = computeCameraRenderMetrics();
+    const canvasWidth = renderMetrics?.canvas.width ?? 0;
+    const canvasHeight = renderMetrics?.canvas.height ?? 0;
 
     const fingerExtents = EXTENT_FINGER_NAMES.reduce((accumulator, fingerName) => {
       accumulator[fingerName] = summarizeFingerExtentStats(
@@ -4629,17 +5534,17 @@ export default function App() {
       return accumulator;
     }, {});
 
-    const visibleMirroredBounds = coverMetrics
+    const visibleMirroredBounds = renderMetrics
       ? {
-          uMin: roundMetric(coverMetrics.mirroredNormalized.uMin),
-          uMax: roundMetric(coverMetrics.mirroredNormalized.uMax),
-          vMin: roundMetric(coverMetrics.mirroredNormalized.vMin),
-          vMax: roundMetric(coverMetrics.mirroredNormalized.vMax),
+          uMin: roundMetric(renderMetrics.mirroredNormalized.uMin),
+          uMax: roundMetric(renderMetrics.mirroredNormalized.uMax),
+          vMin: roundMetric(renderMetrics.mirroredNormalized.vMin),
+          vMax: roundMetric(renderMetrics.mirroredNormalized.vMax),
           uSpan: roundMetric(
-            coverMetrics.mirroredNormalized.uMax - coverMetrics.mirroredNormalized.uMin,
+            renderMetrics.mirroredNormalized.uMax - renderMetrics.mirroredNormalized.uMin,
           ),
           vSpan: roundMetric(
-            coverMetrics.mirroredNormalized.vMax - coverMetrics.mirroredNormalized.vMin,
+            renderMetrics.mirroredNormalized.vMax - renderMetrics.mirroredNormalized.vMin,
           ),
         }
       : null;
@@ -4682,22 +5587,23 @@ export default function App() {
               vMax: roundMetric(extentState.lastVisibleBounds.vMax),
             }
           : null,
-      cameraCoverMetrics: coverMetrics
+      cameraCoverMetrics: renderMetrics
         ? {
-            canvas: coverMetrics.canvas,
-            video: coverMetrics.video,
+            canvas: renderMetrics.canvas,
+            video: renderMetrics.video,
             render: {
-              scale: roundMetric(coverMetrics.render.scale, 5),
-              renderedWidth: roundMetric(coverMetrics.render.renderedWidth, 2),
-              renderedHeight: roundMetric(coverMetrics.render.renderedHeight, 2),
-              offsetX: roundMetric(coverMetrics.render.offsetX, 2),
-              offsetY: roundMetric(coverMetrics.render.offsetY, 2),
+              objectFit: renderMetrics.render.objectFit,
+              scale: roundMetric(renderMetrics.render.scale, 5),
+              renderedWidth: roundMetric(renderMetrics.render.renderedWidth, 2),
+              renderedHeight: roundMetric(renderMetrics.render.renderedHeight, 2),
+              offsetX: roundMetric(renderMetrics.render.offsetX, 2),
+              offsetY: roundMetric(renderMetrics.render.offsetY, 2),
             },
             visibleSourcePixels: {
-              x: roundMetric(coverMetrics.visibleSourcePixels.x, 2),
-              y: roundMetric(coverMetrics.visibleSourcePixels.y, 2),
-              width: roundMetric(coverMetrics.visibleSourcePixels.width, 2),
-              height: roundMetric(coverMetrics.visibleSourcePixels.height, 2),
+              x: roundMetric(renderMetrics.visibleSourcePixels.x, 2),
+              y: roundMetric(renderMetrics.visibleSourcePixels.y, 2),
+              width: roundMetric(renderMetrics.visibleSourcePixels.width, 2),
+              height: roundMetric(renderMetrics.visibleSourcePixels.height, 2),
             },
           }
         : null,
@@ -4809,15 +5715,20 @@ export default function App() {
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const renderMetrics = computeCameraRenderMetrics();
 
     if (hand?.fingerTips) {
-      for (const [fingerName, style] of Object.entries(FINGERTIP_OVERLAY_STYLES)) {
+      const fingertipEntries =
+        phaseRef.current === PHASES.FULLSCREEN_CAMERA
+          ? [["index", FINGERTIP_OVERLAY_STYLES.index]]
+          : Object.entries(FINGERTIP_OVERLAY_STYLES);
+      for (const [fingerName, style] of fingertipEntries) {
         const tip = hand.fingerTips[fingerName];
-        if (!tip) {
+        const projectedTip = projectCameraPointToCanvas(tip, renderMetrics);
+        if (!projectedTip) {
           continue;
         }
-        const x = tip.u * canvas.width;
-        const y = tip.v * canvas.height;
+        const { x, y } = projectedTip;
 
         ctx.fillStyle = style.fill;
         ctx.beginPath();
@@ -4832,18 +5743,32 @@ export default function App() {
           ctx.stroke();
         }
       }
-    } else if (hand?.thumbTip) {
-      ctx.fillStyle = "rgba(255, 255, 255, 0.98)";
+    } else if (phaseRef.current === PHASES.FULLSCREEN_CAMERA ? hand?.indexTip : hand?.thumbTip) {
+      const fallbackTip =
+        phaseRef.current === PHASES.FULLSCREEN_CAMERA ? hand.indexTip : hand.thumbTip;
+      const projectedFallbackTip = projectCameraPointToCanvas(fallbackTip, renderMetrics);
+      if (!projectedFallbackTip) {
+        return;
+      }
+      const fallbackStyle =
+        phaseRef.current === PHASES.FULLSCREEN_CAMERA
+          ? FINGERTIP_OVERLAY_STYLES.index
+          : { fill: "rgba(255, 255, 255, 0.98)", radius: 6.2 };
+      ctx.fillStyle = fallbackStyle.fill;
       ctx.beginPath();
-      ctx.arc(hand.thumbTip.u * canvas.width, hand.thumbTip.v * canvas.height, 6.2, 0, Math.PI * 2);
+      ctx.arc(projectedFallbackTip.x, projectedFallbackTip.y, fallbackStyle.radius, 0, Math.PI * 2);
       ctx.fill();
     }
 
     if (debugRef.current && hand?.landmarks) {
       ctx.fillStyle = "rgba(111, 245, 164, 0.9)";
       for (const point of hand.landmarks) {
+        const projectedPoint = projectCameraPointToCanvas(point, renderMetrics);
+        if (!projectedPoint) {
+          continue;
+        }
         ctx.beginPath();
-        ctx.arc(point.u * canvas.width, point.v * canvas.height, 2.8, 0, Math.PI * 2);
+        ctx.arc(projectedPoint.x, projectedPoint.y, 2.8, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -4871,6 +5796,7 @@ export default function App() {
     if (!options.showSkeleton) {
       return;
     }
+    const renderMetrics = computeCameraRenderMetrics();
 
     const safeHands = Array.isArray(hands) ? hands : [];
     const handStyles = [
@@ -4898,31 +5824,33 @@ export default function App() {
       if (Array.isArray(hand.landmarks) && hand.landmarks.length > 0) {
         ctx.fillStyle = style.point;
         for (const point of hand.landmarks) {
-          if (!Number.isFinite(point?.u) || !Number.isFinite(point?.v)) {
+          const projectedPoint = projectCameraPointToCanvas(point, renderMetrics);
+          if (!projectedPoint) {
             continue;
           }
           ctx.beginPath();
-          ctx.arc(point.u * canvas.width, point.v * canvas.height, 2.2, 0, Math.PI * 2);
+          ctx.arc(projectedPoint.x, projectedPoint.y, 2.2, 0, Math.PI * 2);
           ctx.fill();
         }
       }
 
       for (const fingerName of EXTENT_FINGER_NAMES) {
         const tip = fingerTips[fingerName];
-        if (!tip || !Number.isFinite(tip.u) || !Number.isFinite(tip.v)) {
+        const projectedTip = projectCameraPointToCanvas(tip, renderMetrics);
+        if (!projectedTip) {
           continue;
         }
-        const x = tip.u * canvas.width;
-        const y = tip.v * canvas.height;
+        const { x, y } = projectedTip;
         ctx.fillStyle = style.point;
         ctx.beginPath();
         ctx.arc(x, y, fingerName === "thumb" ? 6 : 5, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      if (pointerTip && Number.isFinite(pointerTip.u) && Number.isFinite(pointerTip.v)) {
-        const pointerX = pointerTip.u * canvas.width;
-        const pointerY = pointerTip.v * canvas.height;
+      const projectedPointerTip = projectCameraPointToCanvas(pointerTip, renderMetrics);
+      if (projectedPointerTip) {
+        const pointerX = projectedPointerTip.x;
+        const pointerY = projectedPointerTip.y;
         ctx.strokeStyle = style.ring;
         ctx.lineWidth = 6;
         ctx.beginPath();
@@ -4965,6 +5893,7 @@ export default function App() {
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const renderMetrics = computeCameraRenderMetrics();
     if (pose && Array.isArray(pose.keypoints) && pose.keypoints.length > 0) {
       const keypointMap = {};
       for (const keypoint of pose.keypoints) {
@@ -4979,17 +5908,21 @@ export default function App() {
       for (const [startName, endName] of POSE_CONNECTIONS) {
         const start = keypointMap[startName];
         const end = keypointMap[endName];
+        const projectedStart = projectCameraPointToCanvas(start, renderMetrics);
+        const projectedEnd = projectCameraPointToCanvas(end, renderMetrics);
         if (
           !start ||
           !end ||
+          !projectedStart ||
+          !projectedEnd ||
           (start.score ?? 0) < POSE_KEYPOINT_THRESHOLD ||
           (end.score ?? 0) < POSE_KEYPOINT_THRESHOLD
         ) {
           continue;
         }
         ctx.beginPath();
-        ctx.moveTo(start.u * canvas.width, start.v * canvas.height);
-        ctx.lineTo(end.u * canvas.width, end.v * canvas.height);
+        ctx.moveTo(projectedStart.x, projectedStart.y);
+        ctx.lineTo(projectedEnd.x, projectedEnd.y);
         ctx.stroke();
       }
 
@@ -5022,12 +5955,12 @@ export default function App() {
       };
 
       for (const keypoint of pose.keypoints) {
-        if (!keypoint?.name || (keypoint.score ?? 0) < POSE_KEYPOINT_THRESHOLD) {
+        const projectedKeypoint = projectCameraPointToCanvas(keypoint, renderMetrics);
+        if (!keypoint?.name || !projectedKeypoint || (keypoint.score ?? 0) < POSE_KEYPOINT_THRESHOLD) {
           continue;
         }
         const group = resolveGroup(keypoint.name);
-        const x = keypoint.u * canvas.width;
-        const y = keypoint.v * canvas.height;
+        const { x, y } = projectedKeypoint;
         ctx.fillStyle = colorByGroup[group];
         ctx.beginPath();
         ctx.arc(x, y, group === "eyes" ? 4.6 : 5.8, 0, Math.PI * 2);
@@ -5055,35 +5988,40 @@ export default function App() {
       for (const [startIndex, endIndex] of HAND_ROOT_CONNECTIONS) {
         const start = landmarks[startIndex];
         const end = landmarks[endIndex];
-        if (!isValidHandLandmark(start) || !isValidHandLandmark(end)) {
+        const projectedStart = projectCameraPointToCanvas(start, renderMetrics);
+        const projectedEnd = projectCameraPointToCanvas(end, renderMetrics);
+        if (!projectedStart || !projectedEnd) {
           continue;
         }
         ctx.beginPath();
-        ctx.moveTo(start.u * canvas.width, start.v * canvas.height);
-        ctx.lineTo(end.u * canvas.width, end.v * canvas.height);
+        ctx.moveTo(projectedStart.x, projectedStart.y);
+        ctx.lineTo(projectedEnd.x, projectedEnd.y);
         ctx.stroke();
       }
       for (const chain of HAND_FINGER_CHAINS) {
         for (let index = 1; index < chain.length; index += 1) {
           const start = landmarks[chain[index - 1]];
           const end = landmarks[chain[index]];
-          if (!isValidHandLandmark(start) || !isValidHandLandmark(end)) {
+          const projectedStart = projectCameraPointToCanvas(start, renderMetrics);
+          const projectedEnd = projectCameraPointToCanvas(end, renderMetrics);
+          if (!projectedStart || !projectedEnd) {
             continue;
           }
           ctx.beginPath();
-          ctx.moveTo(start.u * canvas.width, start.v * canvas.height);
-          ctx.lineTo(end.u * canvas.width, end.v * canvas.height);
+          ctx.moveTo(projectedStart.x, projectedStart.y);
+          ctx.lineTo(projectedEnd.x, projectedEnd.y);
           ctx.stroke();
         }
       }
 
       for (const tipIndex of HAND_FINGERTIP_INDEXES) {
         const tip = landmarks[tipIndex];
-        if (!isValidHandLandmark(tip)) {
+        const projectedTip = projectCameraPointToCanvas(tip, renderMetrics);
+        if (!projectedTip) {
           continue;
         }
-        const tipX = tip.u * canvas.width;
-        const tipY = tip.v * canvas.height;
+        const tipX = projectedTip.x;
+        const tipY = projectedTip.y;
         ctx.fillStyle = fillColor;
         ctx.beginPath();
         ctx.arc(tipX, tipY, 5.3, 0, Math.PI * 2);
@@ -5098,6 +6036,96 @@ export default function App() {
         ctx.fillText(FINGERTIP_NAME_BY_INDEX[tipIndex], tipX + 6, tipY - 4);
       }
     }
+  }
+
+  function getFullscreenIndexOverlayPoints(hands) {
+    const renderMetrics = computeCameraRenderMetrics("contain");
+    const safeHands = Array.isArray(hands) ? hands : [];
+    return safeHands
+      .map((hand, handIndex) => {
+        const indexTip = hand?.fingerTips?.index ?? hand?.indexTip ?? null;
+        const projectedPoint = projectCameraPointToCanvas(indexTip, renderMetrics);
+        if (!projectedPoint) {
+          return null;
+        }
+        return {
+          id: hand?.id ?? hand?.label ?? `hand-${handIndex}`,
+          label: hand?.label ?? `Hand ${handIndex + 1}`,
+          x: projectedPoint.x,
+          y: projectedPoint.y,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function getFullscreenTipOverlayPoints(hands) {
+    const renderMetrics = computeCameraRenderMetrics("contain");
+    const safeHands = Array.isArray(hands) ? hands : [];
+    return safeHands.flatMap((hand, handIndex) => {
+      const handId = hand?.id ?? hand?.label ?? `hand-${handIndex}`;
+      return EXTENT_FINGER_NAMES.map((fingerName) => {
+        const tip = hand?.fingerTips?.[fingerName] ?? hand?.[`${fingerName}Tip`] ?? null;
+        const projectedPoint = projectCameraPointToCanvas(tip, renderMetrics);
+        if (!projectedPoint) {
+          return null;
+        }
+        return {
+          id: `${handId}-${fingerName}`,
+          handId,
+          fingerName,
+          x: projectedPoint.x,
+          y: projectedPoint.y,
+        };
+      }).filter(Boolean);
+    });
+  }
+
+  function drawFullscreenOverlay(hands) {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) {
+      return {
+        indexPoints: [],
+        tipPoints: [],
+      };
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return {
+        indexPoints: [],
+        tipPoints: [],
+      };
+    }
+
+    const indexPoints = getFullscreenIndexOverlayPoints(hands);
+    const tipPoints = getFullscreenTipOverlayPoints(hands);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (fullscreenGridModeRef.current === "voronoi") {
+      for (const point of tipPoints) {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.98)";
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, FULLSCREEN_VORONOI_DOT_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      for (const point of indexPoints) {
+        ctx.fillStyle = FINGERTIP_OVERLAY_STYLES.index.fill;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, FINGERTIP_OVERLAY_STYLES.index.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, FINGERTIP_OVERLAY_STYLES.index.radius + 3.2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    return {
+      indexPoints,
+      tipPoints,
+    };
   }
 
   function updateFrameTiming(timestamp) {
@@ -5286,8 +6314,8 @@ export default function App() {
     lastValidHandTimestampRef.current = timestamp;
     handGraceFrameCounterRef.current = 0;
 
-    const coverMetrics = computeCameraCoverMetrics();
-    const visibleBounds = coverMetrics?.mirroredNormalized ?? null;
+    const renderMetrics = computeCameraRenderMetrics();
+    const visibleBounds = renderMetrics?.mirroredNormalized ?? null;
     const thumbTipRawU = Number.isFinite(hand.thumbTip?.uRaw) ? hand.thumbTip.uRaw : hand.thumbTip?.u;
     const thumbTipRawV = Number.isFinite(hand.thumbTip?.vRaw) ? hand.thumbTip.vRaw : hand.thumbTip?.v;
     const indexTipRawU = Number.isFinite(hand.indexTip?.uRaw) ? hand.indexTip.uRaw : hand.indexTip?.u;
@@ -5322,12 +6350,13 @@ export default function App() {
           : Number.isFinite(hand.indexTip?.u) && Number.isFinite(hand.indexTip?.v)
             ? { u: hand.indexTip.u, v: hand.indexTip.v }
             : null;
-    const runnerUsesIndexPointer = phaseRef.current === PHASES.RUNNER;
+    const usesIndexPointer =
+      phaseRef.current === PHASES.RUNNER || phaseRef.current === PHASES.FULLSCREEN_CAMERA;
     const mappedPointerTip =
-      runnerUsesIndexPointer && mappedIndexTip
+      usesIndexPointer && mappedIndexTip
         ? mappedIndexTip
         : mappedThumbTip;
-    const pointerSource = runnerUsesIndexPointer && mappedIndexTip ? "index" : "thumb";
+    const pointerSource = usesIndexPointer && mappedIndexTip ? "index" : "thumb";
     const pointerRawU = pointerSource === "index" ? indexTipRawU : thumbTipRawU;
     const pointerRawV = pointerSource === "index" ? indexTipRawV : thumbTipRawV;
     const pointerClampedU = pointerSource === "index" ? hand.indexTip?.u : hand.thumbTip?.u;
@@ -5379,13 +6408,21 @@ export default function App() {
 
     const shouldUseTransform =
       Boolean(transformRef.current) &&
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA &&
       !isCalibratingRef.current &&
       !isArcCalibratingRef.current;
-    let mappedPoint = {
-      x: mappedPointerTip.u * viewportRef.current.width,
-      y: mappedPointerTip.v * viewportRef.current.height,
-    };
-    let transformMode = "none";
+    const renderedPointerPoint = projectCameraPointToCanvas(mappedPointerTip, renderMetrics);
+    let mappedPoint =
+      phaseRef.current === PHASES.FULLSCREEN_CAMERA && renderedPointerPoint
+        ? renderedPointerPoint
+        : {
+            x: mappedPointerTip.u * viewportRef.current.width,
+            y: mappedPointerTip.v * viewportRef.current.height,
+          };
+    let transformMode =
+      phaseRef.current === PHASES.FULLSCREEN_CAMERA && renderedPointerPoint
+        ? "fullscreen_rendered_camera_space"
+        : "none";
     let arcMappedPoint = null;
     if (shouldUseTransform) {
       if (isArcCalibrationModel(transformRef.current)) {
@@ -6215,6 +7252,11 @@ export default function App() {
           }).slice(0, TRACKING_MAX_HANDS);
           const primaryHand = stableHands[0] ?? null;
           processTrackingFrame(primaryHand, timestamp);
+          if (phaseRef.current === PHASES.FULLSCREEN_CAMERA) {
+            const overlayPoints = drawFullscreenOverlay(stableHands);
+            setFullscreenIndexPoints(overlayPoints.indexPoints);
+            setFullscreenTipPoints(overlayPoints.tipPoints);
+          }
           processMinorityReportFrame(stableHands, timestamp);
           if (phaseRef.current === PHASES.GESTURE_ANALYTICS_LAB) {
             setAnalyticsHands(stableHands);
@@ -6257,6 +7299,589 @@ export default function App() {
       }
     };
   }, [appLog, cameraReady, modelReady]);
+
+  function renderFullscreenRingGroup(point, opacity, keyPrefix) {
+    if (!fullscreenCameraViewport || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
+      return null;
+    }
+
+    return (
+      <div
+        key={`${keyPrefix}-${point.id}`}
+        className="fullscreen-camera-ring-group"
+        style={{
+          left: `${point.x - fullscreenCameraViewport.left}px`,
+          top: `${point.y - fullscreenCameraViewport.top}px`,
+          opacity,
+        }}
+      >
+        {FULLSCREEN_RING_LAYERS.slice()
+          .reverse()
+          .map((layer) => (
+            <div
+              key={`${keyPrefix}-${point.id}-${layer.color}`}
+              className="fullscreen-camera-ring-layer"
+              style={{
+                width: `${layer.diameter}px`,
+                height: `${layer.diameter}px`,
+                backgroundColor: layer.color,
+              }}
+            />
+          ))}
+      </div>
+    );
+  }
+
+  function renderFullscreenPulseBurst(burst, keyPrefix) {
+    if (!fullscreenCameraViewport || !Number.isFinite(burst?.x) || !Number.isFinite(burst?.y)) {
+      return null;
+    }
+
+    const elapsed = Math.max(0, fullscreenPulseNow - burst.startTime);
+    const progress = Math.min(1, elapsed / FULLSCREEN_PULSE_RING_DURATION_MS);
+    if (progress <= 0 || progress >= 1) {
+      return null;
+    }
+
+    const radius = burst.startRadius + (burst.maxRadius - burst.startRadius) * progress;
+    return (
+      <div
+        key={`${keyPrefix}-${burst.id}`}
+        className="fullscreen-camera-pulse-ring"
+        style={{
+          left: `${burst.x - fullscreenCameraViewport.left}px`,
+          top: `${burst.y - fullscreenCameraViewport.top}px`,
+          width: `${radius * 2}px`,
+          height: `${radius * 2}px`,
+          opacity: (1 - progress) * 0.9,
+        }}
+      />
+    );
+  }
+
+  function renderTrackedCursorLayer() {
+    return (
+      <>
+        {cursorTrail.map((point, index) => {
+          const age = Math.max(0, cursorTrailNow - point.timestamp);
+          const progress = 1 - Math.min(1, age / CURSOR_TRAIL_DURATION_MS);
+          if (progress <= 0) {
+            return null;
+          }
+          return (
+            <div
+              key={`cursor-trail-${point.timestamp}-${index}`}
+              className="tracked-cursor-trail"
+              style={{
+                left: `${point.x}px`,
+                top: `${point.y}px`,
+                opacity: progress * 0.75,
+                transform: `translate(-50%, -50%) scale(${0.42 + progress * 0.5})`,
+              }}
+            />
+          );
+        })}
+        <div
+          className={`tracked-cursor ${handDetected ? "" : "paused"}`}
+          style={{
+            left: `${cursor.x}px`,
+            top: `${cursor.y}px`,
+          }}
+        />
+        {debugEnabled && (
+          <div
+            className="raw-cursor"
+            style={{
+              left: `${rawCursor.x}px`,
+              top: `${rawCursor.y}px`,
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
+  function renderFullscreenStaticRingSet(point, keyPrefix) {
+    if (!fullscreenCameraViewport || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
+      return null;
+    }
+
+    const localX = point.x - fullscreenCameraViewport.left;
+    const localY = point.y - fullscreenCameraViewport.top;
+    const viewportRadius = Math.max(
+      Math.hypot(localX, localY),
+      Math.hypot(fullscreenCameraViewport.width - localX, localY),
+      Math.hypot(localX, fullscreenCameraViewport.height - localY),
+      Math.hypot(
+        fullscreenCameraViewport.width - localX,
+        fullscreenCameraViewport.height - localY,
+      ),
+    );
+    const maxDiameter = viewportRadius * 2;
+    const startDiameter =
+      (FULLSCREEN_RING_LAYERS[0]?.diameter ?? 0) + FULLSCREEN_STATIC_RING_STEP_PX;
+    const diameters = [];
+    const clipPath = getStaticRippleClipPath(
+      point,
+      fullscreenIndexPoints,
+      fullscreenCameraViewport,
+    );
+    for (
+      let diameter = startDiameter;
+      diameter <= maxDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
+      diameter += FULLSCREEN_STATIC_RING_STEP_PX
+    ) {
+      diameters.push(diameter);
+    }
+
+    return (
+      <div
+        key={`${keyPrefix}-${point.id}`}
+        className="fullscreen-camera-static-ripple-field"
+        style={{
+          clipPath,
+        }}
+      >
+        {diameters.map((diameter) => (
+          <div
+            key={`${keyPrefix}-${point.id}-${diameter}`}
+            className="fullscreen-camera-static-ring"
+            style={{
+              left: `${point.x - fullscreenCameraViewport.left}px`,
+              top: `${point.y - fullscreenCameraViewport.top}px`,
+              width: `${diameter}px`,
+              height: `${diameter}px`,
+            }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  function renderFullscreenTipRippleSet(point, keyPrefix) {
+    if (!fullscreenCameraViewport || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
+      return null;
+    }
+
+    const localX = point.x - fullscreenCameraViewport.left;
+    const localY = point.y - fullscreenCameraViewport.top;
+    const viewportRadius = Math.max(
+      Math.hypot(localX, localY),
+      Math.hypot(fullscreenCameraViewport.width - localX, localY),
+      Math.hypot(localX, fullscreenCameraViewport.height - localY),
+      Math.hypot(
+        fullscreenCameraViewport.width - localX,
+        fullscreenCameraViewport.height - localY,
+      ),
+    );
+    const maxDiameter = viewportRadius * 2;
+    const startDiameter =
+      (FULLSCREEN_RING_LAYERS[0]?.diameter ?? 0) + FULLSCREEN_STATIC_RING_STEP_PX;
+    const diameters = [];
+    const clipPath = getStaticRippleClipPath(
+      point,
+      fullscreenTipPoints,
+      fullscreenCameraViewport,
+    );
+    for (
+      let diameter = startDiameter;
+      diameter <= maxDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
+      diameter += FULLSCREEN_STATIC_RING_STEP_PX
+    ) {
+      diameters.push(diameter);
+    }
+
+    return (
+      <div
+        key={`${keyPrefix}-${point.id}`}
+        className="fullscreen-camera-static-ripple-field"
+        style={{
+          clipPath,
+        }}
+      >
+        {diameters.map((diameter, index) => {
+          if (index % 2 === 0) {
+            return null;
+          }
+          const color =
+            FULLSCREEN_TIP_RIPPLE_COLORS[
+              Math.floor(index / 2) % FULLSCREEN_TIP_RIPPLE_COLORS.length
+            ];
+          return (
+            <div
+              key={`${keyPrefix}-${point.id}-${diameter}`}
+              className="fullscreen-camera-static-ring"
+              style={{
+                left: `${point.x - fullscreenCameraViewport.left}px`,
+                top: `${point.y - fullscreenCameraViewport.top}px`,
+                width: `${diameter}px`,
+                height: `${diameter}px`,
+                borderColor: color,
+              }}
+            />
+          );
+        })}
+      </div>
+    );
+  }
+
+  function renderFullscreenTipRippleBandSet(point, keyPrefix) {
+    if (!fullscreenCameraViewport || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
+      return null;
+    }
+
+    const localX = point.x - fullscreenCameraViewport.left;
+    const localY = point.y - fullscreenCameraViewport.top;
+    const viewportRadius = Math.max(
+      Math.hypot(localX, localY),
+      Math.hypot(fullscreenCameraViewport.width - localX, localY),
+      Math.hypot(localX, fullscreenCameraViewport.height - localY),
+      Math.hypot(
+        fullscreenCameraViewport.width - localX,
+        fullscreenCameraViewport.height - localY,
+      ),
+    );
+    const maxDiameter = viewportRadius * 2;
+    const centerDiameter = FULLSCREEN_RING_LAYERS[0]?.diameter ?? 44;
+    const clipPath = getStaticRippleClipPath(
+      point,
+      fullscreenTipPoints,
+      fullscreenCameraViewport,
+    );
+    const bands = [];
+
+    for (
+      let bandIndex = 0, innerDiameter = centerDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
+      innerDiameter < maxDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
+      bandIndex += 1, innerDiameter += FULLSCREEN_STATIC_RING_STEP_PX * 2
+    ) {
+      const outerDiameter = innerDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
+      const borderWidth = (outerDiameter - innerDiameter) / 2;
+      const color =
+        FULLSCREEN_TIP_RIPPLE_COLORS[bandIndex % FULLSCREEN_TIP_RIPPLE_COLORS.length];
+      bands.push({
+        innerDiameter,
+        borderWidth,
+        color,
+      });
+    }
+
+    return (
+      <div
+        key={`${keyPrefix}-${point.id}`}
+        className="fullscreen-camera-static-ripple-field"
+        style={{
+          clipPath,
+        }}
+      >
+        {bands.map((band) => (
+          <div
+            key={`${keyPrefix}-${point.id}-${band.innerDiameter}`}
+            className="fullscreen-camera-tip-ripple-band"
+            style={{
+              left: `${point.x - fullscreenCameraViewport.left}px`,
+              top: `${point.y - fullscreenCameraViewport.top}px`,
+              width: `${band.innerDiameter}px`,
+              height: `${band.innerDiameter}px`,
+              borderWidth: `${band.borderWidth}px`,
+              borderColor: band.color,
+            }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  function renderFullscreenStaticCenter(point, keyPrefix) {
+    if (!fullscreenCameraViewport || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
+      return null;
+    }
+
+    const centerDiameter = FULLSCREEN_RING_LAYERS[0]?.diameter ?? 44;
+    return (
+      <div
+        key={`${keyPrefix}-${point.id}`}
+        className="fullscreen-camera-static-center"
+        style={{
+          left: `${point.x - fullscreenCameraViewport.left}px`,
+          top: `${point.y - fullscreenCameraViewport.top}px`,
+          width: `${centerDiameter}px`,
+          height: `${centerDiameter}px`,
+        }}
+      />
+    );
+  }
+
+  function renderFullscreenStaticSeam(keyPrefix) {
+    if (!fullscreenCameraViewport || fullscreenIndexPoints.length !== 2) {
+      return null;
+    }
+
+    const seam = getStaticRippleSeam(
+      fullscreenIndexPoints[0],
+      fullscreenIndexPoints[1],
+      fullscreenCameraViewport,
+    );
+    if (!seam) {
+      return null;
+    }
+
+    return (
+      <svg
+        key={keyPrefix}
+        className="fullscreen-camera-static-seam"
+        viewBox={`0 0 ${fullscreenCameraViewport.width} ${fullscreenCameraViewport.height}`}
+        preserveAspectRatio="none"
+      >
+        <line x1={seam.x1} y1={seam.y1} x2={seam.x2} y2={seam.y2} />
+      </svg>
+    );
+  }
+
+  if (isFullscreenCameraPhase) {
+    return (
+      <div className="app fullscreen-camera-app">
+        <div className="fullscreen-camera-stage" ref={cameraWrapRef}>
+          <video
+            ref={videoRef}
+            className="camera-video fullscreen-camera-video"
+            style={{ objectFit: cameraObjectFit }}
+            playsInline
+            muted
+            autoPlay
+          />
+          <canvas ref={overlayCanvasRef} className="camera-overlay" />
+          {fullscreenGridMode === "hex" ? (
+            <div className="fullscreen-camera-hex-grid" style={fullscreenHexGridMetrics?.style ?? undefined}>
+              {fullscreenHexGridMetrics?.cells?.map((cell) => (
+                <div
+                  key={`fullscreen-hex-cell-${cell.key}`}
+                  className="fullscreen-camera-hex-cell"
+                  style={cell.style}
+                />
+              ))}
+              {fullscreenHexGridMetrics?.outerRing?.map((cell) => (
+                <div
+                  key={`fullscreen-hex-outer-${cell.key}`}
+                  className="fullscreen-camera-grid-outer-ring fullscreen-camera-hex-cell fullscreen-camera-hex-highlight"
+                  style={cell.style}
+                />
+              ))}
+              {fullscreenHexGridMetrics?.neighbors?.map((cell) => (
+                <div
+                  key={`fullscreen-hex-neighbor-${cell.key}`}
+                  className="fullscreen-camera-grid-neighbor fullscreen-camera-hex-cell fullscreen-camera-hex-highlight"
+                  style={cell.style}
+                />
+              ))}
+              {fullscreenHexGridMetrics?.highlight?.map((cell) => (
+                <div
+                  key={`fullscreen-hex-highlight-${cell.key}`}
+                  className="fullscreen-camera-grid-highlight fullscreen-camera-hex-cell fullscreen-camera-hex-highlight"
+                  style={cell.style}
+                />
+              ))}
+            </div>
+          ) : fullscreenGridMode === "voronoi" ? (
+            <svg
+              className="fullscreen-camera-voronoi"
+              style={fullscreenVoronoiMetrics?.style ?? undefined}
+              viewBox={`0 0 ${fullscreenVoronoiMetrics?.width ?? 0} ${fullscreenVoronoiMetrics?.height ?? 0}`}
+              preserveAspectRatio="none"
+            >
+              {fullscreenVoronoiMetrics?.cells.map((cell) => (
+                <polygon
+                  key={`fullscreen-voronoi-cell-${cell.key}`}
+                  className="fullscreen-camera-voronoi-cell"
+                  points={cell.polygon.map((point) => `${point.x},${point.y}`).join(" ")}
+                />
+              ))}
+            </svg>
+          ) : fullscreenGridMode === "rings" ? (
+            <div
+              className="fullscreen-camera-rings"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenRingTrail.map((snapshot, snapshotIndex) => {
+                const age = Math.max(0, fullscreenRingTrailNow - snapshot.timestamp);
+                if (age < FULLSCREEN_RING_TRAIL_SAMPLE_INTERVAL_MS) {
+                  return null;
+                }
+                const progress = 1 - Math.min(1, age / FULLSCREEN_RING_TRAIL_DURATION_MS);
+                if (progress <= 0) {
+                  return null;
+                }
+                return snapshot.points.map((point) =>
+                  renderFullscreenRingGroup(
+                    point,
+                    progress * 0.9,
+                    `fullscreen-ring-trail-${snapshot.timestamp}-${snapshotIndex}`,
+                  ),
+                );
+              })}
+              {fullscreenIndexPoints.map((point) =>
+                renderFullscreenRingGroup(point, 0.9, "fullscreen-ring-current"),
+              )}
+            </div>
+          ) : fullscreenGridMode === "pulse" ? (
+            <div
+              className="fullscreen-camera-rings"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenPulseBursts.map((burst) =>
+                renderFullscreenPulseBurst(burst, "fullscreen-pulse-burst"),
+              )}
+              {fullscreenIndexPoints.map((point) =>
+                renderFullscreenRingGroup(point, 0.9, "fullscreen-pulse-current"),
+              )}
+            </div>
+          ) : fullscreenGridMode === "tip-ripples" ? (
+            <div
+              className="fullscreen-camera-rings"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenTipPoints.map((point) =>
+                renderFullscreenTipRippleSet(point, "fullscreen-tip-ripple-rings"),
+              )}
+              {fullscreenTipPoints.map((point) =>
+                renderFullscreenStaticCenter(point, "fullscreen-tip-ripple-center"),
+              )}
+            </div>
+          ) : fullscreenGridMode === "tip-ripples-v2" ? (
+            <div
+              className="fullscreen-camera-rings"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenTipPoints.map((point) =>
+                renderFullscreenTipRippleBandSet(point, "fullscreen-tip-ripple-v2-bands"),
+              )}
+              {fullscreenTipPoints.map((point) =>
+                renderFullscreenStaticCenter(point, "fullscreen-tip-ripple-v2-center"),
+              )}
+            </div>
+          ) : fullscreenGridMode === "static" ? (
+            <div
+              className="fullscreen-camera-rings"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenIndexPoints.map((point) =>
+                renderFullscreenStaticRingSet(point, "fullscreen-static-rings"),
+              )}
+              {renderFullscreenStaticSeam("fullscreen-static-seam")}
+              {fullscreenIndexPoints.map((point) =>
+                renderFullscreenStaticCenter(point, "fullscreen-static-center"),
+              )}
+            </div>
+          ) : (
+            <div className="fullscreen-camera-grid" style={fullscreenCameraGridMetrics?.style ?? undefined}>
+              {fullscreenCameraGridMetrics?.outerRing?.map((cell) => (
+                <div
+                  key={`fullscreen-grid-outer-${cell.key}`}
+                  className="fullscreen-camera-grid-outer-ring"
+                  style={cell.style}
+                />
+              ))}
+              {fullscreenCameraGridMetrics?.neighbors?.map((cell) => (
+                <div
+                  key={`fullscreen-grid-neighbor-${cell.key}`}
+                  className="fullscreen-camera-grid-neighbor"
+                  style={cell.style}
+                />
+              ))}
+              {fullscreenCameraGridMetrics?.highlight?.map((cell) => (
+                <div
+                  key={`fullscreen-grid-highlight-${cell.key}`}
+                  className="fullscreen-camera-grid-highlight"
+                  style={cell.style}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="fullscreen-camera-hud">
+            <div className="fullscreen-camera-meta">
+              <span className="fullscreen-camera-chip">{cameraPanelTitle}</span>
+              <span className={`tracking-indicator ${handDetected ? "ok" : "warn"}`}>
+                {handDetected ? "Hand detected" : "Hand not detected"} | FPS: {fps.toFixed(1)}
+              </span>
+            </div>
+            <div className="fullscreen-camera-meta fullscreen-camera-actions">
+              <span className="fullscreen-camera-note">
+                Camera fits the window without cropping. Press `Esc` to close.
+              </span>
+              <div className="button-row compact fullscreen-camera-mode-row">
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "square" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("square")}
+                >
+                  Squares
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "hex" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("hex")}
+                >
+                  Hex
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "voronoi" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("voronoi")}
+                >
+                  Voronoi
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "rings" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("rings")}
+                >
+                  Rings
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "pulse" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("pulse")}
+                >
+                  Pulse
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "tip-ripples" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("tip-ripples")}
+                >
+                  Tip Ripples
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "tip-ripples-v2" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("tip-ripples-v2")}
+                >
+                  Tip Ripples v2
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "static" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("static")}
+                >
+                  Static
+                </button>
+              </div>
+              <button type="button" className="secondary" onClick={returnFromFullscreenCameraScreen}>
+                Back to Input Test
+              </button>
+            </div>
+            {(cameraError || modelError) && (
+              <div className="fullscreen-camera-errors">
+                {cameraError && <p className="error-text">{cameraError}</p>}
+                {modelError && <p className="error-text">{modelError}</p>}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -6526,6 +8151,14 @@ export default function App() {
                       disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
                     >
                       Open Pinch Sandbox
+                    </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={openFullscreenCameraScreen}
+                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
+                    >
+                      Open Fullscreen Camera
                     </button>
                     <button
                       className="secondary"
@@ -7223,26 +8856,8 @@ export default function App() {
         phase !== PHASES.BODY_POSE &&
         phase !== PHASES.SPATIAL_GESTURE_MEMORY &&
         phase !== PHASES.GESTURE_ART_LAB &&
-        phase !== PHASES.GESTURE_CONTROL_OS && (
-        <>
-          <div
-            className={`tracked-cursor ${handDetected ? "" : "paused"}`}
-            style={{
-              left: `${cursor.x}px`,
-              top: `${cursor.y}px`,
-            }}
-          />
-          {debugEnabled && (
-            <div
-              className="raw-cursor"
-              style={{
-                left: `${rawCursor.x}px`,
-                top: `${rawCursor.y}px`,
-              }}
-            />
-          )}
-        </>
-      )}
+        phase !== PHASES.GESTURE_CONTROL_OS &&
+        renderTrackedCursorLayer()}
 
       {phase === PHASES.CALIBRATION && isCalibrating && currentTarget && (
         <div className="calibration-layer">
