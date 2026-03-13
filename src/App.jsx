@@ -1300,6 +1300,7 @@ export default function App() {
   });
   const [analyticsHands, setAnalyticsHands] = useState([]);
   const [analyticsTimestamp, setAnalyticsTimestamp] = useState(0);
+  const [gestureAnalyticsLabSessionKey, setGestureAnalyticsLabSessionKey] = useState(0);
   const [gestureArtHands, setGestureArtHands] = useState([]);
   const [gestureArtSessionKey, setGestureArtSessionKey] = useState(0);
   const [gestureControlOSSessionKey, setGestureControlOSSessionKey] = useState(0);
@@ -3733,6 +3734,7 @@ export default function App() {
     setCalibrationSampleFrames(0);
     setAnalyticsHands([]);
     setAnalyticsTimestamp(0);
+    setGestureAnalyticsLabSessionKey((value) => value + 1);
     setPhase(PHASES.GESTURE_ANALYTICS_LAB);
     phaseRef.current = PHASES.GESTURE_ANALYTICS_LAB;
     setCalibrationMessage(
@@ -7089,6 +7091,7 @@ export default function App() {
           />
         ) : phase === PHASES.GESTURE_ANALYTICS_LAB ? (
           <GestureAnalyticsLab
+            key={gestureAnalyticsLabSessionKey}
             liveHands={analyticsHands}
             liveTimestamp={analyticsTimestamp}
             fps={fps}
