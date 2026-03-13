@@ -1,0 +1,469 @@
+import { createScopedLogger } from "./logger.js";
+
+const breakoutLog = createScopedLogger("breakoutGame");
+
+export const BREAKOUT_COUNTDOWN_MS = 3_000;
+export const BREAKOUT_BRICK_SCORE = 100;
+export const BREAKOUT_CAPSULE_SCORE = 200;
+export const BREAKOUT_BRICK_COLORS = ["#ff0000", "#ff8d00", "#ffdb00", "#00d619", "#009fff"];
+
+const BREAKOUT_BRICK_ROWS = 5;
+const BREAKOUT_BRICK_COLUMNS = 10;
+const BREAKOUT_MAX_STEP_SECONDS = 1 / 120;
+const BREAKOUT_PADDLE_LERP_PER_SECOND = 14;
+const BREAKOUT_LAUNCH_SPEED_RATIO = 0.42;
+const BREAKOUT_EXTRA_BALL_SPEED_RATIO = 0.45;
+const BREAKOUT_CAPSULE_SPEED_RATIO = 0.22;
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function createIdFactory(start = 1) {
+  let next = start;
+  return () => next++;
+}
+
+export function createBreakoutLayout(width, height) {
+  const safeWidth = Math.max(320, Number.isFinite(width) ? width : 320);
+  const safeHeight = Math.max(240, Number.isFinite(height) ? height : 240);
+  const sidePadding = clamp(safeWidth * 0.08, 22, 96);
+  const topPadding = clamp(safeHeight * 0.12, 62, 110);
+  const brickGap = clamp(Math.min(safeWidth, safeHeight) * 0.009, 4, 10);
+  const brickHeight = clamp(safeHeight * 0.05, 24, 38);
+  const brickWidth =
+    (safeWidth - sidePadding * 2 - brickGap * (BREAKOUT_BRICK_COLUMNS - 1)) /
+    BREAKOUT_BRICK_COLUMNS;
+  const paddleWidth = clamp(safeWidth * 0.18, 120, 220);
+  const paddleHeight = clamp(safeHeight * 0.022, 14, 22);
+  const paddleY = safeHeight - clamp(safeHeight * 0.11, 52, 86);
+  const ballRadius = clamp(Math.min(safeWidth, safeHeight) * 0.013, 8, 12);
+
+  return {
+    width: safeWidth,
+    height: safeHeight,
+    sidePadding,
+    topPadding,
+    brickGap,
+    brickWidth,
+    brickHeight,
+    paddleWidth,
+    paddleHeight,
+    paddleY,
+    ballRadius,
+    capsuleWidth: ballRadius * 2.2,
+    capsuleHeight: ballRadius * 3,
+    ballLaunchSpeed: Math.max(180, safeHeight * BREAKOUT_LAUNCH_SPEED_RATIO),
+    extraBallSpeed: Math.max(200, safeHeight * BREAKOUT_EXTRA_BALL_SPEED_RATIO),
+    capsuleSpeed: Math.max(120, safeHeight * BREAKOUT_CAPSULE_SPEED_RATIO),
+  };
+}
+
+export function assignBreakoutCapsuleDrops(bricks, rng = Math.random) {
+  const safeBricks = Array.isArray(bricks) ? bricks : [];
+  if (safeBricks.length === 0) {
+    return [];
+  }
+
+  const desiredCount = Math.max(1, Math.floor(safeBricks.length / 5));
+  const shuffledIndexes = safeBricks.map((_, index) => index);
+  for (let index = shuffledIndexes.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(rng() * (index + 1));
+    [shuffledIndexes[index], shuffledIndexes[swapIndex]] = [
+      shuffledIndexes[swapIndex],
+      shuffledIndexes[index],
+    ];
+  }
+
+  const selected = new Set(shuffledIndexes.slice(0, desiredCount));
+  return safeBricks.map((brick, index) => ({
+    ...brick,
+    dropsCapsule: selected.has(index),
+  }));
+}
+
+export function createBreakoutBricks(layout, rng = Math.random) {
+  const baseBricks = [];
+  const createBrickId = createIdFactory(1);
+  for (let row = 0; row < BREAKOUT_BRICK_ROWS; row += 1) {
+    for (let column = 0; column < BREAKOUT_BRICK_COLUMNS; column += 1) {
+      const x = layout.sidePadding + column * (layout.brickWidth + layout.brickGap);
+      const y = layout.topPadding + row * (layout.brickHeight + layout.brickGap);
+      baseBricks.push({
+        id: `brick-${createBrickId()}`,
+        row,
+        column,
+        x,
+        y,
+        width: layout.brickWidth,
+        height: layout.brickHeight,
+        color: BREAKOUT_BRICK_COLORS[row % BREAKOUT_BRICK_COLORS.length],
+        destroyed: false,
+        dropsCapsule: false,
+      });
+    }
+  }
+  return assignBreakoutCapsuleDrops(baseBricks, rng);
+}
+
+function createStuckBall(layout, paddleX, ballId) {
+  const radius = layout.ballRadius;
+  return {
+    id: `ball-${ballId}`,
+    x: paddleX,
+    y: layout.paddleY - layout.paddleHeight / 2 - radius - 4,
+    vx: 0,
+    vy: 0,
+    radius,
+    stuckToPaddle: true,
+  };
+}
+
+function spawnBall(layout, x, y, vx, vy, ballId) {
+  return {
+    id: `ball-${ballId}`,
+    x,
+    y,
+    vx,
+    vy,
+    radius: layout.ballRadius,
+    stuckToPaddle: false,
+  };
+}
+
+function launchBall(ball, layout, rng = Math.random) {
+  const launchSpeed = layout.ballLaunchSpeed;
+  const direction = rng() < 0.5 ? -1 : 1;
+  const xRatio = 0.22 + rng() * 0.14;
+  const vx = launchSpeed * xRatio * direction;
+  const vy = -Math.sqrt(Math.max(launchSpeed * launchSpeed - vx * vx, launchSpeed * launchSpeed * 0.65));
+  return {
+    ...ball,
+    vx,
+    vy,
+    stuckToPaddle: false,
+  };
+}
+
+function intersectsRectCircle(circle, rect) {
+  const nearestX = clamp(circle.x, rect.x, rect.x + rect.width);
+  const nearestY = clamp(circle.y, rect.y, rect.y + rect.height);
+  const dx = circle.x - nearestX;
+  const dy = circle.y - nearestY;
+  return dx * dx + dy * dy <= circle.radius * circle.radius;
+}
+
+function getPaddleRect(layout, paddleX) {
+  return {
+    x: paddleX - layout.paddleWidth / 2,
+    y: layout.paddleY - layout.paddleHeight / 2,
+    width: layout.paddleWidth,
+    height: layout.paddleHeight,
+  };
+}
+
+function spawnCapsuleForBrick(brick, layout, capsuleId) {
+  return {
+    id: `capsule-${capsuleId}`,
+    x: brick.x + brick.width / 2,
+    y: brick.y + brick.height / 2,
+    vy: layout.capsuleSpeed,
+    width: layout.capsuleWidth,
+    height: layout.capsuleHeight,
+  };
+}
+
+function spawnExtraBall(layout, paddleX, sourceX, ballId) {
+  const offsetRatio = clamp((sourceX - paddleX) / Math.max(1, layout.paddleWidth / 2), -1, 1);
+  const speed = layout.extraBallSpeed;
+  const vx = speed * offsetRatio * 0.95;
+  const vy = -Math.sqrt(Math.max(speed * speed - vx * vx, speed * speed * 0.7));
+  return spawnBall(
+    layout,
+    clamp(sourceX, layout.ballRadius, layout.width - layout.ballRadius),
+    layout.paddleY - layout.paddleHeight / 2 - layout.ballRadius - 6,
+    vx,
+    vy,
+    ballId,
+  );
+}
+
+function createRoundReset(state) {
+  const layout = state.layout;
+  const ballId = state.nextBallId;
+  return {
+    ...state,
+    paddle: {
+      ...state.paddle,
+      x: clamp(state.paddle.x, layout.paddleWidth / 2, layout.width - layout.paddleWidth / 2),
+    },
+    balls: [createStuckBall(layout, state.paddle.x, ballId)],
+    capsules: [],
+    status: "countdown",
+    countdownMs: BREAKOUT_COUNTDOWN_MS,
+    nextBallId: ballId + 1,
+    message: "3",
+  };
+}
+
+export function createBreakoutGame(width, height, rng = Math.random) {
+  const layout = createBreakoutLayout(width, height);
+  const paddleX = layout.width / 2;
+  const bricks = createBreakoutBricks(layout, rng);
+  const state = {
+    layout,
+    paddle: {
+      x: paddleX,
+    },
+    balls: [createStuckBall(layout, paddleX, 1)],
+    capsules: [],
+    bricks,
+    score: 0,
+    status: "countdown",
+    countdownMs: BREAKOUT_COUNTDOWN_MS,
+    nextBallId: 2,
+    nextCapsuleId: 1,
+    message: "3",
+  };
+  breakoutLog.info("Created breakout game state", {
+    width: layout.width,
+    height: layout.height,
+    brickCount: bricks.length,
+  });
+  return state;
+}
+
+export function stepBreakoutGame(state, dtSeconds, paddleTargetX, rng = Math.random) {
+  if (!state?.layout) {
+    return state;
+  }
+
+  const layout = state.layout;
+  const safeDt = clamp(Number.isFinite(dtSeconds) ? dtSeconds : 0, 0, 0.05);
+  const paddleBoundsMin = layout.paddleWidth / 2;
+  const paddleBoundsMax = layout.width - layout.paddleWidth / 2;
+  const desiredPaddleX = clamp(
+    Number.isFinite(paddleTargetX) ? paddleTargetX : state.paddle.x,
+    paddleBoundsMin,
+    paddleBoundsMax,
+  );
+  const lerp = 1 - Math.exp(-BREAKOUT_PADDLE_LERP_PER_SECOND * safeDt);
+  const paddleX = state.paddle.x + (desiredPaddleX - state.paddle.x) * lerp;
+  const paddleRect = getPaddleRect(layout, paddleX);
+
+  let nextState = {
+    ...state,
+    paddle: {
+      x: paddleX,
+    },
+  };
+
+  if (safeDt <= 0) {
+    return nextState;
+  }
+
+  if (nextState.status === "cleared") {
+    return {
+      ...nextState,
+      balls: nextState.balls.map((ball) =>
+        ball.stuckToPaddle
+          ? {
+              ...ball,
+              x: paddleX,
+              y: layout.paddleY - layout.paddleHeight / 2 - ball.radius - 4,
+            }
+          : ball,
+      ),
+      message: "Cleared",
+    };
+  }
+
+  if (nextState.status === "countdown") {
+    const countdownMs = Math.max(0, nextState.countdownMs - safeDt * 1000);
+    const launched = countdownMs <= 0;
+    return {
+      ...nextState,
+      countdownMs,
+      status: launched ? "playing" : "countdown",
+      balls: nextState.balls.map((ball) =>
+        ball.stuckToPaddle
+          ? launched
+            ? launchBall(
+                {
+                  ...ball,
+                  x: paddleX,
+                  y: layout.paddleY - layout.paddleHeight / 2 - ball.radius - 4,
+                },
+                layout,
+                rng,
+              )
+            : {
+                ...ball,
+                x: paddleX,
+                y: layout.paddleY - layout.paddleHeight / 2 - ball.radius - 4,
+              }
+          : ball,
+      ),
+      message: launched ? "" : String(Math.max(1, Math.ceil(countdownMs / 1000))),
+    };
+  }
+
+  const subSteps = Math.max(1, Math.ceil(safeDt / BREAKOUT_MAX_STEP_SECONDS));
+  const stepSeconds = safeDt / subSteps;
+  const nextBricks = nextState.bricks.map((brick) => ({ ...brick }));
+  const activeBalls = [];
+  const nextCapsules = nextState.capsules.map((capsule) => ({ ...capsule }));
+  let score = nextState.score;
+  let nextBallId = nextState.nextBallId;
+  let nextCapsuleId = nextState.nextCapsuleId;
+
+  for (const originalBall of nextState.balls) {
+    let ball = { ...originalBall };
+    let removed = false;
+
+    for (let stepIndex = 0; stepIndex < subSteps; stepIndex += 1) {
+      ball.x += ball.vx * stepSeconds;
+      ball.y += ball.vy * stepSeconds;
+
+      if (ball.x - ball.radius <= 0) {
+        ball.x = ball.radius;
+        ball.vx = Math.abs(ball.vx);
+      } else if (ball.x + ball.radius >= layout.width) {
+        ball.x = layout.width - ball.radius;
+        ball.vx = -Math.abs(ball.vx);
+      }
+
+      if (ball.y - ball.radius <= 0) {
+        ball.y = ball.radius;
+        ball.vy = Math.abs(ball.vy);
+      }
+
+      if (
+        ball.vy > 0 &&
+        ball.x + ball.radius >= paddleRect.x &&
+        ball.x - ball.radius <= paddleRect.x + paddleRect.width &&
+        ball.y + ball.radius >= paddleRect.y &&
+        ball.y - ball.radius <= paddleRect.y + paddleRect.height
+      ) {
+        const hitOffset = clamp((ball.x - paddleX) / Math.max(1, layout.paddleWidth / 2), -1, 1);
+        const speed = Math.max(layout.ballLaunchSpeed, Math.hypot(ball.vx, ball.vy) * 1.02);
+        ball.x = clamp(ball.x, paddleRect.x + ball.radius, paddleRect.x + paddleRect.width - ball.radius);
+        ball.y = paddleRect.y - ball.radius - 0.5;
+        ball.vx = speed * hitOffset * 0.95;
+        ball.vy = -Math.sqrt(Math.max(speed * speed - ball.vx * ball.vx, speed * speed * 0.6));
+      }
+
+      const hitBrick = nextBricks.find(
+        (brick) =>
+          !brick.destroyed &&
+          intersectsRectCircle(ball, {
+            x: brick.x,
+            y: brick.y,
+            width: brick.width,
+            height: brick.height,
+          }),
+      );
+
+      if (hitBrick) {
+        hitBrick.destroyed = true;
+        score += BREAKOUT_BRICK_SCORE;
+
+        const brickCenterX = hitBrick.x + hitBrick.width / 2;
+        const brickCenterY = hitBrick.y + hitBrick.height / 2;
+        const deltaX = ball.x - brickCenterX;
+        const deltaY = ball.y - brickCenterY;
+        const overlapX = hitBrick.width / 2 + ball.radius - Math.abs(deltaX);
+        const overlapY = hitBrick.height / 2 + ball.radius - Math.abs(deltaY);
+        if (overlapX < overlapY) {
+          ball.vx = deltaX >= 0 ? Math.abs(ball.vx) : -Math.abs(ball.vx);
+        } else {
+          ball.vy = deltaY >= 0 ? Math.abs(ball.vy) : -Math.abs(ball.vy);
+        }
+
+        if (hitBrick.dropsCapsule) {
+          nextCapsules.push(spawnCapsuleForBrick(hitBrick, layout, nextCapsuleId));
+          nextCapsuleId += 1;
+        }
+      }
+
+      if (ball.y - ball.radius > layout.height) {
+        removed = true;
+        break;
+      }
+    }
+
+    if (!removed) {
+      activeBalls.push(ball);
+    }
+  }
+
+  const liveCapsules = [];
+  for (const capsule of nextCapsules) {
+    capsule.y += capsule.vy * safeDt;
+    const capsuleRect = {
+      x: capsule.x - capsule.width / 2,
+      y: capsule.y - capsule.height / 2,
+      width: capsule.width,
+      height: capsule.height,
+    };
+    const catchesCapsule =
+      capsuleRect.x + capsuleRect.width >= paddleRect.x &&
+      capsuleRect.x <= paddleRect.x + paddleRect.width &&
+      capsuleRect.y + capsuleRect.height >= paddleRect.y &&
+      capsuleRect.y <= paddleRect.y + paddleRect.height;
+
+    if (catchesCapsule) {
+      score += BREAKOUT_CAPSULE_SCORE;
+      activeBalls.push(spawnExtraBall(layout, paddleX, capsule.x, nextBallId));
+      nextBallId += 1;
+      continue;
+    }
+
+    if (capsuleRect.y <= layout.height) {
+      liveCapsules.push(capsule);
+    }
+  }
+
+  if (nextBricks.every((brick) => brick.destroyed)) {
+    return {
+      ...nextState,
+      bricks: nextBricks,
+      balls: activeBalls,
+      capsules: [],
+      score,
+      nextBallId,
+      nextCapsuleId,
+      status: "cleared",
+      countdownMs: 0,
+      message: "Cleared",
+    };
+  }
+
+  if (activeBalls.length === 0) {
+    return createRoundReset({
+      ...nextState,
+      bricks: nextBricks,
+      balls: [],
+      capsules: [],
+      score,
+      nextBallId,
+      nextCapsuleId,
+      status: "playing",
+      countdownMs: 0,
+      message: "",
+    });
+  }
+
+  return {
+    ...nextState,
+    bricks: nextBricks,
+    balls: activeBalls,
+    capsules: liveCapsules,
+    score,
+    nextBallId,
+    nextCapsuleId,
+    status: "playing",
+    countdownMs: 0,
+    message: "",
+  };
+}
