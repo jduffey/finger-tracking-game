@@ -2,7 +2,7 @@ import * as tf from "@tensorflow/tfjs-core";
 import "@tensorflow/tfjs-backend-webgl";
 import "@tensorflow/tfjs-backend-cpu";
 import * as poseDetection from "@tensorflow-models/pose-detection";
-import { createScopedLogger } from "./logger";
+import { createScopedLogger } from "./logger.js";
 
 const poseLog = createScopedLogger("poseTracking");
 const DEFAULT_RUNTIME = "tfjs";

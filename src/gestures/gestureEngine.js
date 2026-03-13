@@ -1,4 +1,4 @@
-import { createScopedLogger } from "../logger";
+import { createScopedLogger } from "../logger.js";
 import {
   ALL_GESTURE_IDS,
   DISCRETE_GESTURE_HOLD_FRAMES,
@@ -9,14 +9,14 @@ import {
   TWO_HAND_GESTURES,
   WINDOW_SIZE,
   createEmptyConfidenceMap,
-} from "./constants";
+} from "./constants.js";
 import {
   extractSingleHandFeature,
   extractTwoHandFeature,
   flattenSingleHandWindow,
   flattenTwoHandWindow,
   wrapAngleDelta,
-} from "./featureExtract";
+} from "./featureExtract.js";
 
 const PINCH_START_THRESHOLD = 0.045;
 const PINCH_END_THRESHOLD = 0.06;
