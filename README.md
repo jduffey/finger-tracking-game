@@ -29,6 +29,21 @@ npm run dev
 
 Open the local URL printed by Vite (typically `http://localhost:5173`) in Chrome.
 
+## Symphony Setup
+
+This repo is configured for Symphony with:
+
+- [`WORKFLOW.md`](./WORKFLOW.md) for the tracker/workspace runtime
+- [`AGENTS.md`](./AGENTS.md) for repo-specific execution guidance
+- repo-local skills under [`.codex/skills`](./.codex/skills)
+
+To use it with the local Symphony tracker setup:
+
+1. Ensure the tracker project slug is `finger-tracking-game`.
+2. Set `TRACKER_API_KEY` for the tracker service.
+3. Optionally set `TARGET_REPO_URL`; otherwise the workflow defaults to `git@github.com:jduffey/finger-tracking-game.git`.
+4. Launch Symphony from this repository with `WORKFLOW.md`.
+
 ## Verbose Logs
 
 - Running `npm run dev` now creates a log file in `logs/`.
