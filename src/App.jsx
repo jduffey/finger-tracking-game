@@ -77,6 +77,7 @@ const FULLSCREEN_RING_TRAIL_DURATION_MS = 2000;
 const FULLSCREEN_RING_TRAIL_SAMPLE_INTERVAL_MS = 34;
 const FULLSCREEN_PULSE_RING_DURATION_MS = 1800;
 const FULLSCREEN_PULSE_RING_INTERVAL_MS = 260;
+const FULLSCREEN_RING_STEP_PX = 36;
 const FULLSCREEN_RING_LAYERS = [
   { diameter: 44, color: "#ff0000" },
   { diameter: 80, color: "#ff8d00" },
@@ -6986,6 +6987,45 @@ export default function App() {
     );
   }
 
+  function renderFullscreenStaticRingSet(point, keyPrefix) {
+    if (!fullscreenCameraViewport || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
+      return null;
+    }
+
+    const localX = point.x - fullscreenCameraViewport.left;
+    const localY = point.y - fullscreenCameraViewport.top;
+    const maxRadius = Math.max(
+      Math.hypot(localX, localY),
+      Math.hypot(fullscreenCameraViewport.width - localX, localY),
+      Math.hypot(localX, fullscreenCameraViewport.height - localY),
+      Math.hypot(
+        fullscreenCameraViewport.width - localX,
+        fullscreenCameraViewport.height - localY,
+      ),
+    );
+    const maxDiameter = maxRadius * 2;
+    const startDiameter =
+      (FULLSCREEN_RING_LAYERS[FULLSCREEN_RING_LAYERS.length - 1]?.diameter ?? 0) +
+      FULLSCREEN_RING_STEP_PX;
+    const diameters = [];
+    for (let diameter = startDiameter; diameter <= maxDiameter + FULLSCREEN_RING_STEP_PX; diameter += FULLSCREEN_RING_STEP_PX) {
+      diameters.push(diameter);
+    }
+
+    return diameters.map((diameter) => (
+      <div
+        key={`${keyPrefix}-${point.id}-${diameter}`}
+        className="fullscreen-camera-static-ring"
+        style={{
+          left: `${point.x - fullscreenCameraViewport.left}px`,
+          top: `${point.y - fullscreenCameraViewport.top}px`,
+          width: `${diameter}px`,
+          height: `${diameter}px`,
+        }}
+      />
+    ));
+  }
+
   if (isFullscreenCameraPhase) {
     return (
       <div className="app fullscreen-camera-app">
@@ -7068,6 +7108,18 @@ export default function App() {
                 renderFullscreenRingGroup(point, 0.9, "fullscreen-pulse-current"),
               )}
             </div>
+          ) : fullscreenGridMode === "static" ? (
+            <div
+              className="fullscreen-camera-rings"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenIndexPoints.map((point) =>
+                renderFullscreenStaticRingSet(point, "fullscreen-static-rings"),
+              )}
+              {fullscreenIndexPoints.map((point) =>
+                renderFullscreenRingGroup(point, 0.9, "fullscreen-static-current"),
+              )}
+            </div>
           ) : (
             <div className="fullscreen-camera-grid" style={fullscreenCameraGridMetrics?.style ?? undefined}>
               {fullscreenCameraGridMetrics?.outerRing?.map((cell) => (
@@ -7133,6 +7185,13 @@ export default function App() {
                   onClick={() => setFullscreenGridMode("pulse")}
                 >
                   Pulse
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "static" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("static")}
+                >
+                  Static
                 </button>
               </div>
               <button type="button" className="secondary" onClick={returnFromFullscreenCameraScreen}>
