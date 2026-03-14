@@ -6873,10 +6873,8 @@ export default function App() {
           bypassGlobalDebounce: bypassGlobalPinchDebounce,
         })
       ) {
-        if (!bypassGlobalPinchDebounce) {
-          lastPinchClickRef.current = timestamp;
-        }
-        appLog.info("Pinch click accepted after debounce", {
+        lastPinchClickRef.current = timestamp;
+        appLog.info("Pinch click accepted", {
           frameId,
           timestamp,
           debounceMs: PINCH_DEBOUNCE_MS,
