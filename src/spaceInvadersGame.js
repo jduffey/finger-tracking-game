@@ -45,6 +45,9 @@ export function createSpaceInvadersLayout(width, height) {
   const shipMaxX = safeWidth - shipMinX;
   const shotWidth = clamp(enemyWidth * 0.18, 6, 10);
   const shotHeight = clamp(safeHeight * 0.035, 16, 28);
+  const initialFormationBottom =
+    topPadding + INVADERS_ROWS * enemyHeight + (INVADERS_ROWS - 1) * enemyGapY;
+  const desiredDangerLineY = shipY - clamp(shipHeight * 1.4, 30, 56);
 
   return {
     width: safeWidth,
@@ -67,7 +70,7 @@ export function createSpaceInvadersLayout(width, height) {
     shotHeight,
     playerShotSpeed: Math.max(280, safeHeight * 0.68),
     enemyShotSpeed: Math.max(160, safeHeight * 0.34),
-    dangerLineY: shipY - clamp(shipHeight * 1.4, 30, 56),
+    dangerLineY: Math.max(desiredDangerLineY, initialFormationBottom + 1),
   };
 }
 

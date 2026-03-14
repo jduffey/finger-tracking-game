@@ -37,6 +37,16 @@ test("createSpaceInvadersLayout keeps a narrow-screen formation moving horizonta
   );
 });
 
+test("createSpaceInvadersLayout keeps the danger line below the initial formation on short screens", () => {
+  const state = createSpaceInvadersGame(320, 240, constantRng(0.2));
+  const initialFormationBottom = Math.max(...state.enemies.map((enemy) => enemy.y + enemy.height));
+
+  assert.ok(state.layout.dangerLineY > initialFormationBottom);
+
+  const next = stepSpaceInvadersGame(state, 1 / 90, state.ship.x, false, constantRng(0.2));
+  assert.equal(next.status, "playing");
+});
+
 test("stepSpaceInvadersGame reverses direction and descends at the edge", () => {
   const layout = createSpaceInvadersLayout(960, 720);
   const state = createSpaceInvadersGame(960, 720, constantRng(0.2));
