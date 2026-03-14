@@ -81,6 +81,7 @@ also auto-resolves Codex from `CODEX_BIN`, then `codex` on `PATH`, then
 - **Camera overlay**: always shows fingertip markers (thumb/index/middle/ring/pinky)
 - **Fullscreen Camera > Brick Dodger**: overlays a full-webcam dodge-and-collect runner where the smoothed index fingertip controls horizontal movement, hazards descend in lanes, bonuses spawn in adjacent risky lanes, survival adds score over time, and difficulty ramps steadily
 - **Fullscreen Camera > Breakout**: overlays a webcam-backed Breakout/Arkanoid mode with a 3-second launch countdown, slower ball speed, score HUD, rainbow capsule drops, and multi-ball powerups
+- **Fullscreen Camera > Finger Pong**: overlays a one-player Pong variant on the full webcam feed where the index fingertip steers a bottom paddle, off-center returns bend the shot, rallies accelerate gently, and score/rally counters stay visible over the camera
 - **Fullscreen Camera > Invaders**: overlays a Space Invaders-style shooter where the index fingertip steers the ship, pinch fires on cooldown, enemy rows sweep downward, and pinch restarts after a loss or clear
 - **Fullscreen Camera > Flappy**: overlays a Flappy Bird-inspired mode on the full webcam feed where each distinct pinch produces one flap, pipes scroll right-to-left, score increments on gap clears, and a pinch after a crash restarts the round
 - **Debug overlay**: adds landmarks, raw pointer marker, and pinch/FPS info
