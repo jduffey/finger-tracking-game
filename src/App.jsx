@@ -40,6 +40,7 @@ import {
   createBreakoutCoopGame,
   stepBreakoutCoopGame,
 } from "./breakoutCoopGame.js";
+import { selectBreakoutCoopSupportHand } from "./fullscreenBreakoutCoopInput.js";
 import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
 import { shouldShowFullscreenInvadersBanner } from "./fullscreenGameUi.js";
 import { runFullscreenOverlayGameUpdates } from "./fullscreenOverlayGames.js";
@@ -1738,6 +1739,7 @@ export default function App() {
   const fullscreenPulseLastEmitByIdRef = useRef({});
   const fullscreenGridModeRef = useRef(fullscreenGridMode);
   const fullscreenHandsRef = useRef([]);
+  const fullscreenPrimaryHandIdRef = useRef(null);
   const fullscreenBreakoutStateRef = useRef(null);
   const fullscreenBreakoutCoopStateRef = useRef(null);
   const fullscreenFruitNinjaStateRef = useRef(null);
@@ -2439,6 +2441,7 @@ export default function App() {
       fullscreenBreakoutCoopLastTickRef.current = 0;
       fullscreenBreakoutCoopPrimaryPinchLatchRef.current = false;
       fullscreenBreakoutCoopSecondaryPinchLatchRef.current = false;
+      fullscreenPrimaryHandIdRef.current = null;
       if (fullscreenBreakoutCoopStateRef.current) {
         fullscreenBreakoutCoopStateRef.current = null;
         setFullscreenBreakoutCoopState(null);
@@ -2453,6 +2456,7 @@ export default function App() {
     fullscreenBreakoutCoopLastTickRef.current = 0;
     fullscreenBreakoutCoopPrimaryPinchLatchRef.current = false;
     fullscreenBreakoutCoopSecondaryPinchLatchRef.current = false;
+    fullscreenPrimaryHandIdRef.current = null;
     fullscreenBreakoutCoopStateRef.current = nextGame;
     setFullscreenBreakoutCoopState(nextGame);
     return undefined;
@@ -6531,7 +6535,10 @@ export default function App() {
 
   function getFullscreenBreakoutCoopInput() {
     const hands = Array.isArray(fullscreenHandsRef.current) ? fullscreenHandsRef.current : [];
-    const secondaryHand = hands[1] ?? null;
+    const secondaryHand = selectBreakoutCoopSupportHand(
+      hands,
+      fullscreenPrimaryHandIdRef.current,
+    );
     const secondaryPinching =
       secondaryHand && Number.isFinite(secondaryHand.pinchDistance)
         ? secondaryHand.pinchDistance < PINCH_START_THRESHOLD
@@ -6903,6 +6910,7 @@ export default function App() {
         setHandDetected(false);
         appLog.debug("Hand detection flag switched to false", { frameId });
       }
+      fullscreenPrimaryHandIdRef.current = null;
       if (pinchStateRef.current) {
         pinchStateRef.current = false;
         setPinchActive(false);
@@ -7785,6 +7793,7 @@ export default function App() {
 
       if (recoveringDetectorRef.current) {
         fullscreenHandsRef.current = [];
+        fullscreenPrimaryHandIdRef.current = null;
         recoveryFrameSkipCounterRef.current += 1;
         if (recoveryFrameSkipCounterRef.current % 30 === 0) {
           appLog.debug("Skipping frame because detector recovery is in progress", {
@@ -7804,6 +7813,7 @@ export default function App() {
       const video = videoRef.current;
       if (!detector || !video || video.readyState < 2) {
         fullscreenHandsRef.current = [];
+        fullscreenPrimaryHandIdRef.current = null;
         appLog.debug("Skipping frame due to missing detector/video readiness", {
           hasDetector: Boolean(detector),
           hasVideo: Boolean(video),
@@ -7887,6 +7897,7 @@ export default function App() {
           }).slice(0, TRACKING_MAX_HANDS);
           fullscreenHandsRef.current = stableHands;
           const primaryHand = stableHands[0] ?? null;
+          fullscreenPrimaryHandIdRef.current = primaryHand?.id ?? primaryHand?.label ?? null;
           processTrackingFrame(primaryHand, timestamp);
           if (phaseRef.current === PHASES.FULLSCREEN_CAMERA) {
             const overlayPoints = drawFullscreenOverlay(stableHands);
