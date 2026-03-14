@@ -247,6 +247,13 @@ body {
   z-index: 2;
 }
 
+.fullscreen-camera-finger-pong {
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
 .fullscreen-camera-breakout-brick {
   border: 3px solid #111;
   border-radius: 10px;
@@ -279,6 +286,100 @@ body {
   border-radius: 999px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
   position: absolute;
+}
+
+.fullscreen-camera-finger-pong-midline {
+  border-top: 2px dashed rgba(255, 246, 214, 0.34);
+  left: 4%;
+  position: absolute;
+  right: 4%;
+  top: 50%;
+}
+
+.fullscreen-camera-finger-pong-paddle,
+.fullscreen-camera-finger-pong-ball {
+  position: absolute;
+}
+
+.fullscreen-camera-finger-pong-paddle {
+  border-radius: 999px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.fullscreen-camera-finger-pong-paddle.player {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.96), rgba(255, 228, 142, 0.92)),
+    linear-gradient(180deg, rgba(255, 196, 96, 0.82), rgba(255, 137, 54, 0.88));
+  border: 4px solid rgba(27, 20, 8, 0.95);
+}
+
+.fullscreen-camera-finger-pong-paddle.opponent {
+  background:
+    linear-gradient(90deg, rgba(218, 255, 247, 0.94), rgba(136, 246, 222, 0.92)),
+    linear-gradient(180deg, rgba(72, 210, 171, 0.84), rgba(20, 118, 110, 0.92));
+  border: 4px solid rgba(5, 32, 31, 0.94);
+}
+
+.fullscreen-camera-finger-pong-ball {
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.4) 28%, transparent 30%),
+    radial-gradient(circle, rgba(255, 247, 204, 0.98), rgba(255, 183, 87, 0.94));
+  border: 3px solid rgba(27, 20, 8, 0.95);
+  border-radius: 50%;
+  box-shadow:
+    0 0 24px rgba(255, 202, 94, 0.4),
+    0 10px 24px rgba(0, 0, 0, 0.26);
+}
+
+.fullscreen-camera-finger-pong-scoreboard,
+.fullscreen-camera-finger-pong-legend {
+  background: rgba(9, 17, 27, 0.72);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 14px;
+  color: #f4f7fb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  left: 18px;
+  padding: 10px 14px;
+  position: absolute;
+}
+
+.fullscreen-camera-finger-pong-scoreboard {
+  font-size: 0.95rem;
+  font-weight: 700;
+  top: 18px;
+}
+
+.fullscreen-camera-finger-pong-legend {
+  bottom: 18px;
+  font-size: 0.82rem;
+}
+
+.fullscreen-camera-finger-pong-banner {
+  background: rgba(9, 17, 27, 0.76);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 20px;
+  color: #fffdf7;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-weight: 900;
+  left: 50%;
+  letter-spacing: 0.04em;
+  max-width: min(84vw, 720px);
+  padding: 18px 24px;
+  position: absolute;
+  text-align: center;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-finger-pong-banner.countdown {
+  background: transparent;
+  border: 0;
+  font-size: clamp(4rem, 14vw, 7rem);
+  letter-spacing: 0.08em;
+  padding: 0;
 }
 
 .fullscreen-camera-flappy-pipe {
