@@ -25,6 +25,11 @@ import {
   shouldCollectRunnerCoin,
 } from "./gameLogic.js";
 import {
+  BRICK_DODGER_BONUS_SCORE,
+  createBrickDodgerGame,
+  stepBrickDodgerGame,
+} from "./brickDodgerGame.js";
+import {
   BREAKOUT_BRICK_SCORE,
   BREAKOUT_CAPSULE_SCORE,
   BREAKOUT_COUNTDOWN_MS,
@@ -1629,6 +1634,7 @@ export default function App() {
   const [fullscreenRingTrailNow, setFullscreenRingTrailNow] = useState(() => performance.now());
   const [fullscreenPulseBursts, setFullscreenPulseBursts] = useState([]);
   const [fullscreenPulseNow, setFullscreenPulseNow] = useState(() => performance.now());
+  const [fullscreenBrickDodgerState, setFullscreenBrickDodgerState] = useState(null);
   const [fullscreenBreakoutState, setFullscreenBreakoutState] = useState(null);
   const [fullscreenInvadersState, setFullscreenInvadersState] = useState(null);
   const [fullscreenFlappyState, setFullscreenFlappyState] = useState(null);
@@ -1717,6 +1723,9 @@ export default function App() {
   const fullscreenPulseBurstsRef = useRef([]);
   const fullscreenPulseLastEmitByIdRef = useRef({});
   const fullscreenGridModeRef = useRef(fullscreenGridMode);
+  const fullscreenBrickDodgerStateRef = useRef(null);
+  const fullscreenBrickDodgerViewportRef = useRef(null);
+  const fullscreenBrickDodgerLastTickRef = useRef(0);
   const fullscreenBreakoutStateRef = useRef(null);
   const fullscreenInvadersStateRef = useRef(null);
   const fullscreenBreakoutViewportRef = useRef(null);
@@ -1823,6 +1832,10 @@ export default function App() {
     [calibrationTargets, calibrationTargetIndex],
   );
   const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
+  const isFullscreenBrickDodgerMode =
+    isFullscreenCameraPhase &&
+    fullscreenGridMode === "brick-dodger" &&
+    Boolean(fullscreenBrickDodgerState);
   const isFullscreenBreakoutMode =
     isFullscreenCameraPhase && fullscreenGridMode === "breakout" && Boolean(fullscreenBreakoutState);
   const isFullscreenInvadersMode =
@@ -2300,6 +2313,7 @@ export default function App() {
       setFullscreenTipPoints([]);
       setFullscreenRingTrail([]);
       setFullscreenPulseBursts([]);
+      setFullscreenBrickDodgerState(null);
       setFullscreenBreakoutState(null);
       setFullscreenInvadersState(null);
     }
@@ -2308,6 +2322,14 @@ export default function App() {
   useEffect(() => {
     fullscreenGridModeRef.current = fullscreenGridMode;
   }, [fullscreenGridMode]);
+
+  useEffect(() => {
+    fullscreenBrickDodgerStateRef.current = fullscreenBrickDodgerState;
+  }, [fullscreenBrickDodgerState]);
+
+  useEffect(() => {
+    fullscreenBrickDodgerViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
 
   useEffect(() => {
     fullscreenBreakoutStateRef.current = fullscreenBreakoutState;
@@ -2353,6 +2375,30 @@ export default function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== "brick-dodger" ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenBrickDodgerLastTickRef.current = 0;
+      if (fullscreenBrickDodgerStateRef.current) {
+        fullscreenBrickDodgerStateRef.current = null;
+        setFullscreenBrickDodgerState(null);
+      }
+      return undefined;
+    }
+
+    const nextGame = createBrickDodgerGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenBrickDodgerLastTickRef.current = 0;
+    fullscreenBrickDodgerStateRef.current = nextGame;
+    setFullscreenBrickDodgerState(nextGame);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
   useEffect(() => {
     if (
@@ -5482,6 +5528,17 @@ export default function App() {
     setFullscreenMissileCommandState(nextGame);
   }
 
+  function restartFullscreenBrickDodgerGame() {
+    const viewportMetrics = fullscreenBrickDodgerViewportRef.current;
+    if (!viewportMetrics) {
+      return;
+    }
+    const nextGame = createBrickDodgerGame(viewportMetrics.width, viewportMetrics.height);
+    fullscreenBrickDodgerLastTickRef.current = 0;
+    fullscreenBrickDodgerStateRef.current = nextGame;
+    setFullscreenBrickDodgerState(nextGame);
+  }
+
   function handlePinchClick(timestamp) {
     appLog.debug("Pinch click detected", {
       timestamp,
@@ -6349,6 +6406,7 @@ export default function App() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (
+      fullscreenGridModeRef.current === "brick-dodger" ||
       fullscreenGridModeRef.current === "breakout" ||
       fullscreenGridModeRef.current === "invaders" ||
       fullscreenGridModeRef.current === "flappy" ||
@@ -6421,6 +6479,41 @@ export default function App() {
     );
     fullscreenBreakoutStateRef.current = nextState;
     setFullscreenBreakoutState(nextState);
+  }
+
+  function updateFullscreenBrickDodgerSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== "brick-dodger" ||
+      !fullscreenBrickDodgerStateRef.current
+    ) {
+      fullscreenBrickDodgerLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenBrickDodgerViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenBrickDodgerLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenBrickDodgerLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenBrickDodgerLastTickRef.current = timestamp;
+
+    const fallbackPlayerX =
+      fullscreenBrickDodgerStateRef.current?.player?.x ?? viewportMetrics.width / 2;
+    const pointerX =
+      handDetectedRef.current && Number.isFinite(cursorRef.current?.x)
+        ? cursorRef.current.x - viewportMetrics.left
+        : fallbackPlayerX;
+    const nextState = stepBrickDodgerGame(
+      fullscreenBrickDodgerStateRef.current,
+      deltaSeconds,
+      pointerX,
+    );
+    fullscreenBrickDodgerStateRef.current = nextState;
+    setFullscreenBrickDodgerState(nextState);
   }
 
   function updateFullscreenInvadersSimulation(timestamp) {
@@ -6516,6 +6609,7 @@ export default function App() {
 
   function updateFullscreenOverlayGames(timestamp) {
     runFullscreenOverlayGameUpdates(timestamp, {
+      updateFullscreenBrickDodgerSimulation,
       updateFullscreenBreakoutSimulation,
       updateFullscreenInvadersSimulation,
       updateFullscreenFlappySimulation,
@@ -8185,6 +8279,79 @@ export default function App() {
                 renderFullscreenStaticCenter(point, "fullscreen-static-center"),
               )}
             </div>
+          ) : fullscreenGridMode === "brick-dodger" ? (
+            <div
+              className="fullscreen-camera-brick-dodger"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenBrickDodgerState?.layout?.laneCenters?.map((center, index) => (
+                <div
+                  key={`brick-dodger-lane-${index + 1}`}
+                  className="fullscreen-camera-brick-dodger-lane"
+                  style={{
+                    left: `${center - fullscreenBrickDodgerState.layout.laneWidth / 2}px`,
+                    width: `${fullscreenBrickDodgerState.layout.laneWidth}px`,
+                  }}
+                />
+              ))}
+              {fullscreenBrickDodgerState?.hazards?.map((hazard) => (
+                <div
+                  key={hazard.id}
+                  className="fullscreen-camera-brick-dodger-hazard"
+                  style={{
+                    left: `${hazard.x - hazard.width / 2}px`,
+                    top: `${hazard.y - hazard.height / 2}px`,
+                    width: `${hazard.width}px`,
+                    height: `${hazard.height}px`,
+                  }}
+                />
+              ))}
+              {fullscreenBrickDodgerState?.bonuses?.map((bonus) => (
+                <div
+                  key={bonus.id}
+                  className="fullscreen-camera-brick-dodger-bonus"
+                  style={{
+                    left: `${bonus.x - bonus.size / 2}px`,
+                    top: `${bonus.y - bonus.size / 2}px`,
+                    width: `${bonus.size}px`,
+                    height: `${bonus.size}px`,
+                  }}
+                />
+              ))}
+              {fullscreenBrickDodgerState?.player ? (
+                <div
+                  className={`fullscreen-camera-brick-dodger-player ${
+                    fullscreenBrickDodgerState.invulnerabilityMs > 0 ? "invulnerable" : ""
+                  }`}
+                  style={{
+                    left: `${fullscreenBrickDodgerState.player.x - fullscreenBrickDodgerState.layout.playerWidth / 2}px`,
+                    top: `${fullscreenBrickDodgerState.layout.playerY - fullscreenBrickDodgerState.layout.playerHeight / 2}px`,
+                    width: `${fullscreenBrickDodgerState.layout.playerWidth}px`,
+                    height: `${fullscreenBrickDodgerState.layout.playerHeight}px`,
+                  }}
+                />
+              ) : null}
+              <div className="fullscreen-camera-brick-dodger-scoreboard">
+                <span>Score {fullscreenBrickDodgerState?.score ?? 0}</span>
+                <span>Shields {fullscreenBrickDodgerState?.lives ?? 0}</span>
+                <span>Time {Math.floor((fullscreenBrickDodgerState?.survivalMs ?? 0) / 1000)}s</span>
+                <span>Streak {fullscreenBrickDodgerState?.bonusStreak ?? 0}</span>
+              </div>
+              <div className="fullscreen-camera-brick-dodger-legend">
+                <span>Bonus +{BRICK_DODGER_BONUS_SCORE}</span>
+                <span>Survive for score over time</span>
+                <span>Adjacent lanes hold the risky pickups</span>
+              </div>
+              {isFullscreenBrickDodgerMode && fullscreenBrickDodgerState?.message ? (
+                <div
+                  className={`fullscreen-camera-brick-dodger-banner ${
+                    fullscreenBrickDodgerState.status === "gameover" ? "game-over" : ""
+                  }`}
+                >
+                  {fullscreenBrickDodgerState.message}
+                </div>
+              ) : null}
+            </div>
           ) : fullscreenGridMode === "breakout" ? (
             <div
               className="fullscreen-camera-breakout"
@@ -8552,7 +8719,9 @@ export default function App() {
             </div>
             <div className="fullscreen-camera-meta fullscreen-camera-actions">
               <span className="fullscreen-camera-note">
-                {fullscreenGridMode === "breakout"
+                {fullscreenGridMode === "brick-dodger"
+                  ? "Brick Dodger uses the existing smoothed index-fingertip X position only. Drift across the full webcam overlay to dodge falling hazards, chase adjacent bonus pickups, and stretch the run as the descent speed ramps up."
+                  : fullscreenGridMode === "breakout"
                   ? `Index fingertip steers the paddle left and right. Bricks use the Rings palette, the launch countdown is ${BREAKOUT_COUNTDOWN_MS / 1000} seconds, and each capsule adds one extra ball.`
                   : fullscreenGridMode === "invaders"
                     ? "Index fingertip steers the ship with the existing fullscreen smoothing. Pinch fires on a short cooldown, enemies descend in arcade sweeps, and pinch restarts the wave after a loss."
@@ -8621,6 +8790,13 @@ export default function App() {
                 </button>
                 <button
                   type="button"
+                  className={fullscreenGridMode === "brick-dodger" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("brick-dodger")}
+                >
+                  Brick Dodger
+                </button>
+                <button
+                  type="button"
                   className={fullscreenGridMode === "breakout" ? "" : "secondary"}
                   onClick={() => setFullscreenGridMode("breakout")}
                 >
@@ -8648,6 +8824,11 @@ export default function App() {
                   Missile Command
                 </button>
               </div>
+              {fullscreenGridMode === "brick-dodger" ? (
+                <button type="button" className="secondary" onClick={restartFullscreenBrickDodgerGame}>
+                  Restart Run
+                </button>
+              ) : null}
               {fullscreenGridMode === "missile-command" ? (
                 <button type="button" className="secondary" onClick={restartFullscreenMissileCommandGame}>
                   Restart Defense

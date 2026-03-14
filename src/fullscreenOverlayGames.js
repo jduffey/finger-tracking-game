@@ -1,12 +1,17 @@
 export function runFullscreenOverlayGameUpdates(
   timestamp,
   {
+    updateFullscreenBrickDodgerSimulation,
     updateFullscreenBreakoutSimulation,
     updateFullscreenInvadersSimulation,
     updateFullscreenFlappySimulation,
     updateFullscreenMissileCommandSimulation,
   } = {},
 ) {
+  if (typeof updateFullscreenBrickDodgerSimulation === "function") {
+    updateFullscreenBrickDodgerSimulation(timestamp);
+  }
+
   if (typeof updateFullscreenBreakoutSimulation === "function") {
     updateFullscreenBreakoutSimulation(timestamp);
   }

@@ -70,7 +70,7 @@ also auto-resolves Codex from `CODEX_BIN`, then `codex` on `PATH`, then
    - `y = b1*u + b2*v + b3`
 5. The tracker maps fingertip coordinates into the visible camera window (derived from object-fit cover crop), then applies calibration and cursor smoothing.
 6. In game mode, pinch rising-edge events hit moles when the smoothed cursor is inside the active mole zone.
-7. In fullscreen camera mode, you can switch to webcam-backed overlay games where the index fingertip controls left-right movement on top of the full feed, including Breakout/Arkanoid and a Space Invaders-style shooter.
+7. In fullscreen camera mode, you can switch to webcam-backed overlay games where the index fingertip controls left-right movement on top of the full feed, including Brick Dodger, Breakout/Arkanoid, and a Space Invaders-style shooter.
 
 ## Controls
 
@@ -79,6 +79,7 @@ also auto-resolves Codex from `CODEX_BIN`, then `codex` on `PATH`, then
 - **Start Game / Restart Game**: play 30-second round
 - **Recalibrate**: clear stored transform and return to calibration
 - **Camera overlay**: always shows fingertip markers (thumb/index/middle/ring/pinky)
+- **Fullscreen Camera > Brick Dodger**: overlays a full-webcam dodge-and-collect runner where the smoothed index fingertip controls horizontal movement, hazards descend in lanes, bonuses spawn in adjacent risky lanes, survival adds score over time, and difficulty ramps steadily
 - **Fullscreen Camera > Breakout**: overlays a webcam-backed Breakout/Arkanoid mode with a 3-second launch countdown, slower ball speed, score HUD, rainbow capsule drops, and multi-ball powerups
 - **Fullscreen Camera > Invaders**: overlays a Space Invaders-style shooter where the index fingertip steers the ship, pinch fires on cooldown, enemy rows sweep downward, and pinch restarts after a loss or clear
 - **Fullscreen Camera > Flappy**: overlays a Flappy Bird-inspired mode on the full webcam feed where each distinct pinch produces one flap, pipes scroll right-to-left, score increments on gap clears, and a pinch after a crash restarts the round
