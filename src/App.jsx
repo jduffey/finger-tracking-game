@@ -32,6 +32,7 @@ import {
   stepBreakoutGame,
 } from "./breakoutGame.js";
 import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
+import { shouldShowFullscreenInvadersBanner } from "./fullscreenGameUi.js";
 import { runFullscreenOverlayGameUpdates } from "./fullscreenOverlayGames.js";
 import {
   MISSILE_COMMAND_COUNTDOWN_MS,
@@ -8327,7 +8328,8 @@ export default function App() {
                 <span>Pinch fires</span>
                 <span>Pinch after loss restarts</span>
               </div>
-              {isFullscreenInvadersMode && fullscreenInvadersState?.message ? (
+              {isFullscreenInvadersMode &&
+              shouldShowFullscreenInvadersBanner(fullscreenInvadersState) ? (
                 <div className="fullscreen-camera-invaders-banner">
                   {fullscreenInvadersState.message}
                 </div>
