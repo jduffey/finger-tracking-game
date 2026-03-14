@@ -25,6 +25,11 @@ import {
   shouldCollectRunnerCoin,
 } from "./gameLogic.js";
 import {
+  BRICK_DODGER_BONUS_SCORE,
+  createBrickDodgerGame,
+  stepBrickDodgerGame,
+} from "./brickDodgerGame.js";
+import {
   BREAKOUT_BRICK_SCORE,
   BREAKOUT_CAPSULE_SCORE,
   BREAKOUT_COUNTDOWN_MS,
@@ -33,7 +38,6 @@ import {
 } from "./breakoutGame.js";
 import {
   BREAKOUT_COOP_BRICK_SCORE,
-  BREAKOUT_COOP_COUNTDOWN_MS,
   BREAKOUT_COOP_PRISM_BRICK_SCORE,
   BREAKOUT_COOP_SHIELD_COOLDOWN_MS,
   BREAKOUT_COOP_SHIELD_DURATION_MS,
@@ -41,6 +45,12 @@ import {
   stepBreakoutCoopGame,
 } from "./breakoutCoopGame.js";
 import { selectBreakoutCoopSupportHand } from "./fullscreenBreakoutCoopInput.js";
+import {
+  FINGER_PONG_COUNTDOWN_MS,
+  FINGER_PONG_MAX_SCORE,
+  createFingerPongGame,
+  stepFingerPongGame,
+} from "./fingerPongGame.js";
 import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
 import { shouldShowFullscreenInvadersBanner } from "./fullscreenGameUi.js";
 import { runFullscreenOverlayGameUpdates } from "./fullscreenOverlayGames.js";
@@ -1648,8 +1658,10 @@ export default function App() {
   const [fullscreenRingTrailNow, setFullscreenRingTrailNow] = useState(() => performance.now());
   const [fullscreenPulseBursts, setFullscreenPulseBursts] = useState([]);
   const [fullscreenPulseNow, setFullscreenPulseNow] = useState(() => performance.now());
+  const [fullscreenBrickDodgerState, setFullscreenBrickDodgerState] = useState(null);
   const [fullscreenBreakoutState, setFullscreenBreakoutState] = useState(null);
   const [fullscreenBreakoutCoopState, setFullscreenBreakoutCoopState] = useState(null);
+  const [fullscreenFingerPongState, setFullscreenFingerPongState] = useState(null);
   const [fullscreenFruitNinjaState, setFullscreenFruitNinjaState] = useState(null);
   const [fullscreenInvadersState, setFullscreenInvadersState] = useState(null);
   const [fullscreenFlappyState, setFullscreenFlappyState] = useState(null);
@@ -1740,16 +1752,22 @@ export default function App() {
   const fullscreenGridModeRef = useRef(fullscreenGridMode);
   const fullscreenHandsRef = useRef([]);
   const fullscreenPrimaryHandIdRef = useRef(null);
+  const fullscreenBrickDodgerStateRef = useRef(null);
+  const fullscreenBrickDodgerViewportRef = useRef(null);
+  const fullscreenBrickDodgerLastTickRef = useRef(0);
   const fullscreenBreakoutStateRef = useRef(null);
   const fullscreenBreakoutCoopStateRef = useRef(null);
+  const fullscreenFingerPongStateRef = useRef(null);
   const fullscreenFruitNinjaStateRef = useRef(null);
   const fullscreenInvadersStateRef = useRef(null);
   const fullscreenBreakoutViewportRef = useRef(null);
+  const fullscreenFingerPongViewportRef = useRef(null);
   const fullscreenBreakoutLastTickRef = useRef(0);
   const fullscreenBreakoutCoopViewportRef = useRef(null);
   const fullscreenBreakoutCoopLastTickRef = useRef(0);
   const fullscreenBreakoutCoopPrimaryPinchLatchRef = useRef(false);
   const fullscreenBreakoutCoopSecondaryPinchLatchRef = useRef(false);
+  const fullscreenFingerPongLastTickRef = useRef(0);
   const fullscreenFruitNinjaLastTickRef = useRef(0);
   const fullscreenInvadersLastTickRef = useRef(0);
   const fullscreenFlappyStateRef = useRef(null);
@@ -1853,12 +1871,20 @@ export default function App() {
     [calibrationTargets, calibrationTargetIndex],
   );
   const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
+  const isFullscreenBrickDodgerMode =
+    isFullscreenCameraPhase &&
+    fullscreenGridMode === "brick-dodger" &&
+    Boolean(fullscreenBrickDodgerState);
   const isFullscreenBreakoutMode =
     isFullscreenCameraPhase && fullscreenGridMode === "breakout" && Boolean(fullscreenBreakoutState);
   const isFullscreenBreakoutCoopMode =
     isFullscreenCameraPhase &&
     fullscreenGridMode === "breakout-coop" &&
     Boolean(fullscreenBreakoutCoopState);
+  const isFullscreenFingerPongMode =
+    isFullscreenCameraPhase &&
+    fullscreenGridMode === "finger-pong" &&
+    Boolean(fullscreenFingerPongState);
   const isFullscreenFruitNinjaMode =
     isFullscreenCameraPhase &&
     fullscreenGridMode === "fruit-ninja" &&
@@ -2338,8 +2364,10 @@ export default function App() {
       setFullscreenTipPoints([]);
       setFullscreenRingTrail([]);
       setFullscreenPulseBursts([]);
+      setFullscreenBrickDodgerState(null);
       setFullscreenBreakoutState(null);
       setFullscreenBreakoutCoopState(null);
+      setFullscreenFingerPongState(null);
       setFullscreenFruitNinjaState(null);
       setFullscreenInvadersState(null);
       setFullscreenFlappyState(null);
@@ -2352,12 +2380,24 @@ export default function App() {
   }, [fullscreenGridMode]);
 
   useEffect(() => {
+    fullscreenBrickDodgerStateRef.current = fullscreenBrickDodgerState;
+  }, [fullscreenBrickDodgerState]);
+
+  useEffect(() => {
+    fullscreenBrickDodgerViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
+
+  useEffect(() => {
     fullscreenBreakoutStateRef.current = fullscreenBreakoutState;
   }, [fullscreenBreakoutState]);
 
   useEffect(() => {
     fullscreenBreakoutCoopStateRef.current = fullscreenBreakoutCoopState;
   }, [fullscreenBreakoutCoopState]);
+
+  useEffect(() => {
+    fullscreenFingerPongStateRef.current = fullscreenFingerPongState;
+  }, [fullscreenFingerPongState]);
 
   useEffect(() => {
     fullscreenFruitNinjaStateRef.current = fullscreenFruitNinjaState;
@@ -2373,6 +2413,10 @@ export default function App() {
 
   useEffect(() => {
     fullscreenBreakoutCoopViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
+
+  useEffect(() => {
+    fullscreenFingerPongViewportRef.current = fullscreenCameraViewport;
   }, [fullscreenCameraViewport]);
 
   useEffect(() => {
@@ -2407,6 +2451,30 @@ export default function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== "brick-dodger" ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenBrickDodgerLastTickRef.current = 0;
+      if (fullscreenBrickDodgerStateRef.current) {
+        fullscreenBrickDodgerStateRef.current = null;
+        setFullscreenBrickDodgerState(null);
+      }
+      return undefined;
+    }
+
+    const nextGame = createBrickDodgerGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenBrickDodgerLastTickRef.current = 0;
+    fullscreenBrickDodgerStateRef.current = nextGame;
+    setFullscreenBrickDodgerState(nextGame);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
   useEffect(() => {
     if (
@@ -2507,6 +2575,30 @@ export default function App() {
     fullscreenInvadersLastTickRef.current = 0;
     fullscreenInvadersStateRef.current = nextGame;
     setFullscreenInvadersState(nextGame);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== "finger-pong" ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenFingerPongLastTickRef.current = 0;
+      if (fullscreenFingerPongStateRef.current) {
+        fullscreenFingerPongStateRef.current = null;
+        setFullscreenFingerPongState(null);
+      }
+      return undefined;
+    }
+
+    const nextGame = createFingerPongGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenFingerPongLastTickRef.current = 0;
+    fullscreenFingerPongStateRef.current = nextGame;
+    setFullscreenFingerPongState(nextGame);
     return undefined;
   }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
@@ -5590,6 +5682,28 @@ export default function App() {
     setFullscreenMissileCommandState(nextGame);
   }
 
+  function restartFullscreenBrickDodgerGame() {
+    const viewportMetrics = fullscreenBrickDodgerViewportRef.current;
+    if (!viewportMetrics) {
+      return;
+    }
+    const nextGame = createBrickDodgerGame(viewportMetrics.width, viewportMetrics.height);
+    fullscreenBrickDodgerLastTickRef.current = 0;
+    fullscreenBrickDodgerStateRef.current = nextGame;
+    setFullscreenBrickDodgerState(nextGame);
+  }
+
+  function restartFullscreenFingerPongGame() {
+    const viewportMetrics = fullscreenFingerPongViewportRef.current;
+    if (!viewportMetrics) {
+      return;
+    }
+    const nextGame = createFingerPongGame(viewportMetrics.width, viewportMetrics.height);
+    fullscreenFingerPongLastTickRef.current = 0;
+    fullscreenFingerPongStateRef.current = nextGame;
+    setFullscreenFingerPongState(nextGame);
+  }
+
   function handlePinchClick(timestamp) {
     appLog.debug("Pinch click detected", {
       timestamp,
@@ -6457,6 +6571,7 @@ export default function App() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (
+      fullscreenGridModeRef.current === "brick-dodger" ||
       fullscreenGridModeRef.current === "breakout-coop" ||
       fullscreenGridModeRef.current === "breakout" ||
       fullscreenGridModeRef.current === "fruit-ninja" ||
@@ -6609,6 +6724,76 @@ export default function App() {
     setFullscreenBreakoutCoopState(nextState);
   }
 
+  function updateFullscreenBrickDodgerSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== "brick-dodger" ||
+      !fullscreenBrickDodgerStateRef.current
+    ) {
+      fullscreenBrickDodgerLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenBrickDodgerViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenBrickDodgerLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenBrickDodgerLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenBrickDodgerLastTickRef.current = timestamp;
+
+    const fallbackPlayerX =
+      fullscreenBrickDodgerStateRef.current?.player?.x ?? viewportMetrics.width / 2;
+    const pointerX =
+      handDetectedRef.current && Number.isFinite(cursorRef.current?.x)
+        ? cursorRef.current.x - viewportMetrics.left
+        : fallbackPlayerX;
+    const nextState = stepBrickDodgerGame(
+      fullscreenBrickDodgerStateRef.current,
+      deltaSeconds,
+      pointerX,
+    );
+    fullscreenBrickDodgerStateRef.current = nextState;
+    setFullscreenBrickDodgerState(nextState);
+  }
+
+  function updateFullscreenFingerPongSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== "finger-pong" ||
+      !fullscreenFingerPongStateRef.current
+    ) {
+      fullscreenFingerPongLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenFingerPongViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenFingerPongLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenFingerPongLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenFingerPongLastTickRef.current = timestamp;
+
+    const fallbackPaddleX =
+      fullscreenFingerPongStateRef.current?.player?.x ?? viewportMetrics.width / 2;
+    const pointerX =
+      handDetectedRef.current && Number.isFinite(cursorRef.current?.x)
+        ? cursorRef.current.x - viewportMetrics.left
+        : fallbackPaddleX;
+    const nextState = stepFingerPongGame(
+      fullscreenFingerPongStateRef.current,
+      deltaSeconds,
+      pointerX,
+    );
+    fullscreenFingerPongStateRef.current = nextState;
+    setFullscreenFingerPongState(nextState);
+  }
+
   function updateFullscreenFruitNinjaSimulation(timestamp) {
     if (
       phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
@@ -6742,8 +6927,10 @@ export default function App() {
 
   function updateFullscreenOverlayGames(timestamp) {
     runFullscreenOverlayGameUpdates(timestamp, {
+      updateFullscreenBrickDodgerSimulation,
       updateFullscreenBreakoutSimulation,
       updateFullscreenBreakoutCoopSimulation,
+      updateFullscreenFingerPongSimulation,
       updateFullscreenInvadersSimulation,
       updateFullscreenFlappySimulation,
       updateFullscreenMissileCommandSimulation,
@@ -8487,6 +8674,79 @@ export default function App() {
                 renderFullscreenStaticCenter(point, "fullscreen-static-center"),
               )}
             </div>
+          ) : fullscreenGridMode === "brick-dodger" ? (
+            <div
+              className="fullscreen-camera-brick-dodger"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenBrickDodgerState?.layout?.laneCenters?.map((center, index) => (
+                <div
+                  key={`brick-dodger-lane-${index + 1}`}
+                  className="fullscreen-camera-brick-dodger-lane"
+                  style={{
+                    left: `${center - fullscreenBrickDodgerState.layout.laneWidth / 2}px`,
+                    width: `${fullscreenBrickDodgerState.layout.laneWidth}px`,
+                  }}
+                />
+              ))}
+              {fullscreenBrickDodgerState?.hazards?.map((hazard) => (
+                <div
+                  key={hazard.id}
+                  className="fullscreen-camera-brick-dodger-hazard"
+                  style={{
+                    left: `${hazard.x - hazard.width / 2}px`,
+                    top: `${hazard.y - hazard.height / 2}px`,
+                    width: `${hazard.width}px`,
+                    height: `${hazard.height}px`,
+                  }}
+                />
+              ))}
+              {fullscreenBrickDodgerState?.bonuses?.map((bonus) => (
+                <div
+                  key={bonus.id}
+                  className="fullscreen-camera-brick-dodger-bonus"
+                  style={{
+                    left: `${bonus.x - bonus.size / 2}px`,
+                    top: `${bonus.y - bonus.size / 2}px`,
+                    width: `${bonus.size}px`,
+                    height: `${bonus.size}px`,
+                  }}
+                />
+              ))}
+              {fullscreenBrickDodgerState?.player ? (
+                <div
+                  className={`fullscreen-camera-brick-dodger-player ${
+                    fullscreenBrickDodgerState.invulnerabilityMs > 0 ? "invulnerable" : ""
+                  }`}
+                  style={{
+                    left: `${fullscreenBrickDodgerState.player.x - fullscreenBrickDodgerState.layout.playerWidth / 2}px`,
+                    top: `${fullscreenBrickDodgerState.layout.playerY - fullscreenBrickDodgerState.layout.playerHeight / 2}px`,
+                    width: `${fullscreenBrickDodgerState.layout.playerWidth}px`,
+                    height: `${fullscreenBrickDodgerState.layout.playerHeight}px`,
+                  }}
+                />
+              ) : null}
+              <div className="fullscreen-camera-brick-dodger-scoreboard">
+                <span>Score {fullscreenBrickDodgerState?.score ?? 0}</span>
+                <span>Shields {fullscreenBrickDodgerState?.lives ?? 0}</span>
+                <span>Time {Math.floor((fullscreenBrickDodgerState?.survivalMs ?? 0) / 1000)}s</span>
+                <span>Streak {fullscreenBrickDodgerState?.bonusStreak ?? 0}</span>
+              </div>
+              <div className="fullscreen-camera-brick-dodger-legend">
+                <span>Bonus +{BRICK_DODGER_BONUS_SCORE}</span>
+                <span>Survive for score over time</span>
+                <span>Adjacent lanes hold the risky pickups</span>
+              </div>
+              {isFullscreenBrickDodgerMode && fullscreenBrickDodgerState?.message ? (
+                <div
+                  className={`fullscreen-camera-brick-dodger-banner ${
+                    fullscreenBrickDodgerState.status === "gameover" ? "game-over" : ""
+                  }`}
+                >
+                  {fullscreenBrickDodgerState.message}
+                </div>
+              ) : null}
+            </div>
           ) : fullscreenGridMode === "breakout-coop" ? (
             <div
               className="fullscreen-camera-breakout fullscreen-camera-breakout-coop"
@@ -8661,6 +8921,64 @@ export default function App() {
               ) : null}
               {isFullscreenBreakoutMode && fullscreenBreakoutState.status === "cleared" ? (
                 <div className="fullscreen-camera-breakout-banner">All bricks cleared</div>
+              ) : null}
+            </div>
+          ) : fullscreenGridMode === "finger-pong" ? (
+            <div
+              className="fullscreen-camera-finger-pong"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              <div className="fullscreen-camera-finger-pong-midline" />
+              <div
+                className="fullscreen-camera-finger-pong-paddle opponent"
+                style={{
+                  left: `${(fullscreenFingerPongState?.opponent?.x ?? 0) - (fullscreenFingerPongState?.layout?.opponentPaddleWidth ?? 0) / 2}px`,
+                  top: `${(fullscreenFingerPongState?.layout?.opponentPaddleY ?? 0) - (fullscreenFingerPongState?.layout?.paddleHeight ?? 0) / 2}px`,
+                  width: `${fullscreenFingerPongState?.layout?.opponentPaddleWidth ?? 0}px`,
+                  height: `${fullscreenFingerPongState?.layout?.paddleHeight ?? 0}px`,
+                }}
+              />
+              <div
+                className="fullscreen-camera-finger-pong-paddle player"
+                style={{
+                  left: `${(fullscreenFingerPongState?.player?.x ?? 0) - (fullscreenFingerPongState?.layout?.paddleWidth ?? 0) / 2}px`,
+                  top: `${(fullscreenFingerPongState?.layout?.playerPaddleY ?? 0) - (fullscreenFingerPongState?.layout?.paddleHeight ?? 0) / 2}px`,
+                  width: `${fullscreenFingerPongState?.layout?.paddleWidth ?? 0}px`,
+                  height: `${fullscreenFingerPongState?.layout?.paddleHeight ?? 0}px`,
+                }}
+              />
+              <div
+                className="fullscreen-camera-finger-pong-ball"
+                style={{
+                  left: `${(fullscreenFingerPongState?.ball?.x ?? 0) - (fullscreenFingerPongState?.ball?.radius ?? 0)}px`,
+                  top: `${(fullscreenFingerPongState?.ball?.y ?? 0) - (fullscreenFingerPongState?.ball?.radius ?? 0)}px`,
+                  width: `${(fullscreenFingerPongState?.ball?.radius ?? 0) * 2}px`,
+                  height: `${(fullscreenFingerPongState?.ball?.radius ?? 0) * 2}px`,
+                }}
+              />
+              <div className="fullscreen-camera-finger-pong-scoreboard">
+                <span>Score {fullscreenFingerPongState?.score ?? 0}</span>
+                <span>Rally {fullscreenFingerPongState?.rallyCount ?? 0}</span>
+                <span>Best {fullscreenFingerPongState?.bestRally ?? 0}</span>
+                <span>Misses {fullscreenFingerPongState?.opponentScore ?? 0}</span>
+              </div>
+              <div className="fullscreen-camera-finger-pong-legend">
+                <span>Horizontal fingertip steers</span>
+                <span>Edge hits bend returns</span>
+                <span>First to {FINGER_PONG_MAX_SCORE}</span>
+              </div>
+              {isFullscreenFingerPongMode &&
+              fullscreenFingerPongState?.status === "countdown" &&
+              fullscreenFingerPongState.countdownMs > 0 ? (
+                <div className="fullscreen-camera-finger-pong-banner countdown">
+                  {Math.max(1, Math.ceil(fullscreenFingerPongState.countdownMs / 1000))}
+                </div>
+              ) : null}
+              {isFullscreenFingerPongMode &&
+              fullscreenFingerPongState?.status === "won" ? (
+                <div className="fullscreen-camera-finger-pong-banner">
+                  {fullscreenFingerPongState.message}
+                </div>
               ) : null}
             </div>
           ) : fullscreenGridMode === "fruit-ninja" ? (
@@ -9040,8 +9358,12 @@ export default function App() {
               <span className="fullscreen-camera-note">
                 {fullscreenGridMode === "breakout-coop"
                   ? `Breakout Co-op keeps index-finger steering on the paddle, uses support-hand pinch for a ${Math.round(BREAKOUT_COOP_SHIELD_DURATION_MS / 1000)} second shield pulse, and prism bricks split the ball while the shield recharges over about ${Math.round(BREAKOUT_COOP_SHIELD_COOLDOWN_MS / 1000)} seconds.`
+                  : fullscreenGridMode === "brick-dodger"
+                  ? "Brick Dodger uses the existing smoothed index-fingertip X position only. Drift across the full webcam overlay to dodge falling hazards, chase adjacent bonus pickups, and stretch the run as the descent speed ramps up."
                   : fullscreenGridMode === "breakout"
                   ? `Index fingertip steers the paddle left and right. Bricks use the Rings palette, the launch countdown is ${BREAKOUT_COUNTDOWN_MS / 1000} seconds, and each capsule adds one extra ball.`
+                  : fullscreenGridMode === "finger-pong"
+                  ? `Finger Pong keeps the full webcam visible behind a one-player rally. Your bottom paddle follows smoothed horizontal fingertip motion, the opening countdown is ${FINGER_PONG_COUNTDOWN_MS / 1000} seconds, and off-center contacts steer the return angle while rallies gently speed up.`
                   : fullscreenGridMode === "fruit-ninja"
                   ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
                   : fullscreenGridMode === "invaders"
@@ -9111,6 +9433,13 @@ export default function App() {
                 </button>
                 <button
                   type="button"
+                  className={fullscreenGridMode === "brick-dodger" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("brick-dodger")}
+                >
+                  Brick Dodger
+                </button>
+                <button
+                  type="button"
                   className={fullscreenGridMode === "breakout-coop" ? "" : "secondary"}
                   onClick={() => setFullscreenGridMode("breakout-coop")}
                 >
@@ -9122,6 +9451,13 @@ export default function App() {
                   onClick={() => setFullscreenGridMode("breakout")}
                 >
                   Breakout
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "finger-pong" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("finger-pong")}
+                >
+                  Finger Pong
                 </button>
                 <button
                   type="button"
@@ -9152,6 +9488,16 @@ export default function App() {
                   Missile Command
                 </button>
               </div>
+              {fullscreenGridMode === "brick-dodger" ? (
+                <button type="button" className="secondary" onClick={restartFullscreenBrickDodgerGame}>
+                  Restart Run
+                </button>
+              ) : null}
+              {fullscreenGridMode === "finger-pong" ? (
+                <button type="button" className="secondary" onClick={restartFullscreenFingerPongGame}>
+                  Restart Rally
+                </button>
+              ) : null}
               {fullscreenGridMode === "fruit-ninja" ? (
                 <button type="button" className="secondary" onClick={restartFullscreenFruitNinjaGame}>
                   Restart Round

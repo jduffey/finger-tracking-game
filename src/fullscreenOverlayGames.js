@@ -1,19 +1,29 @@
 export function runFullscreenOverlayGameUpdates(
   timestamp,
   {
+    updateFullscreenBrickDodgerSimulation,
     updateFullscreenBreakoutSimulation,
     updateFullscreenBreakoutCoopSimulation,
+    updateFullscreenFingerPongSimulation,
     updateFullscreenInvadersSimulation,
     updateFullscreenFlappySimulation,
     updateFullscreenMissileCommandSimulation,
   } = {},
 ) {
+  if (typeof updateFullscreenBrickDodgerSimulation === "function") {
+    updateFullscreenBrickDodgerSimulation(timestamp);
+  }
+
   if (typeof updateFullscreenBreakoutSimulation === "function") {
     updateFullscreenBreakoutSimulation(timestamp);
   }
 
   if (typeof updateFullscreenBreakoutCoopSimulation === "function") {
     updateFullscreenBreakoutCoopSimulation(timestamp);
+  }
+
+  if (typeof updateFullscreenFingerPongSimulation === "function") {
+    updateFullscreenFingerPongSimulation(timestamp);
   }
 
   if (typeof updateFullscreenInvadersSimulation === "function") {
