@@ -122,3 +122,52 @@ test("stepBrickDodgerGame removes a shield and ends the run on the last hit", ()
   assert.equal(next.status, "gameover");
   assert.equal(next.bonusStreak, 0);
 });
+
+test("stepBrickDodgerGame does not award a bonus after a lethal collision", () => {
+  const layout = createBrickDodgerLayout(960, 720);
+  const laneX = layout.laneCenters[1];
+  const state = {
+    layout,
+    player: { x: laneX },
+    hazards: [
+      {
+        id: "hazard-1",
+        laneIndex: 1,
+        x: laneX,
+        y: layout.playerY,
+        width: layout.hazardWidth,
+        height: layout.hazardHeight,
+        vy: 0,
+      },
+    ],
+    bonuses: [
+      {
+        id: "bonus-1",
+        laneIndex: 1,
+        x: laneX,
+        y: layout.playerY,
+        size: layout.bonusSize,
+        vy: 0,
+      },
+    ],
+    score: 125,
+    lives: 1,
+    elapsedMs: 0,
+    survivalMs: 0,
+    survivalScoreRemainder: 0,
+    bonusStreak: 2,
+    invulnerabilityMs: 0,
+    status: "playing",
+    message: "",
+    nextHazardId: 2,
+    nextBonusId: 2,
+    spawnTimerMs: 5_000,
+  };
+
+  const next = stepBrickDodgerGame(state, 1 / 60, laneX, constantRng(0.8));
+  assert.equal(next.score, 125);
+  assert.equal(next.lives, 0);
+  assert.equal(next.status, "gameover");
+  assert.equal(next.bonusStreak, 0);
+  assert.equal(next.message, "Run over");
+});

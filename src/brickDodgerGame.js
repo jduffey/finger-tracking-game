@@ -301,6 +301,21 @@ export function stepBrickDodgerGame(state, dtSeconds, playerTargetX, rng = Math.
     }
   }
 
+  if (status === "gameover") {
+    return {
+      ...workingState,
+      hazards: remainingHazards,
+      bonuses: movedBonuses,
+      score,
+      lives: Math.max(0, lives),
+      bonusStreak,
+      invulnerabilityMs,
+      status,
+      message,
+      spawnTimerMs,
+    };
+  }
+
   const remainingBonuses = [];
   for (const bonus of movedBonuses) {
     const bonusRect = {
