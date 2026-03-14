@@ -37,24 +37,40 @@ test("createSpaceInvadersLayout keeps a narrow-screen formation moving horizonta
   );
 });
 
-test("createSpaceInvadersLayout keeps the danger line below the initial formation on short screens", () => {
+test("createSpaceInvadersLayout gives short screens enough descent headroom to stay winnable", () => {
   const state = createSpaceInvadersGame(320, 240, constantRng(0.2));
   const layout = state.layout;
   const initialFormationBottom = Math.max(...state.enemies.map((enemy) => enemy.y + enemy.height));
-  const rightmostEnemy = Math.max(...state.enemies.map((enemy) => enemy.x + enemy.width));
-  const nudged = {
-    ...state,
+
+  assert.ok(layout.dangerLineY > initialFormationBottom + layout.descendStep * 4);
+
+  let current = state;
+  for (let descent = 0; descent < 4; descent += 1) {
+    const rightmostEnemy = Math.max(...current.enemies.map((enemy) => enemy.x + enemy.width));
+    const nudged = {
+      ...current,
+      enemyDirection: 1,
+      enemies: current.enemies.map((enemy) => ({
+        ...enemy,
+        x: enemy.x + (layout.width - layout.sidePadding - rightmostEnemy) - 1,
+      })),
+    };
+
+    current = stepSpaceInvadersGame(nudged, 0.05, nudged.ship.x, false, constantRng(0.2));
+    assert.equal(current.status, "playing");
+  }
+
+  const rightmostEnemy = Math.max(...current.enemies.map((enemy) => enemy.x + enemy.width));
+  const finalNudged = {
+    ...current,
     enemyDirection: 1,
-    enemies: state.enemies.map((enemy) => ({
+    enemies: current.enemies.map((enemy) => ({
       ...enemy,
       x: enemy.x + (layout.width - layout.sidePadding - rightmostEnemy) - 1,
     })),
   };
-
-  assert.ok(layout.dangerLineY > initialFormationBottom + layout.descendStep);
-
-  const next = stepSpaceInvadersGame(nudged, 0.05, nudged.ship.x, false, constantRng(0.2));
-  assert.equal(next.status, "playing");
+  const landed = stepSpaceInvadersGame(finalNudged, 0.05, finalNudged.ship.x, false, constantRng(0.2));
+  assert.equal(landed.status, "gameover");
 });
 
 test("stepSpaceInvadersGame reverses direction and descends at the edge", () => {

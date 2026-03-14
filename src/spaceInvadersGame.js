@@ -11,6 +11,7 @@ const INVADERS_SHIP_LERP_PER_SECOND = 18;
 const INVADERS_FIRE_COOLDOWN_MS = 240;
 const INVADERS_ENEMY_FIRE_INTERVAL_MS = 900;
 const INVADERS_RESTART_COOLDOWN_MS = 700;
+const INVADERS_MIN_DANGER_DESCENTS = 4;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -49,6 +50,10 @@ export function createSpaceInvadersLayout(width, height) {
   const initialFormationBottom =
     topPadding + INVADERS_ROWS * enemyHeight + (INVADERS_ROWS - 1) * enemyGapY;
   const desiredDangerLineY = shipY - clamp(shipHeight * 1.4, 30, 56);
+  const minimumDangerLineY = Math.min(
+    safeHeight - 1,
+    initialFormationBottom + descendStep * INVADERS_MIN_DANGER_DESCENTS + 1,
+  );
 
   return {
     width: safeWidth,
@@ -71,7 +76,7 @@ export function createSpaceInvadersLayout(width, height) {
     shotHeight,
     playerShotSpeed: Math.max(280, safeHeight * 0.68),
     enemyShotSpeed: Math.max(160, safeHeight * 0.34),
-    dangerLineY: Math.max(desiredDangerLineY, initialFormationBottom + descendStep + 1),
+    dangerLineY: Math.max(desiredDangerLineY, minimumDangerLineY),
   };
 }
 
