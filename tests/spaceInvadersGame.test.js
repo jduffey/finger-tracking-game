@@ -18,6 +18,25 @@ test("createSpaceInvadersGame centers the ship and spawns a full formation", () 
   assert.equal(game.ship.x, game.layout.width / 2);
 });
 
+test("createSpaceInvadersLayout keeps a narrow-screen formation moving horizontally", () => {
+  const layout = createSpaceInvadersLayout(320, 568);
+  const state = createSpaceInvadersGame(320, 568, constantRng(0.2));
+  const highestEnemyY = Math.min(...state.enemies.map((enemy) => enemy.y));
+  const leftmostEnemyX = Math.min(...state.enemies.map((enemy) => enemy.x));
+
+  assert.ok(layout.formationWidth < layout.width - 2 * layout.sidePadding);
+
+  const next = stepSpaceInvadersGame(state, 1 / 90, state.ship.x, false, constantRng(0.2));
+
+  assert.equal(
+    Math.min(...next.enemies.filter((enemy) => enemy.alive).map((enemy) => enemy.y)),
+    highestEnemyY,
+  );
+  assert.ok(
+    Math.min(...next.enemies.filter((enemy) => enemy.alive).map((enemy) => enemy.x)) > leftmostEnemyX,
+  );
+});
+
 test("stepSpaceInvadersGame reverses direction and descends at the edge", () => {
   const layout = createSpaceInvadersLayout(960, 720);
   const state = createSpaceInvadersGame(960, 720, constantRng(0.2));

@@ -30,9 +30,16 @@ export function createSpaceInvadersLayout(width, height) {
   const enemyGapY = clamp(enemyHeight * 0.45, 10, 20);
   const formationWidth = INVADERS_COLUMNS * enemyWidth + (INVADERS_COLUMNS - 1) * enemyGapX;
   const topPadding = clamp(safeHeight * 0.12, 48, 96);
-  const sidePadding = clamp(safeWidth * 0.08, 18, 76);
+  const baseSidePadding = clamp(safeWidth * 0.08, 18, 76);
   const shipWidth = clamp(safeWidth * 0.12, 68, 122);
   const shipHeight = clamp(safeHeight * 0.05, 24, 42);
+  const enemySpeed = Math.max(54, safeWidth * 0.085);
+  // Reserve enough room for at least one horizontal step in either direction.
+  const minFormationTravelWidth = enemySpeed * INVADERS_MAX_STEP_SECONDS * 2 + 1;
+  const sidePadding = Math.max(
+    0,
+    Math.min(baseSidePadding, (safeWidth - formationWidth - minFormationTravelWidth) / 2),
+  );
   const shipY = safeHeight - clamp(safeHeight * 0.13, 58, 92);
   const shipMinX = shipWidth / 2 + sidePadding * 0.35;
   const shipMaxX = safeWidth - shipMinX;
@@ -50,7 +57,7 @@ export function createSpaceInvadersLayout(width, height) {
     sidePadding,
     formationWidth,
     descendStep: clamp(safeHeight * 0.045, 18, 34),
-    enemySpeed: Math.max(54, safeWidth * 0.085),
+    enemySpeed,
     shipWidth,
     shipHeight,
     shipY,
