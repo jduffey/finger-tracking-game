@@ -239,6 +239,13 @@ body {
   z-index: 2;
 }
 
+.fullscreen-camera-flappy {
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
 .fullscreen-camera-breakout-brick {
   border: 3px solid #111;
   border-radius: 10px;
@@ -271,6 +278,90 @@ body {
   border-radius: 999px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
   position: absolute;
+}
+
+.fullscreen-camera-flappy-pipe {
+  background:
+    linear-gradient(90deg, rgba(12, 49, 22, 0.9), rgba(37, 133, 54, 0.95) 20%, rgba(128, 235, 123, 0.92) 50%, rgba(32, 123, 46, 0.95) 80%, rgba(9, 65, 24, 0.94));
+  border: 4px solid rgba(8, 22, 12, 0.88);
+  border-radius: 14px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
+  position: absolute;
+}
+
+.fullscreen-camera-flappy-bird {
+  background:
+    radial-gradient(circle at 35% 32%, rgba(255, 255, 255, 0.96) 0 16%, transparent 17%),
+    radial-gradient(circle at 62% 70%, rgba(255, 168, 77, 0.92) 0 18%, transparent 19%),
+    linear-gradient(180deg, #ffe273, #ffb23f);
+  border: 4px solid rgba(20, 20, 20, 0.92);
+  border-radius: 42% 58% 48% 52%;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  position: absolute;
+  transform-origin: center;
+}
+
+.fullscreen-camera-flappy-bird::after {
+  background: #111;
+  border-radius: 999px;
+  content: "";
+  height: 18%;
+  left: 62%;
+  position: absolute;
+  top: 34%;
+  width: 18%;
+}
+
+.fullscreen-camera-flappy-ground {
+  background:
+    linear-gradient(180deg, rgba(201, 163, 75, 0.92), rgba(144, 103, 39, 0.96)),
+    repeating-linear-gradient(90deg, rgba(96, 68, 24, 0.24) 0 22px, rgba(255, 220, 128, 0.16) 22px 44px);
+  border-top: 5px solid rgba(255, 232, 145, 0.92);
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  right: 0;
+}
+
+.fullscreen-camera-flappy-scoreboard,
+.fullscreen-camera-flappy-legend {
+  background: rgba(9, 17, 27, 0.72);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 14px;
+  color: #f4f7fb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  left: 18px;
+  padding: 10px 14px;
+  position: absolute;
+}
+
+.fullscreen-camera-flappy-scoreboard {
+  font-size: 0.95rem;
+  font-weight: 700;
+  top: 18px;
+}
+
+.fullscreen-camera-flappy-legend {
+  bottom: 18px;
+  font-size: 0.82rem;
+}
+
+.fullscreen-camera-flappy-banner {
+  background: rgba(9, 17, 27, 0.76);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 20px;
+  color: #fffdf7;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-weight: 900;
+  left: 50%;
+  letter-spacing: 0.04em;
+  padding: 18px 24px;
+  position: absolute;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .fullscreen-camera-breakout-scoreboard,
@@ -1890,17 +1981,21 @@ button:disabled {
   }
 
   .fullscreen-camera-breakout-scoreboard,
-  .fullscreen-camera-breakout-legend {
+  .fullscreen-camera-breakout-legend,
+  .fullscreen-camera-flappy-scoreboard,
+  .fullscreen-camera-flappy-legend {
     gap: 8px;
     left: 12px;
     padding: 8px 10px;
   }
 
-  .fullscreen-camera-breakout-scoreboard {
+  .fullscreen-camera-breakout-scoreboard,
+  .fullscreen-camera-flappy-scoreboard {
     right: 12px;
   }
 
-  .fullscreen-camera-breakout-legend {
+  .fullscreen-camera-breakout-legend,
+  .fullscreen-camera-flappy-legend {
     bottom: 12px;
     right: auto;
   }

@@ -80,6 +80,7 @@ also auto-resolves Codex from `CODEX_BIN`, then `codex` on `PATH`, then
 - **Recalibrate**: clear stored transform and return to calibration
 - **Camera overlay**: always shows fingertip markers (thumb/index/middle/ring/pinky)
 - **Fullscreen Camera > Breakout**: overlays a webcam-backed Breakout/Arkanoid mode with a 3-second launch countdown, slower ball speed, score HUD, rainbow capsule drops, and multi-ball powerups
+- **Fullscreen Camera > Flappy**: overlays a Flappy Bird-inspired mode on the full webcam feed where each distinct pinch produces one flap, pipes scroll right-to-left, score increments on gap clears, and a pinch after a crash restarts the round
 - **Debug overlay**: adds landmarks, raw pointer marker, and pinch/FPS info
 - **Log Tracking Extents**: writes raw/clamped/visible-normalized fingertip coverage plus visible camera bounds to the log file
 

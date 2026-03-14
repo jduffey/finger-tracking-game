@@ -31,6 +31,8 @@ import {
   createBreakoutGame,
   stepBreakoutGame,
 } from "./breakoutGame.js";
+import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
+import { runFullscreenOverlayGameUpdates } from "./fullscreenOverlayGames.js";
 import {
   MISSILE_COMMAND_COUNTDOWN_MS,
   MISSILE_COMMAND_THREAT_SCORE,
@@ -46,6 +48,10 @@ import {
   getLastDetectionMeta,
   initHandTracking,
 } from "./handTracking.js";
+import {
+  shouldAcceptPinchClick,
+  shouldBypassGlobalPinchDebounce,
+} from "./pinchInput.js";
 import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from "./poseTracking.js";
 import { createScopedLogger } from "./logger.js";
 import MinorityReportLab from "./components/MinorityReportLab.jsx";
@@ -1618,6 +1624,7 @@ export default function App() {
   const [fullscreenPulseBursts, setFullscreenPulseBursts] = useState([]);
   const [fullscreenPulseNow, setFullscreenPulseNow] = useState(() => performance.now());
   const [fullscreenBreakoutState, setFullscreenBreakoutState] = useState(null);
+  const [fullscreenFlappyState, setFullscreenFlappyState] = useState(null);
   const [fullscreenMissileCommandState, setFullscreenMissileCommandState] = useState(null);
   const [poseModelReady, setPoseModelReady] = useState(false);
   const [poseModelError, setPoseModelError] = useState("");
@@ -1706,6 +1713,9 @@ export default function App() {
   const fullscreenBreakoutStateRef = useRef(null);
   const fullscreenBreakoutViewportRef = useRef(null);
   const fullscreenBreakoutLastTickRef = useRef(0);
+  const fullscreenFlappyStateRef = useRef(null);
+  const fullscreenFlappyViewportRef = useRef(null);
+  const fullscreenFlappyLastTickRef = useRef(0);
   const fullscreenMissileCommandStateRef = useRef(null);
   const fullscreenMissileCommandViewportRef = useRef(null);
   const fullscreenMissileCommandLastTickRef = useRef(0);
@@ -1806,6 +1816,8 @@ export default function App() {
   const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
   const isFullscreenBreakoutMode =
     isFullscreenCameraPhase && fullscreenGridMode === "breakout" && Boolean(fullscreenBreakoutState);
+  const isFullscreenFlappyMode =
+    isFullscreenCameraPhase && fullscreenGridMode === "flappy" && Boolean(fullscreenFlappyState);
   const isFullscreenMissileCommandMode =
     isFullscreenCameraPhase &&
     fullscreenGridMode === "missile-command" &&
@@ -2293,6 +2305,14 @@ export default function App() {
   }, [fullscreenCameraViewport]);
 
   useEffect(() => {
+    fullscreenFlappyStateRef.current = fullscreenFlappyState;
+  }, [fullscreenFlappyState]);
+
+  useEffect(() => {
+    fullscreenFlappyViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
+
+  useEffect(() => {
     fullscreenMissileCommandStateRef.current = fullscreenMissileCommandState;
   }, [fullscreenMissileCommandState]);
 
@@ -2338,6 +2358,30 @@ export default function App() {
     fullscreenBreakoutLastTickRef.current = 0;
     fullscreenBreakoutStateRef.current = nextGame;
     setFullscreenBreakoutState(nextGame);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== "flappy" ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenFlappyLastTickRef.current = 0;
+      if (fullscreenFlappyStateRef.current) {
+        fullscreenFlappyStateRef.current = null;
+        setFullscreenFlappyState(null);
+      }
+      return undefined;
+    }
+
+    const nextGame = createFlappyGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenFlappyLastTickRef.current = 0;
+    fullscreenFlappyStateRef.current = nextGame;
+    setFullscreenFlappyState(nextGame);
     return undefined;
   }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
@@ -5424,7 +5468,10 @@ export default function App() {
       return;
     }
 
-    if (phaseRef.current === PHASES.FULLSCREEN_CAMERA && fullscreenGridModeRef.current === "missile-command") {
+    if (
+      phaseRef.current === PHASES.FULLSCREEN_CAMERA &&
+      fullscreenGridModeRef.current === "missile-command"
+    ) {
       const viewportMetrics = fullscreenMissileCommandViewportRef.current;
       const activeState = fullscreenMissileCommandStateRef.current;
       if (!viewportMetrics || !activeState) {
@@ -5481,6 +5528,17 @@ export default function App() {
       appLog.debug("Pinch click ignored in runner mode because jumping is disabled", {
         timestamp,
       });
+      return;
+    }
+
+    if (phaseRef.current === PHASES.FULLSCREEN_CAMERA && fullscreenGridModeRef.current === "flappy") {
+      if (!fullscreenFlappyStateRef.current) {
+        return;
+      }
+      const nextState = flapFlappyGame(fullscreenFlappyStateRef.current);
+      fullscreenFlappyStateRef.current = nextState;
+      fullscreenFlappyLastTickRef.current = timestamp;
+      setFullscreenFlappyState(nextState);
       return;
     }
 
@@ -6251,6 +6309,7 @@ export default function App() {
 
     if (
       fullscreenGridModeRef.current === "breakout" ||
+      fullscreenGridModeRef.current === "flappy" ||
       fullscreenGridModeRef.current === "missile-command"
     ) {
       return {
@@ -6322,6 +6381,33 @@ export default function App() {
     setFullscreenBreakoutState(nextState);
   }
 
+  function updateFullscreenFlappySimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== "flappy" ||
+      !fullscreenFlappyStateRef.current
+    ) {
+      fullscreenFlappyLastTickRef.current = timestamp;
+      return;
+    }
+
+    if (!fullscreenFlappyViewportRef.current) {
+      fullscreenFlappyLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenFlappyLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenFlappyLastTickRef.current = timestamp;
+
+    const nextState = stepFlappyGame(
+      fullscreenFlappyStateRef.current,
+      deltaSeconds,
+    );
+    fullscreenFlappyStateRef.current = nextState;
+    setFullscreenFlappyState(nextState);
+  }
+
   function updateFullscreenMissileCommandSimulation(timestamp) {
     if (
       phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
@@ -6348,6 +6434,14 @@ export default function App() {
     );
     fullscreenMissileCommandStateRef.current = nextState;
     setFullscreenMissileCommandState(nextState);
+  }
+
+  function updateFullscreenOverlayGames(timestamp) {
+    runFullscreenOverlayGameUpdates(timestamp, {
+      updateFullscreenBreakoutSimulation,
+      updateFullscreenFlappySimulation,
+      updateFullscreenMissileCommandSimulation,
+    });
   }
 
   function updateFrameTiming(timestamp) {
@@ -6489,8 +6583,7 @@ export default function App() {
         updateSandboxPhysics(timestamp, cursorRef.current, false, false);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
-        updateFullscreenMissileCommandSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -6526,8 +6619,7 @@ export default function App() {
       updateSandboxPhysics(timestamp, cursorRef.current, false, false);
       updateFlightSimulation(timestamp);
       updateRunnerSimulation(timestamp);
-      updateFullscreenBreakoutSimulation(timestamp);
-      updateFullscreenMissileCommandSimulation(timestamp);
+      updateFullscreenOverlayGames(timestamp);
       updateGame(timestamp);
       return;
     }
@@ -6766,16 +6858,27 @@ export default function App() {
         });
       }
 
+      const bypassGlobalPinchDebounce = shouldBypassGlobalPinchDebounce({
+        phase: phaseRef.current,
+        fullscreenGridMode: fullscreenGridModeRef.current,
+      });
+
       if (
-        !wasPinching &&
-        nextPinch &&
-        timestamp - lastPinchClickRef.current >= PINCH_DEBOUNCE_MS
+        shouldAcceptPinchClick({
+          wasPinching,
+          isPinching: nextPinch,
+          timestamp,
+          lastPinchClickAt: lastPinchClickRef.current,
+          debounceMs: PINCH_DEBOUNCE_MS,
+          bypassGlobalDebounce: bypassGlobalPinchDebounce,
+        })
       ) {
         lastPinchClickRef.current = timestamp;
-        appLog.info("Pinch click accepted after debounce", {
+        appLog.info("Pinch click accepted", {
           frameId,
           timestamp,
           debounceMs: PINCH_DEBOUNCE_MS,
+          bypassGlobalPinchDebounce,
         });
         handlePinchClick(timestamp);
       } else if (!wasPinching && nextPinch) {
@@ -6791,8 +6894,7 @@ export default function App() {
     drawCameraOverlay(hand);
     updateFlightSimulation(timestamp);
     updateRunnerSimulation(timestamp);
-    updateFullscreenBreakoutSimulation(timestamp);
-    updateFullscreenMissileCommandSimulation(timestamp);
+    updateFullscreenOverlayGames(timestamp);
     updateGame(timestamp);
   }
 
@@ -7375,8 +7477,7 @@ export default function App() {
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
-        updateFullscreenMissileCommandSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -7392,8 +7493,7 @@ export default function App() {
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
-        updateFullscreenMissileCommandSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -7410,8 +7510,7 @@ export default function App() {
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
-        updateFullscreenMissileCommandSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
         updateGame(timestamp);
         return;
       }
@@ -7515,8 +7614,7 @@ export default function App() {
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
         updateFlightSimulation(timestamp);
         updateRunnerSimulation(timestamp);
-        updateFullscreenBreakoutSimulation(timestamp);
-        updateFullscreenMissileCommandSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
         updateGame(timestamp);
       } finally {
         inferenceBusyRef.current = false;
@@ -8085,6 +8183,65 @@ export default function App() {
                 <div className="fullscreen-camera-breakout-banner">All bricks cleared</div>
               ) : null}
             </div>
+          ) : fullscreenGridMode === "flappy" ? (
+            <div
+              className="fullscreen-camera-flappy"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenFlappyState?.pipes?.map((pipe) => (
+                <div key={pipe.id}>
+                  <div
+                    className="fullscreen-camera-flappy-pipe"
+                    style={{
+                      left: `${pipe.x}px`,
+                      top: "0px",
+                      width: `${pipe.width}px`,
+                      height: `${pipe.gapTop}px`,
+                    }}
+                  />
+                  <div
+                    className="fullscreen-camera-flappy-pipe"
+                    style={{
+                      left: `${pipe.x}px`,
+                      top: `${pipe.gapTop + pipe.gapHeight}px`,
+                      width: `${pipe.width}px`,
+                      height: `${Math.max(
+                        0,
+                        (fullscreenFlappyState?.layout?.playfieldHeight ?? 0) -
+                          (pipe.gapTop + pipe.gapHeight),
+                      )}px`,
+                    }}
+                  />
+                </div>
+              ))}
+              <div
+                className="fullscreen-camera-flappy-bird"
+                style={{
+                  left: `${(fullscreenFlappyState?.bird?.x ?? 0) - (fullscreenFlappyState?.bird?.radius ?? 0)}px`,
+                  top: `${(fullscreenFlappyState?.bird?.y ?? 0) - (fullscreenFlappyState?.bird?.radius ?? 0)}px`,
+                  width: `${(fullscreenFlappyState?.bird?.radius ?? 0) * 2}px`,
+                  height: `${(fullscreenFlappyState?.bird?.radius ?? 0) * 2}px`,
+                  transform: `rotate(${fullscreenFlappyState?.bird?.rotation ?? 0}deg)`,
+                }}
+              />
+              <div
+                className="fullscreen-camera-flappy-ground"
+                style={{ height: `${fullscreenFlappyState?.layout?.groundHeight ?? 0}px` }}
+              />
+              <div className="fullscreen-camera-flappy-scoreboard">
+                <span>Score {fullscreenFlappyState?.score ?? 0}</span>
+                <span>Status {fullscreenFlappyState?.status ?? "ready"}</span>
+              </div>
+              <div className="fullscreen-camera-flappy-legend">
+                <span>Pinch = flap</span>
+                <span>Pass a gap = +1</span>
+              </div>
+              {isFullscreenFlappyMode && fullscreenFlappyState?.message ? (
+                <div className="fullscreen-camera-flappy-banner">
+                  {fullscreenFlappyState.message}
+                </div>
+              ) : null}
+            </div>
           ) : fullscreenGridMode === "missile-command" ? (
             <div
               className="fullscreen-camera-missile-command"
@@ -8247,6 +8404,8 @@ export default function App() {
                   ? `Index fingertip steers the paddle left and right. Bricks use the Rings palette, the launch countdown is ${BREAKOUT_COUNTDOWN_MS / 1000} seconds, and each capsule adds one extra ball.`
                   : fullscreenGridMode === "missile-command"
                   ? `Index fingertip aims. Pinch launches interceptors from the nearest surviving base, blasts stop threats in an area, and the pace ramps over time after the ${MISSILE_COMMAND_COUNTDOWN_MS / 1000}-second opening countdown.`
+                  : fullscreenGridMode === "flappy"
+                  ? "Flappy overlay uses pinch rising edges only. Each distinct pinch flaps once, holding a pinch does not retrigger, and pinching after a crash restarts the round."
                   : "Camera fits the window without cropping. Press `Esc` to close."}
               </span>
               <div className="button-row compact fullscreen-camera-mode-row">
@@ -8312,6 +8471,13 @@ export default function App() {
                   onClick={() => setFullscreenGridMode("breakout")}
                 >
                   Breakout
+                </button>
+                <button
+                  type="button"
+                  className={fullscreenGridMode === "flappy" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("flappy")}
+                >
+                  Flappy
                 </button>
                 <button
                   type="button"
