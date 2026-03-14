@@ -48,6 +48,15 @@ import {
   stepSpaceInvadersGame,
 } from "./spaceInvadersGame.js";
 import {
+  FRUIT_NINJA_BASE_SCORE,
+  FRUIT_NINJA_BLADE_TRAIL_MS,
+  FRUIT_NINJA_BOMB_PENALTY,
+  FRUIT_NINJA_COMBO_BONUS,
+  FRUIT_NINJA_GAME_OVER_LIVES,
+  createFruitNinjaGame,
+  stepFruitNinjaGame,
+} from "./fruitNinjaGame.js";
+import {
   detectHands,
   getCurrentBackend,
   getCurrentRuntime,
@@ -1630,6 +1639,7 @@ export default function App() {
   const [fullscreenPulseBursts, setFullscreenPulseBursts] = useState([]);
   const [fullscreenPulseNow, setFullscreenPulseNow] = useState(() => performance.now());
   const [fullscreenBreakoutState, setFullscreenBreakoutState] = useState(null);
+  const [fullscreenFruitNinjaState, setFullscreenFruitNinjaState] = useState(null);
   const [fullscreenInvadersState, setFullscreenInvadersState] = useState(null);
   const [fullscreenFlappyState, setFullscreenFlappyState] = useState(null);
   const [fullscreenMissileCommandState, setFullscreenMissileCommandState] = useState(null);
@@ -1718,9 +1728,11 @@ export default function App() {
   const fullscreenPulseLastEmitByIdRef = useRef({});
   const fullscreenGridModeRef = useRef(fullscreenGridMode);
   const fullscreenBreakoutStateRef = useRef(null);
+  const fullscreenFruitNinjaStateRef = useRef(null);
   const fullscreenInvadersStateRef = useRef(null);
   const fullscreenBreakoutViewportRef = useRef(null);
   const fullscreenBreakoutLastTickRef = useRef(0);
+  const fullscreenFruitNinjaLastTickRef = useRef(0);
   const fullscreenInvadersLastTickRef = useRef(0);
   const fullscreenFlappyStateRef = useRef(null);
   const fullscreenFlappyViewportRef = useRef(null);
@@ -1825,6 +1837,10 @@ export default function App() {
   const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
   const isFullscreenBreakoutMode =
     isFullscreenCameraPhase && fullscreenGridMode === "breakout" && Boolean(fullscreenBreakoutState);
+  const isFullscreenFruitNinjaMode =
+    isFullscreenCameraPhase &&
+    fullscreenGridMode === "fruit-ninja" &&
+    Boolean(fullscreenFruitNinjaState);
   const isFullscreenInvadersMode =
     isFullscreenCameraPhase && fullscreenGridMode === "invaders" && Boolean(fullscreenInvadersState);
   const isFullscreenFlappyMode =
@@ -2301,7 +2317,10 @@ export default function App() {
       setFullscreenRingTrail([]);
       setFullscreenPulseBursts([]);
       setFullscreenBreakoutState(null);
+      setFullscreenFruitNinjaState(null);
       setFullscreenInvadersState(null);
+      setFullscreenFlappyState(null);
+      setFullscreenMissileCommandState(null);
     }
   }, [phase]);
 
@@ -2312,6 +2331,10 @@ export default function App() {
   useEffect(() => {
     fullscreenBreakoutStateRef.current = fullscreenBreakoutState;
   }, [fullscreenBreakoutState]);
+
+  useEffect(() => {
+    fullscreenFruitNinjaStateRef.current = fullscreenFruitNinjaState;
+  }, [fullscreenFruitNinjaState]);
 
   useEffect(() => {
     fullscreenInvadersStateRef.current = fullscreenInvadersState;
@@ -2375,6 +2398,30 @@ export default function App() {
     fullscreenBreakoutLastTickRef.current = 0;
     fullscreenBreakoutStateRef.current = nextGame;
     setFullscreenBreakoutState(nextGame);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== "fruit-ninja" ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenFruitNinjaLastTickRef.current = 0;
+      if (fullscreenFruitNinjaStateRef.current) {
+        fullscreenFruitNinjaStateRef.current = null;
+        setFullscreenFruitNinjaState(null);
+      }
+      return undefined;
+    }
+
+    const nextGame = createFruitNinjaGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenFruitNinjaLastTickRef.current = 0;
+    fullscreenFruitNinjaStateRef.current = nextGame;
+    setFullscreenFruitNinjaState(nextGame);
     return undefined;
   }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
@@ -6350,6 +6397,7 @@ export default function App() {
 
     if (
       fullscreenGridModeRef.current === "breakout" ||
+      fullscreenGridModeRef.current === "fruit-ninja" ||
       fullscreenGridModeRef.current === "invaders" ||
       fullscreenGridModeRef.current === "flappy" ||
       fullscreenGridModeRef.current === "missile-command"
@@ -6421,6 +6469,46 @@ export default function App() {
     );
     fullscreenBreakoutStateRef.current = nextState;
     setFullscreenBreakoutState(nextState);
+  }
+
+  function updateFullscreenFruitNinjaSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== "fruit-ninja" ||
+      !fullscreenFruitNinjaStateRef.current
+    ) {
+      fullscreenFruitNinjaLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenBreakoutViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenFruitNinjaLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenFruitNinjaLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenFruitNinjaLastTickRef.current = timestamp;
+
+    const pointer =
+      handDetectedRef.current &&
+      Number.isFinite(cursorRef.current?.x) &&
+      Number.isFinite(cursorRef.current?.y)
+        ? {
+            active: true,
+            x: clampValue(cursorRef.current.x - viewportMetrics.left, 0, viewportMetrics.width),
+            y: clampValue(cursorRef.current.y - viewportMetrics.top, 0, viewportMetrics.height),
+          }
+        : { active: false };
+    const nextState = stepFruitNinjaGame(
+      fullscreenFruitNinjaStateRef.current,
+      deltaSeconds,
+      pointer,
+      timestamp,
+    );
+    fullscreenFruitNinjaStateRef.current = nextState;
+    setFullscreenFruitNinjaState(nextState);
   }
 
   function updateFullscreenInvadersSimulation(timestamp) {
@@ -6521,6 +6609,7 @@ export default function App() {
       updateFullscreenFlappySimulation,
       updateFullscreenMissileCommandSimulation,
     });
+    updateFullscreenFruitNinjaSimulation(timestamp);
   }
 
   function updateFrameTiming(timestamp) {
@@ -8051,6 +8140,73 @@ export default function App() {
     );
   }
 
+  function restartFullscreenFruitNinjaGame() {
+    if (!fullscreenCameraViewport) {
+      return;
+    }
+    const nextGame = createFruitNinjaGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenFruitNinjaLastTickRef.current = 0;
+    fullscreenFruitNinjaStateRef.current = nextGame;
+    setFullscreenFruitNinjaState(nextGame);
+  }
+
+  function renderFullscreenFruitTarget(target) {
+    const size = target.radius * 2;
+    return (
+      <div
+        key={target.id}
+        className={`fullscreen-camera-fruit-target ${target.kind === "bomb" ? "bomb" : "fruit"}`}
+        style={{
+          left: `${target.x - target.radius}px`,
+          top: `${target.y - target.radius}px`,
+          width: `${size}px`,
+          height: `${size}px`,
+          transform: `rotate(${target.rotation}rad)`,
+          background: target.fill,
+          boxShadow:
+            target.kind === "bomb"
+              ? "0 0 0 2px rgba(255, 123, 107, 0.72), 0 16px 40px rgba(0, 0, 0, 0.34)"
+              : `0 0 0 2px ${target.accent}, 0 18px 36px rgba(0, 0, 0, 0.28)`,
+        }}
+      >
+        <div
+          className={`fullscreen-camera-fruit-core ${target.kind === "bomb" ? "bomb" : ""}`}
+          style={{
+            background: target.kind === "bomb" ? target.accent : target.accent,
+          }}
+        />
+      </div>
+    );
+  }
+
+  function renderFullscreenFruitSplitPiece(piece) {
+    const size = piece.radius * 2;
+    return (
+      <div
+        key={piece.id}
+        className={`fullscreen-camera-fruit-split ${piece.half}`}
+        style={{
+          left: `${piece.x - piece.radius}px`,
+          top: `${piece.y - piece.radius}px`,
+          width: `${size}px`,
+          height: `${size}px`,
+          transform: `rotate(${piece.rotation}rad)`,
+          background: piece.fill,
+        }}
+      >
+        <div
+          className="fullscreen-camera-fruit-core"
+          style={{
+            background: piece.accent,
+          }}
+        />
+      </div>
+    );
+  }
+
   if (isFullscreenCameraPhase) {
     return (
       <div className="app fullscreen-camera-app">
@@ -8260,6 +8416,91 @@ export default function App() {
               ) : null}
               {isFullscreenBreakoutMode && fullscreenBreakoutState.status === "cleared" ? (
                 <div className="fullscreen-camera-breakout-banner">All bricks cleared</div>
+              ) : null}
+            </div>
+          ) : fullscreenGridMode === "fruit-ninja" ? (
+            <div
+              className="fullscreen-camera-fruit-ninja"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              <div className="fullscreen-camera-fruit-blade-trail">
+                {fullscreenFruitNinjaState?.bladeTrail?.map((point, index, trail) => {
+                  const previous = trail[index - 1];
+                  if (!previous) {
+                    return null;
+                  }
+                  const dx = point.x - previous.x;
+                  const dy = point.y - previous.y;
+                  const length = Math.hypot(dx, dy);
+                  if (length < 2) {
+                    return null;
+                  }
+                  const age = Math.max(0, performance.now() - point.timestamp);
+                  const opacity = Math.max(0, 1 - age / FRUIT_NINJA_BLADE_TRAIL_MS);
+                  return (
+                    <div
+                      key={`blade-trail-${point.timestamp}-${index}`}
+                      className="fullscreen-camera-fruit-blade-segment"
+                      style={{
+                        left: `${previous.x}px`,
+                        top: `${previous.y}px`,
+                        width: `${length}px`,
+                        transform: `translateY(-50%) rotate(${Math.atan2(dy, dx)}rad)`,
+                        opacity,
+                      }}
+                    />
+                  );
+                })}
+              </div>
+              {fullscreenFruitNinjaState?.splitPieces?.map((piece) =>
+                renderFullscreenFruitSplitPiece(piece),
+              )}
+              {fullscreenFruitNinjaState?.targets?.map((target) =>
+                renderFullscreenFruitTarget(target),
+              )}
+              {fullscreenFruitNinjaState?.particles?.map((particle) => (
+                <div
+                  key={particle.id}
+                  className={`fullscreen-camera-fruit-particle ${particle.kind}`}
+                  style={{
+                    left: `${particle.x - particle.radius}px`,
+                    top: `${particle.y - particle.radius}px`,
+                    width: `${particle.radius * 2}px`,
+                    height: `${particle.radius * 2}px`,
+                    background: particle.fill,
+                    opacity: Math.max(0, 1 - particle.ageMs / particle.ttlMs),
+                  }}
+                />
+              ))}
+              {fullscreenFruitNinjaState?.popups?.map((popup) => (
+                <div
+                  key={popup.id}
+                  className={`fullscreen-camera-fruit-popup ${popup.kind}`}
+                  style={{
+                    left: `${popup.x}px`,
+                    top: `${popup.y}px`,
+                    opacity: Math.max(0, 1 - popup.ageMs / popup.ttlMs),
+                  }}
+                >
+                  {popup.text}
+                </div>
+              ))}
+              <div className="fullscreen-camera-fruit-scoreboard">
+                <span>Score {fullscreenFruitNinjaState?.score ?? 0}</span>
+                <span>Lives {fullscreenFruitNinjaState?.lives ?? FRUIT_NINJA_GAME_OVER_LIVES}</span>
+                <span>Combo x{Math.max(1, fullscreenFruitNinjaState?.comboCount ?? 0)}</span>
+              </div>
+              <div className="fullscreen-camera-fruit-legend">
+                <span>Fruit +{FRUIT_NINJA_BASE_SCORE}</span>
+                <span>Combo +{FRUIT_NINJA_COMBO_BONUS}</span>
+                <span>Bomb -{FRUIT_NINJA_BOMB_PENALTY}</span>
+              </div>
+              <div className="fullscreen-camera-fruit-banner">
+                {fullscreenFruitNinjaState?.message}
+              </div>
+              {isFullscreenFruitNinjaMode &&
+              fullscreenFruitNinjaState?.status === "gameover" ? (
+                <div className="fullscreen-camera-fruit-gameover">Round Over</div>
               ) : null}
             </div>
           ) : fullscreenGridMode === "invaders" ? (
@@ -8554,8 +8795,10 @@ export default function App() {
               <span className="fullscreen-camera-note">
                 {fullscreenGridMode === "breakout"
                   ? `Index fingertip steers the paddle left and right. Bricks use the Rings palette, the launch countdown is ${BREAKOUT_COUNTDOWN_MS / 1000} seconds, and each capsule adds one extra ball.`
+                  : fullscreenGridMode === "fruit-ninja"
+                  ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
                   : fullscreenGridMode === "invaders"
-                    ? "Index fingertip steers the ship with the existing fullscreen smoothing. Pinch fires on a short cooldown, enemies descend in arcade sweeps, and pinch restarts the wave after a loss."
+                  ? "Index fingertip steers the ship with the existing fullscreen smoothing. Pinch fires on a short cooldown, enemies descend in arcade sweeps, and pinch restarts the wave after a loss."
                   : fullscreenGridMode === "missile-command"
                   ? `Index fingertip aims. Pinch launches interceptors from the nearest surviving base, blasts stop threats in an area, and the pace ramps over time after the ${MISSILE_COMMAND_COUNTDOWN_MS / 1000}-second opening countdown.`
                   : fullscreenGridMode === "flappy"
@@ -8628,6 +8871,13 @@ export default function App() {
                 </button>
                 <button
                   type="button"
+                  className={fullscreenGridMode === "fruit-ninja" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("fruit-ninja")}
+                >
+                  Slice Air
+                </button>
+                <button
+                  type="button"
                   className={fullscreenGridMode === "invaders" ? "" : "secondary"}
                   onClick={() => setFullscreenGridMode("invaders")}
                 >
@@ -8648,6 +8898,11 @@ export default function App() {
                   Missile Command
                 </button>
               </div>
+              {fullscreenGridMode === "fruit-ninja" ? (
+                <button type="button" className="secondary" onClick={restartFullscreenFruitNinjaGame}>
+                  Restart Round
+                </button>
+              ) : null}
               {fullscreenGridMode === "missile-command" ? (
                 <button type="button" className="secondary" onClick={restartFullscreenMissileCommandGame}>
                   Restart Defense

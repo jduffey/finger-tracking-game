@@ -239,6 +239,7 @@ body {
   z-index: 2;
 }
 
+.fullscreen-camera-fruit-ninja,
 .fullscreen-camera-flappy {
   overflow: hidden;
   pointer-events: none;
@@ -671,6 +672,155 @@ body {
   font-size: clamp(1.8rem, 5vw, 3rem);
   letter-spacing: 0.04em;
   padding: 18px 24px;
+}
+
+.fullscreen-camera-fruit-target,
+.fullscreen-camera-fruit-split {
+  align-items: center;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  position: absolute;
+}
+
+.fullscreen-camera-fruit-target {
+  border: 3px solid rgba(9, 17, 27, 0.72);
+}
+
+.fullscreen-camera-fruit-target.fruit::after,
+.fullscreen-camera-fruit-split::after {
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  content: "";
+  height: 18%;
+  left: 18%;
+  position: absolute;
+  top: 16%;
+  transform: rotate(-24deg);
+  width: 32%;
+}
+
+.fullscreen-camera-fruit-target.bomb {
+  border-radius: 38%;
+}
+
+.fullscreen-camera-fruit-core {
+  border-radius: 50%;
+  height: 38%;
+  opacity: 0.88;
+  width: 38%;
+}
+
+.fullscreen-camera-fruit-core.bomb {
+  box-shadow: 0 0 24px rgba(255, 123, 107, 0.72);
+}
+
+.fullscreen-camera-fruit-split {
+  border-radius: 50% 50% 44% 44%;
+  opacity: 0.92;
+  overflow: hidden;
+}
+
+.fullscreen-camera-fruit-split.left {
+  clip-path: polygon(0 0, 54% 0, 74% 50%, 54% 100%, 0 100%);
+}
+
+.fullscreen-camera-fruit-split.right {
+  clip-path: polygon(46% 0, 100% 0, 100% 100%, 46% 100%, 26% 50%);
+}
+
+.fullscreen-camera-fruit-blade-trail {
+  inset: 0;
+  position: absolute;
+}
+
+.fullscreen-camera-fruit-blade-segment {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05), rgba(255, 242, 189, 0.92), rgba(255, 255, 255, 0.05));
+  border-radius: 999px;
+  box-shadow: 0 0 18px rgba(255, 239, 161, 0.58);
+  height: 8px;
+  position: absolute;
+  transform-origin: 0 50%;
+}
+
+.fullscreen-camera-fruit-particle {
+  border-radius: 50%;
+  position: absolute;
+}
+
+.fullscreen-camera-fruit-particle.flash {
+  box-shadow: 0 0 18px rgba(255, 209, 102, 0.78);
+}
+
+.fullscreen-camera-fruit-popup {
+  color: #fff8df;
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  position: absolute;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.34);
+  transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-fruit-popup.bomb,
+.fullscreen-camera-fruit-popup.miss {
+  color: #ffb4ab;
+}
+
+.fullscreen-camera-fruit-popup.combo {
+  color: #ffe899;
+}
+
+.fullscreen-camera-fruit-scoreboard,
+.fullscreen-camera-fruit-legend,
+.fullscreen-camera-fruit-banner {
+  background: rgba(9, 17, 27, 0.74);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 14px;
+  color: #f4f7fb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  left: 18px;
+  padding: 10px 14px;
+  position: absolute;
+}
+
+.fullscreen-camera-fruit-scoreboard {
+  font-size: 0.95rem;
+  font-weight: 700;
+  top: 18px;
+}
+
+.fullscreen-camera-fruit-legend {
+  bottom: 18px;
+  font-size: 0.82rem;
+}
+
+.fullscreen-camera-fruit-banner {
+  font-size: 0.9rem;
+  left: 50%;
+  max-width: min(520px, calc(100% - 36px));
+  text-align: center;
+  top: 18px;
+  transform: translateX(-50%);
+}
+
+.fullscreen-camera-fruit-gameover {
+  background: rgba(9, 17, 27, 0.76);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 20px;
+  color: #fffdf7;
+  font-size: clamp(1.8rem, 6vw, 3.2rem);
+  font-weight: 900;
+  left: 50%;
+  letter-spacing: 0.06em;
+  padding: 18px 24px;
+  position: absolute;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .fullscreen-camera-ring-group {
@@ -2071,6 +2221,9 @@ button:disabled {
 
   .fullscreen-camera-breakout-scoreboard,
   .fullscreen-camera-breakout-legend,
+  .fullscreen-camera-fruit-scoreboard,
+  .fullscreen-camera-fruit-legend,
+  .fullscreen-camera-fruit-banner,
   .fullscreen-camera-invaders-scoreboard,
   .fullscreen-camera-flappy-scoreboard,
   .fullscreen-camera-invaders-legend,
@@ -2094,6 +2247,20 @@ button:disabled {
   .fullscreen-camera-flappy-legend,
   .fullscreen-camera-missile-legend {
     bottom: 12px;
+    right: auto;
+  }
+
+  .fullscreen-camera-fruit-scoreboard {
+    right: 12px;
+  }
+
+  .fullscreen-camera-fruit-legend {
+    bottom: 12px;
+    right: auto;
+  }
+
+  .fullscreen-camera-fruit-banner {
+    left: 50%;
     right: auto;
   }
 
