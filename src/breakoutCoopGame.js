@@ -120,6 +120,10 @@ function splitBall(layout, ball, ballId, horizontalDirection) {
   return createPrismTrailBall(layout, ball, vx, vy, ballId);
 }
 
+function canSpawnSplitBall(activeBallCount, remainingOriginalBallCount) {
+  return activeBallCount + remainingOriginalBallCount < BREAKOUT_COOP_MAX_BALLS;
+}
+
 function createShieldState() {
   return {
     activeMs: 0,
@@ -381,7 +385,9 @@ export function stepBreakoutCoopGame(
   let nextBallId = nextState.nextBallId;
   const activeBalls = [];
 
-  for (const originalBall of nextState.balls) {
+  for (let originalBallIndex = 0; originalBallIndex < nextState.balls.length; originalBallIndex += 1) {
+    const originalBall = nextState.balls[originalBallIndex];
+    const remainingOriginalBallCount = nextState.balls.length - originalBallIndex;
     let ball = { ...originalBall };
     let removed = false;
 
@@ -416,7 +422,7 @@ export function stepBreakoutCoopGame(
         ball.vy = -Math.sqrt(Math.max(speed * speed - ball.vx * ball.vx, speed * speed * 0.58));
         ball.savedByShield = true;
         nextShield.saves += 1;
-        if (activeBalls.length < BREAKOUT_COOP_MAX_BALLS - 1) {
+        if (canSpawnSplitBall(activeBalls.length, remainingOriginalBallCount)) {
           activeBalls.push(splitBall(layout, ball, nextBallId, shieldOffset >= 0 ? -1 : 1));
           nextBallId += 1;
         }
@@ -468,7 +474,7 @@ export function stepBreakoutCoopGame(
           ball.vy = deltaY >= 0 ? Math.abs(ball.vy) : -Math.abs(ball.vy);
         }
 
-        if (hitBrick.kind === "prism" && activeBalls.length < BREAKOUT_COOP_MAX_BALLS - 1) {
+        if (hitBrick.kind === "prism" && canSpawnSplitBall(activeBalls.length, remainingOriginalBallCount)) {
           activeBalls.push(splitBall(layout, ball, nextBallId, ball.vx >= 0 ? -1 : 1));
           nextBallId += 1;
         }

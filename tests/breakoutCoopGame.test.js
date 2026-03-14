@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   BREAKOUT_COOP_BRICK_SCORE,
   BREAKOUT_COOP_COUNTDOWN_MS,
+  BREAKOUT_COOP_MAX_BALLS,
   BREAKOUT_COOP_PRISM_BRICK_SCORE,
   BREAKOUT_COOP_SHIELD_DURATION_MS,
   createBreakoutCoopGame,
@@ -12,6 +13,20 @@ import {
 
 function constantRng(value) {
   return () => value;
+}
+
+function createActiveBall(layout, overrides = {}) {
+  return {
+    id: "coop-ball-test",
+    x: layout.width / 2,
+    y: layout.height / 2,
+    vx: 0,
+    vy: -250,
+    radius: layout.ballRadius,
+    stuckToPaddle: false,
+    savedByShield: false,
+    ...overrides,
+  };
 }
 
 test("createBreakoutCoopGame starts in countdown with three lives", () => {
@@ -92,16 +107,13 @@ test("shield activation saves a falling ball and spawns support multi-ball", () 
     layout,
     paddle: { x: layout.width / 2 },
     balls: [
-      {
+      createActiveBall(layout, {
         id: "coop-ball-1",
         x: layout.width / 2,
         y: layout.shieldY - layout.ballRadius - 1,
         vx: 0,
         vy: 320,
-        radius: layout.ballRadius,
-        stuckToPaddle: false,
-        savedByShield: false,
-      },
+      }),
     ],
     bricks: [
       {
@@ -140,6 +152,117 @@ test("shield activation saves a falling ball and spawns support multi-ball", () 
   assert.equal(activated.shield.saves, 1);
   assert.equal(activated.balls.length, 2);
   assert.ok(activated.balls.every((ball) => ball.y < layout.shieldY));
+});
+
+test("shield saves do not exceed the configured max ball cap", () => {
+  const layout = createBreakoutCoopLayout(960, 720);
+  const balls = Array.from({ length: BREAKOUT_COOP_MAX_BALLS }, (_, index) =>
+    createActiveBall(layout, {
+      id: `coop-ball-${index + 1}`,
+      x: layout.width / 2 + index,
+      y: index === 0 ? layout.shieldY - layout.ballRadius - 1 : layout.height / 2,
+      vx: index === 0 ? 0 : 80,
+      vy: index === 0 ? 320 : -220,
+    }),
+  );
+  const state = {
+    layout,
+    paddle: { x: layout.width / 2 },
+    balls,
+    bricks: [
+      {
+        id: "coop-brick-1",
+        row: 0,
+        column: 0,
+        x: 120,
+        y: 120,
+        width: layout.brickWidth,
+        height: layout.brickHeight,
+        color: "#fff",
+        kind: "standard",
+        destroyed: false,
+      },
+    ],
+    score: 0,
+    lives: 3,
+    shield: { activeMs: 0, cooldownMs: 0, saves: 0, activations: 0, meter: 1 },
+    status: "playing",
+    countdownMs: 0,
+    nextBallId: BREAKOUT_COOP_MAX_BALLS + 1,
+    message: "",
+  };
+
+  const activated = stepBreakoutCoopGame(
+    state,
+    1 / 60,
+    state.paddle.x,
+    true,
+    false,
+    constantRng(0.7),
+  );
+
+  assert.equal(activated.shield.saves, 1);
+  assert.equal(activated.balls.length, BREAKOUT_COOP_MAX_BALLS);
+});
+
+test("prism splits do not exceed the configured max ball cap", () => {
+  const layout = createBreakoutCoopLayout(960, 720);
+  const prismBrick = {
+    id: "coop-brick-test",
+    row: 0,
+    column: 0,
+    x: 280,
+    y: 160,
+    width: layout.brickWidth,
+    height: layout.brickHeight,
+    color: "#fff",
+    kind: "prism",
+    destroyed: false,
+  };
+  const balls = [
+    createActiveBall(layout, {
+      id: "coop-ball-1",
+      x: prismBrick.x + prismBrick.width / 2,
+      y: prismBrick.y + prismBrick.height + layout.ballRadius - 1,
+      vx: 80,
+      vy: -250,
+    }),
+    ...Array.from({ length: BREAKOUT_COOP_MAX_BALLS - 1 }, (_, index) =>
+      createActiveBall(layout, {
+        id: `coop-ball-${index + 2}`,
+        x: 160 + index * 24,
+        y: layout.height / 2,
+        vx: 80,
+        vy: -220,
+      }),
+    ),
+  ];
+  const state = {
+    layout,
+    paddle: { x: layout.width / 2 },
+    balls,
+    bricks: [prismBrick, { ...prismBrick, id: "coop-brick-2", x: prismBrick.x + 200, kind: "standard" }],
+    score: 0,
+    lives: 3,
+    shield: { activeMs: 0, cooldownMs: 0, saves: 0, activations: 0, meter: 1 },
+    status: "playing",
+    countdownMs: 0,
+    nextBallId: BREAKOUT_COOP_MAX_BALLS + 1,
+    message: "",
+  };
+
+  const next = stepBreakoutCoopGame(
+    state,
+    1 / 60,
+    state.paddle.x,
+    false,
+    false,
+    constantRng(0.2),
+  );
+
+  assert.equal(next.score, BREAKOUT_COOP_PRISM_BRICK_SCORE);
+  assert.equal(next.balls.length, BREAKOUT_COOP_MAX_BALLS);
+  assert.equal(next.bricks[0].destroyed, true);
 });
 
 test("losing the final life enters game over and restart recreates the round", () => {
