@@ -205,6 +205,65 @@ test("shield saves do not exceed the configured max ball cap", () => {
   assert.equal(activated.balls.length, BREAKOUT_COOP_MAX_BALLS);
 });
 
+test("shield does not save balls that already passed below the visible strip", () => {
+  const layout = createBreakoutCoopLayout(960, 720);
+  const state = {
+    layout,
+    paddle: { x: layout.width / 2 },
+    balls: [
+      createActiveBall(layout, {
+        id: "coop-ball-1",
+        x: layout.width / 2,
+        y: layout.shieldY + layout.shieldHeight / 2 + layout.ballRadius + 18,
+        vx: 0,
+        vy: 320,
+      }),
+    ],
+    bricks: [
+      {
+        id: "coop-brick-1",
+        row: 0,
+        column: 0,
+        x: 120,
+        y: 120,
+        width: layout.brickWidth,
+        height: layout.brickHeight,
+        color: "#fff",
+        kind: "standard",
+        destroyed: false,
+      },
+    ],
+    score: 0,
+    lives: 3,
+    shield: {
+      activeMs: BREAKOUT_COOP_SHIELD_DURATION_MS,
+      cooldownMs: BREAKOUT_COOP_SHIELD_DURATION_MS + 1_000,
+      saves: 0,
+      activations: 1,
+      meter: 1,
+    },
+    status: "playing",
+    countdownMs: 0,
+    nextBallId: 2,
+    message: "",
+  };
+
+  const next = stepBreakoutCoopGame(
+    state,
+    1 / 60,
+    state.paddle.x,
+    false,
+    false,
+    constantRng(0.4),
+  );
+
+  assert.equal(next.shield.saves, 0);
+  assert.equal(next.balls.length, 1);
+  assert.ok(next.balls[0].y > layout.shieldY);
+  assert.ok(next.balls[0].vy > 0);
+  assert.equal(next.balls[0].savedByShield, false);
+});
+
 test("prism splits do not exceed the configured max ball cap", () => {
   const layout = createBreakoutCoopLayout(960, 720);
   const prismBrick = {

@@ -87,6 +87,15 @@ function getPaddleRect(layout, paddleX) {
   };
 }
 
+function getShieldRect(layout, paddleX) {
+  return {
+    x: paddleX - layout.shieldWidth / 2,
+    y: layout.shieldY - layout.shieldHeight / 2,
+    width: layout.shieldWidth,
+    height: layout.shieldHeight,
+  };
+}
+
 function intersectsRectCircle(circle, rect) {
   const nearestX = clamp(circle.x, rect.x, rect.x + rect.width);
   const nearestY = clamp(circle.y, rect.y, rect.y + rect.height);
@@ -367,6 +376,7 @@ export function stepBreakoutCoopGame(
   const stepSeconds = safeDt / subSteps;
   const nextBricks = nextState.bricks.map((brick) => ({ ...brick }));
   const paddleRect = getPaddleRect(layout, paddleX);
+  const shieldRect = getShieldRect(layout, paddleX);
   const nextShield = {
     ...nextState.shield,
     activeMs: Math.max(0, nextState.shield.activeMs - safeDt * 1000),
@@ -412,8 +422,7 @@ export function stepBreakoutCoopGame(
         shieldActive &&
         ball.vy > 0 &&
         !ball.savedByShield &&
-        ball.y + ball.radius >= layout.shieldY &&
-        Math.abs(ball.x - paddleX) <= layout.shieldWidth / 2
+        intersectsRectCircle(ball, shieldRect)
       ) {
         const shieldOffset = clamp((ball.x - paddleX) / Math.max(1, layout.shieldWidth / 2), -1, 1);
         const speed = Math.max(layout.ballLaunchSpeed, Math.hypot(ball.vx, ball.vy) * BREAKOUT_COOP_SPEEDUP);
