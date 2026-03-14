@@ -247,27 +247,19 @@ export function segmentIntersectsCircle(start, end, circle, padding = 0) {
 
 export function scoreSliceBatch(sliceKinds, comboCount = 0) {
   const safeKinds = Array.isArray(sliceKinds) ? sliceKinds : [];
-  let nextComboCount = comboCount;
+  const fruitCount = safeKinds.filter((kind) => kind === "fruit").length;
+  const bombCount = safeKinds.filter((kind) => kind === "bomb").length;
   let points = 0;
-  let bombHit = false;
 
-  for (const kind of safeKinds) {
-    if (kind === "fruit") {
-      nextComboCount += 1;
-      points += FRUIT_NINJA_BASE_SCORE + Math.max(0, nextComboCount - 1) * FRUIT_NINJA_COMBO_BONUS;
-      continue;
-    }
-    if (kind === "bomb") {
-      bombHit = true;
-      nextComboCount = 0;
-      points -= FRUIT_NINJA_BOMB_PENALTY;
-    }
+  for (let index = 0; index < fruitCount; index += 1) {
+    const comboValue = comboCount + index + 1;
+    points += FRUIT_NINJA_BASE_SCORE + Math.max(0, comboValue - 1) * FRUIT_NINJA_COMBO_BONUS;
   }
 
   return {
-    points,
-    bombHit,
-    nextComboCount,
+    points: points - bombCount * FRUIT_NINJA_BOMB_PENALTY,
+    bombHit: bombCount > 0,
+    nextComboCount: bombCount > 0 ? 0 : comboCount + fruitCount,
   };
 }
 
@@ -437,7 +429,7 @@ export function stepFruitNinjaGame(state, dtSeconds, pointer, now = performance.
   const nextSplitPieces = [...nextState.splitPieces];
   const nextPopups = [...nextState.popups];
   const swipeSegments = computeSwipeSegments(nextState.bladeTrail);
-  const slicedKinds = [];
+  const slicedTargets = [];
 
   for (const target of nextState.targets) {
     const advancedTarget = {
@@ -453,27 +445,13 @@ export function stepFruitNinjaGame(state, dtSeconds, pointer, now = performance.
     );
 
     if (isSliced) {
-      const scoreResult = scoreSliceBatch([advancedTarget.kind], comboCount);
-      score += scoreResult.points;
-      comboCount = scoreResult.nextComboCount;
-      comboExpiresAt =
-        advancedTarget.kind === "fruit" ? safeNow + FRUIT_NINJA_COMBO_WINDOW_MS : 0;
-      if (scoreResult.bombHit) {
-        lives -= 1;
-        message = "Bomb clipped. Keep the blade away from dark cores.";
-      } else {
-        const comboLabel = comboCount > 1 ? `Combo x${comboCount}` : advancedTarget.label;
-        message = `${comboLabel} sliced.`;
-      }
       nextParticles.push(...createSliceParticles(advancedTarget, `fx-${nextFxId}`, rng));
       nextFxId += 1;
       nextSplitPieces.push(...createFruitSplitPieces(advancedTarget, `split-${nextFxId}`));
       nextFxId += 1;
       nextPopups.push(
         createPopup(
-          advancedTarget.kind === "bomb"
-            ? `-${FRUIT_NINJA_BOMB_PENALTY}`
-            : `+${Math.max(FRUIT_NINJA_BASE_SCORE, scoreResult.points)}`,
+          advancedTarget.kind === "bomb" ? "BOMB" : advancedTarget.label,
           advancedTarget.x,
           advancedTarget.y,
           advancedTarget.kind,
@@ -481,7 +459,7 @@ export function stepFruitNinjaGame(state, dtSeconds, pointer, now = performance.
         ),
       );
       nextFxId += 1;
-      slicedKinds.push(advancedTarget.kind);
+      slicedTargets.push(advancedTarget);
       continue;
     }
 
@@ -503,10 +481,44 @@ export function stepFruitNinjaGame(state, dtSeconds, pointer, now = performance.
     nextTargets.push(advancedTarget);
   }
 
-  if (slicedKinds.length > 1) {
+  if (slicedTargets.length > 0) {
+    const slicedKinds = slicedTargets.map((target) => target.kind);
+    const scoreResult = scoreSliceBatch(slicedKinds, comboCount);
+    const fruitSlices = slicedTargets.filter((target) => target.kind === "fruit");
+    const bombHits = slicedTargets.filter((target) => target.kind === "bomb").length;
+    score += scoreResult.points;
+    comboCount = scoreResult.nextComboCount;
+    comboExpiresAt =
+      fruitSlices.length > 0 && !scoreResult.bombHit ? safeNow + FRUIT_NINJA_COMBO_WINDOW_MS : 0;
+
+    if (scoreResult.bombHit) {
+      lives -= bombHits;
+      message = "Bomb clipped. Keep the blade away from dark cores.";
+    } else {
+      message =
+        comboCount > 1
+          ? `Combo x${comboCount} sliced.`
+          : `${fruitSlices[0]?.label ?? "Fruit"} sliced.`;
+    }
+
+    const focalTarget = slicedTargets[slicedTargets.length - 1];
     nextPopups.push(
       createPopup(
-        `${slicedKinds.filter((kind) => kind === "fruit").length} HIT`,
+        scoreResult.points >= 0 ? `+${scoreResult.points}` : `${scoreResult.points}`,
+        focalTarget?.x ?? nextState.layout.width * 0.5,
+        focalTarget?.y ?? nextState.layout.height * 0.24,
+        scoreResult.bombHit ? "bomb" : "combo",
+        nextFxId,
+      ),
+    );
+    nextFxId += 1;
+  }
+
+  if (slicedTargets.length > 1) {
+    const fruitHitCount = slicedTargets.filter((target) => target.kind === "fruit").length;
+    nextPopups.push(
+      createPopup(
+        `${fruitHitCount} HIT`,
         nextState.layout.width * 0.5,
         nextState.layout.height * 0.22,
         "combo",
