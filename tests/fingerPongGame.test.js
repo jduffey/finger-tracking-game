@@ -18,11 +18,25 @@ test("createFingerPongGame starts in countdown with centered paddles", () => {
 
 test("stepFingerPongGame transitions from countdown into play", () => {
   let game = createFingerPongGame(960, 720);
-  for (let index = 0; index < 120; index += 1) {
+  for (let index = 0; index < 51; index += 1) {
     game = stepFingerPongGame(game, 0.05, game.player.x);
   }
   assert.equal(game.status, "playing");
   assert.ok(game.ball.vy < 0);
+});
+
+test("stepFingerPongGame preserves full elapsed time across larger frame deltas", () => {
+  const targetX = 760;
+  const singleStepState = stepFingerPongGame(createFingerPongGame(960, 720), 0.05, targetX);
+
+  let repeatedStepState = createFingerPongGame(960, 720);
+  for (let index = 0; index < 3; index += 1) {
+    repeatedStepState = stepFingerPongGame(repeatedStepState, 1 / 60, targetX);
+  }
+
+  assert.ok(Math.abs(singleStepState.countdownMs - repeatedStepState.countdownMs) < 1e-6);
+  assert.ok(Math.abs(singleStepState.player.x - repeatedStepState.player.x) < 1e-6);
+  assert.ok(Math.abs(singleStepState.opponent.x - repeatedStepState.opponent.x) < 1e-6);
 });
 
 test("stepFingerPongGame angles the return based on player paddle contact", () => {

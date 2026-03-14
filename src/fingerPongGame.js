@@ -5,6 +5,7 @@ const fingerPongLog = createScopedLogger("fingerPongGame");
 export const FINGER_PONG_COUNTDOWN_MS = 2_500;
 export const FINGER_PONG_MAX_SCORE = 7;
 
+const FINGER_PONG_MAX_FRAME_SECONDS = 0.05;
 const FINGER_PONG_MAX_STEP_SECONDS = 1 / 45;
 const FINGER_PONG_PADDLE_LERP_PER_SECOND = 15;
 const FINGER_PONG_OPPONENT_LERP_PER_SECOND = 3.8;
@@ -154,13 +155,8 @@ export function createFingerPongGame(width, height) {
   return game;
 }
 
-export function stepFingerPongGame(state, dtSeconds, paddleTargetX) {
-  if (!state?.layout || !state?.ball) {
-    return state;
-  }
-
+function stepFingerPongGameSubstep(state, dtSeconds, paddleTargetX) {
   const layout = state.layout;
-  const safeDt = clamp(Number.isFinite(dtSeconds) ? dtSeconds : 0, 0, FINGER_PONG_MAX_STEP_SECONDS);
   const paddleHalfWidth = layout.paddleWidth / 2;
   const opponentHalfWidth = layout.opponentPaddleWidth / 2;
   const playerTargetX = clamp(
@@ -168,8 +164,8 @@ export function stepFingerPongGame(state, dtSeconds, paddleTargetX) {
     paddleHalfWidth,
     layout.width - paddleHalfWidth,
   );
-  const playerLerp = 1 - Math.exp(-FINGER_PONG_PADDLE_LERP_PER_SECOND * safeDt);
-  const opponentLerp = 1 - Math.exp(-FINGER_PONG_OPPONENT_LERP_PER_SECOND * safeDt);
+  const playerLerp = 1 - Math.exp(-FINGER_PONG_PADDLE_LERP_PER_SECOND * dtSeconds);
+  const opponentLerp = 1 - Math.exp(-FINGER_PONG_OPPONENT_LERP_PER_SECOND * dtSeconds);
   const playerX = state.player.x + (playerTargetX - state.player.x) * playerLerp;
   const opponentTrackX = clamp(state.ball.x, opponentHalfWidth, layout.width - opponentHalfWidth);
   const opponentX = state.opponent.x + (opponentTrackX - state.opponent.x) * opponentLerp;
@@ -191,7 +187,7 @@ export function stepFingerPongGame(state, dtSeconds, paddleTargetX) {
   }
 
   if (nextState.status === "countdown") {
-    const countdownMs = Math.max(0, nextState.countdownMs - safeDt * 1000);
+    const countdownMs = Math.max(0, nextState.countdownMs - dtSeconds * 1000);
     return {
       ...nextState,
       countdownMs,
@@ -203,8 +199,8 @@ export function stepFingerPongGame(state, dtSeconds, paddleTargetX) {
   const speedMultiplier = getBallSpeedMultiplier(nextState.rallyCount);
   let ball = {
     ...nextState.ball,
-    x: nextState.ball.x + nextState.ball.vx * safeDt,
-    y: nextState.ball.y + nextState.ball.vy * safeDt,
+    x: nextState.ball.x + nextState.ball.vx * dtSeconds,
+    y: nextState.ball.y + nextState.ball.vy * dtSeconds,
   };
 
   if (ball.x - ball.radius <= 0) {
@@ -293,4 +289,25 @@ export function stepFingerPongGame(state, dtSeconds, paddleTargetX) {
     ...nextState,
     ball,
   };
+}
+
+export function stepFingerPongGame(state, dtSeconds, paddleTargetX) {
+  if (!state?.layout || !state?.ball) {
+    return state;
+  }
+
+  const safeDt = clamp(Number.isFinite(dtSeconds) ? dtSeconds : 0, 0, FINGER_PONG_MAX_FRAME_SECONDS);
+  if (safeDt <= 0) {
+    return state;
+  }
+
+  const subSteps = Math.max(1, Math.ceil(safeDt / FINGER_PONG_MAX_STEP_SECONDS));
+  const stepSeconds = safeDt / subSteps;
+  let nextState = state;
+
+  for (let stepIndex = 0; stepIndex < subSteps; stepIndex += 1) {
+    nextState = stepFingerPongGameSubstep(nextState, stepSeconds, paddleTargetX);
+  }
+
+  return nextState;
 }
