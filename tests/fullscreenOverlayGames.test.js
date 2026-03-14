@@ -10,6 +10,9 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
     updateFullscreenBreakoutSimulation(nextTimestamp) {
       calls.push(["breakout", nextTimestamp]);
     },
+    updateFullscreenBreakoutCoopSimulation(nextTimestamp) {
+      calls.push(["breakout-coop", nextTimestamp]);
+    },
     updateFullscreenInvadersSimulation(nextTimestamp) {
       calls.push(["invaders", nextTimestamp]);
     },
@@ -23,6 +26,7 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
 
   assert.deepEqual(calls, [
     ["breakout", timestamp],
+    ["breakout-coop", timestamp],
     ["invaders", timestamp],
     ["flappy", timestamp],
     ["missile-command", timestamp],
