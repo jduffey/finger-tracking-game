@@ -95,6 +95,33 @@ test("stepFingerPongGame returns the ball from the opponent paddle and ramps spe
   assert.equal(next.rallyCount, 6);
 });
 
+test("stepFingerPongGame clamps ball speed to the configured rally cap", () => {
+  const layout = createFingerPongLayout(960, 720);
+  const state = {
+    layout,
+    player: { x: layout.width * 0.5, y: layout.playerPaddleY },
+    opponent: { x: layout.width * 0.5, y: layout.opponentPaddleY },
+    ball: {
+      x: layout.width * 0.5,
+      y: layout.height * 0.5,
+      vx: 520,
+      vy: -300,
+      radius: layout.ballRadius,
+    },
+    score: 0,
+    opponentScore: 0,
+    rallyCount: 40,
+    bestRally: 40,
+    status: "playing",
+    countdownMs: 0,
+    message: "",
+  };
+
+  const next = stepFingerPongGame(state, 1 / 60, state.player.x);
+  const expectedSpeed = layout.baseBallSpeed * 1.65;
+  assert.ok(Math.abs(Math.hypot(next.ball.vx, next.ball.vy) - expectedSpeed) < 1e-6);
+});
+
 test("stepFingerPongGame awards points on top exit and resets on player miss", () => {
   const layout = createFingerPongLayout(960, 720);
   const pointState = {

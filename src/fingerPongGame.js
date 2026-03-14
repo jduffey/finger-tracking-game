@@ -279,7 +279,7 @@ function stepFingerPongGameSubstep(state, dtSeconds, paddleTargetX) {
 
   const currentSpeed = Math.hypot(ball.vx, ball.vy);
   const desiredSpeed = layout.baseBallSpeed * speedMultiplier;
-  if (currentSpeed > 0 && desiredSpeed > currentSpeed) {
+  if (currentSpeed > 0 && desiredSpeed > 0 && Math.abs(currentSpeed - desiredSpeed) > 1e-6) {
     const speedScale = desiredSpeed / currentSpeed;
     ball.vx *= speedScale;
     ball.vy *= speedScale;
