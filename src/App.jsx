@@ -5436,8 +5436,14 @@ export default function App() {
         return;
       }
 
-      const targetX = cursorRef.current.x - viewportMetrics.left;
-      const targetY = cursorRef.current.y - viewportMetrics.top;
+      const targetX = Math.min(
+        viewportMetrics.width,
+        Math.max(0, cursorRef.current.x - viewportMetrics.left),
+      );
+      const targetY = Math.min(
+        viewportMetrics.height,
+        Math.max(0, cursorRef.current.y - viewportMetrics.top),
+      );
       const nextState = launchMissileCommandInterceptor(activeState, targetX, targetY);
       if (nextState !== activeState) {
         fullscreenMissileCommandStateRef.current = nextState;

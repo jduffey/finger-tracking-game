@@ -145,15 +145,14 @@ function createThreat(layout, structures, elapsedMs, threatId, rng = Math.random
 }
 
 function getLaunchOrigin(state, targetX) {
-  const aliveStructures = getAliveStructures(state?.structures);
-  if (aliveStructures.length === 0) {
+  const aliveBases = getAliveStructures(state?.structures).filter(
+    (structure) => structure.type === "base",
+  );
+  if (aliveBases.length === 0) {
     return null;
   }
 
-  const preferredBases = aliveStructures.filter((structure) => structure.type === "base");
-  const candidates = preferredBases.length > 0 ? preferredBases : aliveStructures;
-
-  return candidates.reduce((closest, candidate) => {
+  return aliveBases.reduce((closest, candidate) => {
     if (!closest) {
       return candidate;
     }
@@ -171,14 +170,17 @@ export function launchMissileCommandInterceptor(state, targetX, targetY) {
     return state;
   }
 
-  const origin = getLaunchOrigin(state, targetX);
+  const clampedTargetX = clamp(targetX, 0, state.layout.width);
+  const clampedTargetY = clamp(targetY, 0, state.layout.height);
+
+  const origin = getLaunchOrigin(state, clampedTargetX);
   if (!origin) {
     return state;
   }
 
   const originY = origin.y - origin.height * 0.7;
-  const dx = targetX - origin.x;
-  const dy = targetY - originY;
+  const dx = clampedTargetX - origin.x;
+  const dy = clampedTargetY - originY;
   const distance = Math.hypot(dx, dy);
   if (distance < 4) {
     return state;
@@ -194,8 +196,8 @@ export function launchMissileCommandInterceptor(state, targetX, targetY) {
         originY,
         x: origin.x,
         y: originY,
-        targetX,
-        targetY,
+        targetX: clampedTargetX,
+        targetY: clampedTargetY,
         vx: (dx / distance) * state.layout.interceptorSpeed,
         vy: (dy / distance) * state.layout.interceptorSpeed,
       },

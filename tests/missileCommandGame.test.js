@@ -35,6 +35,35 @@ test("launchMissileCommandInterceptor adds a shot during active play", () => {
   assert.equal(next.interceptors[0].targetY, 180);
 });
 
+test("launchMissileCommandInterceptor clamps launch targets to the playfield", () => {
+  const initial = createMissileCommandGame(960, 720);
+  const playing = {
+    ...initial,
+    status: "playing",
+    countdownMs: 0,
+  };
+
+  const next = launchMissileCommandInterceptor(playing, -120, 900);
+  assert.equal(next.interceptors.length, 1);
+  assert.equal(next.interceptors[0].targetX, 0);
+  assert.equal(next.interceptors[0].targetY, playing.layout.height);
+});
+
+test("launchMissileCommandInterceptor does not fire once all bases are destroyed", () => {
+  const initial = createMissileCommandGame(960, 720);
+  const playing = {
+    ...initial,
+    status: "playing",
+    countdownMs: 0,
+    structures: initial.structures.map((structure) =>
+      structure.type === "base" ? { ...structure, alive: false } : structure,
+    ),
+  };
+
+  const next = launchMissileCommandInterceptor(playing, 420, 180);
+  assert.equal(next, playing);
+});
+
 test("stepMissileCommandGame awards score when an explosion catches a threat", () => {
   const initial = createMissileCommandGame(960, 720);
   const next = stepMissileCommandGame(
