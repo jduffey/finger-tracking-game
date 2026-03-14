@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { runFullscreenOverlayGameUpdates } from "../src/fullscreenOverlayGames.js";
 
-test("runFullscreenOverlayGameUpdates dispatches both fullscreen game loops once", () => {
+test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", () => {
   const calls = [];
   const timestamp = 1234;
 
@@ -13,11 +13,15 @@ test("runFullscreenOverlayGameUpdates dispatches both fullscreen game loops once
     updateFullscreenFlappySimulation(nextTimestamp) {
       calls.push(["flappy", nextTimestamp]);
     },
+    updateFullscreenMissileCommandSimulation(nextTimestamp) {
+      calls.push(["missile-command", nextTimestamp]);
+    },
   });
 
   assert.deepEqual(calls, [
     ["breakout", timestamp],
     ["flappy", timestamp],
+    ["missile-command", timestamp],
   ]);
 });
 
