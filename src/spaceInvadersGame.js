@@ -34,6 +34,7 @@ export function createSpaceInvadersLayout(width, height) {
   const shipWidth = clamp(safeWidth * 0.12, 68, 122);
   const shipHeight = clamp(safeHeight * 0.05, 24, 42);
   const enemySpeed = Math.max(54, safeWidth * 0.085);
+  const descendStep = clamp(safeHeight * 0.045, 18, 34);
   // Reserve about one enemy-width of sweep on each side before the first descent.
   const minFormationTravelWidth = enemyWidth * 2;
   const sidePadding = Math.max(
@@ -59,7 +60,7 @@ export function createSpaceInvadersLayout(width, height) {
     topPadding,
     sidePadding,
     formationWidth,
-    descendStep: clamp(safeHeight * 0.045, 18, 34),
+    descendStep,
     enemySpeed,
     shipWidth,
     shipHeight,
@@ -70,7 +71,7 @@ export function createSpaceInvadersLayout(width, height) {
     shotHeight,
     playerShotSpeed: Math.max(280, safeHeight * 0.68),
     enemyShotSpeed: Math.max(160, safeHeight * 0.34),
-    dangerLineY: Math.max(desiredDangerLineY, initialFormationBottom + 1),
+    dangerLineY: Math.max(desiredDangerLineY, initialFormationBottom + descendStep + 1),
   };
 }
 

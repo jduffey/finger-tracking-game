@@ -39,11 +39,21 @@ test("createSpaceInvadersLayout keeps a narrow-screen formation moving horizonta
 
 test("createSpaceInvadersLayout keeps the danger line below the initial formation on short screens", () => {
   const state = createSpaceInvadersGame(320, 240, constantRng(0.2));
+  const layout = state.layout;
   const initialFormationBottom = Math.max(...state.enemies.map((enemy) => enemy.y + enemy.height));
+  const rightmostEnemy = Math.max(...state.enemies.map((enemy) => enemy.x + enemy.width));
+  const nudged = {
+    ...state,
+    enemyDirection: 1,
+    enemies: state.enemies.map((enemy) => ({
+      ...enemy,
+      x: enemy.x + (layout.width - layout.sidePadding - rightmostEnemy) - 1,
+    })),
+  };
 
-  assert.ok(state.layout.dangerLineY > initialFormationBottom);
+  assert.ok(layout.dangerLineY > initialFormationBottom + layout.descendStep);
 
-  const next = stepSpaceInvadersGame(state, 1 / 90, state.ship.x, false, constantRng(0.2));
+  const next = stepSpaceInvadersGame(nudged, 0.05, nudged.ship.x, false, constantRng(0.2));
   assert.equal(next.status, "playing");
 });
 
