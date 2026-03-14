@@ -26,7 +26,7 @@ test("createSpaceInvadersLayout keeps a narrow-screen formation moving horizonta
 
   assert.ok(layout.formationWidth < layout.width - 2 * layout.sidePadding);
 
-  const next = stepSpaceInvadersGame(state, 1 / 90, state.ship.x, false, constantRng(0.2));
+  const next = stepSpaceInvadersGame(state, 4 / 90, state.ship.x, false, constantRng(0.2));
 
   assert.equal(
     Math.min(...next.enemies.filter((enemy) => enemy.alive).map((enemy) => enemy.y)),

@@ -24,7 +24,7 @@ function createIdFactory(prefix, start = 1) {
 export function createSpaceInvadersLayout(width, height) {
   const safeWidth = Math.max(320, Number.isFinite(width) ? width : 320);
   const safeHeight = Math.max(240, Number.isFinite(height) ? height : 240);
-  const enemyWidth = clamp(safeWidth * 0.06, 28, 58);
+  const enemyWidth = clamp(safeWidth * 0.06, 24, 58);
   const enemyHeight = clamp(safeHeight * 0.04, 22, 40);
   const enemyGapX = clamp(enemyWidth * 0.35, 10, 22);
   const enemyGapY = clamp(enemyHeight * 0.45, 10, 20);
@@ -34,8 +34,8 @@ export function createSpaceInvadersLayout(width, height) {
   const shipWidth = clamp(safeWidth * 0.12, 68, 122);
   const shipHeight = clamp(safeHeight * 0.05, 24, 42);
   const enemySpeed = Math.max(54, safeWidth * 0.085);
-  // Reserve enough room for at least one horizontal step in either direction.
-  const minFormationTravelWidth = enemySpeed * INVADERS_MAX_STEP_SECONDS * 2 + 1;
+  // Reserve about one enemy-width of sweep on each side before the first descent.
+  const minFormationTravelWidth = enemyWidth * 2;
   const sidePadding = Math.max(
     0,
     Math.min(baseSidePadding, (safeWidth - formationWidth - minFormationTravelWidth) / 2),
