@@ -70,7 +70,7 @@ also auto-resolves Codex from `CODEX_BIN`, then `codex` on `PATH`, then
    - `y = b1*u + b2*v + b3`
 5. The tracker maps fingertip coordinates into the visible camera window (derived from object-fit cover crop), then applies calibration and cursor smoothing.
 6. In game mode, pinch rising-edge events hit moles when the smoothed cursor is inside the active mole zone.
-7. In fullscreen camera mode, you can switch to webcam-backed overlay games where the index fingertip controls left-right movement on top of the full feed, including Brick Dodger, Breakout/Arkanoid, and a Space Invaders-style shooter.
+7. In fullscreen camera mode, you can switch to webcam-backed overlay games where the index fingertip controls left-right movement on top of the full feed, including Brick Dodger, Breakout/Arkanoid, a support-hand Breakout co-op variant, Finger Pong, and a Space Invaders-style shooter.
 
 ## Controls
 
@@ -80,6 +80,7 @@ also auto-resolves Codex from `CODEX_BIN`, then `codex` on `PATH`, then
 - **Recalibrate**: clear stored transform and return to calibration
 - **Camera overlay**: always shows fingertip markers (thumb/index/middle/ring/pinky)
 - **Fullscreen Camera > Brick Dodger**: overlays a full-webcam dodge-and-collect runner where the smoothed index fingertip controls horizontal movement, hazards descend in lanes, bonuses spawn in adjacent risky lanes, survival adds score over time, and difficulty ramps steadily
+- **Fullscreen Camera > Breakout Co-op**: overlays a richer brick-breaker on the full webcam feed where the index fingertip steers the paddle, a second-hand pinch triggers a temporary shield pulse, prism bricks split extra balls, the HUD tracks score/lives/shield charge, and a pinch after a clear or wipeout restarts the round
 - **Fullscreen Camera > Breakout**: overlays a webcam-backed Breakout/Arkanoid mode with a 3-second launch countdown, slower ball speed, score HUD, rainbow capsule drops, and multi-ball powerups
 - **Fullscreen Camera > Finger Pong**: overlays a one-player Pong variant on the full webcam feed where the index fingertip steers a bottom paddle, off-center returns bend the shot, rallies accelerate gently, and score/rally counters stay visible over the camera
 - **Fullscreen Camera > Invaders**: overlays a Space Invaders-style shooter where the index fingertip steers the ship, pinch fires on cooldown, enemy rows sweep downward, and pinch restarts after a loss or clear

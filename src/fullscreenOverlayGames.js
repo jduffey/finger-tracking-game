@@ -3,6 +3,7 @@ export function runFullscreenOverlayGameUpdates(
   {
     updateFullscreenBrickDodgerSimulation,
     updateFullscreenBreakoutSimulation,
+    updateFullscreenBreakoutCoopSimulation,
     updateFullscreenFingerPongSimulation,
     updateFullscreenInvadersSimulation,
     updateFullscreenFlappySimulation,
@@ -15,6 +16,10 @@ export function runFullscreenOverlayGameUpdates(
 
   if (typeof updateFullscreenBreakoutSimulation === "function") {
     updateFullscreenBreakoutSimulation(timestamp);
+  }
+
+  if (typeof updateFullscreenBreakoutCoopSimulation === "function") {
+    updateFullscreenBreakoutCoopSimulation(timestamp);
   }
 
   if (typeof updateFullscreenFingerPongSimulation === "function") {

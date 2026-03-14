@@ -13,6 +13,9 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
     updateFullscreenBreakoutSimulation(nextTimestamp) {
       calls.push(["breakout", nextTimestamp]);
     },
+    updateFullscreenBreakoutCoopSimulation(nextTimestamp) {
+      calls.push(["breakout-coop", nextTimestamp]);
+    },
     updateFullscreenFingerPongSimulation(nextTimestamp) {
       calls.push(["finger-pong", nextTimestamp]);
     },
@@ -30,6 +33,7 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
   assert.deepEqual(calls, [
     ["brick-dodger", timestamp],
     ["breakout", timestamp],
+    ["breakout-coop", timestamp],
     ["finger-pong", timestamp],
     ["invaders", timestamp],
     ["flappy", timestamp],
