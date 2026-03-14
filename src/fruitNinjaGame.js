@@ -416,6 +416,14 @@ export function stepFruitNinjaGame(state, dtSeconds, pointer, now = performance.
     nextState.comboExpiresAt = 0;
   }
 
+  if (nextState.status !== "running") {
+    return {
+      ...nextState,
+      message: "Round over. Restart to launch another wave.",
+      swipeSegments: [],
+    };
+  }
+
   nextState = spawnTargets(nextState, rng);
 
   const nextTargets = [];

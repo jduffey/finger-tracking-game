@@ -130,3 +130,48 @@ test("stepFruitNinjaGame scores simultaneous fruit and bomb slices consistently"
   assert.equal(fruitFirst.comboCount, bombFirst.comboCount);
   assert.equal(fruitFirst.lives, bombFirst.lives);
 });
+
+test("stepFruitNinjaGame leaves targets and score unchanged after gameover", () => {
+  const state = createFruitNinjaGame(800, 600);
+  state.status = "gameover";
+  state.score = 250;
+  state.lives = 0;
+  state.targets = [
+    {
+      id: "fruit-1",
+      kind: "fruit",
+      label: "Sun Peach",
+      x: 80,
+      y: 80,
+      vx: 120,
+      vy: 0,
+      radius: 28,
+      rotation: 0,
+      spin: 1.2,
+      fill: "#ff6b57",
+      accent: "#ffd4bf",
+      missed: false,
+    },
+  ];
+  state.bladeTrail = [
+    { x: 20, y: 80, timestamp: 0 },
+    { x: 140, y: 80, timestamp: 40 },
+  ];
+
+  const nextState = stepFruitNinjaGame(
+    state,
+    0.016,
+    { active: true, x: 200, y: 80 },
+    60,
+    () => 0.5,
+  );
+
+  assert.equal(nextState.status, "gameover");
+  assert.equal(nextState.score, 250);
+  assert.equal(nextState.lives, 0);
+  assert.equal(nextState.targets.length, 1);
+  assert.deepEqual(nextState.targets[0], state.targets[0]);
+  assert.equal(nextState.popups.length, 0);
+  assert.equal(nextState.particles.length, 0);
+  assert.equal(nextState.message, "Round over. Restart to launch another wave.");
+});
