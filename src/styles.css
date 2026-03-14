@@ -239,7 +239,8 @@ body {
   z-index: 2;
 }
 
-.fullscreen-camera-fruit-ninja {
+.fullscreen-camera-fruit-ninja,
+.fullscreen-camera-flappy {
   overflow: hidden;
   pointer-events: none;
   position: absolute;
@@ -278,6 +279,90 @@ body {
   border-radius: 999px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
   position: absolute;
+}
+
+.fullscreen-camera-flappy-pipe {
+  background:
+    linear-gradient(90deg, rgba(12, 49, 22, 0.9), rgba(37, 133, 54, 0.95) 20%, rgba(128, 235, 123, 0.92) 50%, rgba(32, 123, 46, 0.95) 80%, rgba(9, 65, 24, 0.94));
+  border: 4px solid rgba(8, 22, 12, 0.88);
+  border-radius: 14px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
+  position: absolute;
+}
+
+.fullscreen-camera-flappy-bird {
+  background:
+    radial-gradient(circle at 35% 32%, rgba(255, 255, 255, 0.96) 0 16%, transparent 17%),
+    radial-gradient(circle at 62% 70%, rgba(255, 168, 77, 0.92) 0 18%, transparent 19%),
+    linear-gradient(180deg, #ffe273, #ffb23f);
+  border: 4px solid rgba(20, 20, 20, 0.92);
+  border-radius: 42% 58% 48% 52%;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  position: absolute;
+  transform-origin: center;
+}
+
+.fullscreen-camera-flappy-bird::after {
+  background: #111;
+  border-radius: 999px;
+  content: "";
+  height: 18%;
+  left: 62%;
+  position: absolute;
+  top: 34%;
+  width: 18%;
+}
+
+.fullscreen-camera-flappy-ground {
+  background:
+    linear-gradient(180deg, rgba(201, 163, 75, 0.92), rgba(144, 103, 39, 0.96)),
+    repeating-linear-gradient(90deg, rgba(96, 68, 24, 0.24) 0 22px, rgba(255, 220, 128, 0.16) 22px 44px);
+  border-top: 5px solid rgba(255, 232, 145, 0.92);
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  right: 0;
+}
+
+.fullscreen-camera-flappy-scoreboard,
+.fullscreen-camera-flappy-legend {
+  background: rgba(9, 17, 27, 0.72);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 14px;
+  color: #f4f7fb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  left: 18px;
+  padding: 10px 14px;
+  position: absolute;
+}
+
+.fullscreen-camera-flappy-scoreboard {
+  font-size: 0.95rem;
+  font-weight: 700;
+  top: 18px;
+}
+
+.fullscreen-camera-flappy-legend {
+  bottom: 18px;
+  font-size: 0.82rem;
+}
+
+.fullscreen-camera-flappy-banner {
+  background: rgba(9, 17, 27, 0.76);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 20px;
+  color: #fffdf7;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-weight: 900;
+  left: 50%;
+  letter-spacing: 0.04em;
+  padding: 18px 24px;
+  position: absolute;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .fullscreen-camera-breakout-scoreboard,
@@ -325,7 +410,269 @@ body {
   font-size: clamp(1.8rem, 5vw, 3rem);
   letter-spacing: 0.04em;
   padding: 18px 24px;
- }
+}
+
+.fullscreen-camera-invaders {
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.fullscreen-camera-invaders-ship,
+.fullscreen-camera-invaders-enemy,
+.fullscreen-camera-invaders-shot {
+  position: absolute;
+}
+
+.fullscreen-camera-invaders-ship {
+  background:
+    linear-gradient(180deg, rgba(255, 249, 196, 0.98), rgba(255, 209, 102, 0.92)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.36), transparent);
+  border: 3px solid rgba(16, 18, 24, 0.96);
+  clip-path: polygon(50% 0, 100% 100%, 70% 100%, 58% 72%, 42% 72%, 30% 100%, 0 100%);
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.32));
+}
+
+.fullscreen-camera-invaders-enemy {
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.12) 38%, transparent 40%),
+    linear-gradient(180deg, rgba(125, 255, 183, 0.98), rgba(44, 214, 132, 0.94));
+  border: 3px solid rgba(9, 17, 27, 0.94);
+  border-radius: 12px 12px 9px 9px;
+  box-shadow: 0 10px 24px rgba(3, 16, 10, 0.26);
+  clip-path: polygon(12% 0, 88% 0, 100% 30%, 92% 70%, 76% 70%, 76% 100%, 58% 100%, 50% 78%, 42% 100%, 24% 100%, 24% 70%, 8% 70%, 0 30%);
+}
+
+.fullscreen-camera-invaders-shot.player {
+  background: linear-gradient(180deg, rgba(255, 249, 196, 0.98), rgba(255, 120, 77, 0.95));
+  border: 2px solid rgba(16, 18, 24, 0.95);
+  border-radius: 999px;
+  box-shadow: 0 0 14px rgba(255, 220, 135, 0.65);
+}
+
+.fullscreen-camera-invaders-shot.enemy {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(110, 210, 255, 0.94));
+  border: 2px solid rgba(9, 17, 27, 0.95);
+  border-radius: 999px;
+  box-shadow: 0 0 14px rgba(110, 210, 255, 0.5);
+}
+
+.fullscreen-camera-invaders-scoreboard,
+.fullscreen-camera-invaders-legend {
+  background: rgba(9, 17, 27, 0.72);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 14px;
+  color: #f4f7fb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  left: 18px;
+  padding: 10px 14px;
+  position: absolute;
+}
+
+.fullscreen-camera-invaders-scoreboard {
+  font-size: 0.95rem;
+  font-weight: 700;
+  top: 18px;
+}
+
+.fullscreen-camera-invaders-legend {
+  bottom: 18px;
+  font-size: 0.82rem;
+}
+
+.fullscreen-camera-invaders-banner {
+  background: rgba(9, 17, 27, 0.76);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 20px;
+  color: #fffdf7;
+  font-size: clamp(1.25rem, 3.6vw, 2.5rem);
+  font-weight: 900;
+  left: 50%;
+  letter-spacing: 0.04em;
+  max-width: min(86vw, 680px);
+  padding: 16px 22px;
+  position: absolute;
+  text-align: center;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-missile-command {
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.fullscreen-camera-missile-skyline {
+  background:
+    radial-gradient(circle at 50% 20%, rgba(120, 192, 255, 0.2), transparent 28%),
+    linear-gradient(180deg, rgba(4, 14, 28, 0.1), rgba(4, 14, 28, 0.58));
+  inset: 0;
+  position: absolute;
+}
+
+.fullscreen-camera-missile-ground {
+  background:
+    linear-gradient(180deg, rgba(34, 61, 36, 0.86), rgba(9, 23, 13, 0.96)),
+    linear-gradient(90deg, rgba(148, 255, 152, 0.18), transparent 42%);
+  border-top: 2px solid rgba(201, 244, 182, 0.46);
+  height: 100%;
+  left: 0;
+  position: absolute;
+  width: 100%;
+}
+
+.fullscreen-camera-missile-structure {
+  position: absolute;
+  transform: translateX(0);
+}
+
+.fullscreen-camera-missile-structure.city {
+  background:
+    linear-gradient(180deg, rgba(176, 226, 255, 0.98), rgba(90, 171, 225, 0.88));
+  border: 3px solid rgba(7, 24, 38, 0.92);
+  border-radius: 8px 8px 4px 4px;
+  box-shadow:
+    inset 0 -8px 0 rgba(14, 62, 90, 0.35),
+    0 10px 24px rgba(0, 0, 0, 0.2);
+}
+
+.fullscreen-camera-missile-structure.base {
+  background:
+    linear-gradient(180deg, rgba(255, 227, 169, 0.98), rgba(220, 152, 74, 0.9));
+  border: 3px solid rgba(32, 18, 6, 0.94);
+  border-radius: 12px 12px 6px 6px;
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+.fullscreen-camera-missile-structure.destroyed {
+  filter: grayscale(1);
+  opacity: 0.34;
+}
+
+.fullscreen-camera-missile-trail {
+  height: 2px;
+  position: absolute;
+  transform-origin: left center;
+}
+
+.fullscreen-camera-missile-trail.hostile {
+  background: linear-gradient(90deg, rgba(255, 214, 122, 0.16), rgba(255, 89, 64, 0.92));
+  box-shadow: 0 0 14px rgba(255, 110, 84, 0.54);
+}
+
+.fullscreen-camera-missile-trail.interceptor {
+  background: linear-gradient(90deg, rgba(197, 236, 255, 0.22), rgba(153, 233, 255, 0.96));
+  box-shadow: 0 0 14px rgba(125, 235, 255, 0.46);
+}
+
+.fullscreen-camera-missile-head {
+  border-radius: 50%;
+  height: 12px;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 12px;
+}
+
+.fullscreen-camera-missile-head.hostile {
+  background: #ff7e61;
+  box-shadow: 0 0 18px rgba(255, 126, 97, 0.9);
+}
+
+.fullscreen-camera-missile-head.interceptor {
+  background: #e9fdff;
+  box-shadow: 0 0 18px rgba(171, 247, 255, 0.92);
+}
+
+.fullscreen-camera-missile-explosion {
+  background: radial-gradient(circle, rgba(255, 251, 214, 0.18) 0%, rgba(255, 251, 214, 0.05) 54%, transparent 76%);
+  border-radius: 50%;
+  border-style: solid;
+  border-width: 3px;
+  position: absolute;
+}
+
+.fullscreen-camera-missile-crosshair {
+  border: 2px solid rgba(255, 248, 201, 0.96);
+  border-radius: 50%;
+  box-shadow: 0 0 16px rgba(255, 230, 149, 0.46);
+  height: 34px;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 34px;
+}
+
+.fullscreen-camera-missile-crosshair::before,
+.fullscreen-camera-missile-crosshair::after {
+  background: rgba(255, 248, 201, 0.96);
+  content: "";
+  left: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-missile-crosshair::before {
+  height: 2px;
+  width: 52px;
+}
+
+.fullscreen-camera-missile-crosshair::after {
+  height: 52px;
+  width: 2px;
+}
+
+.fullscreen-camera-missile-scoreboard,
+.fullscreen-camera-missile-legend {
+  background: rgba(9, 17, 27, 0.74);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 14px;
+  color: #f4f7fb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  left: 18px;
+  padding: 10px 14px;
+  position: absolute;
+}
+
+.fullscreen-camera-missile-scoreboard {
+  font-size: 0.95rem;
+  font-weight: 700;
+  top: 18px;
+}
+
+.fullscreen-camera-missile-legend {
+  bottom: 18px;
+  font-size: 0.82rem;
+}
+
+.fullscreen-camera-missile-banner {
+  color: #fffdf7;
+  font-size: clamp(3.4rem, 12vw, 6rem);
+  font-weight: 900;
+  left: 50%;
+  letter-spacing: 0.08em;
+  position: absolute;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-missile-banner.game-over {
+  background: rgba(9, 17, 27, 0.76);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 20px;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  letter-spacing: 0.04em;
+  padding: 18px 24px;
+}
 
 .fullscreen-camera-fruit-target,
 .fullscreen-camera-fruit-split {
@@ -1876,17 +2223,29 @@ button:disabled {
   .fullscreen-camera-breakout-legend,
   .fullscreen-camera-fruit-scoreboard,
   .fullscreen-camera-fruit-legend,
-  .fullscreen-camera-fruit-banner {
+  .fullscreen-camera-fruit-banner,
+  .fullscreen-camera-invaders-scoreboard,
+  .fullscreen-camera-flappy-scoreboard,
+  .fullscreen-camera-invaders-legend,
+  .fullscreen-camera-flappy-legend,
+  .fullscreen-camera-missile-scoreboard,
+  .fullscreen-camera-missile-legend {
     gap: 8px;
     left: 12px;
     padding: 8px 10px;
   }
 
-  .fullscreen-camera-breakout-scoreboard {
+  .fullscreen-camera-breakout-scoreboard,
+  .fullscreen-camera-invaders-scoreboard,
+  .fullscreen-camera-flappy-scoreboard,
+  .fullscreen-camera-missile-scoreboard {
     right: 12px;
   }
 
-  .fullscreen-camera-breakout-legend {
+  .fullscreen-camera-breakout-legend,
+  .fullscreen-camera-invaders-legend,
+  .fullscreen-camera-flappy-legend,
+  .fullscreen-camera-missile-legend {
     bottom: 12px;
     right: auto;
   }
