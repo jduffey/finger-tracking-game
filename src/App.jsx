@@ -48,6 +48,10 @@ import {
   getLastDetectionMeta,
   initHandTracking,
 } from "./handTracking.js";
+import {
+  shouldAcceptPinchClick,
+  shouldBypassGlobalPinchDebounce,
+} from "./pinchInput.js";
 import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from "./poseTracking.js";
 import { createScopedLogger } from "./logger.js";
 import MinorityReportLab from "./components/MinorityReportLab.jsx";
@@ -6854,16 +6858,29 @@ export default function App() {
         });
       }
 
+      const bypassGlobalPinchDebounce = shouldBypassGlobalPinchDebounce({
+        phase: phaseRef.current,
+        fullscreenGridMode: fullscreenGridModeRef.current,
+      });
+
       if (
-        !wasPinching &&
-        nextPinch &&
-        timestamp - lastPinchClickRef.current >= PINCH_DEBOUNCE_MS
+        shouldAcceptPinchClick({
+          wasPinching,
+          isPinching: nextPinch,
+          timestamp,
+          lastPinchClickAt: lastPinchClickRef.current,
+          debounceMs: PINCH_DEBOUNCE_MS,
+          bypassGlobalDebounce: bypassGlobalPinchDebounce,
+        })
       ) {
-        lastPinchClickRef.current = timestamp;
+        if (!bypassGlobalPinchDebounce) {
+          lastPinchClickRef.current = timestamp;
+        }
         appLog.info("Pinch click accepted after debounce", {
           frameId,
           timestamp,
           debounceMs: PINCH_DEBOUNCE_MS,
+          bypassGlobalPinchDebounce,
         });
         handlePinchClick(timestamp);
       } else if (!wasPinching && nextPinch) {
