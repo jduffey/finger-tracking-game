@@ -85,6 +85,7 @@ also auto-resolves Codex from `CODEX_BIN`, then `codex` on `PATH`, then
 - **Fullscreen Camera > Finger Pong**: overlays a one-player Pong variant on the full webcam feed where the index fingertip steers a bottom paddle, off-center returns bend the shot, rallies accelerate gently, and score/rally counters stay visible over the camera
 - **Fullscreen Camera > Invaders**: overlays a Space Invaders-style shooter where the index fingertip steers the ship, pinch fires on cooldown, enemy rows sweep downward, and pinch restarts after a loss or clear
 - **Fullscreen Camera > Flappy**: overlays a Flappy Bird-inspired mode on the full webcam feed where each distinct pinch produces one flap, pipes scroll right-to-left, score increments on gap clears, and a pinch after a crash restarts the round
+- **Off-Axis Chamber Lab**: uses pose-estimated nose/eye movement to shift a faux 3D stone chamber viewport so leaning left/right creates a laptop-friendly “peek-around” depth effect without extra VR hardware
 - **Debug overlay**: adds landmarks, raw pointer marker, and pinch/FPS info
 - **Log Tracking Extents**: writes raw/clamped/visible-normalized fingertip coverage plus visible camera bounds to the log file
 

@@ -88,9 +88,11 @@ import {
   shouldBypassGlobalPinchDebounce,
 } from "./pinchInput.js";
 import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from "./poseTracking.js";
+import { createEmptyOffAxisState, deriveOffAxisHeadState } from "./offAxisHeadTracking.js";
 import { createScopedLogger } from "./logger.js";
 import MinorityReportLab from "./components/MinorityReportLab.jsx";
 import BodyPoseLab from "./components/BodyPoseLab.jsx";
+import OffAxisChamberLab from "./components/OffAxisChamberLab.jsx";
 import RouletteFingerGame from "./components/RouletteFingerGame.jsx";
 import ConveyorSphereGame from "./components/ConveyorSphereGame.jsx";
 import SpatialGestureMemory from "./components/SpatialGestureMemory.jsx";
@@ -113,6 +115,7 @@ const PHASES = {
   FLIGHT: "FLIGHT",
   RUNNER: "RUNNER",
   BODY_POSE: "BODY_POSE",
+  OFF_AXIS_LAB: "OFF_AXIS_LAB",
   MINORITY_REPORT_LAB: "MINORITY_REPORT_LAB",
   CONVEYOR: "CONVEYOR",
   ROULETTE: "ROULETTE",
@@ -1179,6 +1182,7 @@ function createEmptyPoseStatus() {
       fingers: false,
       fingertips: false,
     },
+    offAxis: createEmptyOffAxisState(),
   };
 }
 
@@ -1738,6 +1742,7 @@ export default function App() {
   const mountedRef = useRef(true);
 
   const phaseRef = useRef(phase);
+  const poseStatusRef = useRef(poseStatus);
   const spatialMemoryRef = useRef(spatialMemoryState);
   const viewportRef = useRef(viewport);
   const transformRef = useRef(transform);
@@ -1904,6 +1909,7 @@ export default function App() {
     phase === PHASES.FLIGHT ||
     phase === PHASES.RUNNER ||
     phase === PHASES.BODY_POSE ||
+    phase === PHASES.OFF_AXIS_LAB ||
     phase === PHASES.MINORITY_REPORT_LAB ||
     phase === PHASES.CONVEYOR ||
     phase === PHASES.ROULETTE ||
@@ -1920,6 +1926,8 @@ export default function App() {
       ? "Camera + Runner Controls"
       : phase === PHASES.BODY_POSE
       ? "Camera + Body Pose Highlight"
+      : phase === PHASES.OFF_AXIS_LAB
+      ? "Camera + Off-Axis Head Tracking"
       : phase === PHASES.MINORITY_REPORT_LAB
       ? "Camera + Minority Report Controls"
       : phase === PHASES.CONVEYOR
@@ -1943,7 +1951,7 @@ export default function App() {
     phase === PHASES.CALIBRATION && !isCalibrating && pinchActive
       ? inputTestHoveredCell
       : -1;
-  const isBodyPosePhase = phase === PHASES.BODY_POSE;
+  const isBodyPosePhase = phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB;
   const cameraObjectFit = getCameraObjectFitForPhase(phase);
   const fullscreenCameraViewport = useMemo(() => {
     if (!isFullscreenCameraPhase) {
@@ -2350,7 +2358,7 @@ export default function App() {
           : previous,
       );
     }
-    if (phase !== PHASES.BODY_POSE) {
+    if (phase !== PHASES.BODY_POSE && phase !== PHASES.OFF_AXIS_LAB) {
       setPoseStatus(createEmptyPoseStatus());
     }
     if (phase !== PHASES.SPATIAL_GESTURE_MEMORY && spatialMemoryRef.current?.active) {
@@ -2997,6 +3005,10 @@ export default function App() {
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
+
+  useEffect(() => {
+    poseStatusRef.current = poseStatus;
+  }, [poseStatus]);
 
   useEffect(() => {
     viewportRef.current = viewport;
@@ -3669,9 +3681,17 @@ export default function App() {
   }, [appLog, phase]);
 
   useEffect(() => {
-    if (phase === PHASES.BODY_POSE || phase === PHASES.MINORITY_REPORT_LAB) {
+    if (
+      phase === PHASES.BODY_POSE ||
+      phase === PHASES.OFF_AXIS_LAB ||
+      phase === PHASES.MINORITY_REPORT_LAB
+    ) {
       void ensurePoseDetectorInitialized(
-        phase === PHASES.BODY_POSE ? "enter_body_pose" : "enter_minority_report_lab",
+        phase === PHASES.BODY_POSE
+          ? "enter_body_pose"
+          : phase === PHASES.OFF_AXIS_LAB
+            ? "enter_off_axis_lab"
+            : "enter_minority_report_lab",
       );
     }
   }, [phase]);
@@ -4919,6 +4939,34 @@ export default function App() {
 
   function returnFromBodyPoseLab() {
     appLog.info("Returning from body pose lab to calibration input test");
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
+  function startOffAxisLab() {
+    appLog.info("Off-axis chamber lab start requested", {
+      currentPhase: phaseRef.current,
+      cameraReady,
+      modelReady,
+    });
+    stopGameSession();
+    resetArcCalibrationSession("start_off_axis_lab");
+    setIsCalibrating(false);
+    isCalibratingRef.current = false;
+    calibrationSampleRef.current = null;
+    setCalibrationSampleFrames(0);
+    setPoseStatus(createEmptyPoseStatus());
+    setPhase(PHASES.OFF_AXIS_LAB);
+    phaseRef.current = PHASES.OFF_AXIS_LAB;
+    setCalibrationMessage(
+      "Off-Axis Chamber Lab active. Keep your face centered, then lean to peek around the chamber.",
+    );
+    void ensurePoseDetectorInitialized("start_off_axis_lab");
+  }
+
+  function returnFromOffAxisLab() {
+    appLog.info("Returning from off-axis chamber lab to calibration input test");
     setPhase(PHASES.CALIBRATION);
     phaseRef.current = PHASES.CALIBRATION;
     setCalibrationMessage("Back on Calibration Input Test.");
@@ -7013,6 +7061,7 @@ export default function App() {
       }
     }
 
+    const previousOffAxis = poseStatusRef.current?.offAxis ?? createEmptyOffAxisState();
     const nextPoseStatus = {
       detected: true,
       score: Number.isFinite(pose.score) ? pose.score : 0,
@@ -7029,6 +7078,7 @@ export default function App() {
         fingers: fingerSummary.fingersVisible,
         fingertips: fingerSummary.fingertipsVisible,
       },
+      offAxis: deriveOffAxisHeadState(pose, previousOffAxis),
     };
     setPoseStatus(nextPoseStatus);
     drawPoseOverlay(pose, hands);
@@ -7916,13 +7966,13 @@ export default function App() {
 
       rafRef.current = requestAnimationFrame(frameLoop);
 
-      if (phaseRef.current === PHASES.BODY_POSE) {
+      if (phaseRef.current === PHASES.BODY_POSE || phaseRef.current === PHASES.OFF_AXIS_LAB) {
         const video = videoRef.current;
         const poseDetector = poseDetectorRef.current;
         const handDetector = detectorRef.current;
         if (!poseDetector || !video || video.readyState < 2) {
           if (frameCounterRef.current % 30 === 0) {
-            appLog.debug("Skipping body pose frame due to detector/video readiness", {
+            appLog.debug("Skipping pose-scene frame due to detector/video readiness", {
               hasPoseDetector: Boolean(poseDetector),
               hasVideo: Boolean(video),
               readyState: video?.readyState ?? null,
@@ -9551,7 +9601,7 @@ export default function App() {
           )}
         </div>
         <div className={`tracking-indicator ${handDetected ? "ok" : "warn"}`}>
-          {phase === PHASES.BODY_POSE
+          {phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB
             ? handDetected
               ? "Pose detected"
               : "Pose not detected"
@@ -9584,6 +9634,8 @@ export default function App() {
               ? "Use your INDEX tip to steer the runner."
               : phase === PHASES.BODY_POSE
               ? "Body mode: keep head, shoulders, elbows, and wrists in view."
+              : phase === PHASES.OFF_AXIS_LAB
+              ? "Off-axis mode: keep your nose and both eyes visible, then lean to peek."
               : phase === PHASES.MINORITY_REPORT_LAB
               ? "In lab mode, thumb tips drive pointers."
               : phase === PHASES.GESTURE_ART_LAB
@@ -9597,6 +9649,8 @@ export default function App() {
               ? "Pinch is disabled in runner mode."
               : phase === PHASES.BODY_POSE
               ? "No pinch input needed; pose keypoints are highlighted directly."
+              : phase === PHASES.OFF_AXIS_LAB
+              ? "No pinch input needed; head movement drives the chamber parallax."
               : phase === PHASES.MINORITY_REPORT_LAB
               ? "Pinch to grab/release. Swipes/push/circle and two-hand gestures trigger lab actions."
               : phase === PHASES.CONVEYOR
@@ -9611,22 +9665,23 @@ export default function App() {
           <div className="status-row">
             <span>Camera: {cameraReady ? "ready" : "waiting"}</span>
             <span>Model: {modelReady ? "ready" : "loading"}</span>
-            {phase === PHASES.BODY_POSE && (
+            {(phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB) && (
               <span>Pose model: {poseModelReady ? "ready" : "loading"}</span>
             )}
             <span>Runtime: {activeRuntime}</span>
             <span>Backend: {activeBackend}</span>
-            {phase !== PHASES.BODY_POSE && <span>Pinch: {pinchActive ? "active" : "idle"}</span>}
+            {phase !== PHASES.BODY_POSE && phase !== PHASES.OFF_AXIS_LAB && <span>Pinch: {pinchActive ? "active" : "idle"}</span>}
           </div>
 
           {cameraError && <p className="error-text">{cameraError}</p>}
           {modelError && <p className="error-text">{modelError}</p>}
-          {phase === PHASES.BODY_POSE && poseModelError && <p className="error-text">{poseModelError}</p>}
+          {(phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB) && poseModelError && <p className="error-text">{poseModelError}</p>}
 
           {(phase === PHASES.CALIBRATION ||
             phase === PHASES.SANDBOX ||
             phase === PHASES.FLIGHT ||
             phase === PHASES.BODY_POSE ||
+    phase === PHASES.OFF_AXIS_LAB ||
             phase === PHASES.RUNNER ||
             phase === PHASES.CONVEYOR ||
             phase === PHASES.MINORITY_REPORT_LAB ||
@@ -9662,6 +9717,11 @@ export default function App() {
                 <p className="small-text">
                   Body pose mode tracks head/eyes/shoulders/arms/torso and highlights keypoints on
                   the webcam overlay.
+                </p>
+              ) : phase === PHASES.OFF_AXIS_LAB ? (
+                <p className="small-text">
+                  Off-axis mode estimates head offset from nose/eye landmarks and drives a layered
+                  stone chamber preview that shifts like a faux 3D window.
                 </p>
               ) : phase === PHASES.CONVEYOR ? (
                 <p className="small-text">
@@ -9836,6 +9896,9 @@ export default function App() {
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
                     </button>
+                    <button className="secondary" onClick={startOffAxisLab}>
+                      Open Off-Axis Lab
+                    </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
@@ -9878,6 +9941,9 @@ export default function App() {
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
                     </button>
+                    <button className="secondary" onClick={startOffAxisLab}>
+                      Open Off-Axis Lab
+                    </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
@@ -9899,6 +9965,43 @@ export default function App() {
                     <button onClick={returnFromBodyPoseLab}>Back to Input Test</button>
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Restart Body Pose Lab
+                    </button>
+                    <button className="secondary" onClick={startOffAxisLab}>
+                      Switch to Off-Axis Lab
+                    </button>
+                    <button className="secondary" onClick={startRunnerSession}>
+                      Switch to Runner
+                    </button>
+                    <button className="secondary" onClick={startConveyorSession}>
+                      Open Conveyor Toss
+                    </button>
+                    <button className="secondary" onClick={startFlightSession}>
+                      Switch to Flight
+                    </button>
+                    <button className="secondary" onClick={startMinorityReportLab}>
+                      Open Minority Report Lab
+                    </button>
+                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
+                      Launch Spatial Gesture Memory
+                    </button>
+                    <button className="secondary" onClick={startGestureAnalyticsLab}>
+                      Open Gesture Analytics Lab
+                    </button>
+                    <button className="secondary" onClick={startGestureArtLab}>
+                      Open Gesture Art Lab
+                    </button>
+                    <button className="secondary" onClick={startGestureControlOS}>
+                      Open Gesture Control OS
+                    </button>
+                  </>
+                ) : phase === PHASES.OFF_AXIS_LAB ? (
+                  <>
+                    <button onClick={returnFromOffAxisLab}>Back to Input Test</button>
+                    <button className="secondary" onClick={startOffAxisLab}>
+                      Restart Off-Axis Lab
+                    </button>
+                    <button className="secondary" onClick={startBodyPoseLab}>
+                      Switch to Body Pose Lab
                     </button>
                     <button className="secondary" onClick={startRunnerSession}>
                       Switch to Runner
@@ -9944,6 +10047,9 @@ export default function App() {
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
                     </button>
+                    <button className="secondary" onClick={startOffAxisLab}>
+                      Open Off-Axis Lab
+                    </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
@@ -9977,6 +10083,9 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
+                    </button>
+                    <button className="secondary" onClick={startOffAxisLab}>
+                      Open Off-Axis Lab
                     </button>
                     <button className="secondary" onClick={startGestureArtLab}>
                       Open Gesture Art Lab
@@ -10045,6 +10154,9 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
+                    </button>
+                    <button className="secondary" onClick={startOffAxisLab}>
+                      Open Off-Axis Lab
                     </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
@@ -10116,6 +10228,9 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
+                    </button>
+                    <button className="secondary" onClick={startOffAxisLab}>
+                      Open Off-Axis Lab
                     </button>
                     {hasSavedCalibration && (
                       <button className="secondary" onClick={startGameSession}>
@@ -10305,6 +10420,9 @@ export default function App() {
               <button className="secondary" onClick={startBodyPoseLab}>
                 Open Body Pose Lab
               </button>
+              <button className="secondary" onClick={startOffAxisLab}>
+                Open Off-Axis Lab
+              </button>
               <button className="secondary" onClick={startConveyorSession}>
                 Open Conveyor Toss
               </button>
@@ -10330,6 +10448,8 @@ export default function App() {
           />
         ) : phase === PHASES.BODY_POSE ? (
           <BodyPoseLab poseStatus={poseStatus} />
+        ) : phase === PHASES.OFF_AXIS_LAB ? (
+          <OffAxisChamberLab poseStatus={poseStatus} />
         ) : phase === PHASES.MINORITY_REPORT_LAB ? (
           <MinorityReportLab
             fps={fps}

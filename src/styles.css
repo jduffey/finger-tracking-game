@@ -3111,3 +3111,268 @@ button:disabled {
   font-size: 0.92rem;
   margin: 0 0 6px;
 }
+
+.offaxis-panel {
+  gap: 12px;
+}
+
+.offaxis-status-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.offaxis-status-grid > div {
+  background: rgba(7, 14, 24, 0.72);
+  border: 1px solid rgba(140, 182, 236, 0.24);
+  border-radius: 12px;
+  color: #e9f3ff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 70px;
+  padding: 10px 12px;
+}
+
+.offaxis-status-grid strong {
+  color: #94b8ee;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.offaxis-chamber-stage {
+  align-items: center;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(56, 92, 146, 0.18), transparent 30%),
+    linear-gradient(180deg, #02050a 0%, #07111b 100%);
+  border-radius: 18px;
+  display: flex;
+  justify-content: center;
+  min-height: 520px;
+  overflow: hidden;
+  padding: 24px;
+  position: relative;
+}
+
+.offaxis-screen-frame {
+  background: linear-gradient(180deg, #090f17 0%, #05080d 100%);
+  border: 1px solid rgba(120, 163, 228, 0.25);
+  border-radius: 22px;
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.48),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  padding: clamp(14px, 2vw, 18px);
+  width: min(100%, 860px);
+}
+
+.offaxis-chamber-view {
+  aspect-ratio: 16 / 10;
+  background:
+    radial-gradient(circle at 50% 15%, rgba(87, 129, 198, 0.12), transparent 30%),
+    linear-gradient(180deg, #0b1016 0%, #05080d 100%);
+  border-radius: 16px;
+  isolation: isolate;
+  overflow: hidden;
+  position: relative;
+  transform:
+    perspective(1100px)
+    translate3d(var(--offaxis-shift-x), var(--offaxis-shift-y), 0)
+    rotateX(var(--offaxis-rotate-x))
+    rotateY(var(--offaxis-rotate-y))
+    skewX(var(--offaxis-skew-x))
+    skewY(var(--offaxis-skew-y));
+  transform-style: preserve-3d;
+  transition: transform 110ms ease-out, filter 140ms ease-out;
+}
+
+.offaxis-chamber-stage.idle .offaxis-chamber-view {
+  filter: saturate(0.82) brightness(0.86);
+}
+
+.offaxis-chamber-layer {
+  inset: 0;
+  position: absolute;
+}
+
+.offaxis-layer-backwall {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(92, 140, 220, 0.18), transparent 22%),
+    linear-gradient(180deg, rgba(48, 58, 70, 0.35), rgba(27, 31, 38, 0.86)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(190, 196, 204, 0.045) 0,
+      rgba(190, 196, 204, 0.045) 34px,
+      rgba(20, 24, 30, 0.08) 34px,
+      rgba(20, 24, 30, 0.08) 38px
+    );
+  inset: var(--offaxis-inset);
+  transform: translateZ(calc(-170px + var(--offaxis-depth-boost)));
+}
+
+.offaxis-layer-pillars {
+  transform: translateZ(calc(-80px + var(--offaxis-depth-boost) * 0.4));
+}
+
+.offaxis-layer-pillars .pillar,
+.offaxis-layer-pillars .beam {
+  background: linear-gradient(180deg, #7b6d60 0%, #4e4136 45%, #241c16 100%);
+  border: 1px solid rgba(255, 236, 214, 0.08);
+  border-radius: 20px;
+  box-shadow: inset 0 0 40px rgba(255, 214, 174, 0.08);
+  position: absolute;
+}
+
+.offaxis-layer-pillars .pillar.left {
+  bottom: 15%;
+  left: 12%;
+  top: 10%;
+  width: 11%;
+}
+
+.offaxis-layer-pillars .pillar.right {
+  bottom: 15%;
+  right: 12%;
+  top: 10%;
+  width: 11%;
+}
+
+.offaxis-layer-pillars .beam {
+  height: 12%;
+  left: 17%;
+  right: 17%;
+  top: 9%;
+}
+
+.offaxis-layer-portal {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  transform: translateZ(calc(-120px + var(--offaxis-depth-boost)));
+}
+
+.portal-glow,
+.portal-core,
+.portal-rings {
+  border-radius: 50%;
+  position: absolute;
+}
+
+.portal-glow {
+  background: radial-gradient(circle, rgba(106, 170, 255, 0.4) 0%, rgba(76, 114, 214, 0.08) 55%, transparent 74%);
+  box-shadow: 0 0 90px rgba(70, 128, 255, 0.28);
+  height: 30%;
+  width: 23%;
+}
+
+.portal-core {
+  background: radial-gradient(circle at 42% 35%, rgba(223, 243, 255, 0.98) 0%, rgba(112, 178, 255, 0.92) 28%, rgba(18, 56, 138, 0.84) 68%, rgba(6, 16, 45, 0.88) 100%);
+  height: 19%;
+  width: 13%;
+}
+
+.portal-rings {
+  border: 2px solid rgba(165, 206, 255, 0.28);
+  box-shadow:
+    0 0 32px rgba(84, 145, 255, 0.24),
+    inset 0 0 22px rgba(119, 174, 255, 0.16);
+  height: 28%;
+  width: 22%;
+}
+
+.offaxis-layer-floor {
+  background:
+    linear-gradient(180deg, transparent 0%, rgba(4, 7, 11, 0.16) 20%, rgba(0, 0, 0, 0.52) 100%),
+    linear-gradient(90deg, rgba(204, 211, 220, 0.08) 0, rgba(204, 211, 220, 0.08) 1px, transparent 1px, transparent 8%),
+    linear-gradient(0deg, rgba(204, 211, 220, 0.06) 0, rgba(204, 211, 220, 0.06) 1px, transparent 1px, transparent 10%);
+  clip-path: polygon(12% 100%, 26% 63%, 74% 63%, 88% 100%);
+  opacity: 0.95;
+  transform: translateZ(calc(-22px + var(--offaxis-depth-boost) * 0.2));
+}
+
+.offaxis-layer-foreground {
+  transform: translateZ(calc(68px + var(--offaxis-depth-boost) * 0.1));
+}
+
+.offaxis-layer-foreground .rock {
+  background: linear-gradient(180deg, rgba(104, 89, 73, 0.98) 0%, rgba(57, 44, 34, 0.98) 48%, rgba(20, 16, 13, 0.98) 100%);
+  border: 1px solid rgba(255, 226, 199, 0.08);
+  border-radius: 28px;
+  box-shadow: inset 0 0 22px rgba(255, 201, 147, 0.08);
+  bottom: -3%;
+  position: absolute;
+}
+
+.offaxis-layer-foreground .rock.left {
+  height: 26%;
+  left: -4%;
+  width: 30%;
+}
+
+.offaxis-layer-foreground .rock.center {
+  bottom: -7%;
+  height: 22%;
+  left: 35%;
+  width: 26%;
+}
+
+.offaxis-layer-foreground .rock.right {
+  height: 29%;
+  right: -6%;
+  width: 32%;
+}
+
+.offaxis-layer-dust {
+  transform: translateZ(calc(120px + var(--offaxis-depth-boost) * 0.12));
+}
+
+.dust-particle {
+  animation: offaxisDustFloat linear infinite;
+  background: radial-gradient(circle, rgba(216, 233, 255, 0.72) 0%, rgba(216, 233, 255, 0.18) 56%, transparent 100%);
+  border-radius: 50%;
+  display: block;
+  opacity: 0.72;
+  position: absolute;
+}
+
+.offaxis-empty-state {
+  align-items: center;
+  background: rgba(4, 11, 20, 0.72);
+  border: 1px solid rgba(126, 170, 232, 0.2);
+  border-radius: 14px;
+  bottom: 18px;
+  color: #edf4ff;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  left: 50%;
+  padding: 12px 16px;
+  position: absolute;
+  text-align: center;
+  transform: translateX(-50%);
+  z-index: 4;
+}
+
+@keyframes offaxisDustFloat {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.7);
+  }
+  20% {
+    opacity: 0.7;
+  }
+  80% {
+    opacity: 0.38;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(18px, -24px, 0) scale(1.35);
+  }
+}
+
+@media (max-width: 860px) {
+  .offaxis-chamber-stage {
+    min-height: 420px;
+    padding: 14px;
+  }
+}
