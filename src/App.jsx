@@ -1927,7 +1927,7 @@ export default function App() {
       : phase === PHASES.BODY_POSE
       ? "Camera + Body Pose Highlight"
       : phase === PHASES.OFF_AXIS_LAB
-      ? "Camera + Off-Axis Head Tracking"
+      ? "Camera + Off-Axis Forest Walk"
       : phase === PHASES.MINORITY_REPORT_LAB
       ? "Camera + Minority Report Controls"
       : phase === PHASES.CONVEYOR
@@ -4960,7 +4960,7 @@ export default function App() {
     setPhase(PHASES.OFF_AXIS_LAB);
     phaseRef.current = PHASES.OFF_AXIS_LAB;
     setCalibrationMessage(
-      "Off-Axis Chamber Lab active. Keep your face centered, then lean to peek around the chamber.",
+      "Off-Axis Forest Walk active. Keep your face centered, then lean left and right to look past the trees.",
     );
     void ensurePoseDetectorInitialized("start_off_axis_lab");
   }
@@ -9635,7 +9635,7 @@ export default function App() {
               : phase === PHASES.BODY_POSE
               ? "Body mode: keep head, shoulders, elbows, and wrists in view."
               : phase === PHASES.OFF_AXIS_LAB
-              ? "Off-axis mode: keep your nose and both eyes visible, then lean to peek."
+              ? "Forest walk mode: keep your nose and both eyes visible, then lean to look around trees."
               : phase === PHASES.MINORITY_REPORT_LAB
               ? "In lab mode, thumb tips drive pointers."
               : phase === PHASES.GESTURE_ART_LAB
@@ -9650,7 +9650,7 @@ export default function App() {
               : phase === PHASES.BODY_POSE
               ? "No pinch input needed; pose keypoints are highlighted directly."
               : phase === PHASES.OFF_AXIS_LAB
-              ? "No pinch input needed; head movement drives the chamber parallax."
+              ? "No pinch input needed; head movement shifts the off-axis forest path."
               : phase === PHASES.MINORITY_REPORT_LAB
               ? "Pinch to grab/release. Swipes/push/circle and two-hand gestures trigger lab actions."
               : phase === PHASES.CONVEYOR
@@ -9721,7 +9721,7 @@ export default function App() {
               ) : phase === PHASES.OFF_AXIS_LAB ? (
                 <p className="small-text">
                   Off-axis mode estimates head offset from nose/eye landmarks and drives a layered
-                  stone chamber preview that shifts like a faux 3D window.
+                  forest-path preview so leaning feels like peeking past nearby trunks.
                 </p>
               ) : phase === PHASES.CONVEYOR ? (
                 <p className="small-text">
@@ -9799,6 +9799,14 @@ export default function App() {
                       disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
                     >
                       Open Body Pose Lab
+                    </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={startOffAxisLab}
+                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
+                    >
+                      Open Off-Axis Forest Walk
                     </button>
                     <button
                       className="secondary"
@@ -9896,9 +9904,6 @@ export default function App() {
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
                     </button>
-                    <button className="secondary" onClick={startOffAxisLab}>
-                      Open Off-Axis Lab
-                    </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
@@ -9941,9 +9946,6 @@ export default function App() {
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
                     </button>
-                    <button className="secondary" onClick={startOffAxisLab}>
-                      Open Off-Axis Lab
-                    </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
                     </button>
@@ -9965,9 +9967,6 @@ export default function App() {
                     <button onClick={returnFromBodyPoseLab}>Back to Input Test</button>
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Restart Body Pose Lab
-                    </button>
-                    <button className="secondary" onClick={startOffAxisLab}>
-                      Switch to Off-Axis Lab
                     </button>
                     <button className="secondary" onClick={startRunnerSession}>
                       Switch to Runner
@@ -9998,34 +9997,7 @@ export default function App() {
                   <>
                     <button onClick={returnFromOffAxisLab}>Back to Input Test</button>
                     <button className="secondary" onClick={startOffAxisLab}>
-                      Restart Off-Axis Lab
-                    </button>
-                    <button className="secondary" onClick={startBodyPoseLab}>
-                      Switch to Body Pose Lab
-                    </button>
-                    <button className="secondary" onClick={startRunnerSession}>
-                      Switch to Runner
-                    </button>
-                    <button className="secondary" onClick={startConveyorSession}>
-                      Open Conveyor Toss
-                    </button>
-                    <button className="secondary" onClick={startFlightSession}>
-                      Switch to Flight
-                    </button>
-                    <button className="secondary" onClick={startMinorityReportLab}>
-                      Open Minority Report Lab
-                    </button>
-                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
-                      Launch Spatial Gesture Memory
-                    </button>
-                    <button className="secondary" onClick={startGestureAnalyticsLab}>
-                      Open Gesture Analytics Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureArtLab}>
-                      Open Gesture Art Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureControlOS}>
-                      Open Gesture Control OS
+                      Restart Forest Walk
                     </button>
                   </>
                 ) : phase === PHASES.RUNNER ? (
@@ -10046,9 +10018,6 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
-                    </button>
-                    <button className="secondary" onClick={startOffAxisLab}>
-                      Open Off-Axis Lab
                     </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
@@ -10083,9 +10052,6 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
-                    </button>
-                    <button className="secondary" onClick={startOffAxisLab}>
-                      Open Off-Axis Lab
                     </button>
                     <button className="secondary" onClick={startGestureArtLab}>
                       Open Gesture Art Lab
@@ -10154,9 +10120,6 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
-                    </button>
-                    <button className="secondary" onClick={startOffAxisLab}>
-                      Open Off-Axis Lab
                     </button>
                     <button className="secondary" onClick={startMinorityReportLab}>
                       Open Minority Report Lab
@@ -10228,9 +10191,6 @@ export default function App() {
                     </button>
                     <button className="secondary" onClick={startBodyPoseLab}>
                       Open Body Pose Lab
-                    </button>
-                    <button className="secondary" onClick={startOffAxisLab}>
-                      Open Off-Axis Lab
                     </button>
                     {hasSavedCalibration && (
                       <button className="secondary" onClick={startGameSession}>
@@ -10419,9 +10379,6 @@ export default function App() {
               </button>
               <button className="secondary" onClick={startBodyPoseLab}>
                 Open Body Pose Lab
-              </button>
-              <button className="secondary" onClick={startOffAxisLab}>
-                Open Off-Axis Lab
               </button>
               <button className="secondary" onClick={startConveyorSession}>
                 Open Conveyor Toss
