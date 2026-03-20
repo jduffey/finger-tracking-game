@@ -42,6 +42,12 @@ body {
   width: 100%;
 }
 
+.minority-report-app {
+  background: #050a11;
+  gap: 8px;
+  padding: 8px;
+}
+
 .fullscreen-camera-app {
   background: #02070d;
   overflow: hidden;
@@ -60,6 +66,10 @@ body {
 .top-bar h1 {
   font-size: 1.4rem;
   margin: 0;
+}
+
+.minority-report-top-bar {
+  justify-content: flex-start;
 }
 
 .tracking-indicator {
@@ -99,6 +109,12 @@ body {
   align-content: start;
   grid-template-columns: minmax(320px, 960px);
   justify-content: center;
+}
+
+.content-grid.minority-report-layout {
+  align-content: stretch;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .content-grid.body-layout .camera-card {
@@ -1699,24 +1715,52 @@ body {
 }
 
 .minority-lab-panel {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  gap: 0;
   min-height: 0;
+  padding: 0;
 }
 
 .minority-lab-layout {
-  display: grid;
   flex: 1 1 auto;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.8fr);
+  height: 100%;
   min-height: 0;
+  position: relative;
 }
 
 .minority-stage-shell {
   background: rgba(17, 27, 41, 0.82);
   border: 1px solid #2f425b;
   border-radius: 12px;
+  box-shadow: 0 24px 48px -28px rgba(3, 8, 16, 0.78);
   min-height: 0;
   overflow: hidden;
   position: relative;
+}
+
+.minority-camera-backdrop {
+  inset: 0;
+  position: absolute;
+}
+
+.minority-camera-video {
+  filter: saturate(1.08) contrast(1.03);
+  opacity: 0.8;
+}
+
+.minority-camera-overlay {
+  opacity: 0.82;
+}
+
+.minority-camera-scrim {
+  background:
+    linear-gradient(180deg, rgba(3, 9, 16, 0.18) 0%, rgba(3, 9, 16, 0.48) 100%),
+    radial-gradient(circle at 50% 24%, rgba(76, 145, 219, 0.16), transparent 36%);
+  inset: 0;
+  position: absolute;
+  z-index: 2;
 }
 
 .minority-stage {
@@ -1725,7 +1769,7 @@ body {
     radial-gradient(circle at 78% 82%, rgba(102, 255, 187, 0.12), transparent 35%),
     linear-gradient(180deg, #0e1a2b 0%, #071120 100%);
   height: 100%;
-  min-height: 430px;
+  min-height: calc(100vh - 72px);
   overflow: hidden;
   position: relative;
   width: 100%;
@@ -1735,6 +1779,7 @@ body {
   inset: 0;
   position: absolute;
   transform-origin: 50% 50%;
+  z-index: 4;
 }
 
 .minority-panel-card {
@@ -1799,7 +1844,7 @@ body {
   top: 50%;
   transform: translate(-50%, -50%);
   width: 42px;
-  z-index: 4;
+  z-index: 5;
 }
 
 .lab-hand-pointer span {
@@ -1860,7 +1905,46 @@ body {
   position: absolute;
   top: 12px;
   user-select: none;
-  z-index: 5;
+  z-index: 6;
+}
+
+.minority-lab-inspector {
+  max-height: min(66%, 620px);
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  width: min(390px, calc(100% - 36px));
+  z-index: 7;
+}
+
+.minority-lab-inspector .gesture-debug-panel {
+  backdrop-filter: blur(16px);
+  background: rgba(7, 12, 18, 0.78);
+  box-shadow: 0 20px 38px -28px rgba(0, 0, 0, 0.75);
+}
+
+.minority-lab-scene-chip {
+  background: rgba(7, 12, 18, 0.56);
+  border: 1px solid rgba(74, 112, 148, 0.36);
+  border-radius: 999px;
+  bottom: 18px;
+  color: #dcecff;
+  display: inline-flex;
+  gap: 8px;
+  left: 18px;
+  max-width: min(520px, calc(100% - 420px));
+  padding: 10px 14px;
+  position: absolute;
+  z-index: 7;
+}
+
+.minority-lab-scene-chip strong {
+  font-size: 0.82rem;
+}
+
+.minority-lab-scene-chip span {
+  color: #a9c5dd;
+  font-size: 0.78rem;
 }
 
 .lab-hand-infobox h5 {
@@ -2605,15 +2689,30 @@ button:disabled {
   }
 
   .minority-lab-layout {
-    grid-template-columns: 1fr;
+    min-height: 0;
   }
 
   .minority-stage {
-    min-height: 320px;
+    min-height: 440px;
+  }
+
+  .minority-lab-inspector {
+    left: 12px;
+    max-height: 52%;
+    right: 12px;
+    top: 12px;
+    width: auto;
+  }
+
+  .minority-lab-scene-chip {
+    bottom: 12px;
+    left: 12px;
+    max-width: calc(100% - 24px);
+    right: 12px;
   }
 
   .gesture-debug-panel {
-    max-height: 460px;
+    max-height: 100%;
   }
 }
 

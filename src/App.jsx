@@ -2017,6 +2017,7 @@ export default function App() {
       ? inputTestHoveredCell
       : -1;
   const isBodyPosePhase = phase === PHASES.BODY_POSE;
+  const isMinorityReportPhase = phase === PHASES.MINORITY_REPORT_LAB;
   const cameraObjectFit = getCameraObjectFitForPhase(phase);
   const fullscreenCameraViewport = useMemo(() => {
     if (!isFullscreenCameraPhase) {
@@ -9664,48 +9665,59 @@ export default function App() {
   }
 
   return (
-    <div className="app">
-      <header className="top-bar">
-        <h1>Finger Whack</h1>
-        <div className="button-row">
-          {phase !== PHASES.ROULETTE && phase !== PHASES.CONVEYOR ? (
-            <>
-              <button className="secondary" type="button" onClick={startRouletteSession}>
-                Open Roulette Table
-              </button>
-              <button className="secondary" type="button" onClick={startConveyorSession}>
-                Open Conveyor Toss
-              </button>
-            </>
-          ) : (
-            <button
-              className="secondary"
-              type="button"
-              onClick={
-                phase === PHASES.ROULETTE ? returnFromRouletteSession : returnFromConveyorSession
-              }
-            >
-              Back to Input Test
-            </button>
-          )}
-        </div>
-        <div className={`tracking-indicator ${handDetected ? "ok" : "warn"}`}>
-          {phase === PHASES.BODY_POSE
-            ? handDetected
-              ? "Pose detected"
-              : "Pose not detected"
-            : handDetected
-            ? "Hand detected"
-            : "Hand not detected"}{" "}
-          | FPS: {fps.toFixed(1)}
-        </div>
+    <div className={`app ${isMinorityReportPhase ? "minority-report-app" : ""}`}>
+      <header className={`top-bar ${isMinorityReportPhase ? "minority-report-top-bar" : ""}`}>
+        {isMinorityReportPhase ? (
+          <button type="button" onClick={returnFromMinorityReportLab}>
+            Home
+          </button>
+        ) : (
+          <>
+            <h1>Finger Whack</h1>
+            <div className="button-row">
+              {phase !== PHASES.ROULETTE && phase !== PHASES.CONVEYOR ? (
+                <>
+                  <button className="secondary" type="button" onClick={startRouletteSession}>
+                    Open Roulette Table
+                  </button>
+                  <button className="secondary" type="button" onClick={startConveyorSession}>
+                    Open Conveyor Toss
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={
+                    phase === PHASES.ROULETTE ? returnFromRouletteSession : returnFromConveyorSession
+                  }
+                >
+                  Back to Input Test
+                </button>
+              )}
+            </div>
+            <div className={`tracking-indicator ${handDetected ? "ok" : "warn"}`}>
+              {phase === PHASES.BODY_POSE
+                ? handDetected
+                  ? "Pose detected"
+                  : "Pose not detected"
+                : handDetected
+                ? "Hand detected"
+                : "Hand not detected"}{" "}
+              | FPS: {fps.toFixed(1)}
+            </div>
+          </>
+        )}
       </header>
 
       <div
         className={`content-grid ${
           isCalibrationLayoutPhase && !isBodyPosePhase ? "calibration-layout" : ""
-        } ${isBodyPosePhase ? "body-layout" : ""}`}
+        } ${isBodyPosePhase ? "body-layout" : ""} ${
+          isMinorityReportPhase ? "minority-report-layout" : ""
+        }`}
       >
+        {!isMinorityReportPhase && (
         <section className="card camera-card">
           <h2>{cameraPanelTitle}</h2>
           <div
@@ -10302,6 +10314,7 @@ export default function App() {
             </button>
           </div>
         </section>
+        )}
 
         {phase === PHASES.CALIBRATION ? (
           <section className="card panel calibration-panel">
@@ -10521,6 +10534,11 @@ export default function App() {
             onExportSamples={exportLabSamples}
             onImportSamples={importLabSamples}
             onClearEventLog={clearLabEventLog}
+            videoRef={videoRef}
+            overlayCanvasRef={overlayCanvasRef}
+            cameraWrapRef={cameraWrapRef}
+            cameraAspectRatio={cameraAspectRatio}
+            cameraObjectFit={cameraObjectFit}
           />
         ) : phase === PHASES.SPATIAL_GESTURE_MEMORY ? (
           <SpatialGestureMemory

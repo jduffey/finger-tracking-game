@@ -219,6 +219,26 @@ function clampInfoBoxPosition(position, stageSize) {
   };
 }
 
+function computeTwoHandAverageScale(handStates, twoHand) {
+  if (!Array.isArray(handStates) || handStates.length === 0) {
+    return 1;
+  }
+
+  const selectedHands = handStates.filter(
+    (hand) => hand?.id && (hand.id === twoHand?.handAId || hand.id === twoHand?.handBId),
+  );
+  const sourceHands = selectedHands.length >= 2 ? selectedHands : handStates.slice(0, 2);
+  const validScales = sourceHands
+    .map((hand) => hand?.handScale)
+    .filter((value) => Number.isFinite(value) && value > 0);
+
+  if (validScales.length === 0) {
+    return 1;
+  }
+
+  return validScales.reduce((sum, value) => sum + value, 0) / validScales.length;
+}
+
 export default function MinorityReportLab(props) {
   const {
     fps,
@@ -241,6 +261,11 @@ export default function MinorityReportLab(props) {
     onExportSamples,
     onImportSamples,
     onClearEventLog,
+    videoRef,
+    overlayCanvasRef,
+    cameraWrapRef,
+    cameraAspectRatio,
+    cameraObjectFit,
   } = props;
 
   const stageRef = useRef(null);
@@ -494,20 +519,26 @@ export default function MinorityReportLab(props) {
             distance: twoHand.distance,
             angle: twoHand.angle,
             midpoint: twoHand.midpoint,
+            averageHandScale: computeTwoHandAverageScale(handStates, twoHand),
             transform: currentTransform,
           },
         };
       }
 
       const base = twoHandManipRef.current.base;
-      const distanceRatio = twoHand.distance / Math.max(0.02, base.distance);
+      const currentAverageHandScale = computeTwoHandAverageScale(handStates, twoHand);
+      const depthRatio = clamp(
+        base.averageHandScale / Math.max(0.0001, currentAverageHandScale),
+        0.45,
+        2.6,
+      );
       const deltaAngle = wrapAngle(twoHand.angle - base.angle);
       const moveX = (twoHand.midpoint.x - base.midpoint.x) * stageSize.width;
       const moveY = (twoHand.midpoint.y - base.midpoint.y) * stageSize.height;
       const nextTransform = {
         x: base.transform.x + moveX,
         y: base.transform.y + moveY,
-        scale: clamp(base.transform.scale * distanceRatio, 0.45, 2.6),
+        scale: clamp(base.transform.scale * depthRatio, 0.45, 2.6),
         rotation: wrapAngle(base.transform.rotation + deltaAngle),
       };
       setStageTransform(nextTransform);
@@ -658,18 +689,25 @@ export default function MinorityReportLab(props) {
 
   return (
     <section className="card panel minority-lab-panel">
-      <h2>Minority Report Lab</h2>
-      <p className="small-text">Two-hand fist clench controls the global stage transform (translate/scale/rotate).</p>
-      <p className="small-text">
-        Keep your wrist and forearm visible when using one hand so the lab can stabilize left/right coloring.
-      </p>
-      <p className="small-text">
-        Scene: <strong>{sceneMeta.name}</strong> | {sceneMeta.description}
-      </p>
-
       <div className="minority-lab-layout">
         <div className="minority-stage-shell">
           <div className="minority-stage" ref={stageRef}>
+            <div
+              className="minority-camera-backdrop"
+              ref={cameraWrapRef}
+              style={{ aspectRatio: String(cameraAspectRatio) }}
+            >
+              <video
+                ref={videoRef}
+                className="camera-video minority-camera-video"
+                style={{ objectFit: cameraObjectFit }}
+                playsInline
+                muted
+                autoPlay
+              />
+              <canvas ref={overlayCanvasRef} className="camera-overlay minority-camera-overlay" />
+              <div className="minority-camera-scrim" />
+            </div>
             <div className="minority-stage-transform" style={{
               transform: `translate(${stageTransform.x}px, ${stageTransform.y}px) rotate(${stageTransform.rotation}rad) scale(${stageTransform.scale})`,
             }}>
@@ -758,33 +796,40 @@ export default function MinorityReportLab(props) {
               );
             })}
           </div>
-        </div>
 
-        <GestureDebugPanel
-          fps={fps}
-          detectionStatus={detectionStatus}
-          hands={engineOutput?.hands ?? []}
-          confidences={engineOutput?.confidences}
-          heuristicConfidences={engineOutput?.heuristicConfidences}
-          personalizedConfidences={engineOutput?.personalizedConfidences}
-          threshold={confidenceThreshold}
-          onThresholdChange={onConfidenceThresholdChange}
-          showSkeleton={showSkeleton}
-          showTrails={showTrails}
-          personalizationEnabled={personalizationEnabled}
-          onToggleShowSkeleton={onShowSkeletonChange}
-          onToggleShowTrails={onShowTrailsChange}
-          onTogglePersonalization={onPersonalizationEnabledChange}
-          eventLog={eventLog}
-          onClearEventLog={onClearEventLog}
-          trainingState={trainingState}
-          sampleCounts={sampleCounts}
-          onRecordGesture={onRecordGesture}
-          onDeleteLastSample={onDeleteLastSample}
-          onClearSamples={onClearSamples}
-          onExportSamples={onExportSamples}
-          onImportSamples={onImportSamples}
-        />
+          <div className="minority-lab-inspector">
+            <GestureDebugPanel
+              fps={fps}
+              detectionStatus={detectionStatus}
+              hands={engineOutput?.hands ?? []}
+              confidences={engineOutput?.confidences}
+              heuristicConfidences={engineOutput?.heuristicConfidences}
+              personalizedConfidences={engineOutput?.personalizedConfidences}
+              threshold={confidenceThreshold}
+              onThresholdChange={onConfidenceThresholdChange}
+              showSkeleton={showSkeleton}
+              showTrails={showTrails}
+              personalizationEnabled={personalizationEnabled}
+              onToggleShowSkeleton={onShowSkeletonChange}
+              onToggleShowTrails={onShowTrailsChange}
+              onTogglePersonalization={onPersonalizationEnabledChange}
+              eventLog={eventLog}
+              onClearEventLog={onClearEventLog}
+              trainingState={trainingState}
+              sampleCounts={sampleCounts}
+              onRecordGesture={onRecordGesture}
+              onDeleteLastSample={onDeleteLastSample}
+              onClearSamples={onClearSamples}
+              onExportSamples={onExportSamples}
+              onImportSamples={onImportSamples}
+            />
+          </div>
+
+          <div className="minority-lab-scene-chip">
+            <strong>{sceneMeta.name}</strong>
+            <span>{sceneMeta.description}</span>
+          </div>
+        </div>
       </div>
     </section>
   );
