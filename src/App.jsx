@@ -98,6 +98,7 @@ import GestureAnalyticsLab from "./components/GestureAnalyticsLab.jsx";
 import GestureArtLab from "./components/GestureArtLab.jsx";
 import GestureControlOS from "./components/GestureControlOS.jsx";
 import { createGestureEngine } from "./gestures/gestureEngine.js";
+import { shouldShowWorkspaceNav } from "./workspaceNavigation.js";
 import {
   ALL_GESTURE_IDS,
   GESTURE_DEFINITIONS,
@@ -9721,6 +9722,7 @@ export default function App() {
   }
 
   const navigationLocked = !cameraReady || !modelReady || isCalibrating || isArcCalibrating;
+  const showWorkspaceNav = shouldShowWorkspaceNav(phase);
   const activePhaseName =
     phase === PHASES.CALIBRATION
       ? "Calibration Input Test"
@@ -10092,18 +10094,7 @@ export default function App() {
           {modelError && <p className="error-text">{modelError}</p>}
           {phase === PHASES.BODY_POSE && poseModelError && <p className="error-text">{poseModelError}</p>}
 
-          {(phase === PHASES.CALIBRATION ||
-            phase === PHASES.SANDBOX ||
-            phase === PHASES.FIST_SANDBOX ||
-            phase === PHASES.FLIGHT ||
-            phase === PHASES.BODY_POSE ||
-            phase === PHASES.RUNNER ||
-            phase === PHASES.CONVEYOR ||
-            phase === PHASES.MINORITY_REPORT_LAB ||
-            phase === PHASES.SPATIAL_GESTURE_MEMORY ||
-            phase === PHASES.GESTURE_ANALYTICS_LAB ||
-            phase === PHASES.GESTURE_ART_LAB ||
-            phase === PHASES.GESTURE_CONTROL_OS) && (
+          {showWorkspaceNav && (
             <div className="workspace-nav">
               <div className="workspace-summary">
                 <span className="workspace-summary-label">Current workspace</span>
