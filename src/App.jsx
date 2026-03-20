@@ -89,6 +89,7 @@ import {
 } from "./pinchInput.js";
 import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from "./poseTracking.js";
 import { createScopedLogger } from "./logger.js";
+import { computeFistClenchMeta } from "./fistDetection.js";
 import MinorityReportLab from "./components/MinorityReportLab.jsx";
 import BodyPoseLab from "./components/BodyPoseLab.jsx";
 import RouletteFingerGame from "./components/RouletteFingerGame.jsx";
@@ -127,9 +128,6 @@ const PHASES = {
 const PINCH_START_THRESHOLD = 0.045;
 const PINCH_END_THRESHOLD = 0.06;
 const PINCH_DEBOUNCE_MS = 250;
-const FIST_CLENCH_START_OPENNESS = 0.92;
-const FIST_CLENCH_END_OPENNESS = 1.02;
-const FIST_REQUIRED_CURLED_FINGERS = 4;
 const CURSOR_ALPHA = 0.35;
 const CURSOR_TRAIL_DURATION_MS = 1000;
 const CURSOR_TRAIL_SAMPLE_INTERVAL_MS = 34;
@@ -373,25 +371,6 @@ const SANDBOX_MATERIAL_COLORS = {
   steel: ["#91a2b8", "#7d8fa8"],
   rubber: ["#ef4444", "#f97316"],
 };
-const HAND_LANDMARK_INDEX = {
-  WRIST: 0,
-  THUMB_TIP: 4,
-  INDEX_MCP: 5,
-  INDEX_TIP: 8,
-  MIDDLE_MCP: 9,
-  MIDDLE_TIP: 12,
-  RING_MCP: 13,
-  RING_TIP: 16,
-  PINKY_MCP: 17,
-  PINKY_TIP: 20,
-};
-const FIST_FINGER_SPECS = [
-  { name: "thumb", tip: HAND_LANDMARK_INDEX.THUMB_TIP, base: HAND_LANDMARK_INDEX.INDEX_MCP, startThreshold: 1.02, endThreshold: 1.1 },
-  { name: "index", tip: HAND_LANDMARK_INDEX.INDEX_TIP, base: HAND_LANDMARK_INDEX.INDEX_MCP, startThreshold: 0.94, endThreshold: 1.02 },
-  { name: "middle", tip: HAND_LANDMARK_INDEX.MIDDLE_TIP, base: HAND_LANDMARK_INDEX.MIDDLE_MCP, startThreshold: 0.96, endThreshold: 1.04 },
-  { name: "ring", tip: HAND_LANDMARK_INDEX.RING_TIP, base: HAND_LANDMARK_INDEX.RING_MCP, startThreshold: 0.96, endThreshold: 1.04 },
-  { name: "pinky", tip: HAND_LANDMARK_INDEX.PINKY_TIP, base: HAND_LANDMARK_INDEX.PINKY_MCP, startThreshold: 0.98, endThreshold: 1.06 },
-];
 const FLIGHT_FINGER_ORDER = ["thumb", "index", "middle", "ring", "pinky"];
 const FLIGHT_BASELINE_SAMPLE_TARGET = 34;
 const FLIGHT_FORWARD_SPEED = 310;
@@ -1217,121 +1196,6 @@ function hasVisiblePoseKeypoints(map, names, minScore = POSE_KEYPOINT_THRESHOLD)
 
 function isValidHandLandmark(point) {
   return Boolean(point && Number.isFinite(point.u) && Number.isFinite(point.v));
-}
-
-function getHandLandmark(hand, index) {
-  if (!Array.isArray(hand?.landmarks)) {
-    return null;
-  }
-  const point = hand.landmarks[index];
-  return isValidHandLandmark(point) ? point : null;
-}
-
-function estimatePalmCenterFromHand(hand) {
-  const indices = [
-    HAND_LANDMARK_INDEX.WRIST,
-    HAND_LANDMARK_INDEX.INDEX_MCP,
-    HAND_LANDMARK_INDEX.MIDDLE_MCP,
-    HAND_LANDMARK_INDEX.RING_MCP,
-    HAND_LANDMARK_INDEX.PINKY_MCP,
-  ];
-  let count = 0;
-  let sumU = 0;
-  let sumV = 0;
-
-  for (const index of indices) {
-    const point = getHandLandmark(hand, index);
-    if (!point) {
-      continue;
-    }
-    sumU += point.u;
-    sumV += point.v;
-    count += 1;
-  }
-
-  if (count === 0) {
-    return null;
-  }
-
-  return {
-    u: sumU / count,
-    v: sumV / count,
-  };
-}
-
-function estimateHandScaleFromHand(hand) {
-  const wrist = getHandLandmark(hand, HAND_LANDMARK_INDEX.WRIST);
-  const middleMcp = getHandLandmark(hand, HAND_LANDMARK_INDEX.MIDDLE_MCP);
-  if (wrist && middleMcp) {
-    return Math.max(0.0001, Math.hypot(middleMcp.u - wrist.u, middleMcp.v - wrist.v));
-  }
-
-  if (!Array.isArray(hand?.landmarks)) {
-    return 0.08;
-  }
-
-  let minU = Number.POSITIVE_INFINITY;
-  let maxU = Number.NEGATIVE_INFINITY;
-  let minV = Number.POSITIVE_INFINITY;
-  let maxV = Number.NEGATIVE_INFINITY;
-  for (const point of hand.landmarks) {
-    if (!isValidHandLandmark(point)) {
-      continue;
-    }
-    minU = Math.min(minU, point.u);
-    maxU = Math.max(maxU, point.u);
-    minV = Math.min(minV, point.v);
-    maxV = Math.max(maxV, point.v);
-  }
-
-  if (!Number.isFinite(minU) || !Number.isFinite(maxU) || !Number.isFinite(minV) || !Number.isFinite(maxV)) {
-    return 0.08;
-  }
-
-  return Math.max(0.05, Math.hypot(maxU - minU, maxV - minV));
-}
-
-function computeFistClenchMeta(hand, wasClenched = false) {
-  const palmCenter = estimatePalmCenterFromHand(hand);
-  const scale = estimateHandScaleFromHand(hand);
-  if (!palmCenter || !Number.isFinite(scale) || scale <= 0) {
-    return { active: false, openness: Number.POSITIVE_INFINITY, curledFingerCount: 0 };
-  }
-
-  let opennessTotal = 0;
-  let opennessCount = 0;
-  let curledFingerCount = 0;
-
-  for (const finger of FIST_FINGER_SPECS) {
-    const tip = getHandLandmark(hand, finger.tip) ?? hand?.fingerTips?.[finger.name] ?? null;
-    const base = getHandLandmark(hand, finger.base);
-    if (!tip) {
-      continue;
-    }
-
-    const tipDistanceFromPalm = Math.hypot(tip.u - palmCenter.u, tip.v - palmCenter.v) / scale;
-    opennessTotal += tipDistanceFromPalm;
-    opennessCount += 1;
-
-    if (!base) {
-      continue;
-    }
-
-    const curlRatio = Math.hypot(tip.u - base.u, tip.v - base.v) / scale;
-    const threshold = wasClenched ? finger.endThreshold : finger.startThreshold;
-    if (curlRatio <= threshold) {
-      curledFingerCount += 1;
-    }
-  }
-
-  const openness = opennessCount > 0 ? opennessTotal / opennessCount : Number.POSITIVE_INFINITY;
-  const active = wasClenched
-    ? curledFingerCount >= Math.max(3, FIST_REQUIRED_CURLED_FINGERS - 1) &&
-      openness <= FIST_CLENCH_END_OPENNESS
-    : curledFingerCount >= FIST_REQUIRED_CURLED_FINGERS &&
-      openness <= FIST_CLENCH_START_OPENNESS;
-
-  return { active, openness, curledFingerCount };
 }
 
 function summarizeFingerVisibilityFromHands(hands) {
@@ -7509,6 +7373,11 @@ export default function App() {
         nowClenched: nextFistMeta.active,
         openness: roundMetric(nextFistMeta.openness, 4),
         curledFingerCount: nextFistMeta.curledFingerCount,
+        extendedFingerCount: nextFistMeta.extendedFingerCount,
+        nonThumbCurledCount: nextFistMeta.nonThumbCurledCount,
+        nonThumbExtendedCount: nextFistMeta.nonThumbExtendedCount,
+        averageCurlAngle: roundMetric(nextFistMeta.averageCurlAngle, 2),
+        averageNonThumbReach: roundMetric(nextFistMeta.averageNonThumbReach, 4),
       });
 
       if (

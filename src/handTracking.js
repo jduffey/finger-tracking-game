@@ -217,6 +217,23 @@ function toMirroredNormalized(point, width, height) {
   };
 }
 
+function toMirroredMetricPoint(point) {
+  if (
+    !point ||
+    !Number.isFinite(point.x) ||
+    !Number.isFinite(point.y) ||
+    !Number.isFinite(point.z)
+  ) {
+    return null;
+  }
+
+  return {
+    x: -point.x,
+    y: point.y,
+    z: point.z,
+  };
+}
+
 function extractFingerTips(keypoints, width, height) {
   const tips = {
     thumb: null,
@@ -235,8 +252,16 @@ function extractFingerTips(keypoints, width, height) {
   return tips;
 }
 
+function extractLandmarks3D(keypoints3D) {
+  if (!Array.isArray(keypoints3D)) {
+    return [];
+  }
+  return keypoints3D.map((point) => toMirroredMetricPoint(point));
+}
+
 function extractHandCandidate(candidate, width, height) {
   const keypoints = candidate?.keypoints ?? [];
+  const keypoints3D = candidate?.keypoints3D ?? [];
   const fingerTips = extractFingerTips(keypoints, width, height);
   const indexTip = fingerTips.index;
   const thumbTip = fingerTips.thumb;
@@ -255,6 +280,7 @@ function extractHandCandidate(candidate, width, height) {
   // Preserve original keypoint indices so downstream index-based feature extraction
   // keeps landmark semantics even when some points are invalid this frame.
   const landmarks = keypoints.map((point) => toMirroredNormalized(point, width, height));
+  const landmarks3D = extractLandmarks3D(keypoints3D);
 
   const score = Number.isFinite(candidate?.score) ? candidate.score : 0;
   return {
@@ -264,6 +290,7 @@ function extractHandCandidate(candidate, width, height) {
     fingerTips,
     pinchDistance,
     landmarks,
+    landmarks3D,
     handedness: normalizeHandedness(candidate),
   };
 }
