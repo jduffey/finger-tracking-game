@@ -1829,7 +1829,7 @@ body {
   box-shadow: 0 0 0 8px rgba(172, 205, 255, 0.14);
 }
 
-.lab-hand-pointer.pinched {
+.lab-hand-pointer.clenched {
   transform: translate(-50%, -50%) scale(1.15);
 }
 

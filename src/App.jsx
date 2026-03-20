@@ -732,11 +732,72 @@ function createEmptyLabEngineOutput() {
     heuristicConfidences: createEmptyLabConfidenceMap(),
     personalizedConfidences: createEmptyLabConfidenceMap(),
     liveVectors: {},
+    controlMode: "pinch",
     continuous: {
       pinchActiveByHand: {},
+      fistActiveByHand: {},
       twoHandManipulationActive: false,
     },
     twoHand: { present: false },
+  };
+}
+
+function buildMinorityReportFistOutput(output, sourceHands, previousFistStateByHand = {}) {
+  const safeOutput = output ?? createEmptyLabEngineOutput();
+  const safeHands = Array.isArray(sourceHands) ? sourceHands : [];
+  const nextFistStateByHand = {};
+
+  const findSourceHand = (engineHand, index) =>
+    safeHands.find((hand) => hand?.id && engineHand?.id && hand.id === engineHand.id) ??
+    safeHands.find((hand) => hand?.label && engineHand?.label && hand.label === engineHand.label) ??
+    safeHands[index] ??
+    null;
+
+  const nextHands = (Array.isArray(safeOutput.hands) ? safeOutput.hands : []).map((engineHand, index) => {
+    const sourceHand = findSourceHand(engineHand, index);
+    const handKey = engineHand?.id ?? sourceHand?.id ?? engineHand?.label ?? `hand-${index}`;
+    const wasClenched = previousFistStateByHand[handKey] ?? false;
+    const fistMeta = sourceHand
+      ? computeFistClenchMeta(sourceHand, wasClenched)
+      : { active: false };
+    const fistActive = Boolean(fistMeta.active);
+    nextFistStateByHand[handKey] = fistActive;
+    return {
+      ...engineHand,
+      fistActive,
+      fistMeta,
+      controlActive: fistActive,
+      controlLabel: "Fist",
+    };
+  });
+
+  const fistActiveByHand = nextHands.reduce((accumulator, hand) => {
+    if (hand?.id) {
+      accumulator[hand.id] = Boolean(hand.fistActive);
+    }
+    return accumulator;
+  }, {});
+  const fistActiveHands = nextHands.filter((hand) => hand?.fistActive);
+  const twoHandManipulationActive = fistActiveHands.length >= 2;
+
+  return {
+    output: {
+      ...safeOutput,
+      hands: nextHands,
+      controlMode: "fist",
+      continuous: {
+        ...(safeOutput.continuous ?? {}),
+        fistActiveByHand,
+        twoHandManipulationActive,
+      },
+      twoHand: safeOutput.twoHand?.present
+        ? {
+            ...safeOutput.twoHand,
+            fistBothActive: twoHandManipulationActive,
+          }
+        : safeOutput.twoHand,
+    },
+    fistStateByHand: nextFistStateByHand,
   };
 }
 
@@ -1784,6 +1845,7 @@ export default function App() {
   const labShowSkeletonRef = useRef(labShowSkeleton);
   const labPersonalizationEnabledRef = useRef(labPersonalizationEnabled);
   const labTrainingSessionRef = useRef(null);
+  const labFistStateByHandRef = useRef({});
   const handLabelMemoryRef = useRef({ byLabel: {} });
 
   const handDetectedRef = useRef(false);
@@ -4965,13 +5027,14 @@ export default function App() {
     labTrainingSessionRef.current = null;
     gestureEngineRef.current.reset();
     setLabEngineOutput(createEmptyLabEngineOutput());
+    labFistStateByHandRef.current = {};
     setLabEventLog([]);
     setLabSampleCounts(personalizationRef.current.getSampleCounts());
     setLabTrainingState(createInitialLabTrainingState());
     setPhase(PHASES.MINORITY_REPORT_LAB);
     phaseRef.current = PHASES.MINORITY_REPORT_LAB;
     setCalibrationMessage(
-      "Minority Report Lab active. Keep your forearm visible for steadier left/right hand labeling.",
+      "Minority Report Lab active. Clench to grab, keep both forearms visible, and use gestures for scene actions.",
     );
     void ensurePoseDetectorInitialized("start_minority_report_lab");
   }
@@ -7620,7 +7683,18 @@ export default function App() {
       personalizationEnabled: labPersonalizationEnabledRef.current,
       personalizer: personalizationRef.current,
     });
-    setLabEngineOutput(output);
+    if (phaseRef.current === PHASES.MINORITY_REPORT_LAB) {
+      const adapted = buildMinorityReportFistOutput(
+        output,
+        hands,
+        labFistStateByHandRef.current,
+      );
+      labFistStateByHandRef.current = adapted.fistStateByHand;
+      setLabEngineOutput(adapted.output);
+    } else {
+      labFistStateByHandRef.current = {};
+      setLabEngineOutput(output);
+    }
 
     if (Array.isArray(output?.events) && output.events.length > 0) {
       appendLabEventsToLog(output.events);
@@ -9663,7 +9737,7 @@ export default function App() {
               : phase === PHASES.BODY_POSE
               ? "No pinch input needed; pose keypoints are highlighted directly."
               : phase === PHASES.MINORITY_REPORT_LAB
-              ? "Pinch to grab/release. Swipes/push/circle and two-hand gestures trigger lab actions."
+              ? "Clench to grab/release. Swipes, push, circle, and two-hand fist transforms drive the lab."
               : phase === PHASES.CONVEYOR
               ? "Pinch to grab spheres, then release to throw. Faster flicks add speed."
               : phase === PHASES.FIST_SANDBOX
@@ -9743,7 +9817,7 @@ export default function App() {
                 </p>
               ) : phase === PHASES.MINORITY_REPORT_LAB ? (
                 <p className="small-text">
-                  Multi-hand mode active: one-hand pinch grabs panels, two-hand pinch transforms
+                  Multi-hand mode active: one-hand fist grabs panels, two-hand fists transform
                   the stage, and gestures fire to the event log.
                 </p>
               ) : phase === PHASES.GESTURE_ART_LAB ? (

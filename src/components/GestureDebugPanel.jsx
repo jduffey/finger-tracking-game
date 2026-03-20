@@ -13,6 +13,17 @@ function formatPointer(pointer) {
   return `${pointer.x.toFixed(3)}, ${pointer.y.toFixed(3)}`;
 }
 
+function getHandControlLabel(hand, fallback = "Pinch") {
+  return hand?.controlLabel ?? fallback;
+}
+
+function getHandControlActive(hand) {
+  if (typeof hand?.controlActive === "boolean") {
+    return hand.controlActive;
+  }
+  return Boolean(hand?.pinchActive);
+}
+
 export default function GestureDebugPanel(props) {
   const importInputRef = useRef(null);
 
@@ -79,7 +90,7 @@ export default function GestureDebugPanel(props) {
               >
                 <strong>{label} Hand</strong>
                 <span>Status: {isDetected ? "detected" : "not detected"}</span>
-                <span>Pinch: {isDetected ? (hand.pinchActive ? "active" : "idle") : "n/a"}</span>
+                <span>{getHandControlLabel(hand)}: {isDetected ? (getHandControlActive(hand) ? "active" : "idle") : "n/a"}</span>
                 <span>Pointer: {isDetected ? formatPointer(hand.pointer) : "n/a"}</span>
                 <span>Velocity: {isDetected ? (hand.velocity?.speed ?? 0).toFixed(3) : "n/a"}</span>
               </div>
@@ -89,7 +100,7 @@ export default function GestureDebugPanel(props) {
             <div className="hand-status-item" key={`other-${hand.id}`}>
               <strong>{hand.label ?? hand.id}</strong>
               <span>Status: detected</span>
-              <span>Pinch: {hand.pinchActive ? "active" : "idle"}</span>
+              <span>{getHandControlLabel(hand)}: {getHandControlActive(hand) ? "active" : "idle"}</span>
               <span>Pointer: {formatPointer(hand.pointer)}</span>
               <span>Velocity: {(hand.velocity?.speed ?? 0).toFixed(3)}</span>
             </div>

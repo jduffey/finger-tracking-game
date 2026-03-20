@@ -340,6 +340,8 @@ export default function MinorityReportLab(props) {
     return map;
   }, [engineOutput?.hands]);
 
+  const isHandClenched = (hand) => Boolean(hand?.fistActive);
+
   useEffect(() => {
     setPanels((previous) => {
       if (previous.length === 0) {
@@ -523,7 +525,7 @@ export default function MinorityReportLab(props) {
     const currentGrab = grabRef.current;
     if (currentGrab) {
       const hand = handStates.find((candidate) => candidate.id === currentGrab.handId) ?? null;
-      if (!hand || !hand.pinchActive) {
+      if (!hand || !isHandClenched(hand)) {
         grabRef.current = null;
         setDraggedPanelId(null);
       } else {
@@ -551,7 +553,7 @@ export default function MinorityReportLab(props) {
     }
 
     for (const hand of handStates) {
-      if (!hand.pinchActive) {
+      if (!isHandClenched(hand)) {
         continue;
       }
       const localPointer = pointerToLocal(hand.pointer, stageSize, stageTransformRef.current);
@@ -606,7 +608,7 @@ export default function MinorityReportLab(props) {
       };
       const box = nextBoxPositions[label] ?? HAND_INFO_BOX_DEFAULTS[label];
 
-      if (!hand.pinchActive) {
+      if (!isHandClenched(hand)) {
         handInfoBoxDragRef.current[label] = null;
         continue;
       }
@@ -657,7 +659,7 @@ export default function MinorityReportLab(props) {
   return (
     <section className="card panel minority-lab-panel">
       <h2>Minority Report Lab</h2>
-      <p className="small-text">Two-hand pinch controls the global stage transform (translate/scale/rotate).</p>
+      <p className="small-text">Two-hand fist clench controls the global stage transform (translate/scale/rotate).</p>
       <p className="small-text">
         Keep your wrist and forearm visible when using one hand so the lab can stabilize left/right coloring.
       </p>
@@ -716,7 +718,7 @@ export default function MinorityReportLab(props) {
             {engineOutput?.hands?.map((hand) => (
               <div
                 key={`pointer-${hand.id}`}
-                className={`lab-hand-pointer ${hand.label === "Left" ? "left" : hand.label === "Right" ? "right" : "generic"} ${hand.pinchActive ? "pinched" : ""}`}
+                className={`lab-hand-pointer ${hand.label === "Left" ? "left" : hand.label === "Right" ? "right" : "generic"} ${isHandClenched(hand) ? "clenched" : ""}`}
                 style={{
                   left: `${hand.pointer.x * 100}%`,
                   top: `${hand.pointer.y * 100}%`,
@@ -744,14 +746,14 @@ export default function MinorityReportLab(props) {
                 >
                   <h5>{label} Hand</h5>
                   <p>Status: {isDetected ? "detected" : "not detected"}</p>
-                  <p>Pinch: {isDetected ? (hand.pinchActive ? "active" : "idle") : "n/a"}</p>
+                  <p>Fist: {isDetected ? (isHandClenched(hand) ? "active" : "idle") : "n/a"}</p>
                   <p>
                     Pointer:{" "}
                     {isDetected
                       ? `${(hand.pointer?.x ?? 0).toFixed(3)}, ${(hand.pointer?.y ?? 0).toFixed(3)}`
                       : "n/a"}
                   </p>
-                  <p className="hint">Pinch inside this box to drag</p>
+                  <p className="hint">Clench inside this box to drag</p>
                 </div>
               );
             })}
