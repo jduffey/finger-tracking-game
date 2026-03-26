@@ -173,6 +173,10 @@ export default defineConfig(({ command }) => ({
   build: {
     chunkSizeWarningLimit: 550,
     rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        circleOfFifths: path.resolve(__dirname, "circle-of-fifths.html"),
+      },
       output: {
         manualChunks: resolveVendorChunk,
       },

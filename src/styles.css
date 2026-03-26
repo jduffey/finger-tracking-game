@@ -2351,6 +2351,23 @@ body {
   margin-top: 10px;
 }
 
+.button-link {
+  align-items: center;
+  background: linear-gradient(180deg, #1d71de 0%, #1556ab 100%);
+  border-radius: 10px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 0.95rem;
+  font-weight: 600;
+  justify-content: center;
+  padding: 10px 14px;
+  text-decoration: none;
+}
+
+.button-link.secondary {
+  background: linear-gradient(180deg, #637892 0%, #4d6078 100%);
+}
+
 button {
   background: linear-gradient(180deg, #1d71de 0%, #1556ab 100%);
   border: none;
@@ -2392,6 +2409,426 @@ button:disabled {
   color: #33485d;
   font-size: 0.8rem;
   letter-spacing: 0.02em;
+}
+
+.circle-fifths-page {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 241, 204, 0.12), rgba(255, 241, 204, 0) 26%),
+    radial-gradient(circle at 14% 18%, rgba(77, 147, 255, 0.3), rgba(77, 147, 255, 0) 34%),
+    radial-gradient(circle at 86% 22%, rgba(255, 157, 94, 0.24), rgba(255, 157, 94, 0) 30%),
+    linear-gradient(180deg, #071018 0%, #04070b 100%);
+  color: #f3f2e8;
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
+  width: 100vw;
+}
+
+.circle-fifths-video,
+.circle-fifths-vignette,
+.circle-fifths-grid,
+.circle-fifths-wheel {
+  inset: 0;
+  position: absolute;
+}
+
+.circle-fifths-video {
+  filter: saturate(0.92) contrast(1.08) brightness(0.54);
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.42;
+  transform: scaleX(-1);
+  width: 100%;
+}
+
+.circle-fifths-vignette {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 18%, rgba(0, 0, 0, 0.18) 44%, rgba(0, 0, 0, 0.64) 100%),
+    linear-gradient(180deg, rgba(3, 10, 17, 0.2), rgba(3, 10, 17, 0.7));
+  z-index: 1;
+}
+
+.circle-fifths-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(circle at 50% 50%, black, transparent 88%);
+  opacity: 0.45;
+  z-index: 1;
+}
+
+.circle-fifths-back-link {
+  background: rgba(7, 16, 24, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  color: #f4f2ea;
+  left: 22px;
+  padding: 10px 14px;
+  position: absolute;
+  text-decoration: none;
+  top: 22px;
+  z-index: 5;
+}
+
+.circle-fifths-panel {
+  backdrop-filter: blur(18px);
+  background: rgba(8, 16, 26, 0.56);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  max-width: min(380px, calc(100vw - 32px));
+  padding: 22px 22px 20px;
+  position: absolute;
+  z-index: 5;
+}
+
+.circle-fifths-panel-left {
+  left: 22px;
+  top: 74px;
+}
+
+.circle-fifths-panel-right {
+  right: 22px;
+  text-align: right;
+  top: 22px;
+}
+
+.circle-fifths-panel-bottom-right {
+  max-width: min(460px, calc(100vw - 32px));
+  right: 22px;
+  text-align: left;
+  top: 232px;
+}
+
+.circle-fifths-kicker,
+.circle-fifths-panel-label {
+  color: #ffd7a0;
+  font-family: "Avenir Next", "Futura", "Trebuchet MS", sans-serif;
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.circle-fifths-panel h1 {
+  font-family: "Avenir Next", "Futura", "Trebuchet MS", sans-serif;
+  font-size: clamp(2.1rem, 4vw, 3.5rem);
+  letter-spacing: 0.01em;
+  line-height: 0.95;
+  margin: 0 0 14px;
+  max-width: 8ch;
+}
+
+.circle-fifths-copy {
+  color: rgba(243, 242, 232, 0.84);
+  font-size: 0.98rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.circle-fifths-copy.compact {
+  max-width: 24ch;
+}
+
+.circle-fifths-actions {
+  margin-top: 18px;
+}
+
+.circle-fifths-stats {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.circle-fifths-stats div {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+}
+
+.circle-fifths-stats strong {
+  color: #ffd7a0;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.circle-fifths-stats span {
+  color: #f8f5eb;
+  font-size: 0.96rem;
+}
+
+.circle-fifths-error {
+  color: #ffb8b0;
+  margin: 14px 0 0;
+}
+
+.circle-fifths-current-chord {
+  color: #fff6dc;
+  font-family: "Avenir Next", "Futura", "Trebuchet MS", sans-serif;
+  font-size: clamp(1.4rem, 3vw, 2.3rem);
+  margin: 0 0 10px;
+}
+
+.circle-fifths-beat-buttons {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
+.circle-fifths-beat-button {
+  align-items: flex-start;
+  aspect-ratio: 1 / 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: space-between;
+  min-height: 120px;
+  padding: 14px;
+  text-align: left;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.circle-fifths-beat-button span {
+  font-size: 1.04rem;
+  font-weight: 700;
+}
+
+.circle-fifths-beat-button small {
+  color: rgba(244, 242, 234, 0.72);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.circle-fifths-beat-button.hovered {
+  border-color: rgba(255, 214, 147, 0.72);
+}
+
+.circle-fifths-beat-button.selected {
+  background: linear-gradient(180deg, rgba(255, 193, 107, 0.28), rgba(71, 196, 255, 0.18));
+  border-color: rgba(255, 236, 184, 0.74);
+  transform: translateY(-1px);
+}
+
+.circle-fifths-bpm-block {
+  margin-top: 16px;
+}
+
+.circle-fifths-bpm-meta {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.circle-fifths-bpm-meta strong {
+  color: #ffd7a0;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.circle-fifths-bpm-meta span {
+  color: #fff6dc;
+  font-family: "Avenir Next", "Futura", "Trebuchet MS", sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.circle-fifths-bpm-slider {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  cursor: ew-resize;
+  height: 18px;
+  position: relative;
+}
+
+.circle-fifths-bpm-slider.hovered {
+  border-color: rgba(255, 214, 147, 0.76);
+  box-shadow: 0 0 0 6px rgba(255, 214, 147, 0.08);
+}
+
+.circle-fifths-bpm-slider-fill {
+  background: linear-gradient(90deg, #47c4ff 0%, #7effc1 52%, #ffd978 100%);
+  border-radius: inherit;
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  top: 0;
+}
+
+.circle-fifths-bpm-slider-thumb {
+  background: #fff7de;
+  border: 3px solid rgba(8, 16, 26, 0.9);
+  border-radius: 50%;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+  height: 24px;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+}
+
+.circle-fifths-bpm-slider-thumb.dragging {
+  box-shadow:
+    0 0 0 10px rgba(109, 244, 210, 0.16),
+    0 8px 22px rgba(0, 0, 0, 0.28);
+}
+
+.circle-fifths-wheel {
+  overflow: visible;
+  z-index: 3;
+}
+
+.circle-fifths-wheel-shell {
+  fill: rgba(255, 255, 255, 0.04);
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 2px;
+}
+
+.circle-fifths-segment {
+  fill: hsl(var(--segment-hue) 88% 56% / 0.16);
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 2px;
+  transition:
+    fill 160ms ease,
+    opacity 160ms ease,
+    stroke 160ms ease;
+}
+
+.circle-fifths-segment.inner {
+  fill: hsl(var(--segment-hue) 64% 60% / 0.12);
+}
+
+.circle-fifths-segment.hovered {
+  fill: hsl(var(--segment-hue) 100% 70% / 0.82);
+  stroke: rgba(255, 250, 232, 0.86);
+}
+
+.circle-fifths-segment-label {
+  dominant-baseline: middle;
+  fill: rgba(251, 247, 233, 0.82);
+  font-family: "Avenir Next", "Futura", "Trebuchet MS", sans-serif;
+  font-size: clamp(13px, 1.35vw, 18px);
+  font-weight: 700;
+  pointer-events: none;
+  text-anchor: middle;
+  transition: fill 160ms ease;
+}
+
+.circle-fifths-segment-label.inner {
+  font-size: clamp(12px, 1.2vw, 16px);
+}
+
+.circle-fifths-segment-label.hovered {
+  fill: #09131b;
+}
+
+.circle-fifths-center-core {
+  fill: rgba(9, 19, 27, 0.82);
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 2px;
+}
+
+.circle-fifths-center-title,
+.circle-fifths-center-subtitle {
+  fill: #fff7de;
+  font-family: "Avenir Next", "Futura", "Trebuchet MS", sans-serif;
+  text-anchor: middle;
+}
+
+.circle-fifths-center-title {
+  font-size: clamp(18px, 2vw, 28px);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.circle-fifths-center-subtitle {
+  font-size: clamp(14px, 1.25vw, 18px);
+  letter-spacing: 0.2em;
+  opacity: 0.84;
+  text-transform: uppercase;
+}
+
+.circle-fifths-finger-glow,
+.circle-fifths-finger-dot {
+  pointer-events: none;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+}
+
+.circle-fifths-finger-glow {
+  background: radial-gradient(circle, rgba(255, 230, 161, 0.7), rgba(255, 230, 161, 0) 68%);
+  height: 140px;
+  width: 140px;
+}
+
+.circle-fifths-finger-dot {
+  background:
+    radial-gradient(circle at 32% 32%, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.4) 28%, transparent 30%),
+    radial-gradient(circle, #ffe89d, #ff9d5e);
+  border: 3px solid rgba(10, 18, 26, 0.96);
+  border-radius: 50%;
+  box-shadow: 0 0 24px rgba(255, 185, 105, 0.55);
+  height: 24px;
+  width: 24px;
+}
+
+.circle-fifths-finger-dot.active {
+  background:
+    radial-gradient(circle at 32% 32%, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.4) 28%, transparent 30%),
+    radial-gradient(circle, #fff4c6, #6df4d2);
+  box-shadow:
+    0 0 0 10px rgba(109, 244, 210, 0.14),
+    0 0 24px rgba(109, 244, 210, 0.62);
+}
+
+@media (max-width: 900px) {
+  .circle-fifths-panel {
+    max-width: calc(100vw - 24px);
+    padding: 18px;
+  }
+
+  .circle-fifths-panel-left {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 12px;
+  }
+
+  .circle-fifths-panel-right {
+    left: 12px;
+    right: 12px;
+    top: 64px;
+  }
+
+  .circle-fifths-panel-bottom-right {
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+  }
+
+  .circle-fifths-panel h1 {
+    max-width: none;
+  }
+
+  .circle-fifths-copy.compact {
+    max-width: none;
+  }
 }
 
 .stats-grid span {
