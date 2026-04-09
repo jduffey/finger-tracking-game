@@ -143,8 +143,29 @@ body {
 }
 
 .camera-card {
+  gap: 12px;
   min-width: 0;
+  overflow: hidden;
+}
+
+.camera-preview-panel {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+}
+
+.camera-support-panel {
+  background: rgba(240, 245, 252, 0.92);
+  border: 1px solid #d7e0ec;
+  border-radius: 12px;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  scrollbar-gutter: stable;
 }
 
 .workspace-nav {

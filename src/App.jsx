@@ -10148,172 +10148,178 @@ export default function App() {
         } ${isBodyPosePhase ? "body-layout" : ""}`}
       >
         <section className="card camera-card">
-          <h2>{cameraPanelTitle}</h2>
-          <div
-            className="camera-wrap"
-            ref={cameraWrapRef}
-            style={{ aspectRatio: String(cameraAspectRatio) }}
-          >
-            <video ref={videoRef} className="camera-video" playsInline muted autoPlay />
-            <canvas ref={overlayCanvasRef} className="camera-overlay" />
+          <div className="camera-preview-panel">
+            <h2>{cameraPanelTitle}</h2>
+            <div
+              className="camera-wrap"
+              ref={cameraWrapRef}
+              style={{ aspectRatio: String(cameraAspectRatio) }}
+            >
+              <video ref={videoRef} className="camera-video" playsInline muted autoPlay />
+              <canvas ref={overlayCanvasRef} className="camera-overlay" />
+            </div>
           </div>
 
-          <p className="help-text">Hold one hand up.</p>
-          <p className="help-text">
-            {phase === PHASES.RUNNER
-              ? "Use your INDEX tip to steer the runner."
-              : phase === PHASES.BODY_POSE
-              ? "Body mode: keep head, shoulders, elbows, and wrists in view."
-              : phase === PHASES.OFF_AXIS_LAB
-              ? "Forest walk mode: keep your nose and both eyes visible, then lean to look around trees."
-              : phase === PHASES.MINORITY_REPORT_LAB
-              ? "In lab mode, thumb tips drive pointers."
-              : phase === PHASES.GESTURE_ART_LAB
-              ? "Index fingertip controls the primary art attractor in real time."
-              : phase === PHASES.GESTURE_CONTROL_OS
-              ? "Pinch focuses and moves windows while the gesture engine manages desktop actions."
-              : "Use your THUMB tip as the pointer."}
-          </p>
-          <p className="help-text">
-            {phase === PHASES.RUNNER
-              ? "Pinch is disabled in runner mode."
-              : phase === PHASES.BODY_POSE
-              ? "No pinch input needed; pose keypoints are highlighted directly."
-              : phase === PHASES.OFF_AXIS_LAB
-              ? "No pinch input needed; head movement shifts the off-axis forest path."
-              : phase === PHASES.MINORITY_REPORT_LAB
-              ? "Pinch to grab/release. Swipes/push/circle and two-hand gestures trigger lab actions."
-              : phase === PHASES.CONVEYOR
-              ? "Pinch to grab spheres, then release to throw. Faster flicks add speed."
-              : phase === PHASES.FIST_SANDBOX
-              ? "Clench your whole fist to grab a block, then open your hand to release it."
-              : phase === PHASES.GESTURE_ART_LAB
-              ? "One hand draws, two hands warp, circle clears, and push toggles freeze."
-              : phase === PHASES.GESTURE_CONTROL_OS
-              ? "Pinch drags windows, swipes switch desktops, and open-palm hold opens the window menu."
-              : 'Pinch (thumb + index) to "click".'}
-          </p>
+          <div className="camera-support-panel">
+            <p className="help-text">Hold one hand up.</p>
+            <p className="help-text">
+              {phase === PHASES.RUNNER
+                ? "Use your INDEX tip to steer the runner."
+                : phase === PHASES.BODY_POSE
+                ? "Body mode: keep head, shoulders, elbows, and wrists in view."
+                : phase === PHASES.OFF_AXIS_LAB
+                ? "Forest walk mode: keep your nose and both eyes visible, then lean to look around trees."
+                : phase === PHASES.MINORITY_REPORT_LAB
+                ? "In lab mode, thumb tips drive pointers."
+                : phase === PHASES.GESTURE_ART_LAB
+                ? "Index fingertip controls the primary art attractor in real time."
+                : phase === PHASES.GESTURE_CONTROL_OS
+                ? "Pinch focuses and moves windows while the gesture engine manages desktop actions."
+                : "Use your THUMB tip as the pointer."}
+            </p>
+            <p className="help-text">
+              {phase === PHASES.RUNNER
+                ? "Pinch is disabled in runner mode."
+                : phase === PHASES.BODY_POSE
+                ? "No pinch input needed; pose keypoints are highlighted directly."
+                : phase === PHASES.OFF_AXIS_LAB
+                ? "No pinch input needed; head movement shifts the off-axis forest path."
+                : phase === PHASES.MINORITY_REPORT_LAB
+                ? "Pinch to grab/release. Swipes/push/circle and two-hand gestures trigger lab actions."
+                : phase === PHASES.CONVEYOR
+                ? "Pinch to grab spheres, then release to throw. Faster flicks add speed."
+                : phase === PHASES.FIST_SANDBOX
+                ? "Clench your whole fist to grab a block, then open your hand to release it."
+                : phase === PHASES.GESTURE_ART_LAB
+                ? "One hand draws, two hands warp, circle clears, and push toggles freeze."
+                : phase === PHASES.GESTURE_CONTROL_OS
+                ? "Pinch drags windows, swipes switch desktops, and open-palm hold opens the window menu."
+                : 'Pinch (thumb + index) to "click".'}
+            </p>
 
-          <div className="status-row">
-            <span>Camera: {cameraReady ? "ready" : "waiting"}</span>
-            <span>Model: {modelReady ? "ready" : "loading"}</span>
-            {(phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB) && (
-              <span>Pose model: {poseModelReady ? "ready" : "loading"}</span>
+            <div className="status-row">
+              <span>Camera: {cameraReady ? "ready" : "waiting"}</span>
+              <span>Model: {modelReady ? "ready" : "loading"}</span>
+              {(phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB) && (
+                <span>Pose model: {poseModelReady ? "ready" : "loading"}</span>
+              )}
+              <span>Runtime: {activeRuntime}</span>
+              <span>Backend: {activeBackend}</span>
+              {phase !== PHASES.BODY_POSE && phase !== PHASES.OFF_AXIS_LAB && (
+                <span>Pinch: {pinchActive ? "active" : "idle"}</span>
+              )}
+              {phase !== PHASES.BODY_POSE && phase !== PHASES.OFF_AXIS_LAB && (
+                <span>Fist: {fistActive ? "active" : "idle"}</span>
+              )}
+            </div>
+
+            {cameraError && <p className="error-text">{cameraError}</p>}
+            {modelError && <p className="error-text">{modelError}</p>}
+            {(phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB) && poseModelError && (
+              <p className="error-text">{poseModelError}</p>
             )}
-            <span>Runtime: {activeRuntime}</span>
-            <span>Backend: {activeBackend}</span>
-            {phase !== PHASES.BODY_POSE && phase !== PHASES.OFF_AXIS_LAB && (
-              <span>Pinch: {pinchActive ? "active" : "idle"}</span>
-            )}
-            {phase !== PHASES.BODY_POSE && phase !== PHASES.OFF_AXIS_LAB && (
-              <span>Fist: {fistActive ? "active" : "idle"}</span>
-            )}
-          </div>
 
-          {cameraError && <p className="error-text">{cameraError}</p>}
-          {modelError && <p className="error-text">{modelError}</p>}
-          {(phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB) && poseModelError && <p className="error-text">{poseModelError}</p>}
-
-          {showWorkspaceNav && (
-            <div className="workspace-nav">
-              <div className="workspace-summary">
-                <span className="workspace-summary-label">Current workspace</span>
-                <h3>{activePhaseName}</h3>
-                <p className="small-text">{activePhaseSummary}</p>
-                <p className="small-text">{calibrationMessage}</p>
-                <p className="small-text">
-                  {phase === PHASES.CALIBRATION
-                    ? isArcCalibrating
-                      ? `Lazy Arc Confidence: ${Math.round(arcCalibrationProgress * 100)}% (${arcCalibrationSamples} valid frames)`
-                      : `Captured points: ${calibrationPairsCount}/${calibrationTargets.length}${
-                          isCalibrating
-                            ? ` | Sampling: ${calibrationSampleFrames}/${CALIBRATION_SAMPLE_FRAMES}`
-                            : ""
-                        }`
-                    : phase === PHASES.SANDBOX
-                    ? "Pinch over a block to grab it. Keep pinching to drag, then release to fling."
-                    : phase === PHASES.FIST_SANDBOX
-                    ? "Make a full-fist clench over a block to grab it. Keep the fist closed to drag, then open your hand to fling."
-                    : phase === PHASES.FLIGHT
-                    ? `Steering uses all five fingertips. Neutral baseline: ${
-                        flightHud.baselineReady
-                          ? "locked"
-                          : `${flightHud.baselineSamples}/${FLIGHT_BASELINE_SAMPLE_TARGET}`
-                      }.`
-                    : phase === PHASES.BODY_POSE
-                    ? "Body pose mode tracks head, eyes, shoulders, arms, torso, and webcam overlays."
-                    : phase === PHASES.OFF_AXIS_LAB
-                    ? "Off-axis mode uses your nose and both eyes to drive a layered forest scene while holding the last transform through short pose dropouts."
-                    : phase === PHASES.CONVEYOR
-                    ? "Pinch to grab a sphere, then release to throw. Faster flicks add launch speed."
-                    : phase === PHASES.MINORITY_REPORT_LAB
-                    ? "One-hand pinch grabs panels, two-hand pinch transforms the stage, and gestures log events."
-                    : phase === PHASES.GESTURE_ART_LAB
-                    ? "Index attractor, pinch thickness, openness palette, wrist hue, and two-hand warp stay active."
-                    : phase === PHASES.GESTURE_CONTROL_OS
-                    ? "Pinch drags windows, swipes switch desktops, and open-palm hold opens contextual menu actions."
-                    : "4x4 track control: move hand across the camera view to pick any converging track."}
-                </p>
-              </div>
-
-              <div className="workspace-actions">
-                <h3>Mode actions</h3>
-                <div className="workspace-action-grid">
-                  {currentModeActions.map((action) => (
-                    <button
-                      key={action.label}
-                      className={action.secondary ? "secondary" : ""}
-                      type="button"
-                      onClick={action.onClick}
-                      disabled={action.disabled}
-                    >
-                      {action.label}
-                    </button>
-                  ))}
+            {showWorkspaceNav && (
+              <div className="workspace-nav">
+                <div className="workspace-summary">
+                  <span className="workspace-summary-label">Current workspace</span>
+                  <h3>{activePhaseName}</h3>
+                  <p className="small-text">{activePhaseSummary}</p>
+                  <p className="small-text">{calibrationMessage}</p>
+                  <p className="small-text">
+                    {phase === PHASES.CALIBRATION
+                      ? isArcCalibrating
+                        ? `Lazy Arc Confidence: ${Math.round(arcCalibrationProgress * 100)}% (${arcCalibrationSamples} valid frames)`
+                        : `Captured points: ${calibrationPairsCount}/${calibrationTargets.length}${
+                            isCalibrating
+                              ? ` | Sampling: ${calibrationSampleFrames}/${CALIBRATION_SAMPLE_FRAMES}`
+                              : ""
+                          }`
+                      : phase === PHASES.SANDBOX
+                      ? "Pinch over a block to grab it. Keep pinching to drag, then release to fling."
+                      : phase === PHASES.FIST_SANDBOX
+                      ? "Make a full-fist clench over a block to grab it. Keep the fist closed to drag, then open your hand to fling."
+                      : phase === PHASES.FLIGHT
+                      ? `Steering uses all five fingertips. Neutral baseline: ${
+                          flightHud.baselineReady
+                            ? "locked"
+                            : `${flightHud.baselineSamples}/${FLIGHT_BASELINE_SAMPLE_TARGET}`
+                        }.`
+                      : phase === PHASES.BODY_POSE
+                      ? "Body pose mode tracks head, eyes, shoulders, arms, torso, and webcam overlays."
+                      : phase === PHASES.OFF_AXIS_LAB
+                      ? "Off-axis mode uses your nose and both eyes to drive a layered forest scene while holding the last transform through short pose dropouts."
+                      : phase === PHASES.CONVEYOR
+                      ? "Pinch to grab a sphere, then release to throw. Faster flicks add launch speed."
+                      : phase === PHASES.MINORITY_REPORT_LAB
+                      ? "One-hand pinch grabs panels, two-hand pinch transforms the stage, and gestures log events."
+                      : phase === PHASES.GESTURE_ART_LAB
+                      ? "Index attractor, pinch thickness, openness palette, wrist hue, and two-hand warp stay active."
+                      : phase === PHASES.GESTURE_CONTROL_OS
+                      ? "Pinch drags windows, swipes switch desktops, and open-palm hold opens contextual menu actions."
+                      : "4x4 track control: move hand across the camera view to pick any converging track."}
+                  </p>
                 </div>
-              </div>
 
-              {navigationSections.map((section) => (
-                <section key={section.title} className="workspace-nav-section">
-                  <div className="workspace-nav-section-heading">
-                    <h3>{section.title}</h3>
-                    <p className="small-text">{section.description}</p>
-                  </div>
-                  <div className="workspace-nav-grid">
-                    {section.items.map((item) => (
+                <div className="workspace-actions">
+                  <h3>Mode actions</h3>
+                  <div className="workspace-action-grid">
+                    {currentModeActions.map((action) => (
                       <button
-                        key={item.label}
-                        className={item.active ? "nav-button active" : "nav-button secondary"}
+                        key={action.label}
+                        className={action.secondary ? "secondary" : ""}
                         type="button"
-                        onClick={item.onClick}
-                        disabled={item.disabled || item.active}
+                        onClick={action.onClick}
+                        disabled={action.disabled}
                       >
-                        {item.label}
+                        {action.label}
                       </button>
                     ))}
                   </div>
-                </section>
-              ))}
-            </div>
-          )}
+                </div>
 
-          <label className="debug-toggle">
-            <input
-              type="checkbox"
-              checked={debugEnabled}
-              onChange={(event) => setDebugEnabled(event.target.checked)}
-            />
-            Debug overlay
-          </label>
-          <div className="button-row">
-            <button
-              className="secondary"
-              type="button"
-              disabled={!modelReady}
-              onClick={() => logTrackingExtentsSnapshot("manual_button")}
-            >
-              Log Tracking Extents
-            </button>
+                {navigationSections.map((section) => (
+                  <section key={section.title} className="workspace-nav-section">
+                    <div className="workspace-nav-section-heading">
+                      <h3>{section.title}</h3>
+                      <p className="small-text">{section.description}</p>
+                    </div>
+                    <div className="workspace-nav-grid">
+                      {section.items.map((item) => (
+                        <button
+                          key={item.label}
+                          className={item.active ? "nav-button active" : "nav-button secondary"}
+                          type="button"
+                          onClick={item.onClick}
+                          disabled={item.disabled || item.active}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+
+            <label className="debug-toggle">
+              <input
+                type="checkbox"
+                checked={debugEnabled}
+                onChange={(event) => setDebugEnabled(event.target.checked)}
+              />
+              Debug overlay
+            </label>
+            <div className="button-row">
+              <button
+                className="secondary"
+                type="button"
+                disabled={!modelReady}
+                onClick={() => logTrackingExtentsSnapshot("manual_button")}
+              >
+                Log Tracking Extents
+              </button>
+            </div>
           </div>
         </section>
 
