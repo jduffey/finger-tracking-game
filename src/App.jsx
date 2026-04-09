@@ -122,7 +122,6 @@ const PHASES = {
   CALIBRATION: "CALIBRATION",
   FULLSCREEN_CAMERA: "FULLSCREEN_CAMERA",
   SANDBOX: "SANDBOX",
-  FIST_SANDBOX: "FIST_SANDBOX",
   FLIGHT: "FLIGHT",
   RUNNER: "RUNNER",
   BODY_POSE: "BODY_POSE",
@@ -140,9 +139,6 @@ const PHASES = {
 const PINCH_START_THRESHOLD = 0.045;
 const PINCH_END_THRESHOLD = 0.06;
 const PINCH_DEBOUNCE_MS = 250;
-const FIST_CLENCH_START_OPENNESS = 0.92;
-const FIST_CLENCH_END_OPENNESS = 1.02;
-const FIST_REQUIRED_CURLED_FINGERS = 4;
 const CURSOR_ALPHA = 0.35;
 const CURSOR_TRAIL_DURATION_MS = 1000;
 const CURSOR_TRAIL_SAMPLE_INTERVAL_MS = 34;
@@ -389,25 +385,6 @@ const SANDBOX_MATERIAL_COLORS = {
   steel: ["#91a2b8", "#7d8fa8"],
   rubber: ["#ef4444", "#f97316"],
 };
-const HAND_LANDMARK_INDEX = {
-  WRIST: 0,
-  THUMB_TIP: 4,
-  INDEX_MCP: 5,
-  INDEX_TIP: 8,
-  MIDDLE_MCP: 9,
-  MIDDLE_TIP: 12,
-  RING_MCP: 13,
-  RING_TIP: 16,
-  PINKY_MCP: 17,
-  PINKY_TIP: 20,
-};
-const FIST_FINGER_SPECS = [
-  { name: "thumb", tip: HAND_LANDMARK_INDEX.THUMB_TIP, base: HAND_LANDMARK_INDEX.INDEX_MCP, startThreshold: 1.02, endThreshold: 1.1 },
-  { name: "index", tip: HAND_LANDMARK_INDEX.INDEX_TIP, base: HAND_LANDMARK_INDEX.INDEX_MCP, startThreshold: 0.94, endThreshold: 1.02 },
-  { name: "middle", tip: HAND_LANDMARK_INDEX.MIDDLE_TIP, base: HAND_LANDMARK_INDEX.MIDDLE_MCP, startThreshold: 0.96, endThreshold: 1.04 },
-  { name: "ring", tip: HAND_LANDMARK_INDEX.RING_TIP, base: HAND_LANDMARK_INDEX.RING_MCP, startThreshold: 0.96, endThreshold: 1.04 },
-  { name: "pinky", tip: HAND_LANDMARK_INDEX.PINKY_TIP, base: HAND_LANDMARK_INDEX.PINKY_MCP, startThreshold: 0.98, endThreshold: 1.06 },
-];
 const FLIGHT_FINGER_ORDER = ["thumb", "index", "middle", "ring", "pinky"];
 const FLIGHT_BASELINE_SAMPLE_TARGET = 34;
 const FLIGHT_FORWARD_SPEED = 310;
@@ -1236,121 +1213,6 @@ function isValidHandLandmark(point) {
   return Boolean(point && Number.isFinite(point.u) && Number.isFinite(point.v));
 }
 
-function getHandLandmark(hand, index) {
-  if (!Array.isArray(hand?.landmarks)) {
-    return null;
-  }
-  const point = hand.landmarks[index];
-  return isValidHandLandmark(point) ? point : null;
-}
-
-function estimatePalmCenterFromHand(hand) {
-  const indices = [
-    HAND_LANDMARK_INDEX.WRIST,
-    HAND_LANDMARK_INDEX.INDEX_MCP,
-    HAND_LANDMARK_INDEX.MIDDLE_MCP,
-    HAND_LANDMARK_INDEX.RING_MCP,
-    HAND_LANDMARK_INDEX.PINKY_MCP,
-  ];
-  let count = 0;
-  let sumU = 0;
-  let sumV = 0;
-
-  for (const index of indices) {
-    const point = getHandLandmark(hand, index);
-    if (!point) {
-      continue;
-    }
-    sumU += point.u;
-    sumV += point.v;
-    count += 1;
-  }
-
-  if (count === 0) {
-    return null;
-  }
-
-  return {
-    u: sumU / count,
-    v: sumV / count,
-  };
-}
-
-function estimateHandScaleFromHand(hand) {
-  const wrist = getHandLandmark(hand, HAND_LANDMARK_INDEX.WRIST);
-  const middleMcp = getHandLandmark(hand, HAND_LANDMARK_INDEX.MIDDLE_MCP);
-  if (wrist && middleMcp) {
-    return Math.max(0.0001, Math.hypot(middleMcp.u - wrist.u, middleMcp.v - wrist.v));
-  }
-
-  if (!Array.isArray(hand?.landmarks)) {
-    return 0.08;
-  }
-
-  let minU = Number.POSITIVE_INFINITY;
-  let maxU = Number.NEGATIVE_INFINITY;
-  let minV = Number.POSITIVE_INFINITY;
-  let maxV = Number.NEGATIVE_INFINITY;
-  for (const point of hand.landmarks) {
-    if (!isValidHandLandmark(point)) {
-      continue;
-    }
-    minU = Math.min(minU, point.u);
-    maxU = Math.max(maxU, point.u);
-    minV = Math.min(minV, point.v);
-    maxV = Math.max(maxV, point.v);
-  }
-
-  if (!Number.isFinite(minU) || !Number.isFinite(maxU) || !Number.isFinite(minV) || !Number.isFinite(maxV)) {
-    return 0.08;
-  }
-
-  return Math.max(0.05, Math.hypot(maxU - minU, maxV - minV));
-}
-
-function computeFistClenchMeta(hand, wasClenched = false) {
-  const palmCenter = estimatePalmCenterFromHand(hand);
-  const scale = estimateHandScaleFromHand(hand);
-  if (!palmCenter || !Number.isFinite(scale) || scale <= 0) {
-    return { active: false, openness: Number.POSITIVE_INFINITY, curledFingerCount: 0 };
-  }
-
-  let opennessTotal = 0;
-  let opennessCount = 0;
-  let curledFingerCount = 0;
-
-  for (const finger of FIST_FINGER_SPECS) {
-    const tip = getHandLandmark(hand, finger.tip) ?? hand?.fingerTips?.[finger.name] ?? null;
-    const base = getHandLandmark(hand, finger.base);
-    if (!tip) {
-      continue;
-    }
-
-    const tipDistanceFromPalm = Math.hypot(tip.u - palmCenter.u, tip.v - palmCenter.v) / scale;
-    opennessTotal += tipDistanceFromPalm;
-    opennessCount += 1;
-
-    if (!base) {
-      continue;
-    }
-
-    const curlRatio = Math.hypot(tip.u - base.u, tip.v - base.v) / scale;
-    const threshold = wasClenched ? finger.endThreshold : finger.startThreshold;
-    if (curlRatio <= threshold) {
-      curledFingerCount += 1;
-    }
-  }
-
-  const openness = opennessCount > 0 ? opennessTotal / opennessCount : Number.POSITIVE_INFINITY;
-  const active = wasClenched
-    ? curledFingerCount >= Math.max(3, FIST_REQUIRED_CURLED_FINGERS - 1) &&
-      openness <= FIST_CLENCH_END_OPENNESS
-    : curledFingerCount >= FIST_REQUIRED_CURLED_FINGERS &&
-      openness <= FIST_CLENCH_START_OPENNESS;
-
-  return { active, openness, curledFingerCount };
-}
-
 function summarizeFingerVisibilityFromHands(hands) {
   const summary = {
     handsCount: Array.isArray(hands) ? hands.length : 0,
@@ -1769,7 +1631,6 @@ export default function App() {
 
   const [handDetected, setHandDetected] = useState(false);
   const [pinchActive, setPinchActive] = useState(false);
-  const [fistActive, setFistActive] = useState(false);
   const [fps, setFps] = useState(0);
   const [cursor, setCursor] = useState(() => ({
     x: window.innerWidth / 2,
@@ -1952,7 +1813,6 @@ export default function App() {
   const lastValidHandTimestampRef = useRef(0);
   const handGraceFrameCounterRef = useRef(0);
   const pinchStateRef = useRef(false);
-  const fistStateRef = useRef(false);
   const lastPinchClickRef = useRef(0);
   const lastFrameTimeRef = useRef(0);
   const fpsRef = useRef(0);
@@ -2063,7 +1923,7 @@ export default function App() {
     isFullscreenCameraPhase &&
     fullscreenGridMode === "missile-command" &&
     Boolean(fullscreenMissileCommandState);
-  const isSandboxPhase = phase === PHASES.SANDBOX || phase === PHASES.FIST_SANDBOX;
+  const isSandboxPhase = phase === PHASES.SANDBOX;
   const isCalibrationLayoutPhase =
     phase === PHASES.CALIBRATION ||
     phase === PHASES.FULLSCREEN_CAMERA ||
@@ -2108,15 +1968,9 @@ export default function App() {
       ? "Camera + Tracking"
       : phase === PHASES.SANDBOX
       ? "Camera + Pinch Sandbox Controls"
-      : phase === PHASES.FIST_SANDBOX
-      ? "Camera + Fist Sandbox Controls"
       : "Camera + Calibration Controls";
   const inputTestPinchingCell =
     phase === PHASES.CALIBRATION && !isCalibrating && pinchActive
-      ? inputTestHoveredCell
-      : -1;
-  const inputTestClenchingCell =
-    phase === PHASES.CALIBRATION && !isCalibrating && !pinchActive && fistActive
       ? inputTestHoveredCell
       : -1;
   const isBodyPosePhase = phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB;
@@ -3823,7 +3677,7 @@ export default function App() {
   }, [appLog, phase]);
 
   useEffect(() => {
-    if (phase !== PHASES.SANDBOX && phase !== PHASES.FIST_SANDBOX) {
+    if (phase !== PHASES.SANDBOX) {
       return undefined;
     }
     const stage = sandboxStageRef.current;
@@ -4224,20 +4078,6 @@ export default function App() {
     requestAnimationFrame(() => resetSandboxBlocks("open_sandbox"));
   }
 
-  function openFistSandboxScreen() {
-    appLog.info("Opening fist grab sandbox screen");
-    stopGameSession();
-    resetArcCalibrationSession("open_fist_sandbox");
-    setIsCalibrating(false);
-    isCalibratingRef.current = false;
-    calibrationSampleRef.current = null;
-    setCalibrationSampleFrames(0);
-    setPhase(PHASES.FIST_SANDBOX);
-    phaseRef.current = PHASES.FIST_SANDBOX;
-    setCalibrationMessage("Fist Grab Sandbox active.");
-    requestAnimationFrame(() => resetSandboxBlocks("open_fist_sandbox"));
-  }
-
   function openFullscreenCameraScreen() {
     appLog.info("Opening fullscreen camera screen");
     stopGameSession();
@@ -4273,7 +4113,7 @@ export default function App() {
   }
 
   function updateSandboxPhysics(timestamp, pointerPoint, hasHand, grabNow) {
-    if (phaseRef.current !== PHASES.SANDBOX && phaseRef.current !== PHASES.FIST_SANDBOX) {
+    if (phaseRef.current !== PHASES.SANDBOX) {
       return;
     }
     const stage = sandboxStageRef.current;
@@ -7355,7 +7195,6 @@ export default function App() {
         setHandDetected(false);
       }
       setPinchActive(false);
-      setFistActive(false);
       const emptyPoseStatus = createEmptyPoseStatus();
       const previousOffAxis = poseStatusRef.current?.offAxis ?? emptyPoseStatus.offAxis;
       const nextStatus = {
@@ -7401,7 +7240,6 @@ export default function App() {
       setHandDetected(true);
     }
     setPinchActive(false);
-    setFistActive(false);
 
     const keypointMap = {};
     for (const point of pose.keypoints) {
@@ -7501,11 +7339,6 @@ export default function App() {
         pinchStateRef.current = false;
         setPinchActive(false);
         appLog.debug("Pinch state reset because hand is missing", { frameId });
-      }
-      if (fistStateRef.current) {
-        fistStateRef.current = false;
-        setFistActive(false);
-        appLog.debug("Fist clench state reset because hand is missing", { frameId });
       }
       if (isArcCalibratingRef.current && frameId % 20 === 0) {
         setCalibrationMessage(
@@ -7734,32 +7567,6 @@ export default function App() {
       nextPinch = false;
     }
 
-    const nextFistMeta = computeFistClenchMeta(hand, fistStateRef.current);
-    if (nextFistMeta.active !== fistStateRef.current) {
-      const wasClenched = fistStateRef.current;
-      fistStateRef.current = nextFistMeta.active;
-      setFistActive(nextFistMeta.active);
-      appLog.info("Fist clench state transition", {
-        frameId,
-        wasClenched,
-        nowClenched: nextFistMeta.active,
-        openness: roundMetric(nextFistMeta.openness, 4),
-        curledFingerCount: nextFistMeta.curledFingerCount,
-      });
-
-      if (
-        phaseRef.current === PHASES.CALIBRATION &&
-        !isCalibratingRef.current &&
-        nextFistMeta.active &&
-        inputTestHoveredCellRef.current >= 0
-      ) {
-        appLog.info("Calibration grid fist-clench over hovered cell", {
-          frameId,
-          hoveredCellIndex: inputTestHoveredCellRef.current,
-        });
-      }
-    }
-
     if (nextPinch !== pinchStateRef.current) {
       const wasPinching = pinchStateRef.current;
       pinchStateRef.current = nextPinch;
@@ -7815,8 +7622,7 @@ export default function App() {
       }
     }
 
-    const sandboxGrabActive =
-      phaseRef.current === PHASES.FIST_SANDBOX ? fistStateRef.current : pinchStateRef.current;
+    const sandboxGrabActive = pinchStateRef.current;
     updateSandboxPhysics(timestamp, smoothed, true, sandboxGrabActive);
     drawCameraOverlay(hand);
     updateFlightSimulation(timestamp);
@@ -9986,8 +9792,6 @@ export default function App() {
       ? "Calibration Input Test"
       : phase === PHASES.SANDBOX
       ? "Pinch Sandbox"
-      : phase === PHASES.FIST_SANDBOX
-      ? "Fist Sandbox"
       : phase === PHASES.FLIGHT
       ? "Star Flight"
       : phase === PHASES.RUNNER
@@ -10016,8 +9820,6 @@ export default function App() {
       ? "Start here for setup, camera checks, and quick access to every mode."
       : phase === PHASES.SANDBOX
       ? "A focused pinch-and-drag test area for verifying direct manipulation."
-      : phase === PHASES.FIST_SANDBOX
-      ? "A whole-hand grab test area for checking fist-based interaction and release."
       : phase === PHASES.FLIGHT
       ? "Five-finger steering playground with quick reset controls."
       : phase === PHASES.RUNNER
@@ -10066,12 +9868,6 @@ export default function App() {
           {
             label: "Open Pinch Sandbox",
             onClick: openSandboxScreen,
-            secondary: true,
-            disabled: navigationLocked,
-          },
-          {
-            label: "Open Fist Sandbox",
-            onClick: openFistSandboxScreen,
             secondary: true,
             disabled: navigationLocked,
           },
@@ -10192,12 +9988,6 @@ export default function App() {
           label: "Pinch Sandbox",
           onClick: openSandboxScreen,
           active: phase === PHASES.SANDBOX,
-          disabled: navigationLocked,
-        },
-        {
-          label: "Fist Sandbox",
-          onClick: openFistSandboxScreen,
-          active: phase === PHASES.FIST_SANDBOX,
           disabled: navigationLocked,
         },
         {
@@ -10357,8 +10147,6 @@ export default function App() {
                 ? "Pinch to grab/release. Swipes/push/circle and two-hand gestures trigger lab actions."
                 : phase === PHASES.CONVEYOR
                 ? "Pinch to grab spheres, then release to throw. Faster flicks add speed."
-                : phase === PHASES.FIST_SANDBOX
-                ? "Clench your whole fist to grab a block, then open your hand to release it."
                 : phase === PHASES.GESTURE_ART_LAB
                 ? "One hand draws, two hands warp, circle clears, and push toggles freeze."
                 : phase === PHASES.GESTURE_CONTROL_OS
@@ -10376,9 +10164,6 @@ export default function App() {
               <span>Backend: {activeBackend}</span>
               {phase !== PHASES.BODY_POSE && phase !== PHASES.OFF_AXIS_LAB && (
                 <span>Pinch: {pinchActive ? "active" : "idle"}</span>
-              )}
-              {phase !== PHASES.BODY_POSE && phase !== PHASES.OFF_AXIS_LAB && (
-                <span>Fist: {fistActive ? "active" : "idle"}</span>
               )}
             </div>
 
@@ -10406,8 +10191,6 @@ export default function App() {
                           }`
                       : phase === PHASES.SANDBOX
                       ? "Pinch over a block to grab it. Keep pinching to drag, then release to fling."
-                      : phase === PHASES.FIST_SANDBOX
-                      ? "Make a full-fist clench over a block to grab it. Keep the fist closed to drag, then open your hand to fling."
                       : phase === PHASES.FLIGHT
                       ? `Steering uses all five fingertips. Neutral baseline: ${
                           flightHud.baselineReady
@@ -10512,8 +10295,8 @@ export default function App() {
           <section className="card panel calibration-panel">
             <h2>Calibration Input Test</h2>
             <p className="small-text">
-              Primary target area: hover any box, then pinch or clench while hovering to verify
-              gesture input behavior.
+              Primary target area: hover any box, then pinch while hovering to verify gesture
+              input behavior.
             </p>
 
             <div className="input-test-panel input-test-primary">
@@ -10531,7 +10314,6 @@ export default function App() {
                   {Array.from({ length: INPUT_TEST_CELL_COUNT }, (_, cellIndex) => {
                     const isHovered = inputTestHoveredCell === cellIndex;
                     const isPinching = inputTestPinchingCell === cellIndex;
-                    const isClenched = inputTestClenchingCell === cellIndex;
                     return (
                       <div
                         key={cellIndex}
@@ -10539,13 +10321,7 @@ export default function App() {
                           inputTestCellRefs.current[cellIndex] = element;
                         }}
                         className={`input-test-cell ${
-                          isPinching
-                            ? "pinching"
-                            : isClenched
-                              ? "clenched"
-                              : isHovered
-                                ? "hovered"
-                                : ""
+                          isPinching ? "pinching" : isHovered ? "hovered" : ""
                         }`}
                       >
                         <span>{cellIndex + 1}</span>
@@ -10558,22 +10334,19 @@ export default function App() {
               <h3>Input Test</h3>
               <p className="small-text">
                 Move over any of the {INPUT_TEST_CELL_COUNT} cells to see hover color. Keep
-                hovering and pinch to switch to the red pinch color, or clench your whole fist to
-                switch to the neon purple fist color.
+                hovering and pinch to switch to the red pinch color.
               </p>
               <p className="small-text">
                 Hovered cell: {inputTestHoveredCell >= 0 ? inputTestHoveredCell + 1 : "none"} |
-                Pinch: {pinchActive ? "active" : "idle"} | Fist: {fistActive ? "active" : "idle"}
+                Pinch: {pinchActive ? "active" : "idle"}
               </p>
             </div>
           </section>
         ) : isSandboxPhase ? (
           <section className="card panel sandbox-panel">
-            <h2>{phase === PHASES.FIST_SANDBOX ? "Fist Grab Sandbox" : "Pinch Drag Sandbox"}</h2>
+            <h2>Pinch Drag Sandbox</h2>
             <p className="small-text">
-              {phase === PHASES.FIST_SANDBOX
-                ? "Hover over a block and clench your whole fist to grab it. Keep the fist clenched while moving, then open your hand to fling."
-                : "Hover over a block and pinch to grab it. Move while pinching, then release to fling."}
+              Hover over a block and pinch to grab it. Move while pinching, then release to fling.
             </p>
             <p className="small-text">
               Two steel blocks (lower bounce) and two rubber blocks (higher bounce).
@@ -10603,8 +10376,8 @@ export default function App() {
 
             <p className="small-text">
               Blocks: {sandboxBlocks.length} | Grabbed:{" "}
-              {sandboxGrabbedBlockId !== null ? sandboxGrabbedBlockId : "none"} | {phase === PHASES.FIST_SANDBOX ? "Fist" : "Pinch"}:{" "}
-              {phase === PHASES.FIST_SANDBOX ? (fistActive ? "active" : "idle") : pinchActive ? "active" : "idle"}
+              {sandboxGrabbedBlockId !== null ? sandboxGrabbedBlockId : "none"} | Pinch:{" "}
+              {pinchActive ? "active" : "idle"}
             </p>
           </section>
         ) : phase === PHASES.FLIGHT ? (
