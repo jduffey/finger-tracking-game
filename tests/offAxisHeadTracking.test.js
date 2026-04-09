@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createEmptyOffAxisState, deriveOffAxisHeadState } from "../src/offAxisHeadTracking.js";
+import {
+  createEmptyOffAxisState,
+  createHeldOffAxisState,
+  deriveOffAxisHeadState,
+} from "../src/offAxisHeadTracking.js";
 
 function point(name, u, v, score = 0.9) {
   return { name, u, v, score };
@@ -49,4 +53,44 @@ test("deriveOffAxisHeadState reflects lateral movement and depth changes", () =>
   assert.ok(state.cameraShiftXPx > 0);
   assert.ok(state.chamberRotationDeg > 0);
   assert.ok(state.depth > 0);
+});
+
+test("deriveOffAxisHeadState requires the nose and both eyes", () => {
+  const pose = {
+    keypoints: [
+      point("nose", 0.52, 0.4),
+      point("left_eye", 0.47, 0.35),
+      point("left_ear", 0.42, 0.38, 0.65),
+      point("right_ear", 0.61, 0.39, 0.65),
+    ],
+  };
+
+  const state = deriveOffAxisHeadState(pose);
+  assert.equal(state.detected, false);
+  assert.equal(state.status, "Need nose + both eyes");
+  assert.equal(state.eyeSpan, 0);
+});
+
+test("createHeldOffAxisState keeps the previous transform during brief dropouts", () => {
+  const previous = {
+    ...createEmptyOffAxisState(),
+    detected: true,
+    confidence: 0.84,
+    offsetX: 0.31,
+    offsetY: -0.12,
+    yaw: 0.24,
+    pitch: -0.08,
+    depth: 0.19,
+    cameraShiftXPx: 28.4,
+    chamberRotationDeg: 4.6,
+    status: "Head tracked",
+  };
+
+  const held = createHeldOffAxisState(previous);
+  assert.equal(held.detected, false);
+  assert.equal(held.confidence, 0);
+  assert.equal(held.offsetX, previous.offsetX);
+  assert.equal(held.cameraShiftXPx, previous.cameraShiftXPx);
+  assert.equal(held.chamberRotationDeg, previous.chamberRotationDeg);
+  assert.equal(held.status, "Reacquiring head...");
 });

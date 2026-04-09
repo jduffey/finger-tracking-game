@@ -76,6 +76,7 @@ also auto-resolves Codex from `CODEX_BIN`, then `codex` on `PATH`, then
 
 - **Start Calibration**: begin 9-point calibration
 - **Pinch** (thumb + index): confirm calibration target / hit mole
+- **Fist clench**: lights hovered calibration test cells neon purple and drives the fist-grab sandbox
 - **Start Game / Restart Game**: play 30-second round
 - **Recalibrate**: clear stored transform and return to calibration
 - **Camera overlay**: always shows fingertip markers (thumb/index/middle/ring/pinky)
@@ -86,6 +87,9 @@ also auto-resolves Codex from `CODEX_BIN`, then `codex` on `PATH`, then
 - **Fullscreen Camera > Invaders**: overlays a Space Invaders-style shooter where the index fingertip steers the ship, pinch fires on cooldown, enemy rows sweep downward, and pinch restarts after a loss or clear
 - **Fullscreen Camera > Flappy**: overlays a Flappy Bird-inspired mode on the full webcam feed where each distinct pinch produces one flap, pipes scroll right-to-left, score increments on gap clears, and a pinch after a crash restarts the round
 - **Off-Axis Forest Walk**: uses pose-estimated nose/eye movement to shift a faux 3D woodland trail so leaning left/right feels like peeking around nearby trees while walking through the woods
+- **Separate Page > Circle of Fifths**: opens `/circle-of-fifths.html`, a standalone fullscreen webcam instrument where one-hand index tracking hovers a major/minor wheel and each slice plays a synthesized chord
+- **Pinch Sandbox**: lets you pinch blocks to drag and fling with simple block physics
+- **Fist Sandbox**: mirrors the pinch sandbox but uses a whole-hand fist clench to grab/release blocks
 - **Debug overlay**: adds landmarks, raw pointer marker, and pinch/FPS info
 - **Log Tracking Extents**: writes raw/clamped/visible-normalized fingertip coverage plus visible camera bounds to the log file
 

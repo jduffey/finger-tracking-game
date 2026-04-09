@@ -65,6 +65,31 @@ export function createEmptyOffAxisState() {
   };
 }
 
+export function createHeldOffAxisState(previousState = createEmptyOffAxisState()) {
+  const state =
+    previousState && typeof previousState === "object"
+      ? previousState
+      : createEmptyOffAxisState();
+  const hasRecentTransform =
+    state.detected ||
+    Math.abs(state.offsetX ?? 0) > 0.001 ||
+    Math.abs(state.offsetY ?? 0) > 0.001 ||
+    Math.abs(state.yaw ?? 0) > 0.001 ||
+    Math.abs(state.pitch ?? 0) > 0.001 ||
+    Math.abs(state.depth ?? 0) > 0.001;
+
+  if (!hasRecentTransform) {
+    return createEmptyOffAxisState();
+  }
+
+  return {
+    ...state,
+    detected: false,
+    confidence: 0,
+    status: "Reacquiring head...",
+  };
+}
+
 export function deriveOffAxisHeadState(pose, previousState = createEmptyOffAxisState()) {
   if (!pose || !Array.isArray(pose.keypoints) || pose.keypoints.length === 0) {
     return createEmptyOffAxisState();
@@ -76,13 +101,20 @@ export function deriveOffAxisHeadState(pose, previousState = createEmptyOffAxisS
   const leftEar = getPointByName(pose, "left_ear", 0.12);
   const rightEar = getPointByName(pose, "right_ear", 0.12);
 
+  if (!nose || !leftEye || !rightEye) {
+    return {
+      ...createEmptyOffAxisState(),
+      status: "Need nose + both eyes",
+    };
+  }
+
   const eyeMid = averagePoints([leftEye, rightEye]);
   const headCenter = averagePoints([nose, eyeMid, leftEar, rightEar]);
 
   if (!eyeMid || !headCenter) {
     return {
       ...createEmptyOffAxisState(),
-      status: "Need nose + eye landmarks",
+      status: "Need nose + both eyes",
     };
   }
 
