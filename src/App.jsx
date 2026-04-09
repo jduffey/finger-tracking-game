@@ -106,6 +106,11 @@ import GestureControlOS from "./components/GestureControlOS.jsx";
 import { createGestureEngine } from "./gestures/gestureEngine.js";
 import { shouldShowWorkspaceNav } from "./workspaceNavigation.js";
 import {
+  RESIZABLE_LEFT_PANE_HANDLE_WIDTH_PX,
+  RESIZABLE_LEFT_PANE_MIN_WIDTH_PX,
+  clampResizableLeftPaneWidth,
+} from "./layoutSizing.js";
+import {
   ALL_GESTURE_IDS,
   GESTURE_DEFINITIONS,
   GESTURE_IDS,
@@ -166,6 +171,8 @@ const FULLSCREEN_TIP_RIPPLE_COLORS = [
 ];
 const FULLSCREEN_VORONOI_DOT_RADIUS = 4.5;
 const CIRCLE_OF_FIFTHS_AUTOSTART_SESSION_KEY = "circle-of-fifths-autostart";
+const DESKTOP_LAYOUT_BREAKPOINT_PX = 980;
+const LEFT_PANE_RESIZE_KEYBOARD_STEP_PX = 24;
 
 function clipPolygonToHalfPlane(polygon, normalX, normalY, offset) {
   if (!Array.isArray(polygon) || polygon.length === 0) {
@@ -1749,6 +1756,8 @@ export default function App() {
     height: window.innerHeight,
   }));
   const [phase, setPhase] = useState(PHASES.CALIBRATION);
+  const [leftPaneWidth, setLeftPaneWidth] = useState(null);
+  const [isLeftPaneResizing, setIsLeftPaneResizing] = useState(false);
 
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState("");
@@ -1868,6 +1877,8 @@ export default function App() {
   const videoRef = useRef(null);
   const overlayCanvasRef = useRef(null);
   const cameraWrapRef = useRef(null);
+  const contentGridRef = useRef(null);
+  const cameraPaneRef = useRef(null);
   const boardRef = useRef(null);
   const inputTestStageRef = useRef(null);
   const sandboxStageRef = useRef(null);
@@ -1876,6 +1887,10 @@ export default function App() {
   const runnerStageRef = useRef(null);
   const runnerCanvasRef = useRef(null);
   const inputTestCellRefs = useRef([]);
+  const leftPaneResizeStateRef = useRef({
+    startWidth: 0,
+    startX: 0,
+  });
 
   const detectorRef = useRef(null);
   const poseDetectorRef = useRef(null);
@@ -2105,6 +2120,84 @@ export default function App() {
       ? inputTestHoveredCell
       : -1;
   const isBodyPosePhase = phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB;
+  const showLeftPaneResizer =
+    !isBodyPosePhase && viewport.width > DESKTOP_LAYOUT_BREAKPOINT_PX;
+
+  const getContentGridWidth = () =>
+    contentGridRef.current?.getBoundingClientRect().width ?? viewport.width;
+
+  const getMeasuredLeftPaneWidth = () => {
+    const measuredWidth = cameraPaneRef.current?.getBoundingClientRect().width;
+    if (Number.isFinite(measuredWidth) && measuredWidth > 0) {
+      return measuredWidth;
+    }
+    if (Number.isFinite(leftPaneWidth) && leftPaneWidth > 0) {
+      return leftPaneWidth;
+    }
+    return clampResizableLeftPaneWidth(viewport.width * 0.42, getContentGridWidth());
+  };
+
+  const getMaxLeftPaneWidth = () =>
+    clampResizableLeftPaneWidth(Number.POSITIVE_INFINITY, getContentGridWidth());
+
+  const setClampedLeftPaneWidth = (nextWidth) => {
+    const clampedWidth = clampResizableLeftPaneWidth(nextWidth, getContentGridWidth());
+    setLeftPaneWidth(clampedWidth);
+    return clampedWidth;
+  };
+
+  const handleLeftPaneResizerPointerDown = (event) => {
+    if (!showLeftPaneResizer) {
+      return;
+    }
+
+    const startingWidth = getMeasuredLeftPaneWidth();
+    if (!Number.isFinite(startingWidth) || startingWidth <= 0) {
+      return;
+    }
+
+    leftPaneResizeStateRef.current = {
+      startWidth: startingWidth,
+      startX: event.clientX,
+    };
+    setIsLeftPaneResizing(true);
+    event.preventDefault();
+  };
+
+  const handleLeftPaneResizerKeyDown = (event) => {
+    if (!showLeftPaneResizer) {
+      return;
+    }
+
+    const currentWidth = getMeasuredLeftPaneWidth();
+    if (!Number.isFinite(currentWidth) || currentWidth <= 0) {
+      return;
+    }
+
+    if (event.key === "ArrowLeft") {
+      setClampedLeftPaneWidth(currentWidth - LEFT_PANE_RESIZE_KEYBOARD_STEP_PX);
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === "ArrowRight") {
+      setClampedLeftPaneWidth(currentWidth + LEFT_PANE_RESIZE_KEYBOARD_STEP_PX);
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === "Home") {
+      setClampedLeftPaneWidth(RESIZABLE_LEFT_PANE_MIN_WIDTH_PX);
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === "End") {
+      setClampedLeftPaneWidth(getMaxLeftPaneWidth());
+      event.preventDefault();
+    }
+  };
+
   const cameraObjectFit = getCameraObjectFitForPhase(phase);
   const fullscreenCameraViewport = useMemo(() => {
     if (!isFullscreenCameraPhase) {
@@ -3284,6 +3377,71 @@ export default function App() {
       window.removeEventListener("resize", onResize);
     };
   }, [appLog]);
+
+  useEffect(() => {
+    if (!showLeftPaneResizer && isLeftPaneResizing) {
+      setIsLeftPaneResizing(false);
+    }
+  }, [isLeftPaneResizing, showLeftPaneResizer]);
+
+  useEffect(() => {
+    if (!showLeftPaneResizer || leftPaneWidth === null) {
+      return;
+    }
+
+    const clampedWidth = clampResizableLeftPaneWidth(leftPaneWidth, getContentGridWidth());
+    if (Math.abs(clampedWidth - leftPaneWidth) > 0.5) {
+      setLeftPaneWidth(clampedWidth);
+    }
+  }, [leftPaneWidth, showLeftPaneResizer, viewport.width]);
+
+  useEffect(() => {
+    if (!isLeftPaneResizing) {
+      return undefined;
+    }
+
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+    };
+  }, [isLeftPaneResizing]);
+
+  useEffect(() => {
+    if (!isLeftPaneResizing || !showLeftPaneResizer) {
+      return undefined;
+    }
+
+    const handlePointerMove = (event) => {
+      const { startWidth, startX } = leftPaneResizeStateRef.current;
+      if (!Number.isFinite(startWidth) || startWidth <= 0) {
+        return;
+      }
+      setClampedLeftPaneWidth(startWidth + event.clientX - startX);
+    };
+
+    const stopResizing = () => {
+      setIsLeftPaneResizing(false);
+      leftPaneResizeStateRef.current = {
+        startWidth: 0,
+        startX: 0,
+      };
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+    window.addEventListener("pointercancel", stopResizing);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+      window.removeEventListener("pointercancel", stopResizing);
+    };
+  }, [isLeftPaneResizing, showLeftPaneResizer, viewport.width]);
 
   useEffect(() => {
     appLog.debug("Viewport effect started for targets/cursor refresh", viewport);
@@ -9808,6 +9966,21 @@ export default function App() {
   const navigationLocked = !cameraReady || !modelReady || isCalibrating || isArcCalibrating;
   const offAxisNavigationLocked = !cameraReady || isCalibrating || isArcCalibrating;
   const showWorkspaceNav = shouldShowWorkspaceNav(phase);
+  const contentGridClassName = `content-grid ${
+    isCalibrationLayoutPhase && !isBodyPosePhase ? "calibration-layout" : ""
+  } ${isBodyPosePhase ? "body-layout" : ""} ${showLeftPaneResizer ? "resizable-layout" : ""}`;
+  const contentGridStyle = showLeftPaneResizer
+    ? {
+        "--left-pane-resizer-width": `${RESIZABLE_LEFT_PANE_HANDLE_WIDTH_PX}px`,
+        ...(leftPaneWidth !== null
+          ? { "--left-pane-column": `${Math.round(leftPaneWidth)}px` }
+          : {}),
+      }
+    : undefined;
+  const leftPaneResizerValueNow = showLeftPaneResizer
+    ? Math.round(getMeasuredLeftPaneWidth())
+    : undefined;
+  const leftPaneResizerValueMax = showLeftPaneResizer ? Math.round(getMaxLeftPaneWidth()) : undefined;
   const activePhaseName =
     phase === PHASES.CALIBRATION
       ? "Calibration Input Test"
@@ -10142,12 +10315,8 @@ export default function App() {
         </div>
       </header>
 
-      <div
-        className={`content-grid ${
-          isCalibrationLayoutPhase && !isBodyPosePhase ? "calibration-layout" : ""
-        } ${isBodyPosePhase ? "body-layout" : ""}`}
-      >
-        <section className="card camera-card">
+      <div className={contentGridClassName} ref={contentGridRef} style={contentGridStyle}>
+        <section className="card camera-card" ref={cameraPaneRef}>
           <div className="camera-preview-panel">
             <h2>{cameraPanelTitle}</h2>
             <div
@@ -10322,6 +10491,22 @@ export default function App() {
             </div>
           </div>
         </section>
+
+        {showLeftPaneResizer && (
+          <div
+            aria-label="Resize camera pane"
+            aria-orientation="vertical"
+            aria-valuemax={leftPaneResizerValueMax}
+            aria-valuemin={RESIZABLE_LEFT_PANE_MIN_WIDTH_PX}
+            aria-valuenow={leftPaneResizerValueNow}
+            className={`content-grid-resizer ${isLeftPaneResizing ? "active" : ""}`}
+            onKeyDown={handleLeftPaneResizerKeyDown}
+            onPointerDown={handleLeftPaneResizerPointerDown}
+            role="separator"
+            tabIndex={0}
+            title="Drag to resize the camera pane"
+          />
+        )}
 
         {phase === PHASES.CALIBRATION ? (
           <section className="card panel calibration-panel">
