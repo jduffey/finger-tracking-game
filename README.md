@@ -86,6 +86,7 @@ also auto-resolves Codex from `CODEX_BIN`, then `codex` on `PATH`, then
 - **Fullscreen Camera > Finger Pong**: overlays a one-player Pong variant on the full webcam feed where the index fingertip steers a bottom paddle, off-center returns bend the shot, rallies accelerate gently, and score/rally counters stay visible over the camera
 - **Fullscreen Camera > Invaders**: overlays a Space Invaders-style shooter where the index fingertip steers the ship, pinch fires on cooldown, enemy rows sweep downward, and pinch restarts after a loss or clear
 - **Fullscreen Camera > Flappy**: overlays a Flappy Bird-inspired mode on the full webcam feed where each distinct pinch produces one flap, pipes scroll right-to-left, score increments on gap clears, and a pinch after a crash restarts the round
+- **Separate Page > Circle of Fifths**: opens `/circle-of-fifths.html`, a standalone fullscreen webcam instrument where one-hand index tracking hovers a major/minor wheel and each slice plays a synthesized chord
 - **Pinch Sandbox**: lets you pinch blocks to drag and fling with simple block physics
 - **Fist Sandbox**: mirrors the pinch sandbox but uses a whole-hand fist clench to grab/release blocks
 - **Debug overlay**: adds landmarks, raw pointer marker, and pinch/FPS info
