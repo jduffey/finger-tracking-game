@@ -98,6 +98,7 @@ import GestureAnalyticsLab from "./components/GestureAnalyticsLab.jsx";
 import GestureArtLab from "./components/GestureArtLab.jsx";
 import GestureControlOS from "./components/GestureControlOS.jsx";
 import { createGestureEngine } from "./gestures/gestureEngine.js";
+import { shouldShowWorkspaceNav } from "./workspaceNavigation.js";
 import {
   ALL_GESTURE_IDS,
   GESTURE_DEFINITIONS,
@@ -9737,32 +9738,309 @@ export default function App() {
     );
   }
 
+  const navigationLocked = !cameraReady || !modelReady || isCalibrating || isArcCalibrating;
+  const showWorkspaceNav = shouldShowWorkspaceNav(phase);
+  const activePhaseName =
+    phase === PHASES.CALIBRATION
+      ? "Calibration Input Test"
+      : phase === PHASES.SANDBOX
+      ? "Pinch Sandbox"
+      : phase === PHASES.FIST_SANDBOX
+      ? "Fist Sandbox"
+      : phase === PHASES.FLIGHT
+      ? "Star Flight"
+      : phase === PHASES.RUNNER
+      ? "Track Runner"
+      : phase === PHASES.BODY_POSE
+      ? "Body Pose Lab"
+      : phase === PHASES.CONVEYOR
+      ? "Conveyor Toss"
+      : phase === PHASES.ROULETTE
+      ? "Roulette Table"
+      : phase === PHASES.MINORITY_REPORT_LAB
+      ? "Minority Report Lab"
+      : phase === PHASES.SPATIAL_GESTURE_MEMORY
+      ? "Spatial Gesture Memory"
+      : phase === PHASES.GESTURE_ANALYTICS_LAB
+      ? "Gesture Analytics Lab"
+      : phase === PHASES.GESTURE_ART_LAB
+      ? "Gesture Art Lab"
+      : phase === PHASES.GESTURE_CONTROL_OS
+      ? "Gesture Control OS"
+      : "Whack-a-Mole";
+  const activePhaseSummary =
+    phase === PHASES.CALIBRATION
+      ? "Start here for setup, camera checks, and quick access to every mode."
+      : phase === PHASES.SANDBOX
+      ? "A focused pinch-and-drag test area for verifying direct manipulation."
+      : phase === PHASES.FIST_SANDBOX
+      ? "A whole-hand grab test area for checking fist-based interaction and release."
+      : phase === PHASES.FLIGHT
+      ? "Five-finger steering playground with quick reset controls."
+      : phase === PHASES.RUNNER
+      ? "Track-switching runner with streamlined access back to the hub."
+      : phase === PHASES.BODY_POSE
+      ? "Whole-body tracking mode with pose-specific readiness details."
+      : phase === PHASES.CONVEYOR
+      ? "Throwing sandbox kept separate from the main navigation clusters."
+      : phase === PHASES.ROULETTE
+      ? "Table game entry kept distinct from the motion experiment labs."
+      : phase === PHASES.MINORITY_REPORT_LAB
+      ? "Multi-hand interaction lab with training and event logging tools."
+      : phase === PHASES.SPATIAL_GESTURE_MEMORY
+      ? "Memory challenge with next-round and reset actions kept up front."
+      : phase === PHASES.GESTURE_ANALYTICS_LAB
+      ? "Analysis workspace for reviewing live gesture features and performance."
+      : phase === PHASES.GESTURE_ART_LAB
+      ? "Creative canvas mode with a cleaner way to move between labs and games."
+      : phase === PHASES.GESTURE_CONTROL_OS
+      ? "Desktop simulation mode grouped under labs instead of ad hoc buttons."
+      : "Core game mode with calibration and alternate experiences available from the sidebar.";
+
+  const currentModeActions =
+    phase === PHASES.CALIBRATION
+      ? [
+          {
+            label: isCalibrating ? "Restart Calibration" : "Start Calibration",
+            onClick: beginCalibration,
+            disabled: !cameraReady || !modelReady || isArcCalibrating,
+          },
+          {
+            label: isArcCalibrating
+              ? "Restart Lazy Arc Calibration"
+              : "Start Lazy Arc Calibration",
+            onClick: beginArcCalibration,
+            secondary: true,
+            disabled: !cameraReady || !modelReady || isCalibrating,
+          },
+          {
+            label: "Reset Input Test",
+            onClick: () => resetCalibrationInputTests("manual_button"),
+            secondary: true,
+          },
+          {
+            label: "Open Pinch Sandbox",
+            onClick: openSandboxScreen,
+            secondary: true,
+            disabled: navigationLocked,
+          },
+          {
+            label: "Open Fist Sandbox",
+            onClick: openFistSandboxScreen,
+            secondary: true,
+            disabled: navigationLocked,
+          },
+          {
+            label: "Open Fullscreen Camera",
+            onClick: openFullscreenCameraScreen,
+            secondary: true,
+            disabled: navigationLocked,
+          },
+          {
+            label: "Open Circle of Fifths Page",
+            onClick: openCircleOfFifthsPage,
+            secondary: true,
+            disabled: navigationLocked,
+          },
+        ]
+      : isSandboxPhase
+      ? [
+          { label: "Back to Input Test", onClick: returnToCalibrationInputTest },
+          {
+            label: "Reset Blocks",
+            onClick: () => resetSandboxBlocks("manual_button"),
+            secondary: true,
+          },
+        ]
+      : phase === PHASES.FLIGHT
+      ? [
+          { label: "Back to Input Test", onClick: returnFromFlightSession },
+          {
+            label: "Re-center Hand Pose",
+            onClick: () => resetFlightNeutral("manual_button"),
+            secondary: true,
+          },
+          {
+            label: "Reset Flight Scene",
+            onClick: () => resetFlightSession("manual_button"),
+            secondary: true,
+          },
+        ]
+      : phase === PHASES.RUNNER
+      ? [
+          { label: "Back to Input Test", onClick: returnFromRunnerSession },
+          {
+            label: "Reset Runner",
+            onClick: () => resetRunnerSession("manual_button"),
+            secondary: true,
+          },
+        ]
+      : phase === PHASES.BODY_POSE
+      ? [
+          { label: "Back to Input Test", onClick: returnFromBodyPoseLab },
+          { label: "Restart Body Pose Lab", onClick: startBodyPoseLab, secondary: true },
+        ]
+      : phase === PHASES.CONVEYOR
+      ? [
+          { label: "Back to Input Test", onClick: returnFromConveyorSession },
+          { label: "Restart Conveyor Toss", onClick: startConveyorSession, secondary: true },
+        ]
+      : phase === PHASES.ROULETTE
+      ? [{ label: "Back to Input Test", onClick: returnFromRouletteSession }]
+      : phase === PHASES.MINORITY_REPORT_LAB
+      ? [
+          { label: "Back to Input Test", onClick: returnFromMinorityReportLab },
+          { label: "Reset Lab Session", onClick: startMinorityReportLab, secondary: true },
+        ]
+      : phase === PHASES.SPATIAL_GESTURE_MEMORY
+      ? [
+          { label: "Back to Input Test", onClick: returnFromSpatialGestureMemorySession },
+          { label: "Next Round", onClick: startSpatialGestureMemoryRound, secondary: true },
+          { label: "Reset Spatial Memory", onClick: resetSpatialGestureMemory, secondary: true },
+        ]
+      : phase === PHASES.GESTURE_ANALYTICS_LAB
+      ? [
+          { label: "Back to Input Test", onClick: returnFromGestureAnalyticsLab },
+          { label: "Reset Analytics Lab", onClick: startGestureAnalyticsLab, secondary: true },
+        ]
+      : phase === PHASES.GESTURE_ART_LAB
+      ? [
+          { label: "Back to Input Test", onClick: returnFromGestureArtLab },
+          { label: "Restart Gesture Art Lab", onClick: startGestureArtLab, secondary: true },
+        ]
+      : phase === PHASES.GESTURE_CONTROL_OS
+      ? [
+          { label: "Back to Input Test", onClick: returnFromGestureControlOS },
+          { label: "Restart Gesture Control OS", onClick: startGestureControlOS, secondary: true },
+        ]
+      : [
+          {
+            label: gameRunning ? "Restart Game" : "Start Game",
+            onClick: startGameSession,
+            disabled: !hasSavedCalibration,
+          },
+          { label: "Recalibrate", onClick: handleRecalibrate, secondary: true },
+        ];
+
+  const navigationSections = [
+    {
+      title: "Core",
+      description: "Setup and shared spaces live together at the top of the sidebar.",
+      items: [
+        {
+          label: "Input Test",
+          onClick: returnToCalibrationInputTest,
+          active: phase === PHASES.CALIBRATION,
+        },
+        {
+          label: "Pinch Sandbox",
+          onClick: openSandboxScreen,
+          active: phase === PHASES.SANDBOX,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Fist Sandbox",
+          onClick: openFistSandboxScreen,
+          active: phase === PHASES.FIST_SANDBOX,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Fullscreen Camera",
+          onClick: openFullscreenCameraScreen,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Whack-a-Mole",
+          onClick: startGameSession,
+          active: phase === PHASES.GAME,
+          disabled: navigationLocked || !hasSavedCalibration,
+        },
+      ],
+    },
+    {
+      title: "Games",
+      description: "Game modes are grouped separately from labs so the page reads faster.",
+      items: [
+        {
+          label: "Runner",
+          onClick: startRunnerSession,
+          active: phase === PHASES.RUNNER,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Flight",
+          onClick: startFlightSession,
+          active: phase === PHASES.FLIGHT,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Conveyor Toss",
+          onClick: startConveyorSession,
+          active: phase === PHASES.CONVEYOR,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Roulette",
+          onClick: startRouletteSession,
+          active: phase === PHASES.ROULETTE,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Spatial Memory",
+          onClick: startSpatialGestureMemorySession,
+          active: phase === PHASES.SPATIAL_GESTURE_MEMORY,
+          disabled: navigationLocked,
+        },
+      ],
+    },
+    {
+      title: "Labs",
+      description: "Experimental workspaces now sit in one consistent navigation group.",
+      items: [
+        {
+          label: "Body Pose",
+          onClick: startBodyPoseLab,
+          active: phase === PHASES.BODY_POSE,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Minority Report",
+          onClick: startMinorityReportLab,
+          active: phase === PHASES.MINORITY_REPORT_LAB,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Gesture Analytics",
+          onClick: startGestureAnalyticsLab,
+          active: phase === PHASES.GESTURE_ANALYTICS_LAB,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Gesture Art",
+          onClick: startGestureArtLab,
+          active: phase === PHASES.GESTURE_ART_LAB,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Gesture Control OS",
+          onClick: startGestureControlOS,
+          active: phase === PHASES.GESTURE_CONTROL_OS,
+          disabled: navigationLocked,
+        },
+      ],
+    },
+  ];
+
   return (
     <div className="app">
       <header className="top-bar">
-        <h1>Finger Whack</h1>
-        <div className="button-row">
-          {phase !== PHASES.ROULETTE && phase !== PHASES.CONVEYOR ? (
-            <>
-              <button className="secondary" type="button" onClick={startRouletteSession}>
-                Open Roulette Table
-              </button>
-              <button className="secondary" type="button" onClick={startConveyorSession}>
-                Open Conveyor Toss
-              </button>
-            </>
-          ) : (
-            <button
-              className="secondary"
-              type="button"
-              onClick={
-                phase === PHASES.ROULETTE ? returnFromRouletteSession : returnFromConveyorSession
-              }
-            >
-              Back to Input Test
-            </button>
-          )}
+        <div className="top-bar-title-group">
+          <h1>Finger Whack</h1>
+          <p className="top-bar-subtitle">
+            Cleaner navigation with one home for setup, games, and labs.
+          </p>
         </div>
+        <div className="phase-pill">{activePhaseName}</div>
         <div className={`tracking-indicator ${handDetected ? "ok" : "warn"}`}>
           {phase === PHASES.BODY_POSE
             ? handDetected
@@ -9839,530 +10117,85 @@ export default function App() {
           {modelError && <p className="error-text">{modelError}</p>}
           {phase === PHASES.BODY_POSE && poseModelError && <p className="error-text">{poseModelError}</p>}
 
-          {(phase === PHASES.CALIBRATION ||
-            phase === PHASES.SANDBOX ||
-            phase === PHASES.FIST_SANDBOX ||
-            phase === PHASES.FLIGHT ||
-            phase === PHASES.BODY_POSE ||
-            phase === PHASES.RUNNER ||
-            phase === PHASES.CONVEYOR ||
-            phase === PHASES.MINORITY_REPORT_LAB ||
-            phase === PHASES.SPATIAL_GESTURE_MEMORY ||
-            phase === PHASES.GESTURE_ANALYTICS_LAB ||
-            phase === PHASES.GESTURE_ART_LAB ||
-            phase === PHASES.GESTURE_CONTROL_OS) && (
-            <>
-              <p className="small-text">{calibrationMessage}</p>
-              {phase === PHASES.CALIBRATION ? (
+          {showWorkspaceNav && (
+            <div className="workspace-nav">
+              <div className="workspace-summary">
+                <span className="workspace-summary-label">Current workspace</span>
+                <h3>{activePhaseName}</h3>
+                <p className="small-text">{activePhaseSummary}</p>
+                <p className="small-text">{calibrationMessage}</p>
                 <p className="small-text">
-                  {isArcCalibrating
-                    ? `Lazy Arc Confidence: ${Math.round(arcCalibrationProgress * 100)}% (${arcCalibrationSamples} valid frames)`
-                    : `Captured points: ${calibrationPairsCount}/${calibrationTargets.length}${
-                        isCalibrating
-                          ? ` | Sampling: ${calibrationSampleFrames}/${CALIBRATION_SAMPLE_FRAMES}`
-                        : ""
-                      }`}
+                  {phase === PHASES.CALIBRATION
+                    ? isArcCalibrating
+                      ? `Lazy Arc Confidence: ${Math.round(arcCalibrationProgress * 100)}% (${arcCalibrationSamples} valid frames)`
+                      : `Captured points: ${calibrationPairsCount}/${calibrationTargets.length}${
+                          isCalibrating
+                            ? ` | Sampling: ${calibrationSampleFrames}/${CALIBRATION_SAMPLE_FRAMES}`
+                            : ""
+                        }`
+                    : phase === PHASES.SANDBOX
+                    ? "Pinch over a block to grab it. Keep pinching to drag, then release to fling."
+                    : phase === PHASES.FIST_SANDBOX
+                    ? "Make a full-fist clench over a block to grab it. Keep the fist closed to drag, then open your hand to fling."
+                    : phase === PHASES.FLIGHT
+                    ? `Steering uses all five fingertips. Neutral baseline: ${
+                        flightHud.baselineReady
+                          ? "locked"
+                          : `${flightHud.baselineSamples}/${FLIGHT_BASELINE_SAMPLE_TARGET}`
+                      }.`
+                    : phase === PHASES.BODY_POSE
+                    ? "Body pose mode tracks head, eyes, shoulders, arms, torso, and webcam overlays."
+                    : phase === PHASES.CONVEYOR
+                    ? "Pinch to grab a sphere, then release to throw. Faster flicks add launch speed."
+                    : phase === PHASES.MINORITY_REPORT_LAB
+                    ? "One-hand pinch grabs panels, two-hand pinch transforms the stage, and gestures log events."
+                    : phase === PHASES.GESTURE_ART_LAB
+                    ? "Index attractor, pinch thickness, openness palette, wrist hue, and two-hand warp stay active."
+                    : phase === PHASES.GESTURE_CONTROL_OS
+                    ? "Pinch drags windows, swipes switch desktops, and open-palm hold opens contextual menu actions."
+                    : "4x4 track control: move hand across the camera view to pick any converging track."}
                 </p>
-              ) : phase === PHASES.SANDBOX ? (
-                <p className="small-text">
-                  Pinch over a block to grab it. Keep pinching to drag, then release to fling.
-                </p>
-              ) : phase === PHASES.FIST_SANDBOX ? (
-                <p className="small-text">
-                  Make a full-fist clench over a block to grab it. Keep the fist closed to drag, then open your hand to fling.
-                </p>
-              ) : phase === PHASES.FLIGHT ? (
-                <p className="small-text">
-                  Steering uses all five fingertips. Neutral baseline:{" "}
-                  {flightHud.baselineReady
-                    ? "locked"
-                    : `${flightHud.baselineSamples}/${FLIGHT_BASELINE_SAMPLE_TARGET}`}
-                  .
-                </p>
-              ) : phase === PHASES.BODY_POSE ? (
-                <p className="small-text">
-                  Body pose mode tracks head/eyes/shoulders/arms/torso and highlights keypoints on
-                  the webcam overlay.
-                </p>
-              ) : phase === PHASES.CONVEYOR ? (
-                <p className="small-text">
-                  Conveyor toss mode: pinch to grab a sphere, then release to throw. Faster flicks
-                  add back-launch speed.
-                </p>
-              ) : phase === PHASES.MINORITY_REPORT_LAB ? (
-                <p className="small-text">
-                  Multi-hand mode active: one-hand pinch grabs panels, two-hand pinch transforms
-                  the stage, and gestures fire to the event log.
-                </p>
-              ) : phase === PHASES.GESTURE_ART_LAB ? (
-                <p className="small-text">
-                  Continuous mapping mode: index attractor, pinch thickness, openness palette,
-                  wrist hue, velocity emission, and two-hand warp controls.
-                </p>
-              ) : phase === PHASES.GESTURE_CONTROL_OS ? (
-                <p className="small-text">
-                  Desktop demo mode: pinch drags focused windows, swipes switch desktops, and
-                  open-palm hold reveals contextual menu actions.
-                </p>
-              ) : (
-                <p className="small-text">
-                  4x4 track control: move hand across the camera view to pick any converging track.
-                </p>
-              )}
-
-              <div className="button-row">
-                {phase === PHASES.CALIBRATION ? (
-                  <>
-                    <button
-                      onClick={beginCalibration}
-                      disabled={!cameraReady || !modelReady || isArcCalibrating}
-                    >
-                      {isCalibrating ? "Restart Calibration" : "Start Calibration"}
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={beginArcCalibration}
-                      disabled={!cameraReady || !modelReady || isCalibrating}
-                    >
-                      {isArcCalibrating
-                        ? "Restart Lazy Arc Calibration"
-                        : "Start Lazy Arc Calibration"}
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={startRunnerSession}
-                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
-                    >
-                      Launch Runner Game
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={startFlightSession}
-                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
-                    >
-                      Launch Flight Game
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={startConveyorSession}
-                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
-                    >
-                      Launch Conveyor Toss
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={startBodyPoseLab}
-                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
-                    >
-                      Open Body Pose Lab
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={startMinorityReportLab}
-                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
-                    >
-                      Open Minority Report Lab
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={startSpatialGestureMemorySession}
-                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
-                    >
-                      Launch Spatial Gesture Memory
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={startGestureAnalyticsLab}
-                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
-                    >
-                      Open Gesture Analytics Lab
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={startGestureArtLab}
-                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
-                    >
-                      Open Gesture Art Lab
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={startGestureControlOS}
-                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
-                    >
-                      Open Gesture Control OS
-                    </button>
-                    {hasSavedCalibration && !isCalibrating && !isArcCalibrating && (
-                      <button className="secondary" onClick={startGameSession}>
-                        Start Whack-a-Mole
-                      </button>
-                    )}
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={openSandboxScreen}
-                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
->
-                      Open Pinch Sandbox
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={openFistSandboxScreen}
-                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
-                    >
-                      Open Fist Sandbox
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={openFullscreenCameraScreen}
-                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
-                    >
-                      Open Fullscreen Camera
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={openCircleOfFifthsPage}
-                      disabled={!cameraReady || !modelReady || isCalibrating || isArcCalibrating}
-                    >
-                      Open Circle of Fifths Page
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={() => resetCalibrationInputTests("manual_button")}
-                    >
-                      Reset Input Test
-                    </button>
-                  </>
-                ) : isSandboxPhase ? (
-                  <>
-                    <button onClick={returnToCalibrationInputTest}>Back to Input Test</button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={() => resetSandboxBlocks("manual_button")}
-                    >
-                      Reset Blocks
-                    </button>
-                    {hasSavedCalibration && (
-                      <button className="secondary" onClick={startGameSession}>
-                        Start Whack-a-Mole
-                      </button>
-                    )}
-                    <button className="secondary" onClick={startRunnerSession}>
-                      Launch Runner Game
-                    </button>
-                    <button className="secondary" onClick={startFlightSession}>
-                      Launch Flight Game
-                    </button>
-                    <button className="secondary" onClick={startConveyorSession}>
-                      Launch Conveyor Toss
-                    </button>
-                    <button className="secondary" onClick={startBodyPoseLab}>
-                      Open Body Pose Lab
-                    </button>
-                    <button className="secondary" onClick={startMinorityReportLab}>
-                      Open Minority Report Lab
-                    </button>
-                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
-                      Launch Spatial Gesture Memory
-                    </button>
-                    <button className="secondary" onClick={startGestureAnalyticsLab}>
-                      Open Gesture Analytics Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureArtLab}>
-                      Open Gesture Art Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureControlOS}>
-                      Open Gesture Control OS
-                    </button>
-                  </>
-                ) : phase === PHASES.FLIGHT ? (
-                  <>
-                    <button onClick={returnFromFlightSession}>Back to Input Test</button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={() => resetFlightNeutral("manual_button")}
-                    >
-                      Re-center Hand Pose
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={() => resetFlightSession("manual_button")}
-                    >
-                      Reset Flight Scene
-                    </button>
-                    <button className="secondary" onClick={startRunnerSession}>
-                      Switch to Runner
-                    </button>
-                    <button className="secondary" onClick={startConveyorSession}>
-                      Open Conveyor Toss
-                    </button>
-                    <button className="secondary" onClick={startBodyPoseLab}>
-                      Open Body Pose Lab
-                    </button>
-                    <button className="secondary" onClick={startMinorityReportLab}>
-                      Open Minority Report Lab
-                    </button>
-                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
-                      Launch Spatial Gesture Memory
-                    </button>
-                    <button className="secondary" onClick={startGestureAnalyticsLab}>
-                      Open Gesture Analytics Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureArtLab}>
-                      Open Gesture Art Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureControlOS}>
-                      Open Gesture Control OS
-                    </button>
-                  </>
-                ) : phase === PHASES.BODY_POSE ? (
-                  <>
-                    <button onClick={returnFromBodyPoseLab}>Back to Input Test</button>
-                    <button className="secondary" onClick={startBodyPoseLab}>
-                      Restart Body Pose Lab
-                    </button>
-                    <button className="secondary" onClick={startRunnerSession}>
-                      Switch to Runner
-                    </button>
-                    <button className="secondary" onClick={startConveyorSession}>
-                      Open Conveyor Toss
-                    </button>
-                    <button className="secondary" onClick={startFlightSession}>
-                      Switch to Flight
-                    </button>
-                    <button className="secondary" onClick={startMinorityReportLab}>
-                      Open Minority Report Lab
-                    </button>
-                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
-                      Launch Spatial Gesture Memory
-                    </button>
-                    <button className="secondary" onClick={startGestureAnalyticsLab}>
-                      Open Gesture Analytics Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureArtLab}>
-                      Open Gesture Art Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureControlOS}>
-                      Open Gesture Control OS
-                    </button>
-                  </>
-                ) : phase === PHASES.RUNNER ? (
-                  <>
-                    <button onClick={returnFromRunnerSession}>Back to Input Test</button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      onClick={() => resetRunnerSession("manual_button")}
-                    >
-                      Reset Runner
-                    </button>
-                    <button className="secondary" onClick={startFlightSession}>
-                      Switch to Flight
-                    </button>
-                    <button className="secondary" onClick={startConveyorSession}>
-                      Open Conveyor Toss
-                    </button>
-                    <button className="secondary" onClick={startBodyPoseLab}>
-                      Open Body Pose Lab
-                    </button>
-                    <button className="secondary" onClick={startMinorityReportLab}>
-                      Open Minority Report Lab
-                    </button>
-                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
-                      Launch Spatial Gesture Memory
-                    </button>
-                    <button className="secondary" onClick={startGestureAnalyticsLab}>
-                      Open Gesture Analytics Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureArtLab}>
-                      Open Gesture Art Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureControlOS}>
-                      Open Gesture Control OS
-                    </button>
-                  </>
-                ) : phase === PHASES.GESTURE_ANALYTICS_LAB ? (
-                  <>
-                    <button onClick={returnFromGestureAnalyticsLab}>Back to Input Test</button>
-                    <button className="secondary" onClick={startGestureAnalyticsLab}>
-                      Reset Analytics Lab
-                    </button>
-                    <button className="secondary" onClick={startMinorityReportLab}>
-                      Open Minority Report Lab
-                    </button>
-                    <button className="secondary" onClick={startRunnerSession}>
-                      Switch to Runner
-                    </button>
-                    <button className="secondary" onClick={startFlightSession}>
-                      Switch to Flight
-                    </button>
-                    <button className="secondary" onClick={startBodyPoseLab}>
-                      Open Body Pose Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureArtLab}>
-                      Open Gesture Art Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureControlOS}>
-                      Open Gesture Control OS
-                    </button>
-                    {hasSavedCalibration && (
-                      <button className="secondary" onClick={startGameSession}>
-                        Switch to Whack-a-Mole
-                      </button>
-                    )}
-                  </>
-                ) : phase === PHASES.GESTURE_ART_LAB ? (
-                  <>
-                    <button onClick={returnFromGestureArtLab}>Back to Input Test</button>
-                    <button className="secondary" onClick={startGestureArtLab}>
-                      Restart Gesture Art Lab
-                    </button>
-                    <button className="secondary" onClick={startMinorityReportLab}>
-                      Switch to Minority Report Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureAnalyticsLab}>
-                      Open Gesture Analytics Lab
-                    </button>
-                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
-                      Launch Spatial Gesture Memory
-                    </button>
-                    <button className="secondary" onClick={startRunnerSession}>
-                      Switch to Runner
-                    </button>
-                    <button className="secondary" onClick={startFlightSession}>
-                      Switch to Flight
-                    </button>
-                  </>
-                ) : phase === PHASES.GESTURE_CONTROL_OS ? (
-                  <>
-                    <button onClick={returnFromGestureControlOS}>Back to Input Test</button>
-                    <button className="secondary" onClick={startGestureControlOS}>
-                      Restart Gesture Control OS
-                    </button>
-                    <button className="secondary" onClick={startMinorityReportLab}>
-                      Open Minority Report Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureAnalyticsLab}>
-                      Open Gesture Analytics Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureArtLab}>
-                      Open Gesture Art Lab
-                    </button>
-                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
-                      Launch Spatial Gesture Memory
-                    </button>
-                  </>
-                ) : phase === PHASES.CONVEYOR ? (
-                  <>
-                    <button onClick={returnFromConveyorSession}>Back to Input Test</button>
-                    <button className="secondary" onClick={startConveyorSession}>
-                      Restart Conveyor Toss
-                    </button>
-                    <button className="secondary" onClick={startRunnerSession}>
-                      Switch to Runner
-                    </button>
-                    <button className="secondary" onClick={startFlightSession}>
-                      Switch to Flight
-                    </button>
-                    <button className="secondary" onClick={startBodyPoseLab}>
-                      Open Body Pose Lab
-                    </button>
-                    <button className="secondary" onClick={startMinorityReportLab}>
-                      Open Minority Report Lab
-                    </button>
-                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
-                      Launch Spatial Gesture Memory
-                    </button>
-                    <button className="secondary" onClick={startGestureAnalyticsLab}>
-                      Open Gesture Analytics Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureArtLab}>
-                      Open Gesture Art Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureControlOS}>
-                      Open Gesture Control OS
-                    </button>
-                  </>
-                ) : phase === PHASES.SPATIAL_GESTURE_MEMORY ? (
-                  <>
-                    <button onClick={returnFromSpatialGestureMemorySession}>Back to Input Test</button>
-                    <button className="secondary" onClick={startSpatialGestureMemoryRound}>
-                      Next Round
-                    </button>
-                    <button className="secondary" onClick={resetSpatialGestureMemory}>
-                      Reset Spatial Memory
-                    </button>
-                    <button className="secondary" onClick={startMinorityReportLab}>
-                      Switch to Minority Report Lab
-                    </button>
-                    <button className="secondary" onClick={startRunnerSession}>
-                      Switch to Runner
-                    </button>
-                    <button className="secondary" onClick={startGestureAnalyticsLab}>
-                      Open Gesture Analytics Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureArtLab}>
-                      Open Gesture Art Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureControlOS}>
-                      Open Gesture Control OS
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={returnFromMinorityReportLab}>Back to Input Test</button>
-                    <button className="secondary" onClick={startMinorityReportLab}>
-                      Reset Lab Session
-                    </button>
-                    <button className="secondary" onClick={startSpatialGestureMemorySession}>
-                      Launch Spatial Gesture Memory
-                    </button>
-                    <button className="secondary" onClick={startGestureAnalyticsLab}>
-                      Open Gesture Analytics Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureArtLab}>
-                      Open Gesture Art Lab
-                    </button>
-                    <button className="secondary" onClick={startGestureControlOS}>
-                      Open Gesture Control OS
-                    </button>
-                    <button className="secondary" onClick={startRunnerSession}>
-                      Switch to Runner
-                    </button>
-                    <button className="secondary" onClick={startFlightSession}>
-                      Switch to Flight
-                    </button>
-                    <button className="secondary" onClick={startConveyorSession}>
-                      Open Conveyor Toss
-                    </button>
-                    <button className="secondary" onClick={startBodyPoseLab}>
-                      Open Body Pose Lab
-                    </button>
-                    {hasSavedCalibration && (
-                      <button className="secondary" onClick={startGameSession}>
-                        Switch to Whack-a-Mole
-                      </button>
-                    )}
-                  </>
-                )}
               </div>
-            </>
+
+              <div className="workspace-actions">
+                <h3>Mode actions</h3>
+                <div className="workspace-action-grid">
+                  {currentModeActions.map((action) => (
+                    <button
+                      key={action.label}
+                      className={action.secondary ? "secondary" : ""}
+                      type="button"
+                      onClick={action.onClick}
+                      disabled={action.disabled}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {navigationSections.map((section) => (
+                <section key={section.title} className="workspace-nav-section">
+                  <div className="workspace-nav-section-heading">
+                    <h3>{section.title}</h3>
+                    <p className="small-text">{section.description}</p>
+                  </div>
+                  <div className="workspace-nav-grid">
+                    {section.items.map((item) => (
+                      <button
+                        key={item.label}
+                        className={item.active ? "nav-button active" : "nav-button secondary"}
+                        type="button"
+                        onClick={item.onClick}
+                        disabled={item.disabled || item.active}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
           )}
 
           <label className="debug-toggle">
@@ -10511,18 +10344,6 @@ export default function App() {
               </div>
             </div>
 
-            <div className="button-row">
-              <button onClick={startFlightSession}>Restart Flight</button>
-              <button className="secondary" onClick={startGameSession}>
-                Switch to Whack-a-Mole
-              </button>
-              <button className="secondary" onClick={startConveyorSession}>
-                Open Conveyor Toss
-              </button>
-              <button className="secondary" onClick={startRouletteSession}>
-                Open Roulette Table
-              </button>
-            </div>
           </section>
         ) : phase === PHASES.RUNNER ? (
           <section className="card panel runner-panel">
@@ -10544,24 +10365,6 @@ export default function App() {
               </div>
             </div>
 
-            <div className="button-row">
-              <button onClick={startRunnerSession}>Restart Runner</button>
-              <button className="secondary" onClick={startFlightSession}>
-                Switch to Flight
-              </button>
-              <button className="secondary" onClick={startBodyPoseLab}>
-                Open Body Pose Lab
-              </button>
-              <button className="secondary" onClick={startConveyorSession}>
-                Open Conveyor Toss
-              </button>
-              <button className="secondary" onClick={startGameSession}>
-                Switch to Whack-a-Mole
-              </button>
-              <button className="secondary" onClick={startRouletteSession}>
-                Open Roulette Table
-              </button>
-            </div>
           </section>
         ) : phase === PHASES.CONVEYOR ? (
           <ConveyorSphereGame
@@ -10670,44 +10473,6 @@ export default function App() {
               </div>
             </div>
 
-            <div className="button-row">
-              <button onClick={startGameSession}>
-                {gameRunning ? "Restart Game" : "Start Game"}
-              </button>
-              <button className="secondary" onClick={startFlightSession}>
-                Launch Flight Game
-              </button>
-              <button className="secondary" onClick={startRunnerSession}>
-                Launch Runner Game
-              </button>
-              <button className="secondary" onClick={startBodyPoseLab}>
-                Open Body Pose Lab
-              </button>
-              <button className="secondary" onClick={startMinorityReportLab}>
-                Open Minority Report Lab
-              </button>
-              <button className="secondary" onClick={startConveyorSession}>
-                Open Conveyor Toss
-              </button>
-              <button className="secondary" onClick={startRouletteSession}>
-                Open Roulette Table
-              </button>
-              <button className="secondary" onClick={startSpatialGestureMemorySession}>
-                Launch Spatial Gesture Memory
-              </button>
-              <button className="secondary" onClick={startGestureAnalyticsLab}>
-                Open Gesture Analytics Lab
-              </button>
-              <button className="secondary" onClick={startGestureArtLab}>
-                Open Gesture Art Lab
-              </button>
-              <button className="secondary" onClick={startGestureControlOS}>
-                Open Gesture Control OS
-              </button>
-              <button className="secondary" onClick={handleRecalibrate}>
-                Recalibrate
-              </button>
-            </div>
 
             <div className="game-board" ref={boardRef}>
               {holes.map((hole) => (
