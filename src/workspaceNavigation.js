@@ -1,7 +1,6 @@
 const WORKSPACE_NAV_PHASES = new Set([
   "CALIBRATION",
   "SANDBOX",
-  "FIST_SANDBOX",
   "FLIGHT",
   "BODY_POSE",
   "OFF_AXIS_LAB",

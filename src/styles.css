@@ -1643,14 +1643,6 @@ body {
   transform: translateY(-1px);
 }
 
-.input-test-cell.clenched {
-  background: #c100ff;
-  border-color: #8900b4;
-  box-shadow: 0 0 0 3px rgba(193, 0, 255, 0.34), 0 0 22px rgba(215, 92, 255, 0.34);
-  color: #ffffff;
-  transform: translateY(-1px);
-}
-
 .sandbox-panel {
   align-items: center;
   justify-content: center;
