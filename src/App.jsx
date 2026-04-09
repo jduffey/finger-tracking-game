@@ -158,6 +158,7 @@ const FULLSCREEN_TIP_RIPPLE_COLORS = [
   FULLSCREEN_RING_LAYERS[0]?.color ?? "#ff0000",
 ];
 const FULLSCREEN_VORONOI_DOT_RADIUS = 4.5;
+const CIRCLE_OF_FIFTHS_AUTOSTART_SESSION_KEY = "circle-of-fifths-autostart";
 
 function clipPolygonToHalfPlane(polygon, normalX, normalY, offset) {
   if (!Array.isArray(polygon) || polygon.length === 0) {
@@ -5588,6 +5589,22 @@ export default function App() {
     setCalibrationMessage("Roulette mode active. Pinch and hold to drag chips with your finger.");
   }
 
+  function openCircleOfFifthsPage() {
+    try {
+      window.sessionStorage.setItem(
+        CIRCLE_OF_FIFTHS_AUTOSTART_SESSION_KEY,
+        JSON.stringify({
+          issuedAt: Date.now(),
+          from: "main-app",
+        }),
+      );
+    } catch (error) {
+      appLog.warn("Failed to persist circle of fifths launch intent", { error });
+    }
+
+    window.location.assign("/circle-of-fifths.html");
+  }
+
   function startGameSession() {
     appLog.info("Starting game session requested", {
       hasTransform: Boolean(transformRef.current),
@@ -9816,6 +9833,12 @@ export default function App() {
           {
             label: "Open Fullscreen Camera",
             onClick: openFullscreenCameraScreen,
+            secondary: true,
+            disabled: navigationLocked,
+          },
+          {
+            label: "Open Circle of Fifths Page",
+            onClick: openCircleOfFifthsPage,
             secondary: true,
             disabled: navigationLocked,
           },
