@@ -221,6 +221,11 @@ function clampInfoBoxPosition(position, stageSize) {
 
 export default function MinorityReportLab(props) {
   const {
+    cameraAspectRatio,
+    cameraObjectFit,
+    cameraOverlayRef,
+    cameraStageRef,
+    cameraVideoRef,
     fps,
     engineOutput,
     eventLog,
@@ -243,6 +248,7 @@ export default function MinorityReportLab(props) {
     onClearEventLog,
   } = props;
 
+  const stageShellRef = useRef(null);
   const stageRef = useRef(null);
   const [stageSize, setStageSize] = useState(STAGE_DEFAULT_SIZE);
   const [sceneIndex, setSceneIndex] = useState(0);
@@ -288,15 +294,23 @@ export default function MinorityReportLab(props) {
   }, [handInfoBoxPositions]);
 
   useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) {
+    const stageShell = stageShellRef.current;
+    if (!stageShell) {
       return undefined;
     }
 
     const syncSize = () => {
-      const rect = stage.getBoundingClientRect();
-      const width = Math.max(1, Math.round(rect.width));
-      const height = Math.max(1, Math.round(rect.height));
+      const rect = stageShell.getBoundingClientRect();
+      const shellWidth = Math.max(1, Math.round(rect.width));
+      const shellHeight = Math.max(1, Math.round(rect.height));
+      const aspectRatio =
+        Number.isFinite(cameraAspectRatio) && cameraAspectRatio > 0 ? cameraAspectRatio : 4 / 3;
+      let width = shellWidth;
+      let height = Math.round(width / aspectRatio);
+      if (height > shellHeight) {
+        height = shellHeight;
+        width = Math.round(height * aspectRatio);
+      }
       setStageSize((previous) => {
         if (previous.width === width && previous.height === height) {
           return previous;
@@ -315,14 +329,14 @@ export default function MinorityReportLab(props) {
     }
 
     const observer = new ResizeObserver(syncSize);
-    observer.observe(stage);
+    observer.observe(stageShell);
     window.addEventListener("resize", syncSize);
 
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", syncSize);
     };
-  }, []);
+  }, [cameraAspectRatio]);
 
   const dragBoundsStyle = useMemo(() => {
     const insetX = Math.min(PANEL_WIDTH * 0.5, stageSize.width * 0.5);
@@ -680,8 +694,32 @@ export default function MinorityReportLab(props) {
       </div>
 
       <div className={`minority-lab-layout ${isDebugPanelVisible ? "" : "debug-collapsed"}`}>
-        <div className="minority-stage-shell">
-          <div className="minority-stage" ref={stageRef}>
+        <div className="minority-stage-shell" ref={stageShellRef}>
+          <div
+            className="minority-stage"
+            ref={(node) => {
+              stageRef.current = node;
+              if (cameraStageRef && typeof cameraStageRef === "object") {
+                cameraStageRef.current = node;
+              }
+            }}
+            style={{
+              width: `${stageSize.width}px`,
+              height: `${stageSize.height}px`,
+            }}
+          >
+            <video
+              ref={cameraVideoRef}
+              className="camera-video minority-stage-video"
+              style={{ objectFit: cameraObjectFit }}
+              playsInline
+              muted
+              autoPlay
+            />
+            <canvas
+              ref={cameraOverlayRef}
+              className="camera-overlay minority-stage-camera-overlay"
+            />
             <div className="minority-stage-transform" style={{
               transform: `translate(${stageTransform.x}px, ${stageTransform.y}px) rotate(${stageTransform.rotation}rad) scale(${stageTransform.scale})`,
             }}>

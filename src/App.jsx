@@ -91,6 +91,10 @@ import {
   shouldAcceptPinchClick,
   shouldBypassGlobalPinchDebounce,
 } from "./pinchInput.js";
+import {
+  shouldShowInlineCameraPreview,
+  shouldUseContainedCameraFit,
+} from "./cameraLayout.js";
 import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from "./poseTracking.js";
 import {
   createEmptyOffAxisState,
@@ -647,7 +651,7 @@ function normalizeTipToVisibleBounds(uRaw, vRaw, visibleBounds) {
 }
 
 function getCameraObjectFitForPhase(phase) {
-  return phase === PHASES.FULLSCREEN_CAMERA ? "contain" : "cover";
+  return shouldUseContainedCameraFit(phase) ? "contain" : "cover";
 }
 
 function pruneCursorTrail(trail, now) {
@@ -1973,6 +1977,7 @@ export default function App() {
       : phase === PHASES.SANDBOX
       ? "Camera + Pinch Sandbox Controls"
       : "Camera + Calibration Controls";
+  const showInlineCameraPreview = shouldShowInlineCameraPreview(phase);
   const inputTestPinchingCell =
     phase === PHASES.CALIBRATION && !isCalibrating && pinchActive
       ? inputTestHoveredCell
@@ -10118,14 +10123,23 @@ export default function App() {
         <section className="card camera-card" ref={cameraPaneRef}>
           <div className="camera-preview-panel">
             <h2>{cameraPanelTitle}</h2>
-            <div
-              className="camera-wrap"
-              ref={cameraWrapRef}
-              style={{ aspectRatio: String(cameraAspectRatio) }}
-            >
-              <video ref={videoRef} className="camera-video" playsInline muted autoPlay />
-              <canvas ref={overlayCanvasRef} className="camera-overlay" />
-            </div>
+            {showInlineCameraPreview ? (
+              <div
+                className="camera-wrap"
+                ref={cameraWrapRef}
+                style={{ aspectRatio: String(cameraAspectRatio) }}
+              >
+                <video
+                  ref={videoRef}
+                  className="camera-video"
+                  style={{ objectFit: cameraObjectFit }}
+                  playsInline
+                  muted
+                  autoPlay
+                />
+                <canvas ref={overlayCanvasRef} className="camera-overlay" />
+              </div>
+            ) : null}
           </div>
 
           <div className="camera-support-panel">
@@ -10456,6 +10470,11 @@ export default function App() {
           <OffAxisChamberLab poseStatus={poseStatus} />
         ) : phase === PHASES.MINORITY_REPORT_LAB ? (
           <MinorityReportLab
+            cameraAspectRatio={cameraAspectRatio}
+            cameraObjectFit={cameraObjectFit}
+            cameraOverlayRef={overlayCanvasRef}
+            cameraStageRef={cameraWrapRef}
+            cameraVideoRef={videoRef}
             fps={fps}
             engineOutput={labEngineOutput}
             eventLog={labEventLog}
