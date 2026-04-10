@@ -1,5 +1,6 @@
 const MINORITY_REPORT_STAGE_MIN_SCALE = 0.45;
 const MINORITY_REPORT_STAGE_MAX_SCALE = 2.6;
+const MINORITY_REPORT_FOCUS_FILL_RATIO = 0.82;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -14,8 +15,8 @@ export function shouldUseMinorityReportZoom(twoHand, continuous) {
 
 export function normalizeMinorityReportStageTransform(transform) {
   return {
-    x: 0,
-    y: 0,
+    x: Number.isFinite(transform?.x) ? transform.x : 0,
+    y: Number.isFinite(transform?.y) ? transform.y : 0,
     scale: clamp(transform?.scale ?? 1, MINORITY_REPORT_STAGE_MIN_SCALE, MINORITY_REPORT_STAGE_MAX_SCALE),
     rotation: 0,
   };
@@ -25,6 +26,28 @@ export function getMinorityReportZoomTransform(baseTransform, baseDistance, curr
   const normalizedBase = normalizeMinorityReportStageTransform(baseTransform);
   const distanceRatio = currentDistance / Math.max(0.02, baseDistance);
   return normalizeMinorityReportStageTransform({
+    x: normalizedBase.x,
+    y: normalizedBase.y,
     scale: normalizedBase.scale * distanceRatio,
+  });
+}
+
+export function getMinorityReportFocusTransform(stageSize, tileBounds) {
+  const width = Math.max(1, stageSize?.width ?? 960);
+  const height = Math.max(1, stageSize?.height ?? 640);
+  const focusScale = clamp(
+    Math.min(
+      (width * MINORITY_REPORT_FOCUS_FILL_RATIO) / Math.max(1, tileBounds?.width ?? width),
+      (height * MINORITY_REPORT_FOCUS_FILL_RATIO) / Math.max(1, tileBounds?.height ?? height),
+    ),
+    MINORITY_REPORT_STAGE_MIN_SCALE,
+    MINORITY_REPORT_STAGE_MAX_SCALE,
+  );
+  const centerX = width * 0.5;
+  const centerY = height * 0.5;
+  return normalizeMinorityReportStageTransform({
+    x: (centerX - (tileBounds?.centerX ?? centerX)) * focusScale,
+    y: (centerY - (tileBounds?.centerY ?? centerY)) * focusScale,
+    scale: focusScale,
   });
 }

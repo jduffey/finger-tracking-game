@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import GestureDebugPanel from "./GestureDebugPanel.jsx";
 import { GESTURE_IDS } from "../gestures/constants.js";
 import {
+  getMinorityReportFocusTransform,
   getMinorityReportZoomTransform,
   normalizeMinorityReportStageTransform,
   shouldUseMinorityReportZoom,
@@ -10,12 +11,16 @@ import {
   MINORITY_REPORT_PANEL_COUNT,
   clampMinorityReportPanelPosition,
   getMinorityReportPanelPlacement,
+  getMinorityReportTileBounds,
+  getMinorityReportTileIndexAtPoint,
   getMinorityReportTileBoundsList,
 } from "../minorityReportLabLayout.js";
 
 const STAGE_DEFAULT_SIZE = { width: 960, height: 640 };
 const HAND_INFO_BOX_SIZE = { width: 170, height: 88 };
 const HAND_INFO_BOX_MARGIN = 10;
+const DOUBLE_PINCH_MAX_DELAY_MS = 320;
+const SECTOR_FOCUS_ANIMATION_MS = 220;
 const DEFAULT_STAGE_TRANSFORM = {
   x: 0,
   y: 0,
@@ -112,8 +117,8 @@ function pointerToLocal(pointer, stageSize, transform) {
 
   const centerX = width * 0.5;
   const centerY = height * 0.5;
-  const translatedX = px - centerX;
-  const translatedY = py - centerY;
+  const translatedX = px - centerX - (transform?.x ?? 0);
+  const translatedY = py - centerY - (transform?.y ?? 0);
 
   return {
     x: translatedX / Math.max(0.001, transform.scale) + centerX,
@@ -201,6 +206,8 @@ export default function MinorityReportLab(props) {
   const [pointerTrails, setPointerTrails] = useState({});
   const [handInfoBoxPositions, setHandInfoBoxPositions] = useState(HAND_INFO_BOX_DEFAULTS);
   const [isDebugPanelVisible, setIsDebugPanelVisible] = useState(false);
+  const [focusedTileIndex, setFocusedTileIndex] = useState(null);
+  const [isStageTransformAnimating, setIsStageTransformAnimating] = useState(false);
 
   const panelsRef = useRef(panels);
   const sceneIndexRef = useRef(sceneIndex);
@@ -210,6 +217,9 @@ export default function MinorityReportLab(props) {
   const pointerTrailsRef = useRef(pointerTrails);
   const handInfoBoxPositionsRef = useRef(handInfoBoxPositions);
   const processedEventsFrameRef = useRef(-1);
+  const pinchActiveByHandRef = useRef({});
+  const lastPinchStartRef = useRef({});
+  const stageTransformAnimationTimeoutRef = useRef(null);
   const handInfoBoxDragRef = useRef({
     Left: null,
     Right: null,
@@ -234,6 +244,14 @@ export default function MinorityReportLab(props) {
   useEffect(() => {
     handInfoBoxPositionsRef.current = handInfoBoxPositions;
   }, [handInfoBoxPositions]);
+
+  useEffect(() => {
+    return () => {
+      if (stageTransformAnimationTimeoutRef.current) {
+        window.clearTimeout(stageTransformAnimationTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const stageShell = stageShellRef.current;
@@ -332,6 +350,37 @@ export default function MinorityReportLab(props) {
     }));
   }, [stageSize]);
 
+  const animateStageTransform = (nextTransform) => {
+    if (stageTransformAnimationTimeoutRef.current) {
+      window.clearTimeout(stageTransformAnimationTimeoutRef.current);
+    }
+    setIsStageTransformAnimating(true);
+    setStageTransform(nextTransform);
+    stageTransformRef.current = nextTransform;
+    stageTransformAnimationTimeoutRef.current = window.setTimeout(() => {
+      setIsStageTransformAnimating(false);
+      stageTransformAnimationTimeoutRef.current = null;
+    }, SECTOR_FOCUS_ANIMATION_MS);
+  };
+
+  const focusTile = (tileIndex) => {
+    const tile = getMinorityReportTileBounds(stageSize, tileIndex);
+    const nextTransform = getMinorityReportFocusTransform(stageSize, tile);
+    setFocusedTileIndex(tileIndex);
+    animateStageTransform(nextTransform);
+    grabRef.current = null;
+    handInfoBoxDragRef.current = {
+      Left: null,
+      Right: null,
+    };
+    setDraggedPanelId(null);
+  };
+
+  const resetFocusedView = () => {
+    setFocusedTileIndex(null);
+    animateStageTransform(normalizeMinorityReportStageTransform(DEFAULT_STAGE_TRANSFORM));
+  };
+
   useEffect(() => {
     const frameId = engineOutput?.frameId;
     if (!Number.isFinite(frameId)) {
@@ -346,6 +395,41 @@ export default function MinorityReportLab(props) {
     const twoHand = engineOutput?.twoHand ?? { present: false };
     const events = Array.isArray(engineOutput?.events) ? engineOutput.events : [];
     const zoomGestureActive = shouldUseMinorityReportZoom(twoHand, engineOutput?.continuous);
+    const now = performance.now();
+    let doublePinchTriggered = false;
+
+    for (const hand of handStates) {
+      const wasPinching = Boolean(pinchActiveByHandRef.current[hand.id]);
+      if (!hand.pinchActive || wasPinching || !hand.pointer || zoomGestureActive) {
+        continue;
+      }
+      const localPointer = pointerToLocal(hand.pointer, stageSize, stageTransformRef.current);
+      const tileIndex = getMinorityReportTileIndexAtPoint(localPointer, stageSize);
+      if (!Number.isInteger(tileIndex)) {
+        continue;
+      }
+      const previousPinch = lastPinchStartRef.current[hand.id];
+      if (
+        previousPinch &&
+        previousPinch.tileIndex === tileIndex &&
+        now - previousPinch.timestamp <= DOUBLE_PINCH_MAX_DELAY_MS
+      ) {
+        focusTile(tileIndex);
+        lastPinchStartRef.current[hand.id] = null;
+        doublePinchTriggered = true;
+        break;
+      }
+      lastPinchStartRef.current[hand.id] = {
+        timestamp: now,
+        tileIndex,
+      };
+    }
+
+    const nextPinchStateByHand = {};
+    for (const hand of handStates) {
+      nextPinchStateByHand[hand.id] = Boolean(hand.pinchActive);
+    }
+    pinchActiveByHandRef.current = nextPinchStateByHand;
 
     if (showTrails) {
       setPointerTrails((previous) => {
@@ -382,8 +466,8 @@ export default function MinorityReportLab(props) {
           setPanels((currentPanels) => applySceneLayout(currentPanels, nextIndex, stageSize));
           if (hard) {
             const resetTransform = normalizeMinorityReportStageTransform(DEFAULT_STAGE_TRANSFORM);
-            setStageTransform(resetTransform);
-            stageTransformRef.current = resetTransform;
+            setFocusedTileIndex(null);
+            animateStageTransform(resetTransform);
             grabRef.current = null;
             setDraggedPanelId(null);
             twoHandManipRef.current = { active: false, base: null };
@@ -428,9 +512,7 @@ export default function MinorityReportLab(props) {
         } else if (event.gestureId === GESTURE_IDS.PUSH_FORWARD) {
           toggleNearestPanelSelection(event.handId);
         } else if (event.gestureId === GESTURE_IDS.CIRCLE) {
-          const resetTransform = normalizeMinorityReportStageTransform(DEFAULT_STAGE_TRANSFORM);
-          setStageTransform(resetTransform);
-          stageTransformRef.current = resetTransform;
+          resetFocusedView();
         }
 
         if (
@@ -468,7 +550,14 @@ export default function MinorityReportLab(props) {
       }
     }
 
+    if (doublePinchTriggered) {
+      return;
+    }
+
     if (zoomGestureActive) {
+      if (isStageTransformAnimating) {
+        setIsStageTransformAnimating(false);
+      }
       const currentTransform = normalizeMinorityReportStageTransform(stageTransformRef.current);
       if (!twoHandManipRef.current.active) {
         twoHandManipRef.current = {
@@ -711,12 +800,15 @@ export default function MinorityReportLab(props) {
               className="camera-overlay minority-stage-camera-overlay"
             />
             <div className="minority-stage-transform" style={{
-              transform: `scale(${stageTransform.scale})`,
+              transform: `translate(${stageTransform.x}px, ${stageTransform.y}px) scale(${stageTransform.scale})`,
+              transition: isStageTransformAnimating
+                ? `transform ${SECTOR_FOCUS_ANIMATION_MS}ms cubic-bezier(.2,.72,.2,1)`
+                : "none",
             }}>
               {tileBounds.map((tile) => (
                 <div
                   key={`minority-tile-${tile.index}`}
-                  className="minority-stage-drag-bounds"
+                  className={`minority-stage-drag-bounds ${focusedTileIndex === tile.index ? "focused" : ""}`}
                   style={{
                     left: `${tile.left}px`,
                     top: `${tile.top}px`,

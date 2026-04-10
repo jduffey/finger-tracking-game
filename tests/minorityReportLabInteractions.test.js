@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  getMinorityReportFocusTransform,
   getMinorityReportZoomTransform,
   normalizeMinorityReportStageTransform,
   shouldUseMinorityReportZoom,
@@ -43,13 +44,28 @@ test("getMinorityReportZoomTransform keeps stage zoom-only and clamps scale", ()
       0.5,
       1,
     ),
-    { x: 0, y: 0, scale: 2.6, rotation: 0 },
+    { x: 120, y: -44, scale: 2.6, rotation: 0 },
   );
 });
 
 test("normalizeMinorityReportStageTransform clears stage translation and rotation", () => {
   assert.deepEqual(
     normalizeMinorityReportStageTransform({ x: 75, y: 30, scale: 0.8, rotation: 0.9 }),
-    { x: 0, y: 0, scale: 0.8, rotation: 0 },
+    { x: 75, y: 30, scale: 0.8, rotation: 0 },
+  );
+});
+
+test("getMinorityReportFocusTransform centers a sector and scales it toward fullscreen", () => {
+  assert.deepEqual(
+    getMinorityReportFocusTransform(
+      { width: 960, height: 640 },
+      { centerX: 160, centerY: 120, width: 260, height: 180 },
+    ),
+    {
+      x: 832,
+      y: 520,
+      scale: 2.6,
+      rotation: 0,
+    },
   );
 });

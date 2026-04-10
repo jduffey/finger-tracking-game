@@ -45,6 +45,26 @@ export function getMinorityReportTileBoundsList(stageSize) {
   );
 }
 
+export function getMinorityReportTileIndexAtPoint(point, stageSize) {
+  if (!point) {
+    return null;
+  }
+
+  for (let tileIndex = 0; tileIndex < MINORITY_REPORT_TILE_COUNT; tileIndex += 1) {
+    const tile = getMinorityReportTileBounds(stageSize, tileIndex);
+    if (
+      point.x >= tile.left &&
+      point.x <= tile.left + tile.width &&
+      point.y >= tile.top &&
+      point.y <= tile.top + tile.height
+    ) {
+      return tileIndex;
+    }
+  }
+
+  return null;
+}
+
 function getSceneSlotPlacement(sceneIndex, slotIndex) {
   if (sceneIndex === 1) {
     return [

@@ -5,6 +5,7 @@ import {
   MINORITY_REPORT_PANELS_PER_TILE,
   clampMinorityReportPanelPosition,
   getMinorityReportPanelPlacement,
+  getMinorityReportTileIndexAtPoint,
   getMinorityReportTileBounds,
   getMinorityReportTileBoundsList,
 } from "../src/minorityReportLabLayout.js";
@@ -50,4 +51,22 @@ test("clampMinorityReportPanelPosition keeps a card inside its assigned sector",
   assert.ok(clamped.x <= tile.left + tile.width);
   assert.ok(clamped.y >= tile.top);
   assert.ok(clamped.y <= tile.top + tile.height);
+});
+
+test("getMinorityReportTileIndexAtPoint resolves sectors and ignores the gaps", () => {
+  const tiles = getMinorityReportTileBoundsList({ width: 960, height: 640 });
+  assert.equal(
+    getMinorityReportTileIndexAtPoint(
+      { x: tiles[4].centerX, y: tiles[4].centerY },
+      { width: 960, height: 640 },
+    ),
+    4,
+  );
+  assert.equal(
+    getMinorityReportTileIndexAtPoint(
+      { x: tiles[0].left + tiles[0].width + 4, y: tiles[0].centerY },
+      { width: 960, height: 640 },
+    ),
+    null,
+  );
 });
