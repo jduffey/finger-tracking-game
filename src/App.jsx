@@ -52,7 +52,10 @@ import {
   stepFingerPongGame,
 } from "./fingerPongGame.js";
 import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
-import { shouldShowFullscreenInvadersBanner } from "./fullscreenGameUi.js";
+import {
+  getFullscreenTrackedFingerNames,
+  shouldShowFullscreenInvadersBanner,
+} from "./fullscreenGameUi.js";
 import { runFullscreenOverlayGameUpdates } from "./fullscreenOverlayGames.js";
 import {
   MISSILE_COMMAND_COUNTDOWN_MS,
@@ -6760,9 +6763,13 @@ export default function App() {
   function getFullscreenTipOverlayPoints(hands) {
     const renderMetrics = computeCameraRenderMetrics("contain");
     const safeHands = Array.isArray(hands) ? hands : [];
+    const trackedFingerNames = getFullscreenTrackedFingerNames(
+      fullscreenGridModeRef.current,
+      EXTENT_FINGER_NAMES,
+    );
     return safeHands.flatMap((hand, handIndex) => {
       const handId = hand?.id ?? hand?.label ?? `hand-${handIndex}`;
-      return EXTENT_FINGER_NAMES.map((fingerName) => {
+      return trackedFingerNames.map((fingerName) => {
         const tip = hand?.fingerTips?.[fingerName] ?? hand?.[`${fingerName}Tip`] ?? null;
         const projectedPoint = projectCameraPointToCanvas(tip, renderMetrics);
         if (!projectedPoint) {
