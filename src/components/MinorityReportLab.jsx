@@ -6,10 +6,13 @@ import {
   normalizeMinorityReportStageTransform,
   shouldUseMinorityReportZoom,
 } from "../minorityReportLabInteractions.js";
+import {
+  MINORITY_REPORT_PANEL_COUNT,
+  clampMinorityReportPanelPosition,
+  getMinorityReportPanelPlacement,
+  getMinorityReportTileBoundsList,
+} from "../minorityReportLabLayout.js";
 
-const PANEL_WIDTH = 196;
-const PANEL_HEIGHT = 124;
-const PANEL_COUNT = 6;
 const STAGE_DEFAULT_SIZE = { width: 960, height: 640 };
 const HAND_INFO_BOX_SIZE = { width: 170, height: 88 };
 const HAND_INFO_BOX_MARGIN = 10;
@@ -61,61 +64,15 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function scenePoint(sceneIndex, cardIndex, width, height) {
-  const safeWidth = Math.max(360, width);
-  const safeHeight = Math.max(280, height);
-  const centerX = safeWidth * 0.5;
-  const centerY = safeHeight * 0.5;
-
-  if (sceneIndex === 0) {
-    const colCount = 3;
-    const rowCount = Math.ceil(PANEL_COUNT / colCount);
-    const col = cardIndex % colCount;
-    const row = Math.floor(cardIndex / colCount);
-    const spanX = Math.min(620, safeWidth * 0.72);
-    const spanY = Math.min(340, safeHeight * 0.62);
-    return {
-      x: centerX + (col / Math.max(1, colCount - 1) - 0.5) * spanX,
-      y: centerY + (row / Math.max(1, rowCount - 1) - 0.5) * spanY,
-      rotation: (col - 1) * 0.06,
-      scale: 1,
-    };
-  }
-
-  if (sceneIndex === 1) {
-    const bandY = centerY + (cardIndex % 2 === 0 ? -68 : 68);
-    const minX = safeWidth * 0.12;
-    const maxX = safeWidth * 0.88;
-    const t = cardIndex / Math.max(1, PANEL_COUNT - 1);
-    return {
-      x: minX + t * (maxX - minX),
-      y: bandY,
-      rotation: (t - 0.5) * 0.22,
-      scale: 0.95 + (cardIndex % 3) * 0.04,
-    };
-  }
-
-  const radiusX = Math.min(290, safeWidth * 0.3);
-  const radiusY = Math.min(190, safeHeight * 0.26);
-  const angle = (-Math.PI * 0.5) + (cardIndex / PANEL_COUNT) * (Math.PI * 2);
-  return {
-    x: centerX + Math.cos(angle) * radiusX,
-    y: centerY + Math.sin(angle) * radiusY,
-    rotation: angle * 0.35,
-    scale: 0.94 + Math.sin(angle * 2) * 0.06,
-  };
-}
-
 function createPanels(sceneIndex, stageSize) {
-  const width = stageSize?.width ?? STAGE_DEFAULT_SIZE.width;
-  const height = stageSize?.height ?? STAGE_DEFAULT_SIZE.height;
-
-  return Array.from({ length: PANEL_COUNT }, (_, index) => {
-    const scenePlacement = scenePoint(sceneIndex, index, width, height);
+  return Array.from({ length: MINORITY_REPORT_PANEL_COUNT }, (_, index) => {
+    const scenePlacement = getMinorityReportPanelPlacement(sceneIndex, index, stageSize);
     return {
       id: `panel-${index + 1}`,
       title: PANEL_TITLES[index % PANEL_TITLES.length],
-      subtitle: `Node ${index + 1}`,
+      subtitle: `Sector ${scenePlacement.tileIndex + 1} · Card ${scenePlacement.tileSlotIndex + 1}`,
+      tileIndex: scenePlacement.tileIndex,
+      tileSlotIndex: scenePlacement.tileSlotIndex,
       x: scenePlacement.x,
       y: scenePlacement.y,
       rotation: scenePlacement.rotation,
@@ -127,12 +84,13 @@ function createPanels(sceneIndex, stageSize) {
 }
 
 function applySceneLayout(existingPanels, sceneIndex, stageSize) {
-  const width = stageSize?.width ?? STAGE_DEFAULT_SIZE.width;
-  const height = stageSize?.height ?? STAGE_DEFAULT_SIZE.height;
   return existingPanels.map((panel, index) => {
-    const nextPlacement = scenePoint(sceneIndex, index, width, height);
+    const nextPlacement = getMinorityReportPanelPlacement(sceneIndex, index, stageSize);
     return {
       ...panel,
+      tileIndex: nextPlacement.tileIndex,
+      tileSlotIndex: nextPlacement.tileSlotIndex,
+      subtitle: `Sector ${nextPlacement.tileIndex + 1} · Card ${nextPlacement.tileSlotIndex + 1}`,
       x: nextPlacement.x,
       y: nextPlacement.y,
       rotation: nextPlacement.rotation,
@@ -186,16 +144,6 @@ function nearestPanel(panels, localPointer, maxDistance = 150) {
   return {
     panel: winner,
     distance: bestDistance,
-  };
-}
-
-function clampPanelPosition(panel, stageSize) {
-  const halfWidth = PANEL_WIDTH * 0.5;
-  const halfHeight = PANEL_HEIGHT * 0.5;
-  return {
-    ...panel,
-    x: clamp(panel.x, halfWidth, stageSize.width - halfWidth),
-    y: clamp(panel.y, halfHeight, stageSize.height - halfHeight),
   };
 }
 
@@ -332,16 +280,10 @@ export default function MinorityReportLab(props) {
     };
   }, [cameraAspectRatio]);
 
-  const dragBoundsStyle = useMemo(() => {
-    const insetX = Math.min(PANEL_WIDTH * 0.5, stageSize.width * 0.5);
-    const insetY = Math.min(PANEL_HEIGHT * 0.5, stageSize.height * 0.5);
-    return {
-      left: `${insetX}px`,
-      top: `${insetY}px`,
-      width: `${Math.max(0, stageSize.width - insetX * 2)}px`,
-      height: `${Math.max(0, stageSize.height - insetY * 2)}px`,
-    };
-  }, [stageSize]);
+  const tileBounds = useMemo(
+    () => getMinorityReportTileBoundsList(stageSize),
+    [stageSize],
+  );
   const panelClassName = immersive
     ? "minority-lab-panel minority-lab-panel-immersive"
     : "card panel minority-lab-panel";
@@ -382,7 +324,7 @@ export default function MinorityReportLab(props) {
       if (previous.length === 0) {
         return createPanels(sceneIndexRef.current, stageSize);
       }
-      return previous.map((panel) => clampPanelPosition(panel, stageSize));
+      return previous.map((panel) => clampMinorityReportPanelPosition(panel, stageSize));
     });
     setHandInfoBoxPositions((previous) => ({
       Left: clampInfoBoxPosition(previous.Left ?? HAND_INFO_BOX_DEFAULTS.Left, stageSize),
@@ -510,13 +452,16 @@ export default function MinorityReportLab(props) {
               if (panel.id !== grabbed.panelId) {
                 return panel;
               }
-              return {
-                ...panel,
-                x: panel.x + throwDistanceX,
-                y: panel.y + throwDistanceY,
-                rotation: panel.rotation + throwDirection * 0.46,
-                throwingUntil: Date.now() + 650,
-              };
+              return clampMinorityReportPanelPosition(
+                {
+                  ...panel,
+                  x: panel.x + throwDistanceX,
+                  y: panel.y + throwDistanceY,
+                  rotation: panel.rotation + throwDirection * 0.46,
+                  throwingUntil: Date.now() + 650,
+                },
+                stageSize,
+              );
             }),
           );
         }
@@ -571,7 +516,7 @@ export default function MinorityReportLab(props) {
               if (panel.id !== currentGrab.panelId) {
                 return panel;
               }
-              return clampPanelPosition(
+              return clampMinorityReportPanelPosition(
                 {
                   ...panel,
                   x: localPointer.x - currentGrab.offsetX,
@@ -608,7 +553,7 @@ export default function MinorityReportLab(props) {
       setPanels((currentPanels) =>
         currentPanels.map((panel) => ({
           ...(panel.id === nearest.panel.id
-            ? clampPanelPosition(
+            ? clampMinorityReportPanelPosition(
                 {
                   ...panel,
                   selected: true,
@@ -768,11 +713,21 @@ export default function MinorityReportLab(props) {
             <div className="minority-stage-transform" style={{
               transform: `scale(${stageTransform.scale})`,
             }}>
-              <div
-                className="minority-stage-drag-bounds"
-                style={dragBoundsStyle}
-                aria-hidden="true"
-              />
+              {tileBounds.map((tile) => (
+                <div
+                  key={`minority-tile-${tile.index}`}
+                  className="minority-stage-drag-bounds"
+                  style={{
+                    left: `${tile.left}px`,
+                    top: `${tile.top}px`,
+                    width: `${tile.width}px`,
+                    height: `${tile.height}px`,
+                  }}
+                  aria-hidden="true"
+                >
+                  <span className="minority-stage-sector-label">Sector {tile.index + 1}</span>
+                </div>
+              ))}
               {panels.map((panel) => (
                 <article
                   key={panel.id}
@@ -791,9 +746,7 @@ export default function MinorityReportLab(props) {
                 >
                   <h4>{panel.title}</h4>
                   <p>{panel.subtitle}</p>
-                  <small>
-                    x:{panel.x.toFixed(0)} y:{panel.y.toFixed(0)} r:{(panel.rotation * 57.2958).toFixed(0)}° s:{panel.scale.toFixed(2)}
-                  </small>
+                  <small>Pinch-drag within this sector</small>
                 </article>
               ))}
             </div>

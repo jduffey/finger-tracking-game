@@ -1962,8 +1962,23 @@ body {
   border: 1px dashed rgba(162, 214, 255, 0.58);
   border-radius: 8px;
   box-shadow: inset 0 0 0 1px rgba(235, 246, 255, 0.08);
+  overflow: hidden;
   pointer-events: none;
   position: absolute;
+}
+
+.minority-stage-sector-label {
+  background: rgba(8, 18, 30, 0.74);
+  border-bottom-right-radius: 8px;
+  color: #d9ecff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  left: 0;
+  letter-spacing: 0.02em;
+  padding: 5px 8px;
+  position: absolute;
+  text-transform: uppercase;
+  top: 0;
 }
 
 .minority-stage-transform {
@@ -1992,31 +2007,35 @@ body {
     0 10px 26px rgba(3, 10, 20, 0.4),
     inset 0 0 0 1px rgba(255, 255, 255, 0.58);
   color: #13263b;
-  height: 124px;
+  height: 84px;
   left: 0;
-  padding: 10px 12px;
+  padding: 8px 10px;
   position: absolute;
   top: 0;
   user-select: none;
-  width: 196px;
+  width: 132px;
 }
 
 .minority-panel-card h4 {
-  font-size: 0.92rem;
+  font-size: 0.8rem;
   letter-spacing: 0.01em;
   margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .minority-panel-card p {
   color: #3c5570;
-  font-size: 0.8rem;
-  margin: 6px 0 8px;
+  font-size: 0.67rem;
+  margin: 5px 0 6px;
 }
 
 .minority-panel-card small {
   color: #4b6783;
   display: block;
-  font-size: 0.72rem;
+  font-size: 0.62rem;
+  line-height: 1.2;
 }
 
 .minority-panel-card.selected {
