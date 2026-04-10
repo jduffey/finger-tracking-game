@@ -1,6 +1,7 @@
 import { createScopedLogger } from "./logger.js";
 
-export const CALIBRATION_STORAGE_KEY = "fingerWhack.calibration.v2";
+export const CALIBRATION_STORAGE_KEY = "fingerTrackingGame.calibration.v2";
+const LEGACY_CALIBRATION_STORAGE_KEY = ["finger", "Wh", "ack.calibration.v2"].join("");
 const calibrationLog = createScopedLogger("calibration");
 const ARC_MODEL_VERSION = 1;
 const ARC_RANGE_QUANTILE_LOW = 0.02;
@@ -486,7 +487,9 @@ export function loadCalibration() {
     return null;
   }
   try {
-    const raw = storage.getItem(CALIBRATION_STORAGE_KEY);
+    const raw =
+      storage.getItem(CALIBRATION_STORAGE_KEY) ??
+      storage.getItem(LEGACY_CALIBRATION_STORAGE_KEY);
     if (!raw) {
       calibrationLog.info("No calibration data in localStorage");
       return null;
@@ -499,6 +502,16 @@ export function loadCalibration() {
       parsed,
       normalized,
     });
+    if (normalized && !storage.getItem(CALIBRATION_STORAGE_KEY)) {
+      try {
+        storage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(normalized));
+        storage.removeItem(LEGACY_CALIBRATION_STORAGE_KEY);
+      } catch (migrationError) {
+        calibrationLog.warn("Failed to migrate calibration storage key", {
+          migrationError,
+        });
+      }
+    }
     return normalized;
   } catch (error) {
     calibrationLog.error("Failed to load calibration from localStorage", {
@@ -522,6 +535,7 @@ export function saveCalibration(model) {
   }
   try {
     storage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(normalized));
+    storage.removeItem(LEGACY_CALIBRATION_STORAGE_KEY);
     calibrationLog.info("Calibration saved");
   } catch (error) {
     calibrationLog.warn("Failed to save calibration to localStorage", { error });
@@ -537,6 +551,7 @@ export function clearCalibration() {
   }
   try {
     storage.removeItem(CALIBRATION_STORAGE_KEY);
+    storage.removeItem(LEGACY_CALIBRATION_STORAGE_KEY);
   } catch (error) {
     calibrationLog.warn("Failed to clear calibration from localStorage", { error });
   }

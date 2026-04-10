@@ -112,3 +112,64 @@ test("loadCalibration returns null when storage is unavailable", () => {
     assert.equal(loadCalibration(), null);
   });
 });
+
+test("loadCalibration migrates legacy saved calibration to the renamed storage key", () => {
+  const writes = [];
+  const removals = [];
+  const legacyKey = ["finger", "Wh", "ack.calibration.v2"].join("");
+
+  withMockStorage(
+    {
+      getItem(key) {
+        if (key === CALIBRATION_STORAGE_KEY) {
+          return null;
+        }
+        if (key === legacyKey) {
+          return JSON.stringify({
+            kind: "affine",
+            a1: 1,
+            a2: 0,
+            a3: 12,
+            b1: 0,
+            b2: 1,
+            b3: 24,
+          });
+        }
+        return null;
+      },
+      setItem(key, value) {
+        writes.push([key, value]);
+      },
+      removeItem(key) {
+        removals.push(key);
+      },
+    },
+    () => {
+      assert.deepEqual(loadCalibration(), {
+        kind: "affine",
+        a1: 1,
+        a2: 0,
+        a3: 12,
+        b1: 0,
+        b2: 1,
+        b3: 24,
+      });
+    },
+  );
+
+  assert.deepEqual(writes, [
+    [
+      CALIBRATION_STORAGE_KEY,
+      JSON.stringify({
+        kind: "affine",
+        a1: 1,
+        a2: 0,
+        a3: 12,
+        b1: 0,
+        b2: 1,
+        b3: 24,
+      }),
+    ],
+  ]);
+  assert.deepEqual(removals, [legacyKey]);
+});

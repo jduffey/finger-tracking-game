@@ -16,7 +16,7 @@ function createVerboseLogWriterPlugin() {
   };
 
   return {
-    name: "finger-whack-verbose-log-writer",
+    name: "finger-tracking-game-verbose-log-writer",
     apply: "serve",
     configureServer(server) {
       const logsDir = path.join(server.config.root, "logs");
@@ -34,7 +34,7 @@ function createVerboseLogWriterPlugin() {
         data: { file: `logs/${logFileName}` },
       });
 
-      console.log(`[finger-whack] verbose logs: logs/${logFileName}`);
+      console.log(`[finger-tracking-game] verbose logs: logs/${logFileName}`);
 
       server.middlewares.use((req, res, next) => {
         if (req.method !== "POST" || !req.url?.startsWith("/__debug-log")) {

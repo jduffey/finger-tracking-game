@@ -1,6 +1,6 @@
-# Finger Whack
+# Finger Tracking Game
 
-Finger Whack is a webcam-driven hand- and pose-tracking playground built with React, Vite, and TensorFlow.js. It started as a pinch-controlled Whack-a-Mole prototype and now includes a calibration hub, multiple games and labs, fullscreen camera overlays, and a separate Circle of Fifths instrument page.
+Finger Tracking Game is a webcam-driven hand- and pose-tracking playground built with React, Vite, and TensorFlow.js. It includes a calibration hub, multiple games and labs, fullscreen camera overlays, and a separate Circle of Fifths instrument page.
 
 ## What Is In This Repo
 
@@ -17,7 +17,6 @@ Finger Whack is a webcam-driven hand- and pose-tracking playground built with Re
 - One-hand index-finger tracking steers chord selection.
 - Pinch interactions choose drum presets and adjust BPM.
 - Uses webcam input and browser audio output.
-
 ## Requirements
 
 - Node.js 18 or newer
@@ -72,7 +71,7 @@ npm run preview
 
 - Hand tracking starts with the MediaPipe Hands runtime and can probe or fall back to TFJS backends when needed.
 - Body Pose Lab and Off-Axis Forest Walk use pose detection rather than the hand-tracking flow.
-- Calibration is stored in `localStorage` under `fingerWhack.calibration.v2`.
+- Calibration is stored in `localStorage` under `fingerTrackingGame.calibration.v2`.
 - Verbose browser/runtime events are written to timestamped files in `logs/` only while running `npm run dev`.
 
 ## Optional Symphony Setup

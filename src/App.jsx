@@ -10156,7 +10156,7 @@ export default function App() {
     <div className="app">
       <header className="top-bar">
         <div className="top-bar-title-group">
-          <h1>Finger Whack</h1>
+          <h1>Finger Tracking Game</h1>
           <p className="top-bar-subtitle">
             Cleaner navigation with one home for setup, games, and labs.
           </p>
