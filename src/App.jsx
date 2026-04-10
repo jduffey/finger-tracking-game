@@ -30,6 +30,7 @@ import {
   stepBrickDodgerGame,
 } from "./brickDodgerGame.js";
 import {
+  BREAKOUT_BRICK_COLORS,
   BREAKOUT_BRICK_SCORE,
   BREAKOUT_CAPSULE_SCORE,
   BREAKOUT_COUNTDOWN_MS,
@@ -2292,13 +2293,14 @@ export default function App() {
     );
 
     const cells = sites
-      .map((point) => {
+      .map((point, index) => {
         const polygon = buildStaticRippleClipPolygon(point, sites, fullscreenCameraViewport);
         if (!polygon || polygon.length < 3) {
           return null;
         }
         return {
           key: point.id,
+          color: BREAKOUT_BRICK_COLORS[index % BREAKOUT_BRICK_COLORS.length],
           polygon,
         };
       })
@@ -8864,6 +8866,7 @@ export default function App() {
                   key={`fullscreen-voronoi-cell-${cell.key}`}
                   className="fullscreen-camera-voronoi-cell"
                   points={cell.polygon.map((point) => `${point.x},${point.y}`).join(" ")}
+                  style={{ fill: cell.color }}
                 />
               ))}
             </svg>
@@ -9755,30 +9758,30 @@ export default function App() {
                 >
                   Missile Command
                 </button>
+                {fullscreenGridMode === "brick-dodger" ? (
+                  <button type="button" className="secondary" onClick={restartFullscreenBrickDodgerGame}>
+                    Restart Run
+                  </button>
+                ) : null}
+                {fullscreenGridMode === "finger-pong" ? (
+                  <button type="button" className="secondary" onClick={restartFullscreenFingerPongGame}>
+                    Restart Rally
+                  </button>
+                ) : null}
+                {fullscreenGridMode === "fruit-ninja" ? (
+                  <button type="button" className="secondary" onClick={restartFullscreenFruitNinjaGame}>
+                    Restart Round
+                  </button>
+                ) : null}
+                {fullscreenGridMode === "missile-command" ? (
+                  <button type="button" className="secondary" onClick={restartFullscreenMissileCommandGame}>
+                    Restart Defense
+                  </button>
+                ) : null}
+                <button type="button" className="secondary" onClick={returnFromFullscreenCameraScreen}>
+                  Back to Input Test
+                </button>
               </div>
-              {fullscreenGridMode === "brick-dodger" ? (
-                <button type="button" className="secondary" onClick={restartFullscreenBrickDodgerGame}>
-                  Restart Run
-                </button>
-              ) : null}
-              {fullscreenGridMode === "finger-pong" ? (
-                <button type="button" className="secondary" onClick={restartFullscreenFingerPongGame}>
-                  Restart Rally
-                </button>
-              ) : null}
-              {fullscreenGridMode === "fruit-ninja" ? (
-                <button type="button" className="secondary" onClick={restartFullscreenFruitNinjaGame}>
-                  Restart Round
-                </button>
-              ) : null}
-              {fullscreenGridMode === "missile-command" ? (
-                <button type="button" className="secondary" onClick={restartFullscreenMissileCommandGame}>
-                  Restart Defense
-                </button>
-              ) : null}
-              <button type="button" className="secondary" onClick={returnFromFullscreenCameraScreen}>
-                Back to Input Test
-              </button>
             </div>
             {(cameraError || modelError) && (
               <div className="fullscreen-camera-errors">
