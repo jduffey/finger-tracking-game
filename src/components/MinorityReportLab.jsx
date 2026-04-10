@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import GestureDebugPanel from "./GestureDebugPanel.jsx";
 import { GESTURE_IDS } from "../gestures/constants.js";
+import {
+  getMinorityReportZoomTransform,
+  normalizeMinorityReportStageTransform,
+  shouldUseMinorityReportZoom,
+} from "../minorityReportLabInteractions.js";
 
 const PANEL_WIDTH = 196;
 const PANEL_HEIGHT = 124;
@@ -54,17 +59,6 @@ const PANEL_TITLES = [
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
-}
-
-function wrapAngle(value) {
-  let angle = value;
-  while (angle > Math.PI) {
-    angle -= Math.PI * 2;
-  }
-  while (angle < -Math.PI) {
-    angle += Math.PI * 2;
-  }
-  return angle;
 }
 
 function scenePoint(sceneIndex, cardIndex, width, height) {
@@ -160,17 +154,12 @@ function pointerToLocal(pointer, stageSize, transform) {
 
   const centerX = width * 0.5;
   const centerY = height * 0.5;
-  const translatedX = px - centerX - transform.x;
-  const translatedY = py - centerY - transform.y;
-
-  const cos = Math.cos(-transform.rotation);
-  const sin = Math.sin(-transform.rotation);
-  const rotatedX = translatedX * cos - translatedY * sin;
-  const rotatedY = translatedX * sin + translatedY * cos;
+  const translatedX = px - centerX;
+  const translatedY = py - centerY;
 
   return {
-    x: rotatedX / Math.max(0.001, transform.scale) + centerX,
-    y: rotatedY / Math.max(0.001, transform.scale) + centerY,
+    x: translatedX / Math.max(0.001, transform.scale) + centerX,
+    y: translatedY / Math.max(0.001, transform.scale) + centerY,
   };
 }
 
@@ -414,6 +403,7 @@ export default function MinorityReportLab(props) {
     const handStates = Array.isArray(engineOutput?.hands) ? engineOutput.hands : [];
     const twoHand = engineOutput?.twoHand ?? { present: false };
     const events = Array.isArray(engineOutput?.events) ? engineOutput.events : [];
+    const zoomGestureActive = shouldUseMinorityReportZoom(twoHand, engineOutput?.continuous);
 
     if (showTrails) {
       setPointerTrails((previous) => {
@@ -449,8 +439,9 @@ export default function MinorityReportLab(props) {
           sceneIndexRef.current = nextIndex;
           setPanels((currentPanels) => applySceneLayout(currentPanels, nextIndex, stageSize));
           if (hard) {
-            setStageTransform(DEFAULT_STAGE_TRANSFORM);
-            stageTransformRef.current = DEFAULT_STAGE_TRANSFORM;
+            const resetTransform = normalizeMinorityReportStageTransform(DEFAULT_STAGE_TRANSFORM);
+            setStageTransform(resetTransform);
+            stageTransformRef.current = resetTransform;
             grabRef.current = null;
             setDraggedPanelId(null);
             twoHandManipRef.current = { active: false, base: null };
@@ -495,8 +486,9 @@ export default function MinorityReportLab(props) {
         } else if (event.gestureId === GESTURE_IDS.PUSH_FORWARD) {
           toggleNearestPanelSelection(event.handId);
         } else if (event.gestureId === GESTURE_IDS.CIRCLE) {
-          setStageTransform(DEFAULT_STAGE_TRANSFORM);
-          stageTransformRef.current = DEFAULT_STAGE_TRANSFORM;
+          const resetTransform = normalizeMinorityReportStageTransform(DEFAULT_STAGE_TRANSFORM);
+          setStageTransform(resetTransform);
+          stageTransformRef.current = resetTransform;
         }
 
         if (
@@ -531,40 +523,37 @@ export default function MinorityReportLab(props) {
       }
     }
 
-    if (twoHand.present && engineOutput?.continuous?.twoHandManipulationActive) {
-      const currentTransform = stageTransformRef.current;
+    if (zoomGestureActive) {
+      const currentTransform = normalizeMinorityReportStageTransform(stageTransformRef.current);
       if (!twoHandManipRef.current.active) {
         twoHandManipRef.current = {
           active: true,
           base: {
             distance: twoHand.distance,
-            angle: twoHand.angle,
-            midpoint: twoHand.midpoint,
             transform: currentTransform,
           },
         };
       }
 
       const base = twoHandManipRef.current.base;
-      const distanceRatio = twoHand.distance / Math.max(0.02, base.distance);
-      const deltaAngle = wrapAngle(twoHand.angle - base.angle);
-      const moveX = (twoHand.midpoint.x - base.midpoint.x) * stageSize.width;
-      const moveY = (twoHand.midpoint.y - base.midpoint.y) * stageSize.height;
-      const nextTransform = {
-        x: base.transform.x + moveX,
-        y: base.transform.y + moveY,
-        scale: clamp(base.transform.scale * distanceRatio, 0.45, 2.6),
-        rotation: wrapAngle(base.transform.rotation + deltaAngle),
-      };
+      const nextTransform = getMinorityReportZoomTransform(
+        base.transform,
+        base.distance,
+        twoHand.distance,
+      );
       setStageTransform(nextTransform);
       stageTransformRef.current = nextTransform;
       grabRef.current = null;
+      handInfoBoxDragRef.current = {
+        Left: null,
+        Right: null,
+      };
       setDraggedPanelId(null);
     } else {
       twoHandManipRef.current = { active: false, base: null };
     }
 
-    if (engineOutput?.continuous?.twoHandManipulationActive) {
+    if (zoomGestureActive) {
       return;
     }
 
@@ -777,7 +766,7 @@ export default function MinorityReportLab(props) {
               className="camera-overlay minority-stage-camera-overlay"
             />
             <div className="minority-stage-transform" style={{
-              transform: `translate(${stageTransform.x}px, ${stageTransform.y}px) rotate(${stageTransform.rotation}rad) scale(${stageTransform.scale})`,
+              transform: `scale(${stageTransform.scale})`,
             }}>
               <div
                 className="minority-stage-drag-bounds"
