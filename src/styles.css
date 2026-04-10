@@ -1836,12 +1836,22 @@ body {
   min-height: 0;
 }
 
+.minority-lab-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 10px 0 12px;
+}
+
 .minority-lab-layout {
   display: grid;
   flex: 1 1 auto;
   gap: 12px;
   grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.8fr);
   min-height: 0;
+}
+
+.minority-lab-layout.debug-collapsed {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .minority-stage-shell {

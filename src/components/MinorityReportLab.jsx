@@ -252,6 +252,7 @@ export default function MinorityReportLab(props) {
   const [draggedPanelId, setDraggedPanelId] = useState(null);
   const [pointerTrails, setPointerTrails] = useState({});
   const [handInfoBoxPositions, setHandInfoBoxPositions] = useState(HAND_INFO_BOX_DEFAULTS);
+  const [isDebugPanelVisible, setIsDebugPanelVisible] = useState(false);
 
   const panelsRef = useRef(panels);
   const sceneIndexRef = useRef(sceneIndex);
@@ -664,8 +665,19 @@ export default function MinorityReportLab(props) {
       <p className="small-text">
         Scene: <strong>{sceneMeta.name}</strong> | {sceneMeta.description}
       </p>
+      <div className="minority-lab-toolbar">
+        <button
+          type="button"
+          className="secondary"
+          aria-controls="minority-report-debug-panel"
+          aria-expanded={isDebugPanelVisible}
+          onClick={() => setIsDebugPanelVisible((previous) => !previous)}
+        >
+          {isDebugPanelVisible ? "Hide Detector Status/Controls" : "Show Detector Status/Controls"}
+        </button>
+      </div>
 
-      <div className="minority-lab-layout">
+      <div className={`minority-lab-layout ${isDebugPanelVisible ? "" : "debug-collapsed"}`}>
         <div className="minority-stage-shell">
           <div className="minority-stage" ref={stageRef}>
             <div className="minority-stage-transform" style={{
@@ -758,31 +770,35 @@ export default function MinorityReportLab(props) {
           </div>
         </div>
 
-        <GestureDebugPanel
-          fps={fps}
-          detectionStatus={detectionStatus}
-          hands={engineOutput?.hands ?? []}
-          confidences={engineOutput?.confidences}
-          heuristicConfidences={engineOutput?.heuristicConfidences}
-          personalizedConfidences={engineOutput?.personalizedConfidences}
-          threshold={confidenceThreshold}
-          onThresholdChange={onConfidenceThresholdChange}
-          showSkeleton={showSkeleton}
-          showTrails={showTrails}
-          personalizationEnabled={personalizationEnabled}
-          onToggleShowSkeleton={onShowSkeletonChange}
-          onToggleShowTrails={onShowTrailsChange}
-          onTogglePersonalization={onPersonalizationEnabledChange}
-          eventLog={eventLog}
-          onClearEventLog={onClearEventLog}
-          trainingState={trainingState}
-          sampleCounts={sampleCounts}
-          onRecordGesture={onRecordGesture}
-          onDeleteLastSample={onDeleteLastSample}
-          onClearSamples={onClearSamples}
-          onExportSamples={onExportSamples}
-          onImportSamples={onImportSamples}
-        />
+        {isDebugPanelVisible && (
+          <div id="minority-report-debug-panel">
+            <GestureDebugPanel
+              fps={fps}
+              detectionStatus={detectionStatus}
+              hands={engineOutput?.hands ?? []}
+              confidences={engineOutput?.confidences}
+              heuristicConfidences={engineOutput?.heuristicConfidences}
+              personalizedConfidences={engineOutput?.personalizedConfidences}
+              threshold={confidenceThreshold}
+              onThresholdChange={onConfidenceThresholdChange}
+              showSkeleton={showSkeleton}
+              showTrails={showTrails}
+              personalizationEnabled={personalizationEnabled}
+              onToggleShowSkeleton={onShowSkeletonChange}
+              onToggleShowTrails={onShowTrailsChange}
+              onTogglePersonalization={onPersonalizationEnabledChange}
+              eventLog={eventLog}
+              onClearEventLog={onClearEventLog}
+              trainingState={trainingState}
+              sampleCounts={sampleCounts}
+              onRecordGesture={onRecordGesture}
+              onDeleteLastSample={onDeleteLastSample}
+              onClearSamples={onClearSamples}
+              onExportSamples={onExportSamples}
+              onImportSamples={onImportSamples}
+            />
+          </div>
+        )}
       </div>
     </section>
   );
