@@ -1949,6 +1949,7 @@ body {
 
 .minority-stage-video {
   background: transparent;
+  opacity: 0.2;
   z-index: 0;
 }
 
