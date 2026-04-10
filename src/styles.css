@@ -369,7 +369,7 @@ body {
 }
 
 .fullscreen-camera-voronoi-cell {
-  fill: none;
+  fill-opacity: 0.3;
   stroke: rgba(255, 255, 255, 0.92);
   stroke-width: 1.5;
 }
@@ -1833,7 +1833,33 @@ body {
 }
 
 .minority-lab-panel {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
+  position: relative;
+}
+
+.minority-lab-panel-immersive {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  height: 100vh;
+  overflow: hidden;
+  padding: 0;
+  width: 100%;
+}
+
+.minority-lab-header {
+  align-items: center;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.minority-lab-header h2 {
+  flex: 1 1 auto;
+  margin: 0;
 }
 
 .minority-lab-layout {
@@ -1844,13 +1870,63 @@ body {
   min-height: 0;
 }
 
+.minority-lab-layout.immersive {
+  display: block;
+  height: 100%;
+  position: relative;
+}
+
+.minority-lab-layout.debug-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.minority-lab-overlay-controls {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  z-index: 6;
+}
+
+.minority-lab-overlay-controls .button-row {
+  pointer-events: auto;
+}
+
+.minority-lab-errors {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.minority-lab-error {
+  margin: 0;
+  max-width: min(420px, calc(100vw - 36px));
+  pointer-events: auto;
+}
+
 .minority-stage-shell {
+  align-items: center;
   background: rgba(17, 27, 41, 0.82);
   border: 1px solid #2f425b;
   border-radius: 12px;
+  display: flex;
+  justify-content: center;
   min-height: 0;
   overflow: hidden;
   position: relative;
+}
+
+.minority-stage-shell.immersive {
+  background: #02070d;
+  border: 0;
+  border-radius: 0;
+  height: 100%;
+  width: 100%;
 }
 
 .minority-stage {
@@ -1858,17 +1934,136 @@ body {
     radial-gradient(circle at 24% 17%, rgba(110, 184, 255, 0.12), transparent 42%),
     radial-gradient(circle at 78% 82%, rgba(102, 255, 187, 0.12), transparent 35%),
     linear-gradient(180deg, #0e1a2b 0%, #071120 100%);
-  height: 100%;
+  flex: 0 0 auto;
+  max-height: 100%;
+  max-width: 100%;
   min-height: 430px;
   overflow: hidden;
   position: relative;
   width: 100%;
 }
 
+.minority-lab-panel-immersive .minority-stage {
+  min-height: 0;
+}
+
+.minority-stage-video {
+  background: transparent;
+  opacity: 0.2;
+  z-index: 0;
+}
+
+.minority-stage-camera-overlay {
+  z-index: 1;
+}
+
+.minority-stage-super-sector {
+  background:
+    linear-gradient(180deg, rgba(28, 56, 84, 0.16), rgba(12, 26, 41, 0.08)),
+    radial-gradient(circle at top left, rgba(135, 210, 255, 0.08), transparent 48%);
+  border: 1px solid rgba(145, 205, 245, 0.32);
+  border-radius: 18px;
+  box-shadow:
+    inset 0 0 0 1px rgba(219, 240, 255, 0.08),
+    0 12px 28px rgba(3, 10, 20, 0.12);
+  pointer-events: none;
+  position: absolute;
+}
+
+.minority-stage-super-sector.focused {
+  border-color: rgba(218, 241, 255, 0.68);
+  box-shadow:
+    0 0 0 2px rgba(164, 216, 255, 0.2),
+    inset 0 0 0 1px rgba(242, 249, 255, 0.12),
+    0 12px 28px rgba(3, 10, 20, 0.18);
+}
+
+.minority-stage-super-sector-label {
+  background: rgba(5, 14, 24, 0.82);
+  border-bottom-right-radius: 10px;
+  color: #eff8ff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  left: 0;
+  letter-spacing: 0.04em;
+  padding: 7px 11px;
+  position: absolute;
+  text-transform: uppercase;
+  top: 0;
+}
+
+.minority-stage-drag-bounds {
+  background: rgba(82, 157, 226, 0.1);
+  border: 1px dashed rgba(162, 214, 255, 0.58);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(235, 246, 255, 0.08);
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+}
+
+.minority-stage-drag-bounds.focused {
+  background: rgba(108, 196, 255, 0.16);
+  border-color: rgba(215, 241, 255, 0.92);
+  box-shadow:
+    0 0 0 2px rgba(169, 223, 255, 0.38),
+    inset 0 0 0 1px rgba(235, 246, 255, 0.18);
+}
+
+.minority-stage-drag-bounds.hovered-left {
+  background: rgba(94, 191, 255, 0.26);
+  border-color: rgba(147, 222, 255, 0.96);
+  box-shadow:
+    0 0 0 2px rgba(92, 188, 255, 0.24),
+    inset 0 0 0 1px rgba(226, 248, 255, 0.2);
+}
+
+.minority-stage-drag-bounds.hovered-right {
+  background: rgba(255, 151, 110, 0.26);
+  border-color: rgba(255, 191, 161, 0.96);
+  box-shadow:
+    0 0 0 2px rgba(255, 151, 110, 0.22),
+    inset 0 0 0 1px rgba(255, 238, 230, 0.2);
+}
+
+.minority-stage-drag-bounds.hovered-both {
+  background: rgba(203, 158, 255, 0.3);
+  border-color: rgba(236, 214, 255, 0.98);
+  box-shadow:
+    0 0 0 3px rgba(201, 147, 255, 0.28),
+    inset 0 0 0 1px rgba(251, 244, 255, 0.24);
+}
+
+.minority-stage-sector-label {
+  background: rgba(8, 18, 30, 0.74);
+  border-bottom-right-radius: 8px;
+  color: #d9ecff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  left: 0;
+  letter-spacing: 0.02em;
+  padding: 5px 8px;
+  position: absolute;
+  text-transform: uppercase;
+  top: 0;
+}
+
 .minority-stage-transform {
   inset: 0;
   position: absolute;
   transform-origin: 50% 50%;
+  z-index: 2;
+}
+
+.minority-report-debug-panel-immersive {
+  bottom: 18px;
+  max-height: calc(100vh - 108px);
+  overflow: auto;
+  position: absolute;
+  right: 18px;
+  top: 72px;
+  width: min(360px, calc(100vw - 36px));
+  z-index: 6;
 }
 
 .minority-panel-card {
@@ -1879,31 +2074,35 @@ body {
     0 10px 26px rgba(3, 10, 20, 0.4),
     inset 0 0 0 1px rgba(255, 255, 255, 0.58);
   color: #13263b;
-  height: 124px;
+  height: 84px;
   left: 0;
-  padding: 10px 12px;
+  padding: 8px 10px;
   position: absolute;
   top: 0;
   user-select: none;
-  width: 196px;
+  width: 132px;
 }
 
 .minority-panel-card h4 {
-  font-size: 0.92rem;
+  font-size: 0.8rem;
   letter-spacing: 0.01em;
   margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .minority-panel-card p {
   color: #3c5570;
-  font-size: 0.8rem;
-  margin: 6px 0 8px;
+  font-size: 0.67rem;
+  margin: 5px 0 6px;
 }
 
 .minority-panel-card small {
   color: #4b6783;
   display: block;
-  font-size: 0.72rem;
+  font-size: 0.62rem;
+  line-height: 1.2;
 }
 
 .minority-panel-card.selected {

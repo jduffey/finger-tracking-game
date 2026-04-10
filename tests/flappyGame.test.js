@@ -18,6 +18,10 @@ test("createFlappyGame seeds a ready state with visible pipes", () => {
   assert.equal(game.message, "Pinch to flap");
   assert.equal(game.pipes.length, 3);
   assert.ok(game.pipes.every((pipe) => pipe.x >= game.layout.width));
+  assert.deepEqual(
+    game.pipes.map((pipe) => pipe.id),
+    ["pipe-1", "pipe-4", "pipe-7"],
+  );
 });
 
 test("flapFlappyGame starts the round and applies upward velocity", () => {
@@ -58,6 +62,45 @@ test("stepFlappyGame advances pipes and awards score once per passed obstacle", 
   const next = stepFlappyGame(state, 1 / 60, constantRng(0.2));
   assert.equal(next.score, FLAPPY_PIPE_SCORE);
   assert.equal(next.pipes[0].passed, true);
+});
+
+test("stepFlappyGame only spawns every third scheduled pipe", () => {
+  const layout = createFlappyLayout(960, 720);
+  const state = {
+    layout,
+    bird: {
+      x: layout.birdX,
+      y: layout.playfieldHeight * 0.45,
+      vy: 0,
+      radius: layout.birdRadius,
+      rotation: 0,
+    },
+    pipes: [
+      {
+        id: "pipe-1",
+        x: layout.width - layout.pipeSpacing * 3,
+        width: layout.pipeWidth,
+        gapTop: 120,
+        gapHeight: layout.gapHeight,
+        passed: false,
+      },
+    ],
+    score: 0,
+    status: "playing",
+    message: "",
+    nextPipeId: 4,
+  };
+
+  const next = stepFlappyGame(state, 0, constantRng(0.2));
+  assert.equal(next.pipes.length, 1);
+  const advanced = stepFlappyGame(state, 1 / 60, constantRng(0.2));
+  assert.equal(advanced.pipes.length, 2);
+  assert.equal(advanced.pipes[1].id, "pipe-4");
+  assert.equal(
+    advanced.pipes[1].x,
+    advanced.pipes[0].x + layout.pipeSpacing * 3,
+  );
+  assert.equal(advanced.nextPipeId, 7);
 });
 
 test("stepFlappyGame ends the round on pipe collision", () => {

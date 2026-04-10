@@ -1,9 +1,35 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  getPinchClickExcludeSelector,
   shouldAcceptPinchClick,
   shouldBypassGlobalPinchDebounce,
 } from "../src/pinchInput.js";
+
+test("getPinchClickExcludeSelector always excludes the left camera pane buttons", () => {
+  assert.equal(
+    getPinchClickExcludeSelector({
+      phase: "GAME",
+    }),
+    ".camera-card",
+  );
+
+  assert.equal(
+    getPinchClickExcludeSelector({
+      phase: "MINORITY_REPORT_LAB",
+    }),
+    ".camera-card",
+  );
+});
+
+test("getPinchClickExcludeSelector also excludes roulette controls during roulette mode", () => {
+  assert.equal(
+    getPinchClickExcludeSelector({
+      phase: "ROULETTE",
+    }),
+    ".camera-card, .roulette-panel",
+  );
+});
 
 test("shouldBypassGlobalPinchDebounce only bypasses debounce for fullscreen flappy", () => {
   assert.equal(

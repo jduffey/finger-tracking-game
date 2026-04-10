@@ -30,6 +30,7 @@ import {
   stepBrickDodgerGame,
 } from "./brickDodgerGame.js";
 import {
+  BREAKOUT_BRICK_COLORS,
   BREAKOUT_BRICK_SCORE,
   BREAKOUT_CAPSULE_SCORE,
   BREAKOUT_COUNTDOWN_MS,
@@ -52,7 +53,10 @@ import {
   stepFingerPongGame,
 } from "./fingerPongGame.js";
 import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
-import { shouldShowFullscreenInvadersBanner } from "./fullscreenGameUi.js";
+import {
+  getFullscreenTrackedFingerNames,
+  shouldShowFullscreenInvadersBanner,
+} from "./fullscreenGameUi.js";
 import { runFullscreenOverlayGameUpdates } from "./fullscreenOverlayGames.js";
 import {
   MISSILE_COMMAND_COUNTDOWN_MS,
@@ -84,9 +88,15 @@ import {
   initHandTracking,
 } from "./handTracking.js";
 import {
+  getPinchClickExcludeSelector,
   shouldAcceptPinchClick,
   shouldBypassGlobalPinchDebounce,
 } from "./pinchInput.js";
+import {
+  shouldShowInlineCameraPreview,
+  shouldUseContainedCameraFit,
+  shouldUseImmersiveAppLayout,
+} from "./cameraLayout.js";
 import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from "./poseTracking.js";
 import {
   createEmptyOffAxisState,
@@ -643,7 +653,7 @@ function normalizeTipToVisibleBounds(uRaw, vRaw, visibleBounds) {
 }
 
 function getCameraObjectFitForPhase(phase) {
-  return phase === PHASES.FULLSCREEN_CAMERA ? "contain" : "cover";
+  return shouldUseContainedCameraFit(phase) ? "contain" : "cover";
 }
 
 function pruneCursorTrail(trail, now) {
@@ -1897,6 +1907,8 @@ export default function App() {
     [calibrationTargets, calibrationTargetIndex],
   );
   const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
+  const isMinorityReportLabPhase = phase === PHASES.MINORITY_REPORT_LAB;
+  const isImmersiveAppPhase = shouldUseImmersiveAppLayout(phase);
   const isFullscreenBrickDodgerMode =
     isFullscreenCameraPhase &&
     fullscreenGridMode === "brick-dodger" &&
@@ -1969,6 +1981,7 @@ export default function App() {
       : phase === PHASES.SANDBOX
       ? "Camera + Pinch Sandbox Controls"
       : "Camera + Calibration Controls";
+  const showInlineCameraPreview = shouldShowInlineCameraPreview(phase);
   const inputTestPinchingCell =
     phase === PHASES.CALIBRATION && !isCalibrating && pinchActive
       ? inputTestHoveredCell
@@ -2280,13 +2293,14 @@ export default function App() {
     );
 
     const cells = sites
-      .map((point) => {
+      .map((point, index) => {
         const polygon = buildStaticRippleClipPolygon(point, sites, fullscreenCameraViewport);
         if (!polygon || polygon.length < 3) {
           return null;
         }
         return {
           key: point.id,
+          color: BREAKOUT_BRICK_COLORS[index % BREAKOUT_BRICK_COLORS.length],
           polygon,
         };
       })
@@ -2544,13 +2558,19 @@ export default function App() {
   }, [fullscreenCameraViewport]);
 
   useEffect(() => {
-    if (phase !== PHASES.FULLSCREEN_CAMERA) {
+    if (!isImmersiveAppPhase) {
       return undefined;
     }
 
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
-        returnFromFullscreenCameraScreen();
+        if (phase === PHASES.FULLSCREEN_CAMERA) {
+          returnFromFullscreenCameraScreen();
+          return;
+        }
+        if (phase === PHASES.MINORITY_REPORT_LAB) {
+          returnFromMinorityReportLab();
+        }
       }
     };
 
@@ -2558,7 +2578,7 @@ export default function App() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [phase]);
+  }, [isImmersiveAppPhase, phase]);
 
   useEffect(() => {
     if (
@@ -5941,8 +5961,9 @@ export default function App() {
       phase: phaseRef.current,
       gameRunning: gameRunningRef.current,
     });
-    const excludeInsideSelector =
-      phaseRef.current === PHASES.ROULETTE ? ".roulette-panel" : null;
+    const excludeInsideSelector = getPinchClickExcludeSelector({
+      phase: phaseRef.current,
+    });
     const clickedButton = clickButtonAtPoint(cursorRef.current, {
       excludeInsideSelector,
     });
@@ -6760,9 +6781,13 @@ export default function App() {
   function getFullscreenTipOverlayPoints(hands) {
     const renderMetrics = computeCameraRenderMetrics("contain");
     const safeHands = Array.isArray(hands) ? hands : [];
+    const trackedFingerNames = getFullscreenTrackedFingerNames(
+      fullscreenGridModeRef.current,
+      EXTENT_FINGER_NAMES,
+    );
     return safeHands.flatMap((hand, handIndex) => {
       const handId = hand?.id ?? hand?.label ?? `hand-${handIndex}`;
-      return EXTENT_FINGER_NAMES.map((fingerName) => {
+      return trackedFingerNames.map((fingerName) => {
         const tip = hand?.fingerTips?.[fingerName] ?? hand?.[`${fingerName}Tip`] ?? null;
         const projectedPoint = projectCameraPointToCanvas(tip, renderMetrics);
         if (!projectedPoint) {
@@ -8841,6 +8866,7 @@ export default function App() {
                   key={`fullscreen-voronoi-cell-${cell.key}`}
                   className="fullscreen-camera-voronoi-cell"
                   points={cell.polygon.map((point) => `${point.x},${point.y}`).join(" ")}
+                  style={{ fill: cell.color }}
                 />
               ))}
             </svg>
@@ -9732,30 +9758,30 @@ export default function App() {
                 >
                   Missile Command
                 </button>
+                {fullscreenGridMode === "brick-dodger" ? (
+                  <button type="button" className="secondary" onClick={restartFullscreenBrickDodgerGame}>
+                    Restart Run
+                  </button>
+                ) : null}
+                {fullscreenGridMode === "finger-pong" ? (
+                  <button type="button" className="secondary" onClick={restartFullscreenFingerPongGame}>
+                    Restart Rally
+                  </button>
+                ) : null}
+                {fullscreenGridMode === "fruit-ninja" ? (
+                  <button type="button" className="secondary" onClick={restartFullscreenFruitNinjaGame}>
+                    Restart Round
+                  </button>
+                ) : null}
+                {fullscreenGridMode === "missile-command" ? (
+                  <button type="button" className="secondary" onClick={restartFullscreenMissileCommandGame}>
+                    Restart Defense
+                  </button>
+                ) : null}
+                <button type="button" className="secondary" onClick={returnFromFullscreenCameraScreen}>
+                  Back to Input Test
+                </button>
               </div>
-              {fullscreenGridMode === "brick-dodger" ? (
-                <button type="button" className="secondary" onClick={restartFullscreenBrickDodgerGame}>
-                  Restart Run
-                </button>
-              ) : null}
-              {fullscreenGridMode === "finger-pong" ? (
-                <button type="button" className="secondary" onClick={restartFullscreenFingerPongGame}>
-                  Restart Rally
-                </button>
-              ) : null}
-              {fullscreenGridMode === "fruit-ninja" ? (
-                <button type="button" className="secondary" onClick={restartFullscreenFruitNinjaGame}>
-                  Restart Round
-                </button>
-              ) : null}
-              {fullscreenGridMode === "missile-command" ? (
-                <button type="button" className="secondary" onClick={restartFullscreenMissileCommandGame}>
-                  Restart Defense
-                </button>
-              ) : null}
-              <button type="button" className="secondary" onClick={returnFromFullscreenCameraScreen}>
-                Back to Input Test
-              </button>
             </div>
             {(cameraError || modelError) && (
               <div className="fullscreen-camera-errors">
@@ -9765,6 +9791,49 @@ export default function App() {
             )}
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (isMinorityReportLabPhase) {
+    return (
+      <div className="app fullscreen-camera-app minority-report-app">
+        <MinorityReportLab
+          immersive
+          cameraAspectRatio={cameraAspectRatio}
+          cameraObjectFit={cameraObjectFit}
+          cameraOverlayRef={overlayCanvasRef}
+          cameraStageRef={cameraWrapRef}
+          cameraVideoRef={videoRef}
+          cameraError={cameraError}
+          modelError={modelError}
+          fps={fps}
+          engineOutput={labEngineOutput}
+          eventLog={labEventLog}
+          detectionStatus={{
+            handsCount: labEngineOutput.hands.length,
+            inferenceBusy: inferenceBusyRef.current,
+            handDetected,
+          }}
+          confidenceThreshold={labConfidenceThreshold}
+          showSkeleton={labShowSkeleton}
+          showTrails={labShowTrails}
+          personalizationEnabled={labPersonalizationEnabled}
+          onConfidenceThresholdChange={setLabConfidenceThreshold}
+          onShowSkeletonChange={setLabShowSkeleton}
+          onShowTrailsChange={setLabShowTrails}
+          onPersonalizationEnabledChange={setLabPersonalizationEnabled}
+          trainingState={labTrainingState}
+          sampleCounts={labSampleCounts}
+          onRecordGesture={startLabGestureRecording}
+          onDeleteLastSample={deleteLastLabSample}
+          onClearSamples={clearLabSamples}
+          onExportSamples={exportLabSamples}
+          onImportSamples={importLabSamples}
+          onClearEventLog={clearLabEventLog}
+          onBack={returnFromMinorityReportLab}
+          onReset={startMinorityReportLab}
+        />
       </div>
     );
   }
@@ -10109,14 +10178,23 @@ export default function App() {
         <section className="card camera-card" ref={cameraPaneRef}>
           <div className="camera-preview-panel">
             <h2>{cameraPanelTitle}</h2>
-            <div
-              className="camera-wrap"
-              ref={cameraWrapRef}
-              style={{ aspectRatio: String(cameraAspectRatio) }}
-            >
-              <video ref={videoRef} className="camera-video" playsInline muted autoPlay />
-              <canvas ref={overlayCanvasRef} className="camera-overlay" />
-            </div>
+            {showInlineCameraPreview ? (
+              <div
+                className="camera-wrap"
+                ref={cameraWrapRef}
+                style={{ aspectRatio: String(cameraAspectRatio) }}
+              >
+                <video
+                  ref={videoRef}
+                  className="camera-video"
+                  style={{ objectFit: cameraObjectFit }}
+                  playsInline
+                  muted
+                  autoPlay
+                />
+                <canvas ref={overlayCanvasRef} className="camera-overlay" />
+              </div>
+            ) : null}
           </div>
 
           <div className="camera-support-panel">
@@ -10447,6 +10525,11 @@ export default function App() {
           <OffAxisChamberLab poseStatus={poseStatus} />
         ) : phase === PHASES.MINORITY_REPORT_LAB ? (
           <MinorityReportLab
+            cameraAspectRatio={cameraAspectRatio}
+            cameraObjectFit={cameraObjectFit}
+            cameraOverlayRef={overlayCanvasRef}
+            cameraStageRef={cameraWrapRef}
+            cameraVideoRef={videoRef}
             fps={fps}
             engineOutput={labEngineOutput}
             eventLog={labEventLog}

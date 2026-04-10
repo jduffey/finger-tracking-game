@@ -1,19 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import GestureDebugPanel from "./GestureDebugPanel.jsx";
 import { GESTURE_IDS } from "../gestures/constants.js";
+import {
+  getMinorityReportAnchoredZoomTransform,
+  getMinorityReportFocusTransform,
+  getMinorityReportOverviewTransform,
+  getMinorityReportPinchSequenceAction,
+  normalizeMinorityReportStageTransform,
+  shouldResetMinorityReportFocus,
+  shouldUseMinorityReportZoom,
+} from "../minorityReportLabInteractions.js";
+import {
+  clampMinorityReportPanelPosition,
+  getMinorityReportPanelPlacement,
+  getMinorityReportRandomPanelAssignments,
+  getMinorityReportSuperSectorBoundsList,
+  getMinorityReportTileBounds,
+  getMinorityReportTileIndexAtPoint,
+  getMinorityReportTileBoundsList,
+  getMinorityReportWorkspaceBounds,
+} from "../minorityReportLabLayout.js";
 
-const PANEL_WIDTH = 196;
-const PANEL_HEIGHT = 124;
-const PANEL_COUNT = 6;
 const STAGE_DEFAULT_SIZE = { width: 960, height: 640 };
 const HAND_INFO_BOX_SIZE = { width: 170, height: 88 };
 const HAND_INFO_BOX_MARGIN = 10;
-const DEFAULT_STAGE_TRANSFORM = {
-  x: 0,
-  y: 0,
-  scale: 1,
-  rotation: 0,
-};
+const DOUBLE_PINCH_MAX_DELAY_MS = 320;
+const SECTOR_FOCUS_ANIMATION_MS = 160;
+const PANEL_IDLE_TRANSITION_MS = 80;
+const PANEL_THROW_TRANSITION_MS = 520;
 
 const SCENES = [
   {
@@ -56,72 +70,29 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function wrapAngle(value) {
-  let angle = value;
-  while (angle > Math.PI) {
-    angle -= Math.PI * 2;
-  }
-  while (angle < -Math.PI) {
-    angle += Math.PI * 2;
-  }
-  return angle;
+function getDefaultStageTransform(stageSize) {
+  return getMinorityReportOverviewTransform(
+    stageSize,
+    getMinorityReportWorkspaceBounds(stageSize),
+  );
 }
 
-function scenePoint(sceneIndex, cardIndex, width, height) {
-  const safeWidth = Math.max(360, width);
-  const safeHeight = Math.max(280, height);
-  const centerX = safeWidth * 0.5;
-  const centerY = safeHeight * 0.5;
-
-  if (sceneIndex === 0) {
-    const colCount = 3;
-    const rowCount = Math.ceil(PANEL_COUNT / colCount);
-    const col = cardIndex % colCount;
-    const row = Math.floor(cardIndex / colCount);
-    const spanX = Math.min(620, safeWidth * 0.72);
-    const spanY = Math.min(340, safeHeight * 0.62);
-    return {
-      x: centerX + (col / Math.max(1, colCount - 1) - 0.5) * spanX,
-      y: centerY + (row / Math.max(1, rowCount - 1) - 0.5) * spanY,
-      rotation: (col - 1) * 0.06,
-      scale: 1,
-    };
-  }
-
-  if (sceneIndex === 1) {
-    const bandY = centerY + (cardIndex % 2 === 0 ? -68 : 68);
-    const minX = safeWidth * 0.12;
-    const maxX = safeWidth * 0.88;
-    const t = cardIndex / Math.max(1, PANEL_COUNT - 1);
-    return {
-      x: minX + t * (maxX - minX),
-      y: bandY,
-      rotation: (t - 0.5) * 0.22,
-      scale: 0.95 + (cardIndex % 3) * 0.04,
-    };
-  }
-
-  const radiusX = Math.min(290, safeWidth * 0.3);
-  const radiusY = Math.min(190, safeHeight * 0.26);
-  const angle = (-Math.PI * 0.5) + (cardIndex / PANEL_COUNT) * (Math.PI * 2);
-  return {
-    x: centerX + Math.cos(angle) * radiusX,
-    y: centerY + Math.sin(angle) * radiusY,
-    rotation: angle * 0.35,
-    scale: 0.94 + Math.sin(angle * 2) * 0.06,
-  };
+function formatPanelSubtitle(placement) {
+  return `Super Sector ${placement.superSectorIndex + 1} · Sector ${placement.localTileIndex + 1} · Card ${placement.tileSlotIndex + 1}`;
 }
 
-function createPanels(sceneIndex, stageSize) {
-  const width = stageSize?.width ?? STAGE_DEFAULT_SIZE.width;
-  const height = stageSize?.height ?? STAGE_DEFAULT_SIZE.height;
-
-  return Array.from({ length: PANEL_COUNT }, (_, index) => {
-    const scenePlacement = scenePoint(sceneIndex, index, width, height);
+function createPanels(sceneIndex, stageSize, panelAssignments) {
+  return panelAssignments.map((panelAssignment, index) => {
+    const scenePlacement = getMinorityReportPanelPlacement(sceneIndex, panelAssignment, stageSize);
     return {
       id: `panel-${index + 1}`,
       title: PANEL_TITLES[index % PANEL_TITLES.length],
-      subtitle: `Node ${index + 1}`,
+      subtitle: formatPanelSubtitle(scenePlacement),
+      tileIndex: scenePlacement.tileIndex,
+      superSectorIndex: scenePlacement.superSectorIndex,
+      localTileIndex: scenePlacement.localTileIndex,
+      tileSlotIndex: scenePlacement.tileSlotIndex,
+      tileSlotCount: scenePlacement.tileSlotCount,
       x: scenePlacement.x,
       y: scenePlacement.y,
       rotation: scenePlacement.rotation,
@@ -132,13 +103,25 @@ function createPanels(sceneIndex, stageSize) {
   });
 }
 
-function applySceneLayout(existingPanels, sceneIndex, stageSize) {
-  const width = stageSize?.width ?? STAGE_DEFAULT_SIZE.width;
-  const height = stageSize?.height ?? STAGE_DEFAULT_SIZE.height;
+function applySceneLayout(existingPanels, sceneIndex, stageSize, panelAssignments) {
   return existingPanels.map((panel, index) => {
-    const nextPlacement = scenePoint(sceneIndex, index, width, height);
+    const nextPlacement = getMinorityReportPanelPlacement(
+      sceneIndex,
+      panelAssignments[index] ?? {
+        tileIndex: panel.tileIndex,
+        tileSlotIndex: panel.tileSlotIndex,
+        tileSlotCount: panel.tileSlotCount,
+      },
+      stageSize,
+    );
     return {
       ...panel,
+      tileIndex: nextPlacement.tileIndex,
+      superSectorIndex: nextPlacement.superSectorIndex,
+      localTileIndex: nextPlacement.localTileIndex,
+      tileSlotIndex: nextPlacement.tileSlotIndex,
+      tileSlotCount: nextPlacement.tileSlotCount,
+      subtitle: formatPanelSubtitle(nextPlacement),
       x: nextPlacement.x,
       y: nextPlacement.y,
       rotation: nextPlacement.rotation,
@@ -160,17 +143,12 @@ function pointerToLocal(pointer, stageSize, transform) {
 
   const centerX = width * 0.5;
   const centerY = height * 0.5;
-  const translatedX = px - centerX - transform.x;
-  const translatedY = py - centerY - transform.y;
-
-  const cos = Math.cos(-transform.rotation);
-  const sin = Math.sin(-transform.rotation);
-  const rotatedX = translatedX * cos - translatedY * sin;
-  const rotatedY = translatedX * sin + translatedY * cos;
+  const translatedX = px - centerX - (transform?.x ?? 0);
+  const translatedY = py - centerY - (transform?.y ?? 0);
 
   return {
-    x: rotatedX / Math.max(0.001, transform.scale) + centerX,
-    y: rotatedY / Math.max(0.001, transform.scale) + centerY,
+    x: translatedX / Math.max(0.001, transform.scale) + centerX,
+    y: translatedY / Math.max(0.001, transform.scale) + centerY,
   };
 }
 
@@ -200,16 +178,6 @@ function nearestPanel(panels, localPointer, maxDistance = 150) {
   };
 }
 
-function clampPanelPosition(panel, stageSize) {
-  const halfWidth = PANEL_WIDTH * 0.5;
-  const halfHeight = PANEL_HEIGHT * 0.5;
-  return {
-    ...panel,
-    x: clamp(panel.x, halfWidth, stageSize.width - halfWidth),
-    y: clamp(panel.y, halfHeight, stageSize.height - halfHeight),
-  };
-}
-
 function clampInfoBoxPosition(position, stageSize) {
   const maxX = Math.max(HAND_INFO_BOX_MARGIN, stageSize.width - HAND_INFO_BOX_SIZE.width - HAND_INFO_BOX_MARGIN);
   const maxY = Math.max(HAND_INFO_BOX_MARGIN, stageSize.height - HAND_INFO_BOX_SIZE.height - HAND_INFO_BOX_MARGIN);
@@ -221,6 +189,13 @@ function clampInfoBoxPosition(position, stageSize) {
 
 export default function MinorityReportLab(props) {
   const {
+    cameraAspectRatio,
+    cameraObjectFit,
+    cameraOverlayRef,
+    cameraStageRef,
+    cameraVideoRef,
+    cameraError,
+    modelError,
     fps,
     engineOutput,
     eventLog,
@@ -241,26 +216,41 @@ export default function MinorityReportLab(props) {
     onExportSamples,
     onImportSamples,
     onClearEventLog,
+    immersive = false,
+    onBack,
+    onReset,
   } = props;
 
+  const stageShellRef = useRef(null);
   const stageRef = useRef(null);
+  const [panelAssignments] = useState(() => getMinorityReportRandomPanelAssignments());
   const [stageSize, setStageSize] = useState(STAGE_DEFAULT_SIZE);
   const [sceneIndex, setSceneIndex] = useState(0);
-  const [stageTransform, setStageTransform] = useState(DEFAULT_STAGE_TRANSFORM);
-  const [panels, setPanels] = useState(() => createPanels(0, STAGE_DEFAULT_SIZE));
+  const [stageTransform, setStageTransform] = useState(() => getDefaultStageTransform(STAGE_DEFAULT_SIZE));
+  const [panels, setPanels] = useState(() =>
+    createPanels(0, STAGE_DEFAULT_SIZE, panelAssignments),
+  );
   const [selectedPanelId, setSelectedPanelId] = useState(null);
   const [draggedPanelId, setDraggedPanelId] = useState(null);
   const [pointerTrails, setPointerTrails] = useState({});
   const [handInfoBoxPositions, setHandInfoBoxPositions] = useState(HAND_INFO_BOX_DEFAULTS);
+  const [isDebugPanelVisible, setIsDebugPanelVisible] = useState(false);
+  const [focusedTileIndex, setFocusedTileIndex] = useState(null);
+  const [isStageTransformAnimating, setIsStageTransformAnimating] = useState(false);
 
   const panelsRef = useRef(panels);
   const sceneIndexRef = useRef(sceneIndex);
   const stageTransformRef = useRef(stageTransform);
+  const focusedTileIndexRef = useRef(focusedTileIndex);
+  const stageViewModeRef = useRef("overview");
   const grabRef = useRef(null);
   const twoHandManipRef = useRef({ active: false, base: null });
   const pointerTrailsRef = useRef(pointerTrails);
   const handInfoBoxPositionsRef = useRef(handInfoBoxPositions);
   const processedEventsFrameRef = useRef(-1);
+  const pinchActiveByHandRef = useRef({});
+  const lastPinchStartRef = useRef({});
+  const stageTransformAnimationTimeoutRef = useRef(null);
   const handInfoBoxDragRef = useRef({
     Left: null,
     Right: null,
@@ -279,6 +269,10 @@ export default function MinorityReportLab(props) {
   }, [stageTransform]);
 
   useEffect(() => {
+    focusedTileIndexRef.current = focusedTileIndex;
+  }, [focusedTileIndex]);
+
+  useEffect(() => {
     pointerTrailsRef.current = pointerTrails;
   }, [pointerTrails]);
 
@@ -287,15 +281,31 @@ export default function MinorityReportLab(props) {
   }, [handInfoBoxPositions]);
 
   useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) {
+    return () => {
+      if (stageTransformAnimationTimeoutRef.current) {
+        window.clearTimeout(stageTransformAnimationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const stageShell = stageShellRef.current;
+    if (!stageShell) {
       return undefined;
     }
 
     const syncSize = () => {
-      const rect = stage.getBoundingClientRect();
-      const width = Math.max(1, Math.round(rect.width));
-      const height = Math.max(1, Math.round(rect.height));
+      const rect = stageShell.getBoundingClientRect();
+      const shellWidth = Math.max(1, Math.round(rect.width));
+      const shellHeight = Math.max(1, Math.round(rect.height));
+      const aspectRatio =
+        Number.isFinite(cameraAspectRatio) && cameraAspectRatio > 0 ? cameraAspectRatio : 4 / 3;
+      let width = shellWidth;
+      let height = Math.round(width / aspectRatio);
+      if (height > shellHeight) {
+        height = shellHeight;
+        width = Math.round(height * aspectRatio);
+      }
       setStageSize((previous) => {
         if (previous.width === width && previous.height === height) {
           return previous;
@@ -314,16 +324,42 @@ export default function MinorityReportLab(props) {
     }
 
     const observer = new ResizeObserver(syncSize);
-    observer.observe(stage);
+    observer.observe(stageShell);
     window.addEventListener("resize", syncSize);
 
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", syncSize);
     };
-  }, []);
+  }, [cameraAspectRatio]);
 
-  const sceneMeta = useMemo(() => SCENES[sceneIndex] ?? SCENES[0], [sceneIndex]);
+  const tileBounds = useMemo(
+    () => getMinorityReportTileBoundsList(stageSize),
+    [stageSize],
+  );
+  const superSectorBounds = useMemo(
+    () => getMinorityReportSuperSectorBoundsList(stageSize),
+    [stageSize],
+  );
+  const panelClassName = immersive
+    ? "minority-lab-panel minority-lab-panel-immersive"
+    : "card panel minority-lab-panel";
+  const layoutClassName = [
+    "minority-lab-layout",
+    !isDebugPanelVisible ? "debug-collapsed" : "",
+    immersive ? "immersive" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const stageShellClassName = ["minority-stage-shell", immersive ? "immersive" : ""]
+    .filter(Boolean)
+    .join(" ");
+  const debugPanelClassName = [
+    "minority-report-debug-panel",
+    immersive ? "minority-report-debug-panel-immersive" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const handsByLabel = useMemo(() => {
     const map = {
       Left: null,
@@ -339,19 +375,198 @@ export default function MinorityReportLab(props) {
     }
     return map;
   }, [engineOutput?.hands]);
+  const hoveredTileByHand = useMemo(() => {
+    const hovered = {
+      Left: null,
+      Right: null,
+    };
+    const hands = Array.isArray(engineOutput?.hands) ? engineOutput.hands : [];
+    for (const hand of hands) {
+      if ((hand?.label !== "Left" && hand?.label !== "Right") || !hand?.pointer) {
+        continue;
+      }
+      const localPointer = pointerToLocal(hand.pointer, stageSize, stageTransform);
+      hovered[hand.label] = getMinorityReportTileIndexAtPoint(localPointer, stageSize);
+    }
+    return hovered;
+  }, [engineOutput?.hands, stageSize, stageTransform]);
+  const focusedSuperSectorIndex = Number.isInteger(focusedTileIndex)
+    ? tileBounds[focusedTileIndex]?.superSectorIndex ?? null
+    : null;
+  const superSectorElements = useMemo(
+    () =>
+      superSectorBounds.map((superSector) => (
+        <div
+          key={`minority-super-sector-${superSector.index}`}
+          className={`minority-stage-super-sector ${
+            focusedSuperSectorIndex === superSector.index ? "focused" : ""
+          }`}
+          style={{
+            left: `${superSector.left}px`,
+            top: `${superSector.top}px`,
+            width: `${superSector.width}px`,
+            height: `${superSector.height}px`,
+          }}
+          aria-hidden="true"
+        >
+          <span className="minority-stage-super-sector-label">
+            Super Sector {superSector.index + 1}
+          </span>
+        </div>
+      )),
+    [focusedSuperSectorIndex, superSectorBounds],
+  );
+  const tileElements = useMemo(
+    () =>
+      tileBounds.map((tile) => (
+        <div
+          key={`minority-tile-${tile.index}`}
+          className={`minority-stage-drag-bounds ${focusedTileIndex === tile.index ? "focused" : ""} ${
+            hoveredTileByHand.Left === tile.index && hoveredTileByHand.Right === tile.index
+              ? "hovered-both"
+              : hoveredTileByHand.Left === tile.index
+              ? "hovered-left"
+              : hoveredTileByHand.Right === tile.index
+              ? "hovered-right"
+              : ""
+          }`}
+          style={{
+            left: `${tile.left}px`,
+            top: `${tile.top}px`,
+            width: `${tile.width}px`,
+            height: `${tile.height}px`,
+          }}
+          aria-hidden="true"
+        >
+          <span className="minority-stage-sector-label">
+            Sector {tile.localTileIndex + 1}
+          </span>
+        </div>
+      )),
+    [focusedTileIndex, hoveredTileByHand.Left, hoveredTileByHand.Right, tileBounds],
+  );
+  const panelElements = useMemo(
+    () =>
+      panels.map((panel) => {
+        const isDragging = draggedPanelId === panel.id;
+        const isThrowing = panel.throwingUntil > Date.now();
+        const transition = isDragging
+          ? "none"
+          : isThrowing
+          ? `left ${PANEL_THROW_TRANSITION_MS}ms cubic-bezier(.09,.67,.22,.98), top ${PANEL_THROW_TRANSITION_MS}ms cubic-bezier(.09,.67,.22,.98), transform ${PANEL_THROW_TRANSITION_MS}ms cubic-bezier(.09,.67,.22,.98), box-shadow 180ms ease`
+          : `left ${PANEL_IDLE_TRANSITION_MS}ms linear, top ${PANEL_IDLE_TRANSITION_MS}ms linear, transform ${PANEL_IDLE_TRANSITION_MS}ms linear, box-shadow 120ms ease`;
+        return (
+          <article
+            key={panel.id}
+            className={`minority-panel-card ${panel.selected ? "selected" : ""} ${selectedPanelId === panel.id ? "focused" : ""}`}
+            style={{
+              left: `${panel.x}px`,
+              top: `${panel.y}px`,
+              transform: `translate(-50%, -50%) rotate(${panel.rotation}rad) scale(${panel.scale})`,
+              transition,
+            }}
+          >
+            <h4>{panel.title}</h4>
+            <p>{panel.subtitle}</p>
+            <small>Pinch-drag within this sector</small>
+          </article>
+        );
+      }),
+    [draggedPanelId, panels, selectedPanelId],
+  );
 
   useEffect(() => {
     setPanels((previous) => {
       if (previous.length === 0) {
-        return createPanels(sceneIndexRef.current, stageSize);
+        return createPanels(sceneIndexRef.current, stageSize, panelAssignments);
       }
-      return previous.map((panel) => clampPanelPosition(panel, stageSize));
+      return previous.map((panel) => clampMinorityReportPanelPosition(panel, stageSize));
     });
+    if (stageViewModeRef.current === "overview") {
+      const overviewTransform = getDefaultStageTransform(stageSize);
+      setIsStageTransformAnimating(false);
+      setStageTransform(overviewTransform);
+      stageTransformRef.current = overviewTransform;
+    } else if (
+      stageViewModeRef.current === "focused" &&
+      Number.isInteger(focusedTileIndexRef.current)
+    ) {
+      const focusedTile = getMinorityReportTileBounds(stageSize, focusedTileIndexRef.current);
+      const nextFocusedTransform = getMinorityReportFocusTransform(stageSize, focusedTile);
+      setIsStageTransformAnimating(false);
+      setStageTransform(nextFocusedTransform);
+      stageTransformRef.current = nextFocusedTransform;
+    }
     setHandInfoBoxPositions((previous) => ({
       Left: clampInfoBoxPosition(previous.Left ?? HAND_INFO_BOX_DEFAULTS.Left, stageSize),
       Right: clampInfoBoxPosition(previous.Right ?? HAND_INFO_BOX_DEFAULTS.Right, stageSize),
     }));
-  }, [stageSize]);
+  }, [panelAssignments, stageSize]);
+
+  const animateStageTransform = (nextTransform) => {
+    if (stageTransformAnimationTimeoutRef.current) {
+      window.clearTimeout(stageTransformAnimationTimeoutRef.current);
+    }
+    setIsStageTransformAnimating(true);
+    setStageTransform(nextTransform);
+    stageTransformRef.current = nextTransform;
+    stageTransformAnimationTimeoutRef.current = window.setTimeout(() => {
+      setIsStageTransformAnimating(false);
+      stageTransformAnimationTimeoutRef.current = null;
+    }, SECTOR_FOCUS_ANIMATION_MS);
+  };
+
+  const focusTile = (tileIndex) => {
+    const tile = getMinorityReportTileBounds(stageSize, tileIndex);
+    const nextTransform = getMinorityReportFocusTransform(stageSize, tile);
+    stageViewModeRef.current = "focused";
+    focusedTileIndexRef.current = tileIndex;
+    setFocusedTileIndex(tileIndex);
+    animateStageTransform(nextTransform);
+    grabRef.current = null;
+    handInfoBoxDragRef.current = {
+      Left: null,
+      Right: null,
+    };
+    setDraggedPanelId(null);
+  };
+
+  const resetFocusedView = () => {
+    stageViewModeRef.current = "overview";
+    focusedTileIndexRef.current = null;
+    setFocusedTileIndex(null);
+    animateStageTransform(getDefaultStageTransform(stageSize));
+  };
+
+  const requestTileFocus = (tileIndex) => {
+    if (!Number.isInteger(tileIndex)) {
+      return;
+    }
+    if (shouldResetMinorityReportFocus(focusedTileIndexRef.current, tileIndex)) {
+      resetFocusedView();
+      return;
+    }
+    focusTile(tileIndex);
+  };
+
+  const handleStageDoubleClick = (event) => {
+    const stageNode = stageRef.current;
+    if (!stageNode) {
+      return;
+    }
+    const rect = stageNode.getBoundingClientRect();
+    const pointer = {
+      x: clamp((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1),
+      y: clamp((event.clientY - rect.top) / Math.max(1, rect.height), 0, 1),
+    };
+    const localPointer = pointerToLocal(pointer, stageSize, stageTransformRef.current);
+    const tileIndex = getMinorityReportTileIndexAtPoint(localPointer, stageSize);
+    if (!Number.isInteger(tileIndex)) {
+      return;
+    }
+    event.preventDefault();
+    requestTileFocus(tileIndex);
+  };
 
   useEffect(() => {
     const frameId = engineOutput?.frameId;
@@ -366,6 +581,47 @@ export default function MinorityReportLab(props) {
     const handStates = Array.isArray(engineOutput?.hands) ? engineOutput.hands : [];
     const twoHand = engineOutput?.twoHand ?? { present: false };
     const events = Array.isArray(engineOutput?.events) ? engineOutput.events : [];
+    const zoomGestureActive = shouldUseMinorityReportZoom(twoHand, engineOutput?.continuous);
+    const now = performance.now();
+    let doublePinchTriggered = false;
+
+    for (const hand of handStates) {
+      const wasPinching = Boolean(pinchActiveByHandRef.current[hand.id]);
+      if (!hand.pinchActive || wasPinching || !hand.pointer || zoomGestureActive) {
+        continue;
+      }
+      const localPointer = pointerToLocal(hand.pointer, stageSize, stageTransformRef.current);
+      const tileIndex = getMinorityReportTileIndexAtPoint(localPointer, stageSize);
+      const previousPinch = lastPinchStartRef.current[hand.id];
+      const pinchSequence = getMinorityReportPinchSequenceAction(
+        previousPinch,
+        tileIndex,
+        now,
+        DOUBLE_PINCH_MAX_DELAY_MS,
+      );
+
+      if (pinchSequence.action === "focus" && Number.isInteger(tileIndex)) {
+        requestTileFocus(tileIndex);
+        lastPinchStartRef.current[hand.id] = null;
+        doublePinchTriggered = true;
+        break;
+      }
+
+      if (pinchSequence.action === "overview") {
+        resetFocusedView();
+        lastPinchStartRef.current[hand.id] = null;
+        doublePinchTriggered = true;
+        break;
+      }
+
+      lastPinchStartRef.current[hand.id] = pinchSequence.state;
+    }
+
+    const nextPinchStateByHand = {};
+    for (const hand of handStates) {
+      nextPinchStateByHand[hand.id] = Boolean(hand.pinchActive);
+    }
+    pinchActiveByHandRef.current = nextPinchStateByHand;
 
     if (showTrails) {
       setPointerTrails((previous) => {
@@ -399,10 +655,15 @@ export default function MinorityReportLab(props) {
         setSceneIndex((previous) => {
           const nextIndex = (previous + step + SCENES.length) % SCENES.length;
           sceneIndexRef.current = nextIndex;
-          setPanels((currentPanels) => applySceneLayout(currentPanels, nextIndex, stageSize));
+          setPanels((currentPanels) =>
+            applySceneLayout(currentPanels, nextIndex, stageSize, panelAssignments),
+          );
           if (hard) {
-            setStageTransform(DEFAULT_STAGE_TRANSFORM);
-            stageTransformRef.current = DEFAULT_STAGE_TRANSFORM;
+            const resetTransform = getDefaultStageTransform(stageSize);
+            stageViewModeRef.current = "overview";
+            focusedTileIndexRef.current = null;
+            setFocusedTileIndex(null);
+            animateStageTransform(resetTransform);
             grabRef.current = null;
             setDraggedPanelId(null);
             twoHandManipRef.current = { active: false, base: null };
@@ -447,8 +708,7 @@ export default function MinorityReportLab(props) {
         } else if (event.gestureId === GESTURE_IDS.PUSH_FORWARD) {
           toggleNearestPanelSelection(event.handId);
         } else if (event.gestureId === GESTURE_IDS.CIRCLE) {
-          setStageTransform(DEFAULT_STAGE_TRANSFORM);
-          stageTransformRef.current = DEFAULT_STAGE_TRANSFORM;
+          resetFocusedView();
         }
 
         if (
@@ -470,53 +730,74 @@ export default function MinorityReportLab(props) {
               if (panel.id !== grabbed.panelId) {
                 return panel;
               }
-              return {
-                ...panel,
-                x: panel.x + throwDistanceX,
-                y: panel.y + throwDistanceY,
-                rotation: panel.rotation + throwDirection * 0.46,
-                throwingUntil: Date.now() + 650,
-              };
+              return clampMinorityReportPanelPosition(
+                {
+                  ...panel,
+                  x: panel.x + throwDistanceX,
+                  y: panel.y + throwDistanceY,
+                  rotation: panel.rotation + throwDirection * 0.46,
+                  throwingUntil: Date.now() + 650,
+                },
+                stageSize,
+              );
             }),
           );
         }
       }
     }
 
-    if (twoHand.present && engineOutput?.continuous?.twoHandManipulationActive) {
-      const currentTransform = stageTransformRef.current;
+    if (doublePinchTriggered) {
+      return;
+    }
+
+    if (zoomGestureActive) {
+      if (isStageTransformAnimating) {
+        setIsStageTransformAnimating(false);
+      }
+      const currentTransform = normalizeMinorityReportStageTransform(stageTransformRef.current);
       if (!twoHandManipRef.current.active) {
+        const baseLocalAnchor = pointerToLocal(
+          twoHand.midpoint ?? { x: 0.5, y: 0.5 },
+          stageSize,
+          currentTransform,
+        );
         twoHandManipRef.current = {
           active: true,
           base: {
             distance: twoHand.distance,
-            angle: twoHand.angle,
-            midpoint: twoHand.midpoint,
             transform: currentTransform,
+            localAnchor: baseLocalAnchor,
           },
         };
+        stageViewModeRef.current = "manual";
+        if (focusedTileIndexRef.current !== null) {
+          focusedTileIndexRef.current = null;
+          setFocusedTileIndex(null);
+        }
       }
 
       const base = twoHandManipRef.current.base;
-      const distanceRatio = twoHand.distance / Math.max(0.02, base.distance);
-      const deltaAngle = wrapAngle(twoHand.angle - base.angle);
-      const moveX = (twoHand.midpoint.x - base.midpoint.x) * stageSize.width;
-      const moveY = (twoHand.midpoint.y - base.midpoint.y) * stageSize.height;
-      const nextTransform = {
-        x: base.transform.x + moveX,
-        y: base.transform.y + moveY,
-        scale: clamp(base.transform.scale * distanceRatio, 0.45, 2.6),
-        rotation: wrapAngle(base.transform.rotation + deltaAngle),
-      };
+      const nextTransform = getMinorityReportAnchoredZoomTransform({
+        baseTransform: base.transform,
+        baseDistance: base.distance,
+        currentDistance: twoHand.distance,
+        stageSize,
+        baseLocalAnchor: base.localAnchor,
+        currentMidpoint: twoHand.midpoint,
+      });
       setStageTransform(nextTransform);
       stageTransformRef.current = nextTransform;
       grabRef.current = null;
+      handInfoBoxDragRef.current = {
+        Left: null,
+        Right: null,
+      };
       setDraggedPanelId(null);
     } else {
       twoHandManipRef.current = { active: false, base: null };
     }
 
-    if (engineOutput?.continuous?.twoHandManipulationActive) {
+    if (zoomGestureActive) {
       return;
     }
 
@@ -534,7 +815,7 @@ export default function MinorityReportLab(props) {
               if (panel.id !== currentGrab.panelId) {
                 return panel;
               }
-              return clampPanelPosition(
+              return clampMinorityReportPanelPosition(
                 {
                   ...panel,
                   x: localPointer.x - currentGrab.offsetX,
@@ -571,7 +852,7 @@ export default function MinorityReportLab(props) {
       setPanels((currentPanels) =>
         currentPanels.map((panel) => ({
           ...(panel.id === nearest.panel.id
-            ? clampPanelPosition(
+            ? clampMinorityReportPanelPosition(
                 {
                   ...panel,
                   selected: true,
@@ -655,45 +936,92 @@ export default function MinorityReportLab(props) {
   ]);
 
   return (
-    <section className="card panel minority-lab-panel">
-      <h2>Minority Report Lab</h2>
-      <p className="small-text">Two-hand pinch controls the global stage transform (translate/scale/rotate).</p>
-      <p className="small-text">
-        Keep your wrist and forearm visible when using one hand so the lab can stabilize left/right coloring.
-      </p>
-      <p className="small-text">
-        Scene: <strong>{sceneMeta.name}</strong> | {sceneMeta.description}
-      </p>
+    <section className={panelClassName}>
+      {immersive ? (
+        <div className="minority-lab-overlay-controls">
+          <div className="button-row compact">
+            {onBack ? (
+              <button type="button" className="secondary" onClick={onBack}>
+                Back to Input Test
+              </button>
+            ) : null}
+            {onReset ? (
+              <button type="button" className="secondary" onClick={onReset}>
+                Reset Lab Session
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="secondary"
+              aria-controls="minority-report-debug-panel"
+              aria-expanded={isDebugPanelVisible}
+              onClick={() => setIsDebugPanelVisible((previous) => !previous)}
+            >
+              {isDebugPanelVisible ? "Hide Detector Panel" : "Show Detector Panel"}
+            </button>
+          </div>
+          {cameraError || modelError ? (
+            <div className="minority-lab-errors">
+              {cameraError ? <p className="error-text minority-lab-error">{cameraError}</p> : null}
+              {modelError ? <p className="error-text minority-lab-error">{modelError}</p> : null}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="minority-lab-header">
+          <h2>Minority Report Lab</h2>
+          <button
+            type="button"
+            className="secondary"
+            aria-controls="minority-report-debug-panel"
+            aria-expanded={isDebugPanelVisible}
+            onClick={() => setIsDebugPanelVisible((previous) => !previous)}
+          >
+            {isDebugPanelVisible ? "Hide Detector Panel" : "Show Detector Panel"}
+          </button>
+        </div>
+      )}
 
-      <div className="minority-lab-layout">
-        <div className="minority-stage-shell">
-          <div className="minority-stage" ref={stageRef}>
-            <div className="minority-stage-transform" style={{
-              transform: `translate(${stageTransform.x}px, ${stageTransform.y}px) rotate(${stageTransform.rotation}rad) scale(${stageTransform.scale})`,
-            }}>
-              {panels.map((panel) => (
-                <article
-                  key={panel.id}
-                  className={`minority-panel-card ${panel.selected ? "selected" : ""} ${selectedPanelId === panel.id ? "focused" : ""}`}
-                  style={{
-                    left: `${panel.x}px`,
-                    top: `${panel.y}px`,
-                    transform: `translate(-50%, -50%) rotate(${panel.rotation}rad) scale(${panel.scale})`,
-                    transition:
-                      draggedPanelId === panel.id
-                        ? "none"
-                        : panel.throwingUntil > Date.now()
-                        ? "left 620ms cubic-bezier(.09,.67,.22,.98), top 620ms cubic-bezier(.09,.67,.22,.98), transform 620ms cubic-bezier(.09,.67,.22,.98), box-shadow 220ms ease"
-                        : "left 120ms linear, top 120ms linear, transform 120ms linear, box-shadow 150ms ease",
-                  }}
-                >
-                  <h4>{panel.title}</h4>
-                  <p>{panel.subtitle}</p>
-                  <small>
-                    x:{panel.x.toFixed(0)} y:{panel.y.toFixed(0)} r:{(panel.rotation * 57.2958).toFixed(0)}° s:{panel.scale.toFixed(2)}
-                  </small>
-                </article>
-              ))}
+      <div className={layoutClassName}>
+        <div className={stageShellClassName} ref={stageShellRef}>
+          <div
+            className="minority-stage"
+            ref={(node) => {
+              stageRef.current = node;
+              if (cameraStageRef && typeof cameraStageRef === "object") {
+                cameraStageRef.current = node;
+              }
+            }}
+            style={{
+              width: `${stageSize.width}px`,
+              height: `${stageSize.height}px`,
+            }}
+          >
+            <video
+              ref={cameraVideoRef}
+              className="camera-video minority-stage-video"
+              style={{ objectFit: cameraObjectFit }}
+              playsInline
+              muted
+              autoPlay
+            />
+            <canvas
+              ref={cameraOverlayRef}
+              className="camera-overlay minority-stage-camera-overlay"
+            />
+            <div
+              className="minority-stage-transform"
+              onDoubleClick={handleStageDoubleClick}
+              style={{
+                transform: `translate(${stageTransform.x}px, ${stageTransform.y}px) scale(${stageTransform.scale})`,
+                transition: isStageTransformAnimating
+                  ? `transform ${SECTOR_FOCUS_ANIMATION_MS}ms cubic-bezier(.2,.72,.2,1)`
+                  : "none",
+              }}
+            >
+              {superSectorElements}
+              {tileElements}
+              {panelElements}
             </div>
 
             {showTrails && (
@@ -758,31 +1086,35 @@ export default function MinorityReportLab(props) {
           </div>
         </div>
 
-        <GestureDebugPanel
-          fps={fps}
-          detectionStatus={detectionStatus}
-          hands={engineOutput?.hands ?? []}
-          confidences={engineOutput?.confidences}
-          heuristicConfidences={engineOutput?.heuristicConfidences}
-          personalizedConfidences={engineOutput?.personalizedConfidences}
-          threshold={confidenceThreshold}
-          onThresholdChange={onConfidenceThresholdChange}
-          showSkeleton={showSkeleton}
-          showTrails={showTrails}
-          personalizationEnabled={personalizationEnabled}
-          onToggleShowSkeleton={onShowSkeletonChange}
-          onToggleShowTrails={onShowTrailsChange}
-          onTogglePersonalization={onPersonalizationEnabledChange}
-          eventLog={eventLog}
-          onClearEventLog={onClearEventLog}
-          trainingState={trainingState}
-          sampleCounts={sampleCounts}
-          onRecordGesture={onRecordGesture}
-          onDeleteLastSample={onDeleteLastSample}
-          onClearSamples={onClearSamples}
-          onExportSamples={onExportSamples}
-          onImportSamples={onImportSamples}
-        />
+        {isDebugPanelVisible && (
+          <div id="minority-report-debug-panel" className={debugPanelClassName}>
+            <GestureDebugPanel
+              fps={fps}
+              detectionStatus={detectionStatus}
+              hands={engineOutput?.hands ?? []}
+              confidences={engineOutput?.confidences}
+              heuristicConfidences={engineOutput?.heuristicConfidences}
+              personalizedConfidences={engineOutput?.personalizedConfidences}
+              threshold={confidenceThreshold}
+              onThresholdChange={onConfidenceThresholdChange}
+              showSkeleton={showSkeleton}
+              showTrails={showTrails}
+              personalizationEnabled={personalizationEnabled}
+              onToggleShowSkeleton={onShowSkeletonChange}
+              onToggleShowTrails={onShowTrailsChange}
+              onTogglePersonalization={onPersonalizationEnabledChange}
+              eventLog={eventLog}
+              onClearEventLog={onClearEventLog}
+              trainingState={trainingState}
+              sampleCounts={sampleCounts}
+              onRecordGesture={onRecordGesture}
+              onDeleteLastSample={onDeleteLastSample}
+              onClearSamples={onClearSamples}
+              onExportSamples={onExportSamples}
+              onImportSamples={onImportSamples}
+            />
+          </div>
+        )}
       </div>
     </section>
   );
