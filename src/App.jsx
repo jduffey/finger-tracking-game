@@ -94,6 +94,7 @@ import {
 import {
   shouldShowInlineCameraPreview,
   shouldUseContainedCameraFit,
+  shouldUseImmersiveAppLayout,
 } from "./cameraLayout.js";
 import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from "./poseTracking.js";
 import {
@@ -1905,6 +1906,8 @@ export default function App() {
     [calibrationTargets, calibrationTargetIndex],
   );
   const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
+  const isMinorityReportLabPhase = phase === PHASES.MINORITY_REPORT_LAB;
+  const isImmersiveAppPhase = shouldUseImmersiveAppLayout(phase);
   const isFullscreenBrickDodgerMode =
     isFullscreenCameraPhase &&
     fullscreenGridMode === "brick-dodger" &&
@@ -2553,13 +2556,19 @@ export default function App() {
   }, [fullscreenCameraViewport]);
 
   useEffect(() => {
-    if (phase !== PHASES.FULLSCREEN_CAMERA) {
+    if (!isImmersiveAppPhase) {
       return undefined;
     }
 
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
-        returnFromFullscreenCameraScreen();
+        if (phase === PHASES.FULLSCREEN_CAMERA) {
+          returnFromFullscreenCameraScreen();
+          return;
+        }
+        if (phase === PHASES.MINORITY_REPORT_LAB) {
+          returnFromMinorityReportLab();
+        }
       }
     };
 
@@ -2567,7 +2576,7 @@ export default function App() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [phase]);
+  }, [isImmersiveAppPhase, phase]);
 
   useEffect(() => {
     if (
@@ -9779,6 +9788,49 @@ export default function App() {
             )}
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (isMinorityReportLabPhase) {
+    return (
+      <div className="app fullscreen-camera-app minority-report-app">
+        <MinorityReportLab
+          immersive
+          cameraAspectRatio={cameraAspectRatio}
+          cameraObjectFit={cameraObjectFit}
+          cameraOverlayRef={overlayCanvasRef}
+          cameraStageRef={cameraWrapRef}
+          cameraVideoRef={videoRef}
+          cameraError={cameraError}
+          modelError={modelError}
+          fps={fps}
+          engineOutput={labEngineOutput}
+          eventLog={labEventLog}
+          detectionStatus={{
+            handsCount: labEngineOutput.hands.length,
+            inferenceBusy: inferenceBusyRef.current,
+            handDetected,
+          }}
+          confidenceThreshold={labConfidenceThreshold}
+          showSkeleton={labShowSkeleton}
+          showTrails={labShowTrails}
+          personalizationEnabled={labPersonalizationEnabled}
+          onConfidenceThresholdChange={setLabConfidenceThreshold}
+          onShowSkeletonChange={setLabShowSkeleton}
+          onShowTrailsChange={setLabShowTrails}
+          onPersonalizationEnabledChange={setLabPersonalizationEnabled}
+          trainingState={labTrainingState}
+          sampleCounts={labSampleCounts}
+          onRecordGesture={startLabGestureRecording}
+          onDeleteLastSample={deleteLastLabSample}
+          onClearSamples={clearLabSamples}
+          onExportSamples={exportLabSamples}
+          onImportSamples={importLabSamples}
+          onClearEventLog={clearLabEventLog}
+          onBack={returnFromMinorityReportLab}
+          onReset={startMinorityReportLab}
+        />
       </div>
     );
   }

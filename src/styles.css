@@ -1833,7 +1833,20 @@ body {
 }
 
 .minority-lab-panel {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
+  position: relative;
+}
+
+.minority-lab-panel-immersive {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  height: 100vh;
+  overflow: hidden;
+  padding: 0;
+  width: 100%;
 }
 
 .minority-lab-header {
@@ -1857,8 +1870,43 @@ body {
   min-height: 0;
 }
 
+.minority-lab-layout.immersive {
+  display: block;
+  height: 100%;
+  position: relative;
+}
+
 .minority-lab-layout.debug-collapsed {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.minority-lab-overlay-controls {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  z-index: 6;
+}
+
+.minority-lab-overlay-controls .button-row {
+  pointer-events: auto;
+}
+
+.minority-lab-errors {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.minority-lab-error {
+  margin: 0;
+  max-width: min(420px, calc(100vw - 36px));
+  pointer-events: auto;
 }
 
 .minority-stage-shell {
@@ -1873,6 +1921,14 @@ body {
   position: relative;
 }
 
+.minority-stage-shell.immersive {
+  background: #02070d;
+  border: 0;
+  border-radius: 0;
+  height: 100%;
+  width: 100%;
+}
+
 .minority-stage {
   background:
     radial-gradient(circle at 24% 17%, rgba(110, 184, 255, 0.12), transparent 42%),
@@ -1885,6 +1941,10 @@ body {
   overflow: hidden;
   position: relative;
   width: 100%;
+}
+
+.minority-lab-panel-immersive .minority-stage {
+  min-height: 0;
 }
 
 .minority-stage-video {
@@ -1910,6 +1970,17 @@ body {
   position: absolute;
   transform-origin: 50% 50%;
   z-index: 2;
+}
+
+.minority-report-debug-panel-immersive {
+  bottom: 18px;
+  max-height: calc(100vh - 108px);
+  overflow: auto;
+  position: absolute;
+  right: 18px;
+  top: 72px;
+  width: min(360px, calc(100vw - 36px));
+  z-index: 6;
 }
 
 .minority-panel-card {

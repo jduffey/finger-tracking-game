@@ -226,6 +226,8 @@ export default function MinorityReportLab(props) {
     cameraOverlayRef,
     cameraStageRef,
     cameraVideoRef,
+    cameraError,
+    modelError,
     fps,
     engineOutput,
     eventLog,
@@ -246,6 +248,9 @@ export default function MinorityReportLab(props) {
     onExportSamples,
     onImportSamples,
     onClearEventLog,
+    immersive = false,
+    onBack,
+    onReset,
   } = props;
 
   const stageShellRef = useRef(null);
@@ -348,6 +353,25 @@ export default function MinorityReportLab(props) {
       height: `${Math.max(0, stageSize.height - insetY * 2)}px`,
     };
   }, [stageSize]);
+  const panelClassName = immersive
+    ? "minority-lab-panel minority-lab-panel-immersive"
+    : "card panel minority-lab-panel";
+  const layoutClassName = [
+    "minority-lab-layout",
+    !isDebugPanelVisible ? "debug-collapsed" : "",
+    immersive ? "immersive" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const stageShellClassName = ["minority-stage-shell", immersive ? "immersive" : ""]
+    .filter(Boolean)
+    .join(" ");
+  const debugPanelClassName = [
+    "minority-report-debug-panel",
+    immersive ? "minority-report-debug-panel-immersive" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const handsByLabel = useMemo(() => {
     const map = {
       Left: null,
@@ -679,22 +703,54 @@ export default function MinorityReportLab(props) {
   ]);
 
   return (
-    <section className="card panel minority-lab-panel">
-      <div className="minority-lab-header">
-        <h2>Minority Report Lab</h2>
-        <button
-          type="button"
-          className="secondary"
-          aria-controls="minority-report-debug-panel"
-          aria-expanded={isDebugPanelVisible}
-          onClick={() => setIsDebugPanelVisible((previous) => !previous)}
-        >
-          {isDebugPanelVisible ? "Hide Detector Panel" : "Show Detector Panel"}
-        </button>
-      </div>
+    <section className={panelClassName}>
+      {immersive ? (
+        <div className="minority-lab-overlay-controls">
+          <div className="button-row compact">
+            {onBack ? (
+              <button type="button" className="secondary" onClick={onBack}>
+                Back to Input Test
+              </button>
+            ) : null}
+            {onReset ? (
+              <button type="button" className="secondary" onClick={onReset}>
+                Reset Lab Session
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="secondary"
+              aria-controls="minority-report-debug-panel"
+              aria-expanded={isDebugPanelVisible}
+              onClick={() => setIsDebugPanelVisible((previous) => !previous)}
+            >
+              {isDebugPanelVisible ? "Hide Detector Panel" : "Show Detector Panel"}
+            </button>
+          </div>
+          {cameraError || modelError ? (
+            <div className="minority-lab-errors">
+              {cameraError ? <p className="error-text minority-lab-error">{cameraError}</p> : null}
+              {modelError ? <p className="error-text minority-lab-error">{modelError}</p> : null}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="minority-lab-header">
+          <h2>Minority Report Lab</h2>
+          <button
+            type="button"
+            className="secondary"
+            aria-controls="minority-report-debug-panel"
+            aria-expanded={isDebugPanelVisible}
+            onClick={() => setIsDebugPanelVisible((previous) => !previous)}
+          >
+            {isDebugPanelVisible ? "Hide Detector Panel" : "Show Detector Panel"}
+          </button>
+        </div>
+      )}
 
-      <div className={`minority-lab-layout ${isDebugPanelVisible ? "" : "debug-collapsed"}`}>
-        <div className="minority-stage-shell" ref={stageShellRef}>
+      <div className={layoutClassName}>
+        <div className={stageShellClassName} ref={stageShellRef}>
           <div
             className="minority-stage"
             ref={(node) => {
@@ -816,7 +872,7 @@ export default function MinorityReportLab(props) {
         </div>
 
         {isDebugPanelVisible && (
-          <div id="minority-report-debug-panel">
+          <div id="minority-report-debug-panel" className={debugPanelClassName}>
             <GestureDebugPanel
               fps={fps}
               detectionStatus={detectionStatus}
