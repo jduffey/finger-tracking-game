@@ -13,6 +13,13 @@ export function shouldUseMinorityReportZoom(twoHand, continuous) {
   );
 }
 
+export function shouldResetMinorityReportFocus(currentFocusedTileIndex, requestedTileIndex) {
+  return (
+    Number.isInteger(requestedTileIndex) &&
+    currentFocusedTileIndex === requestedTileIndex
+  );
+}
+
 export function normalizeMinorityReportStageTransform(transform) {
   return {
     x: Number.isFinite(transform?.x) ? transform.x : 0,

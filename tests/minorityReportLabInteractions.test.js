@@ -5,6 +5,7 @@ import {
   getMinorityReportFocusTransform,
   getMinorityReportZoomTransform,
   normalizeMinorityReportStageTransform,
+  shouldResetMinorityReportFocus,
   shouldUseMinorityReportZoom,
 } from "../src/minorityReportLabInteractions.js";
 
@@ -83,4 +84,11 @@ test("getMinorityReportAnchoredZoomTransform keeps the pinch anchor stable while
     }),
     { x: 416, y: 260, scale: 1.3, rotation: 0 },
   );
+});
+
+test("shouldResetMinorityReportFocus only resets when the same focused sector is requested again", () => {
+  assert.equal(shouldResetMinorityReportFocus(4, 4), true);
+  assert.equal(shouldResetMinorityReportFocus(4, 5), false);
+  assert.equal(shouldResetMinorityReportFocus(null, 4), false);
+  assert.equal(shouldResetMinorityReportFocus(4, null), false);
 });

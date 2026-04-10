@@ -6,6 +6,7 @@ import {
   getMinorityReportFocusTransform,
   getMinorityReportZoomTransform,
   normalizeMinorityReportStageTransform,
+  shouldResetMinorityReportFocus,
   shouldUseMinorityReportZoom,
 } from "../minorityReportLabInteractions.js";
 import {
@@ -213,6 +214,7 @@ export default function MinorityReportLab(props) {
   const panelsRef = useRef(panels);
   const sceneIndexRef = useRef(sceneIndex);
   const stageTransformRef = useRef(stageTransform);
+  const focusedTileIndexRef = useRef(focusedTileIndex);
   const grabRef = useRef(null);
   const twoHandManipRef = useRef({ active: false, base: null });
   const pointerTrailsRef = useRef(pointerTrails);
@@ -237,6 +239,10 @@ export default function MinorityReportLab(props) {
   useEffect(() => {
     stageTransformRef.current = stageTransform;
   }, [stageTransform]);
+
+  useEffect(() => {
+    focusedTileIndexRef.current = focusedTileIndex;
+  }, [focusedTileIndex]);
 
   useEffect(() => {
     pointerTrailsRef.current = pointerTrails;
@@ -367,6 +373,7 @@ export default function MinorityReportLab(props) {
   const focusTile = (tileIndex) => {
     const tile = getMinorityReportTileBounds(stageSize, tileIndex);
     const nextTransform = getMinorityReportFocusTransform(stageSize, tile);
+    focusedTileIndexRef.current = tileIndex;
     setFocusedTileIndex(tileIndex);
     animateStageTransform(nextTransform);
     grabRef.current = null;
@@ -378,8 +385,39 @@ export default function MinorityReportLab(props) {
   };
 
   const resetFocusedView = () => {
+    focusedTileIndexRef.current = null;
     setFocusedTileIndex(null);
     animateStageTransform(normalizeMinorityReportStageTransform(DEFAULT_STAGE_TRANSFORM));
+  };
+
+  const requestTileFocus = (tileIndex) => {
+    if (!Number.isInteger(tileIndex)) {
+      return;
+    }
+    if (shouldResetMinorityReportFocus(focusedTileIndexRef.current, tileIndex)) {
+      resetFocusedView();
+      return;
+    }
+    focusTile(tileIndex);
+  };
+
+  const handleStageDoubleClick = (event) => {
+    const stageNode = stageRef.current;
+    if (!stageNode) {
+      return;
+    }
+    const rect = stageNode.getBoundingClientRect();
+    const pointer = {
+      x: clamp((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1),
+      y: clamp((event.clientY - rect.top) / Math.max(1, rect.height), 0, 1),
+    };
+    const localPointer = pointerToLocal(pointer, stageSize, stageTransformRef.current);
+    const tileIndex = getMinorityReportTileIndexAtPoint(localPointer, stageSize);
+    if (!Number.isInteger(tileIndex)) {
+      return;
+    }
+    event.preventDefault();
+    requestTileFocus(tileIndex);
   };
 
   useEffect(() => {
@@ -415,7 +453,7 @@ export default function MinorityReportLab(props) {
         previousPinch.tileIndex === tileIndex &&
         now - previousPinch.timestamp <= DOUBLE_PINCH_MAX_DELAY_MS
       ) {
-        focusTile(tileIndex);
+        requestTileFocus(tileIndex);
         lastPinchStartRef.current[hand.id] = null;
         doublePinchTriggered = true;
         break;
@@ -467,6 +505,7 @@ export default function MinorityReportLab(props) {
           setPanels((currentPanels) => applySceneLayout(currentPanels, nextIndex, stageSize));
           if (hard) {
             const resetTransform = normalizeMinorityReportStageTransform(DEFAULT_STAGE_TRANSFORM);
+            focusedTileIndexRef.current = null;
             setFocusedTileIndex(null);
             animateStageTransform(resetTransform);
             grabRef.current = null;
@@ -574,7 +613,8 @@ export default function MinorityReportLab(props) {
             localAnchor: baseLocalAnchor,
           },
         };
-        if (focusedTileIndex !== null) {
+        if (focusedTileIndexRef.current !== null) {
+          focusedTileIndexRef.current = null;
           setFocusedTileIndex(null);
         }
       }
@@ -812,12 +852,16 @@ export default function MinorityReportLab(props) {
               ref={cameraOverlayRef}
               className="camera-overlay minority-stage-camera-overlay"
             />
-            <div className="minority-stage-transform" style={{
-              transform: `translate(${stageTransform.x}px, ${stageTransform.y}px) scale(${stageTransform.scale})`,
-              transition: isStageTransformAnimating
-                ? `transform ${SECTOR_FOCUS_ANIMATION_MS}ms cubic-bezier(.2,.72,.2,1)`
-                : "none",
-            }}>
+            <div
+              className="minority-stage-transform"
+              onDoubleClick={handleStageDoubleClick}
+              style={{
+                transform: `translate(${stageTransform.x}px, ${stageTransform.y}px) scale(${stageTransform.scale})`,
+                transition: isStageTransformAnimating
+                  ? `transform ${SECTOR_FOCUS_ANIMATION_MS}ms cubic-bezier(.2,.72,.2,1)`
+                  : "none",
+              }}
+            >
               {tileBounds.map((tile) => (
                 <div
                   key={`minority-tile-${tile.index}`}
