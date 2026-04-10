@@ -324,7 +324,16 @@ export default function MinorityReportLab(props) {
     };
   }, []);
 
-  const sceneMeta = useMemo(() => SCENES[sceneIndex] ?? SCENES[0], [sceneIndex]);
+  const dragBoundsStyle = useMemo(() => {
+    const insetX = Math.min(PANEL_WIDTH * 0.5, stageSize.width * 0.5);
+    const insetY = Math.min(PANEL_HEIGHT * 0.5, stageSize.height * 0.5);
+    return {
+      left: `${insetX}px`,
+      top: `${insetY}px`,
+      width: `${Math.max(0, stageSize.width - insetX * 2)}px`,
+      height: `${Math.max(0, stageSize.height - insetY * 2)}px`,
+    };
+  }, [stageSize]);
   const handsByLabel = useMemo(() => {
     const map = {
       Left: null,
@@ -657,15 +666,8 @@ export default function MinorityReportLab(props) {
 
   return (
     <section className="card panel minority-lab-panel">
-      <h2>Minority Report Lab</h2>
-      <p className="small-text">Two-hand pinch controls the global stage transform (translate/scale/rotate).</p>
-      <p className="small-text">
-        Keep your wrist and forearm visible when using one hand so the lab can stabilize left/right coloring.
-      </p>
-      <p className="small-text">
-        Scene: <strong>{sceneMeta.name}</strong> | {sceneMeta.description}
-      </p>
-      <div className="minority-lab-toolbar">
+      <div className="minority-lab-header">
+        <h2>Minority Report Lab</h2>
         <button
           type="button"
           className="secondary"
@@ -673,7 +675,7 @@ export default function MinorityReportLab(props) {
           aria-expanded={isDebugPanelVisible}
           onClick={() => setIsDebugPanelVisible((previous) => !previous)}
         >
-          {isDebugPanelVisible ? "Hide Detector Status/Controls" : "Show Detector Status/Controls"}
+          {isDebugPanelVisible ? "Hide Detector Panel" : "Show Detector Panel"}
         </button>
       </div>
 
@@ -683,6 +685,11 @@ export default function MinorityReportLab(props) {
             <div className="minority-stage-transform" style={{
               transform: `translate(${stageTransform.x}px, ${stageTransform.y}px) rotate(${stageTransform.rotation}rad) scale(${stageTransform.scale})`,
             }}>
+              <div
+                className="minority-stage-drag-bounds"
+                style={dragBoundsStyle}
+                aria-hidden="true"
+              />
               {panels.map((panel) => (
                 <article
                   key={panel.id}
