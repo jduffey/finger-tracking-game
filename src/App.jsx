@@ -87,6 +87,7 @@ import {
   initHandTracking,
 } from "./handTracking.js";
 import {
+  getPinchClickExcludeSelector,
   shouldAcceptPinchClick,
   shouldBypassGlobalPinchDebounce,
 } from "./pinchInput.js";
@@ -5944,8 +5945,9 @@ export default function App() {
       phase: phaseRef.current,
       gameRunning: gameRunningRef.current,
     });
-    const excludeInsideSelector =
-      phaseRef.current === PHASES.ROULETTE ? ".roulette-panel" : null;
+    const excludeInsideSelector = getPinchClickExcludeSelector({
+      phase: phaseRef.current,
+    });
     const clickedButton = clickButtonAtPoint(cursorRef.current, {
       excludeInsideSelector,
     });
