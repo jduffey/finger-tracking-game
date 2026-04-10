@@ -1,112 +1,96 @@
 # Finger Whack
 
-Minimal webcam-based Whack-a-Mole game using React + Vite and TensorFlow.js hand pose tracking (MediaPipe Hands model).
+Finger Whack is a webcam-driven hand- and pose-tracking playground built with React, Vite, and TensorFlow.js. It started as a pinch-controlled Whack-a-Mole prototype and now includes a calibration hub, multiple games and labs, fullscreen camera overlays, and a separate Circle of Fifths instrument page.
+
+## What Is In This Repo
+
+### Main app (`/`)
+
+- **Calibration Input Test**: the home screen for camera/model readiness, live overlays, calibration controls, and navigation.
+- **Core modes**: Whack-a-Mole, Pinch Sandbox, Track Runner, Star Flight, Conveyor Toss, Roulette, and Spatial Gesture Memory.
+- **Labs**: Body Pose Lab, Off-Axis Forest Walk, Minority Report Lab, Gesture Analytics Lab, Gesture Art Lab, and Gesture Control OS.
+- **Fullscreen Camera**: a fullscreen webcam playground with visual overlays (`Squares`, `Hex`, `Voronoi`, `Rings`, `Pulse`, `Tip Ripples`, `Tip Ripples v2`, `Static`) plus webcam-backed games (`Brick Dodger`, `Breakout Co-op`, `Breakout`, `Finger Pong`, `Slice Air`, `Invaders`, `Flappy`, `Missile Command`).
+
+### Secondary page (`/circle-of-fifths.html`)
+
+- A dedicated fullscreen Circle of Fifths instrument.
+- One-hand index-finger tracking steers chord selection.
+- Pinch interactions choose drum presets and adjust BPM.
+- Uses webcam input and browser audio output.
 
 ## Requirements
 
-- Node.js 18+
-- Chrome (recommended)
+- Node.js 18 or newer
+- npm
 - Webcam access
+- A modern desktop Chromium browser is recommended
+- Internet access when hand tracking starts, because the default MediaPipe Hands runtime loads assets from `https://cdn.jsdelivr.net/npm/@mediapipe/hands`
 
-## Quick Start
+## Install And Run
 
-If you are creating this from scratch, use:
+For normal local use, you do not need Symphony or any backend service.
+
+If you want a clean lockfile install, use:
 
 ```bash
-npm create vite@latest finger-whack -- --template react
-cd finger-whack
-npm install
-npm i @tensorflow-models/hand-pose-detection @tensorflow/tfjs-core @tensorflow/tfjs-backend-webgl @tensorflow/tfjs-backend-cpu
+npm ci
 npm run dev
 ```
 
-For this repository directly:
+If you prefer, `npm install` works too.
+
+Then:
+
+1. Open the local URL printed by Vite. It is usually `http://localhost:5173`, but Vite will pick another port if that one is busy.
+2. Allow camera access when the browser asks.
+3. Wait for the camera stream and tracking model to initialize.
+4. Use the **Calibration Input Test** screen as the hub for the rest of the app.
+
+From the hub:
+
+- **Start Calibration** runs the 9-point affine calibration used by pointer-driven modes such as Whack-a-Mole.
+- **Start Lazy Arc Calibration** captures a sweep-based calibration and then launches Track Runner.
+- **Open Fullscreen Camera** opens the fullscreen overlay and mini-game playground.
+- **Open Circle of Fifths Page** opens the separate instrument page at `/circle-of-fifths.html`.
+
+To preview the production build locally:
 
 ```bash
-npm install
-npm run dev
+npm run build
+npm run preview
 ```
 
-Open the local URL printed by Vite (typically `http://localhost:5173`) in Chrome.
+## Scripts
 
-## Symphony Setup
+- `npm run dev`: starts the Vite dev server and writes verbose logs to `logs/`
+- `npm run build`: builds both `index.html` and `circle-of-fifths.html` into `dist/`
+- `npm run preview`: serves the built output locally
+- `npm test`: runs the Node test suite
+- `npm run symphony`: launches the optional Symphony workflow wrapper
 
-This repo is configured for Symphony with:
+## Tracking, Logging, And Persistence
 
-- [`WORKFLOW.md`](./WORKFLOW.md) for the tracker/workspace runtime
-- [`AGENTS.md`](./AGENTS.md) for repo-specific execution guidance
-- repo-local skills under [`.codex/skills`](./.codex/skills)
+- Hand tracking starts with the MediaPipe Hands runtime and can probe or fall back to TFJS backends when needed.
+- Body Pose Lab and Off-Axis Forest Walk use pose detection rather than the hand-tracking flow.
+- Calibration is stored in `localStorage` under `fingerWhack.calibration.v2`.
+- Verbose browser/runtime events are written to timestamped files in `logs/` only while running `npm run dev`.
 
-To use it with the local Symphony tracker setup:
+## Optional Symphony Setup
 
-1. Ensure the tracker project slug is `finger-tracking-game`.
-2. Set `TRACKER_API_KEY` for the tracker service.
-3. Optionally set `TARGET_REPO_URL`; otherwise the workflow defaults to `git@github.com:jduffey/finger-tracking-game.git`.
-4. Run `npm run symphony` from this repository to launch Symphony against `WORKFLOW.md`.
+This repository includes Symphony-specific files, but they are not required to run the app itself.
 
-The local launcher defaults `TRACKER_API_KEY` to `dev-key` and uses dashboard
-port `4101` so it can run alongside the `codex-casino` setup on `4100`. It
-also auto-resolves Codex from `CODEX_BIN`, then `codex` on `PATH`, then
-`/Applications/Codex.app/Contents/Resources/codex`.
+To use `npm run symphony`:
 
-## Verbose Logs
-
-- Running `npm run dev` now creates a log file in `logs/`.
-- File name format is `YYYY-MM-DD-HH-MM-SS.log`.
-- Browser runtime events (tracking frames, calibration, pinch transitions, game state transitions, lifecycle events, console messages, and unhandled errors) are streamed into that file for troubleshooting.
-- `logs/` is git-ignored.
-- Tracking now starts with MediaPipe runtime first (for more stable hand coordinates on this machine), then can probe TFJS as a fallback path if needed.
-- If repeated invalid landmarks or long no-hand streaks occur, the app auto-recovers runtime/backend and logs each attempt in detail.
-- Hand-detected status uses a short grace window to avoid flickering off on single dropped frames.
-- Use **Log Tracking Extents** in the UI to log raw vs clamped fingertip extents, visible-area-normalized extents, out-of-visible-bounds ratios, and camera cover/crop bounds for edge-alignment diagnostics.
-
-## How It Works
-
-1. The app requests webcam permission and starts with MediaPipe runtime (then can fallback/probe TFJS backends if needed).
-2. Hand landmarks are inferred in a `requestAnimationFrame` loop using MediaPipe Hands.
-3. Calibration collects 9 screen targets. Each pinch samples index fingertip data over 10 frames and averages it.
-4. An affine transform is solved with least squares:
-   - `x = a1*u + a2*v + a3`
-   - `y = b1*u + b2*v + b3`
-5. The tracker maps fingertip coordinates into the visible camera window (derived from object-fit cover crop), then applies calibration and cursor smoothing.
-6. In game mode, pinch rising-edge events hit moles when the smoothed cursor is inside the active mole zone.
-7. In fullscreen camera mode, you can switch to webcam-backed overlay games where the index fingertip controls left-right movement on top of the full feed, including Brick Dodger, Breakout/Arkanoid, a support-hand Breakout co-op variant, Finger Pong, and a Space Invaders-style shooter.
-
-## Controls
-
-- **Start Calibration**: begin 9-point calibration
-- **Pinch** (thumb + index): confirm calibration target / hit mole
-- **Start Game / Restart Game**: play 30-second round
-- **Recalibrate**: clear stored transform and return to calibration
-- **Camera overlay**: always shows fingertip markers (thumb/index/middle/ring/pinky)
-- **Fullscreen Camera > Brick Dodger**: overlays a full-webcam dodge-and-collect runner where the smoothed index fingertip controls horizontal movement, hazards descend in lanes, bonuses spawn in adjacent risky lanes, survival adds score over time, and difficulty ramps steadily
-- **Fullscreen Camera > Breakout Co-op**: overlays a richer brick-breaker on the full webcam feed where the index fingertip steers the paddle, a second-hand pinch triggers a temporary shield pulse, prism bricks split extra balls, the HUD tracks score/lives/shield charge, and a pinch after a clear or wipeout restarts the round
-- **Fullscreen Camera > Breakout**: overlays a webcam-backed Breakout/Arkanoid mode with a 3-second launch countdown, slower ball speed, score HUD, rainbow capsule drops, and multi-ball powerups
-- **Fullscreen Camera > Finger Pong**: overlays a one-player Pong variant on the full webcam feed where the index fingertip steers a bottom paddle, off-center returns bend the shot, rallies accelerate gently, and score/rally counters stay visible over the camera
-- **Fullscreen Camera > Invaders**: overlays a Space Invaders-style shooter where the index fingertip steers the ship, pinch fires on cooldown, enemy rows sweep downward, and pinch restarts after a loss or clear
-- **Fullscreen Camera > Flappy**: overlays a Flappy Bird-inspired mode on the full webcam feed where each distinct pinch produces one flap, pipes scroll right-to-left, score increments on gap clears, and a pinch after a crash restarts the round
-- **Off-Axis Forest Walk**: uses pose-estimated nose/eye movement to shift a faux 3D woodland trail so leaning left/right feels like peeking around nearby trees while walking through the woods
-- **Separate Page > Circle of Fifths**: opens `/circle-of-fifths.html`, a standalone fullscreen webcam instrument where one-hand index tracking hovers a major/minor wheel and each slice plays a synthesized chord
-- **Pinch Sandbox**: lets you pinch blocks to drag and fling with simple block physics
-- **Debug overlay**: adds landmarks, raw pointer marker, and pinch/FPS info
-- **Log Tracking Extents**: writes raw/clamped/visible-normalized fingertip coverage plus visible camera bounds to the log file
-
-## Calibration Persistence
-
-Calibration is saved in `localStorage` and reused on reload. You can clear it with **Recalibrate**.
-Newer builds use a newer calibration storage key; after updating, do one fresh calibration pass.
+1. Have a built local Symphony checkout at `${SYMPHONY_REPO:-$HOME/repos/symphony}` so `elixir/bin/symphony` exists.
+2. Make Codex available through `CODEX_BIN`, `codex` on `PATH`, or `/Applications/Codex.app/Contents/Resources/codex`.
+3. Set `TRACKER_API_KEY` if you do not want the launcher default of `dev-key`.
+4. Optionally override `TARGET_REPO_URL`, `SYMPHONY_DASHBOARD_PORT` (default `4101`), `SYMPHONY_LOCAL_REPO_PATH`, or `SYMPHONY_MERGE_BASE`.
+5. Run `npm run symphony`.
 
 ## Troubleshooting
 
-- Camera prompt does not appear:
-  - Check Chrome site settings and allow camera access.
-  - Ensure no other app is exclusively locking the webcam.
-- Cursor movement feels off:
-  - Run calibration again.
-  - Keep hand in frame and hold steady while pinching targets.
-- Poor tracking performance:
-  - Improve lighting.
-  - Keep one hand visible and reduce background clutter.
-  - Close other heavy browser tabs/processes.
-- MediaPipe runtime fallback fails to initialize:
-  - Confirm internet access (the fallback uses `https://cdn.jsdelivr.net/npm/@mediapipe/hands`).
+- **No camera prompt appears**: check browser and OS camera permissions, and make sure another app is not exclusively holding the webcam.
+- **The page loads but hand tracking does not start**: keep internet access available for the MediaPipe asset load, and retry in Chrome or another Chromium browser with WebGL enabled.
+- **The cursor feels off**: rerun calibration and keep your hand fully visible while capturing.
+- **Tracking is noisy or slow**: improve lighting, reduce background clutter, and close other GPU-heavy browser tabs.
+- **The Circle of Fifths page is silent**: confirm the browser allows audio playback and interact with the page so the `AudioContext` can start.
