@@ -6,7 +6,6 @@ import {
   getMinorityReportFocusTransform,
   getMinorityReportOverviewTransform,
   getMinorityReportPinchSequenceAction,
-  getMinorityReportZoomTransform,
   normalizeMinorityReportStageTransform,
   shouldResetMinorityReportFocus,
   shouldUseMinorityReportZoom,
@@ -26,7 +25,9 @@ const STAGE_DEFAULT_SIZE = { width: 960, height: 640 };
 const HAND_INFO_BOX_SIZE = { width: 170, height: 88 };
 const HAND_INFO_BOX_MARGIN = 10;
 const DOUBLE_PINCH_MAX_DELAY_MS = 320;
-const SECTOR_FOCUS_ANIMATION_MS = 220;
+const SECTOR_FOCUS_ANIMATION_MS = 160;
+const PANEL_IDLE_TRANSITION_MS = 80;
+const PANEL_THROW_TRANSITION_MS = 520;
 
 const SCENES = [
   {
@@ -374,6 +375,105 @@ export default function MinorityReportLab(props) {
     }
     return map;
   }, [engineOutput?.hands]);
+  const hoveredTileByHand = useMemo(() => {
+    const hovered = {
+      Left: null,
+      Right: null,
+    };
+    const hands = Array.isArray(engineOutput?.hands) ? engineOutput.hands : [];
+    for (const hand of hands) {
+      if ((hand?.label !== "Left" && hand?.label !== "Right") || !hand?.pointer) {
+        continue;
+      }
+      const localPointer = pointerToLocal(hand.pointer, stageSize, stageTransform);
+      hovered[hand.label] = getMinorityReportTileIndexAtPoint(localPointer, stageSize);
+    }
+    return hovered;
+  }, [engineOutput?.hands, stageSize, stageTransform]);
+  const focusedSuperSectorIndex = Number.isInteger(focusedTileIndex)
+    ? tileBounds[focusedTileIndex]?.superSectorIndex ?? null
+    : null;
+  const superSectorElements = useMemo(
+    () =>
+      superSectorBounds.map((superSector) => (
+        <div
+          key={`minority-super-sector-${superSector.index}`}
+          className={`minority-stage-super-sector ${
+            focusedSuperSectorIndex === superSector.index ? "focused" : ""
+          }`}
+          style={{
+            left: `${superSector.left}px`,
+            top: `${superSector.top}px`,
+            width: `${superSector.width}px`,
+            height: `${superSector.height}px`,
+          }}
+          aria-hidden="true"
+        >
+          <span className="minority-stage-super-sector-label">
+            Super Sector {superSector.index + 1}
+          </span>
+        </div>
+      )),
+    [focusedSuperSectorIndex, superSectorBounds],
+  );
+  const tileElements = useMemo(
+    () =>
+      tileBounds.map((tile) => (
+        <div
+          key={`minority-tile-${tile.index}`}
+          className={`minority-stage-drag-bounds ${focusedTileIndex === tile.index ? "focused" : ""} ${
+            hoveredTileByHand.Left === tile.index && hoveredTileByHand.Right === tile.index
+              ? "hovered-both"
+              : hoveredTileByHand.Left === tile.index
+              ? "hovered-left"
+              : hoveredTileByHand.Right === tile.index
+              ? "hovered-right"
+              : ""
+          }`}
+          style={{
+            left: `${tile.left}px`,
+            top: `${tile.top}px`,
+            width: `${tile.width}px`,
+            height: `${tile.height}px`,
+          }}
+          aria-hidden="true"
+        >
+          <span className="minority-stage-sector-label">
+            Sector {tile.localTileIndex + 1}
+          </span>
+        </div>
+      )),
+    [focusedTileIndex, hoveredTileByHand.Left, hoveredTileByHand.Right, tileBounds],
+  );
+  const panelElements = useMemo(
+    () =>
+      panels.map((panel) => {
+        const isDragging = draggedPanelId === panel.id;
+        const isThrowing = panel.throwingUntil > Date.now();
+        const transition = isDragging
+          ? "none"
+          : isThrowing
+          ? `left ${PANEL_THROW_TRANSITION_MS}ms cubic-bezier(.09,.67,.22,.98), top ${PANEL_THROW_TRANSITION_MS}ms cubic-bezier(.09,.67,.22,.98), transform ${PANEL_THROW_TRANSITION_MS}ms cubic-bezier(.09,.67,.22,.98), box-shadow 180ms ease`
+          : `left ${PANEL_IDLE_TRANSITION_MS}ms linear, top ${PANEL_IDLE_TRANSITION_MS}ms linear, transform ${PANEL_IDLE_TRANSITION_MS}ms linear, box-shadow 120ms ease`;
+        return (
+          <article
+            key={panel.id}
+            className={`minority-panel-card ${panel.selected ? "selected" : ""} ${selectedPanelId === panel.id ? "focused" : ""}`}
+            style={{
+              left: `${panel.x}px`,
+              top: `${panel.y}px`,
+              transform: `translate(-50%, -50%) rotate(${panel.rotation}rad) scale(${panel.scale})`,
+              transition,
+            }}
+          >
+            <h4>{panel.title}</h4>
+            <p>{panel.subtitle}</p>
+            <small>Pinch-drag within this sector</small>
+          </article>
+        );
+      }),
+    [draggedPanelId, panels, selectedPanelId],
+  );
 
   useEffect(() => {
     setPanels((previous) => {
@@ -919,66 +1019,9 @@ export default function MinorityReportLab(props) {
                   : "none",
               }}
             >
-              {superSectorBounds.map((superSector) => (
-                <div
-                  key={`minority-super-sector-${superSector.index}`}
-                  className={`minority-stage-super-sector ${
-                    focusedTileIndex !== null &&
-                    tileBounds[focusedTileIndex]?.superSectorIndex === superSector.index
-                      ? "focused"
-                      : ""
-                  }`}
-                  style={{
-                    left: `${superSector.left}px`,
-                    top: `${superSector.top}px`,
-                    width: `${superSector.width}px`,
-                    height: `${superSector.height}px`,
-                  }}
-                  aria-hidden="true"
-                >
-                  <span className="minority-stage-super-sector-label">
-                    Super Sector {superSector.index + 1}
-                  </span>
-                </div>
-              ))}
-              {tileBounds.map((tile) => (
-                <div
-                  key={`minority-tile-${tile.index}`}
-                  className={`minority-stage-drag-bounds ${focusedTileIndex === tile.index ? "focused" : ""}`}
-                  style={{
-                    left: `${tile.left}px`,
-                    top: `${tile.top}px`,
-                    width: `${tile.width}px`,
-                    height: `${tile.height}px`,
-                  }}
-                  aria-hidden="true"
-                >
-                  <span className="minority-stage-sector-label">
-                    Sector {tile.localTileIndex + 1}
-                  </span>
-                </div>
-              ))}
-              {panels.map((panel) => (
-                <article
-                  key={panel.id}
-                  className={`minority-panel-card ${panel.selected ? "selected" : ""} ${selectedPanelId === panel.id ? "focused" : ""}`}
-                  style={{
-                    left: `${panel.x}px`,
-                    top: `${panel.y}px`,
-                    transform: `translate(-50%, -50%) rotate(${panel.rotation}rad) scale(${panel.scale})`,
-                    transition:
-                      draggedPanelId === panel.id
-                        ? "none"
-                        : panel.throwingUntil > Date.now()
-                        ? "left 620ms cubic-bezier(.09,.67,.22,.98), top 620ms cubic-bezier(.09,.67,.22,.98), transform 620ms cubic-bezier(.09,.67,.22,.98), box-shadow 220ms ease"
-                        : "left 120ms linear, top 120ms linear, transform 120ms linear, box-shadow 150ms ease",
-                  }}
-                >
-                  <h4>{panel.title}</h4>
-                  <p>{panel.subtitle}</p>
-                  <small>Pinch-drag within this sector</small>
-                </article>
-              ))}
+              {superSectorElements}
+              {tileElements}
+              {panelElements}
             </div>
 
             {showTrails && (
