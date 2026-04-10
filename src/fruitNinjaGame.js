@@ -12,6 +12,7 @@ const FRUIT_NINJA_GRAVITY = 1380;
 const FRUIT_NINJA_TARGET_RADIUS_RATIO = 0.052;
 const FRUIT_NINJA_MIN_TARGET_RADIUS = 26;
 const FRUIT_NINJA_MAX_TARGET_RADIUS = 48;
+const FRUIT_NINJA_TARGET_SCALE = 1.5;
 const FRUIT_NINJA_MIN_SWIPE_SPEED = 760;
 const FRUIT_NINJA_MIN_SEGMENT_LENGTH = 16;
 const FRUIT_NINJA_TRAIL_SAMPLE_DISTANCE = 10;
@@ -56,7 +57,7 @@ export function createFruitNinjaLayout(width, height) {
       minDimension * FRUIT_NINJA_TARGET_RADIUS_RATIO,
       FRUIT_NINJA_MIN_TARGET_RADIUS,
       FRUIT_NINJA_MAX_TARGET_RADIUS,
-    ),
+    ) * FRUIT_NINJA_TARGET_SCALE,
   };
 }
 
@@ -72,7 +73,7 @@ function createFruitTarget(layout, nextId, rng = Math.random) {
   const vx =
     horizontalDirection * randomBetween(layout.width * 0.09, layout.width * 0.22, rng) +
     randomBetween(-30, 30, rng);
-  const vy = -randomBetween(layout.height * 0.92, layout.height * 1.14, rng);
+  const vy = -randomBetween(layout.height * 1.64, layout.height * 1.78, rng);
   const palette = randomChoice(FRUIT_COLORS, rng) ?? FRUIT_COLORS[0];
   return {
     id: createTargetId("fruit", nextId),
@@ -99,7 +100,7 @@ function createBombTarget(layout, nextId, rng = Math.random) {
   const vx =
     horizontalDirection * randomBetween(layout.width * 0.08, layout.width * 0.18, rng) +
     randomBetween(-40, 40, rng);
-  const vy = -randomBetween(layout.height * 0.82, layout.height * 1.02, rng);
+  const vy = -randomBetween(layout.height * 1.54, layout.height * 1.7, rng);
   return {
     id: createTargetId("bomb", nextId),
     kind: "bomb",

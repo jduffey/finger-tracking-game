@@ -4,18 +4,22 @@ import { GESTURE_IDS } from "../gestures/constants.js";
 import {
   getMinorityReportAnchoredZoomTransform,
   getMinorityReportFocusTransform,
+  getMinorityReportOverviewTransform,
+  getMinorityReportPinchSequenceAction,
   getMinorityReportZoomTransform,
   normalizeMinorityReportStageTransform,
   shouldResetMinorityReportFocus,
   shouldUseMinorityReportZoom,
 } from "../minorityReportLabInteractions.js";
 import {
-  MINORITY_REPORT_PANEL_COUNT,
   clampMinorityReportPanelPosition,
   getMinorityReportPanelPlacement,
+  getMinorityReportRandomPanelAssignments,
+  getMinorityReportSuperSectorBoundsList,
   getMinorityReportTileBounds,
   getMinorityReportTileIndexAtPoint,
   getMinorityReportTileBoundsList,
+  getMinorityReportWorkspaceBounds,
 } from "../minorityReportLabLayout.js";
 
 const STAGE_DEFAULT_SIZE = { width: 960, height: 640 };
@@ -23,12 +27,6 @@ const HAND_INFO_BOX_SIZE = { width: 170, height: 88 };
 const HAND_INFO_BOX_MARGIN = 10;
 const DOUBLE_PINCH_MAX_DELAY_MS = 320;
 const SECTOR_FOCUS_ANIMATION_MS = 220;
-const DEFAULT_STAGE_TRANSFORM = {
-  x: 0,
-  y: 0,
-  scale: 1,
-  rotation: 0,
-};
 
 const SCENES = [
   {
@@ -71,15 +69,29 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function createPanels(sceneIndex, stageSize) {
-  return Array.from({ length: MINORITY_REPORT_PANEL_COUNT }, (_, index) => {
-    const scenePlacement = getMinorityReportPanelPlacement(sceneIndex, index, stageSize);
+function getDefaultStageTransform(stageSize) {
+  return getMinorityReportOverviewTransform(
+    stageSize,
+    getMinorityReportWorkspaceBounds(stageSize),
+  );
+}
+
+function formatPanelSubtitle(placement) {
+  return `Super Sector ${placement.superSectorIndex + 1} · Sector ${placement.localTileIndex + 1} · Card ${placement.tileSlotIndex + 1}`;
+}
+
+function createPanels(sceneIndex, stageSize, panelAssignments) {
+  return panelAssignments.map((panelAssignment, index) => {
+    const scenePlacement = getMinorityReportPanelPlacement(sceneIndex, panelAssignment, stageSize);
     return {
       id: `panel-${index + 1}`,
       title: PANEL_TITLES[index % PANEL_TITLES.length],
-      subtitle: `Sector ${scenePlacement.tileIndex + 1} · Card ${scenePlacement.tileSlotIndex + 1}`,
+      subtitle: formatPanelSubtitle(scenePlacement),
       tileIndex: scenePlacement.tileIndex,
+      superSectorIndex: scenePlacement.superSectorIndex,
+      localTileIndex: scenePlacement.localTileIndex,
       tileSlotIndex: scenePlacement.tileSlotIndex,
+      tileSlotCount: scenePlacement.tileSlotCount,
       x: scenePlacement.x,
       y: scenePlacement.y,
       rotation: scenePlacement.rotation,
@@ -90,14 +102,25 @@ function createPanels(sceneIndex, stageSize) {
   });
 }
 
-function applySceneLayout(existingPanels, sceneIndex, stageSize) {
+function applySceneLayout(existingPanels, sceneIndex, stageSize, panelAssignments) {
   return existingPanels.map((panel, index) => {
-    const nextPlacement = getMinorityReportPanelPlacement(sceneIndex, index, stageSize);
+    const nextPlacement = getMinorityReportPanelPlacement(
+      sceneIndex,
+      panelAssignments[index] ?? {
+        tileIndex: panel.tileIndex,
+        tileSlotIndex: panel.tileSlotIndex,
+        tileSlotCount: panel.tileSlotCount,
+      },
+      stageSize,
+    );
     return {
       ...panel,
       tileIndex: nextPlacement.tileIndex,
+      superSectorIndex: nextPlacement.superSectorIndex,
+      localTileIndex: nextPlacement.localTileIndex,
       tileSlotIndex: nextPlacement.tileSlotIndex,
-      subtitle: `Sector ${nextPlacement.tileIndex + 1} · Card ${nextPlacement.tileSlotIndex + 1}`,
+      tileSlotCount: nextPlacement.tileSlotCount,
+      subtitle: formatPanelSubtitle(nextPlacement),
       x: nextPlacement.x,
       y: nextPlacement.y,
       rotation: nextPlacement.rotation,
@@ -199,10 +222,13 @@ export default function MinorityReportLab(props) {
 
   const stageShellRef = useRef(null);
   const stageRef = useRef(null);
+  const [panelAssignments] = useState(() => getMinorityReportRandomPanelAssignments());
   const [stageSize, setStageSize] = useState(STAGE_DEFAULT_SIZE);
   const [sceneIndex, setSceneIndex] = useState(0);
-  const [stageTransform, setStageTransform] = useState(DEFAULT_STAGE_TRANSFORM);
-  const [panels, setPanels] = useState(() => createPanels(0, STAGE_DEFAULT_SIZE));
+  const [stageTransform, setStageTransform] = useState(() => getDefaultStageTransform(STAGE_DEFAULT_SIZE));
+  const [panels, setPanels] = useState(() =>
+    createPanels(0, STAGE_DEFAULT_SIZE, panelAssignments),
+  );
   const [selectedPanelId, setSelectedPanelId] = useState(null);
   const [draggedPanelId, setDraggedPanelId] = useState(null);
   const [pointerTrails, setPointerTrails] = useState({});
@@ -215,6 +241,7 @@ export default function MinorityReportLab(props) {
   const sceneIndexRef = useRef(sceneIndex);
   const stageTransformRef = useRef(stageTransform);
   const focusedTileIndexRef = useRef(focusedTileIndex);
+  const stageViewModeRef = useRef("overview");
   const grabRef = useRef(null);
   const twoHandManipRef = useRef({ active: false, base: null });
   const pointerTrailsRef = useRef(pointerTrails);
@@ -309,6 +336,10 @@ export default function MinorityReportLab(props) {
     () => getMinorityReportTileBoundsList(stageSize),
     [stageSize],
   );
+  const superSectorBounds = useMemo(
+    () => getMinorityReportSuperSectorBoundsList(stageSize),
+    [stageSize],
+  );
   const panelClassName = immersive
     ? "minority-lab-panel minority-lab-panel-immersive"
     : "card panel minority-lab-panel";
@@ -347,15 +378,30 @@ export default function MinorityReportLab(props) {
   useEffect(() => {
     setPanels((previous) => {
       if (previous.length === 0) {
-        return createPanels(sceneIndexRef.current, stageSize);
+        return createPanels(sceneIndexRef.current, stageSize, panelAssignments);
       }
       return previous.map((panel) => clampMinorityReportPanelPosition(panel, stageSize));
     });
+    if (stageViewModeRef.current === "overview") {
+      const overviewTransform = getDefaultStageTransform(stageSize);
+      setIsStageTransformAnimating(false);
+      setStageTransform(overviewTransform);
+      stageTransformRef.current = overviewTransform;
+    } else if (
+      stageViewModeRef.current === "focused" &&
+      Number.isInteger(focusedTileIndexRef.current)
+    ) {
+      const focusedTile = getMinorityReportTileBounds(stageSize, focusedTileIndexRef.current);
+      const nextFocusedTransform = getMinorityReportFocusTransform(stageSize, focusedTile);
+      setIsStageTransformAnimating(false);
+      setStageTransform(nextFocusedTransform);
+      stageTransformRef.current = nextFocusedTransform;
+    }
     setHandInfoBoxPositions((previous) => ({
       Left: clampInfoBoxPosition(previous.Left ?? HAND_INFO_BOX_DEFAULTS.Left, stageSize),
       Right: clampInfoBoxPosition(previous.Right ?? HAND_INFO_BOX_DEFAULTS.Right, stageSize),
     }));
-  }, [stageSize]);
+  }, [panelAssignments, stageSize]);
 
   const animateStageTransform = (nextTransform) => {
     if (stageTransformAnimationTimeoutRef.current) {
@@ -373,6 +419,7 @@ export default function MinorityReportLab(props) {
   const focusTile = (tileIndex) => {
     const tile = getMinorityReportTileBounds(stageSize, tileIndex);
     const nextTransform = getMinorityReportFocusTransform(stageSize, tile);
+    stageViewModeRef.current = "focused";
     focusedTileIndexRef.current = tileIndex;
     setFocusedTileIndex(tileIndex);
     animateStageTransform(nextTransform);
@@ -385,9 +432,10 @@ export default function MinorityReportLab(props) {
   };
 
   const resetFocusedView = () => {
+    stageViewModeRef.current = "overview";
     focusedTileIndexRef.current = null;
     setFocusedTileIndex(null);
-    animateStageTransform(normalizeMinorityReportStageTransform(DEFAULT_STAGE_TRANSFORM));
+    animateStageTransform(getDefaultStageTransform(stageSize));
   };
 
   const requestTileFocus = (tileIndex) => {
@@ -444,24 +492,29 @@ export default function MinorityReportLab(props) {
       }
       const localPointer = pointerToLocal(hand.pointer, stageSize, stageTransformRef.current);
       const tileIndex = getMinorityReportTileIndexAtPoint(localPointer, stageSize);
-      if (!Number.isInteger(tileIndex)) {
-        continue;
-      }
       const previousPinch = lastPinchStartRef.current[hand.id];
-      if (
-        previousPinch &&
-        previousPinch.tileIndex === tileIndex &&
-        now - previousPinch.timestamp <= DOUBLE_PINCH_MAX_DELAY_MS
-      ) {
+      const pinchSequence = getMinorityReportPinchSequenceAction(
+        previousPinch,
+        tileIndex,
+        now,
+        DOUBLE_PINCH_MAX_DELAY_MS,
+      );
+
+      if (pinchSequence.action === "focus" && Number.isInteger(tileIndex)) {
         requestTileFocus(tileIndex);
         lastPinchStartRef.current[hand.id] = null;
         doublePinchTriggered = true;
         break;
       }
-      lastPinchStartRef.current[hand.id] = {
-        timestamp: now,
-        tileIndex,
-      };
+
+      if (pinchSequence.action === "overview") {
+        resetFocusedView();
+        lastPinchStartRef.current[hand.id] = null;
+        doublePinchTriggered = true;
+        break;
+      }
+
+      lastPinchStartRef.current[hand.id] = pinchSequence.state;
     }
 
     const nextPinchStateByHand = {};
@@ -502,9 +555,12 @@ export default function MinorityReportLab(props) {
         setSceneIndex((previous) => {
           const nextIndex = (previous + step + SCENES.length) % SCENES.length;
           sceneIndexRef.current = nextIndex;
-          setPanels((currentPanels) => applySceneLayout(currentPanels, nextIndex, stageSize));
+          setPanels((currentPanels) =>
+            applySceneLayout(currentPanels, nextIndex, stageSize, panelAssignments),
+          );
           if (hard) {
-            const resetTransform = normalizeMinorityReportStageTransform(DEFAULT_STAGE_TRANSFORM);
+            const resetTransform = getDefaultStageTransform(stageSize);
+            stageViewModeRef.current = "overview";
             focusedTileIndexRef.current = null;
             setFocusedTileIndex(null);
             animateStageTransform(resetTransform);
@@ -613,6 +669,7 @@ export default function MinorityReportLab(props) {
             localAnchor: baseLocalAnchor,
           },
         };
+        stageViewModeRef.current = "manual";
         if (focusedTileIndexRef.current !== null) {
           focusedTileIndexRef.current = null;
           setFocusedTileIndex(null);
@@ -862,6 +919,28 @@ export default function MinorityReportLab(props) {
                   : "none",
               }}
             >
+              {superSectorBounds.map((superSector) => (
+                <div
+                  key={`minority-super-sector-${superSector.index}`}
+                  className={`minority-stage-super-sector ${
+                    focusedTileIndex !== null &&
+                    tileBounds[focusedTileIndex]?.superSectorIndex === superSector.index
+                      ? "focused"
+                      : ""
+                  }`}
+                  style={{
+                    left: `${superSector.left}px`,
+                    top: `${superSector.top}px`,
+                    width: `${superSector.width}px`,
+                    height: `${superSector.height}px`,
+                  }}
+                  aria-hidden="true"
+                >
+                  <span className="minority-stage-super-sector-label">
+                    Super Sector {superSector.index + 1}
+                  </span>
+                </div>
+              ))}
               {tileBounds.map((tile) => (
                 <div
                   key={`minority-tile-${tile.index}`}
@@ -874,7 +953,9 @@ export default function MinorityReportLab(props) {
                   }}
                   aria-hidden="true"
                 >
-                  <span className="minority-stage-sector-label">Sector {tile.index + 1}</span>
+                  <span className="minority-stage-sector-label">
+                    Sector {tile.localTileIndex + 1}
+                  </span>
                 </div>
               ))}
               {panels.map((panel) => (

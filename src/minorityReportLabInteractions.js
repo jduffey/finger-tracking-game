@@ -1,6 +1,7 @@
-const MINORITY_REPORT_STAGE_MIN_SCALE = 0.45;
+const MINORITY_REPORT_STAGE_MIN_SCALE = 0.1;
 const MINORITY_REPORT_STAGE_MAX_SCALE = 2.6;
 const MINORITY_REPORT_FOCUS_FILL_RATIO = 0.82;
+const MINORITY_REPORT_OVERVIEW_FILL_RATIO = 0.94;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -18,6 +19,43 @@ export function shouldResetMinorityReportFocus(currentFocusedTileIndex, requeste
     Number.isInteger(requestedTileIndex) &&
     currentFocusedTileIndex === requestedTileIndex
   );
+}
+
+export function getMinorityReportPinchSequenceAction(
+  previousPinch,
+  requestedTileIndex,
+  now,
+  maxDelayMs,
+) {
+  const isSameTargetSequence =
+    previousPinch &&
+    previousPinch.tileIndex === requestedTileIndex &&
+    now - previousPinch.timestamp <= maxDelayMs;
+  const count = isSameTargetSequence ? (previousPinch.count ?? 1) + 1 : 1;
+  const isSectorPinch = Number.isInteger(requestedTileIndex);
+
+  if (isSectorPinch && count >= 2) {
+    return {
+      action: "focus",
+      state: null,
+    };
+  }
+
+  if (!isSectorPinch && count >= 3) {
+    return {
+      action: "overview",
+      state: null,
+    };
+  }
+
+  return {
+    action: null,
+    state: {
+      timestamp: now,
+      tileIndex: requestedTileIndex,
+      count,
+    },
+  };
 }
 
 export function normalizeMinorityReportStageTransform(transform) {
@@ -88,5 +126,33 @@ export function getMinorityReportFocusTransform(stageSize, tileBounds) {
     x: (centerX - (tileBounds?.centerX ?? centerX)) * focusScale,
     y: (centerY - (tileBounds?.centerY ?? centerY)) * focusScale,
     scale: focusScale,
+  });
+}
+
+export function getMinorityReportOverviewTransform(stageSize, workspaceBounds) {
+  const width = Math.max(1, stageSize?.width ?? 960);
+  const height = Math.max(1, stageSize?.height ?? 640);
+  const workspaceWidth = Math.max(1, workspaceBounds?.width ?? width);
+  const workspaceHeight = Math.max(1, workspaceBounds?.height ?? height);
+  const overviewScale = clamp(
+    Math.min(
+      (width * MINORITY_REPORT_OVERVIEW_FILL_RATIO) / workspaceWidth,
+      (height * MINORITY_REPORT_OVERVIEW_FILL_RATIO) / workspaceHeight,
+    ),
+    MINORITY_REPORT_STAGE_MIN_SCALE,
+    MINORITY_REPORT_STAGE_MAX_SCALE,
+  );
+  const centerX = width * 0.5;
+  const centerY = height * 0.5;
+  const workspaceCenterX = Number.isFinite(workspaceBounds?.centerX)
+    ? workspaceBounds.centerX
+    : workspaceWidth * 0.5;
+  const workspaceCenterY = Number.isFinite(workspaceBounds?.centerY)
+    ? workspaceBounds.centerY
+    : workspaceHeight * 0.5;
+  return normalizeMinorityReportStageTransform({
+    x: (centerX - workspaceCenterX) * overviewScale,
+    y: (centerY - workspaceCenterY) * overviewScale,
+    scale: overviewScale,
   });
 }

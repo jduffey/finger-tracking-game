@@ -5,11 +5,21 @@ import {
   FRUIT_NINJA_BOMB_PENALTY,
   FRUIT_NINJA_COMBO_BONUS,
   createFruitNinjaGame,
+  createFruitNinjaLayout,
   computeSwipeSegments,
   scoreSliceBatch,
   segmentIntersectsCircle,
   stepFruitNinjaGame,
 } from "../src/fruitNinjaGame.js";
+
+function constantRng(value) {
+  return () => value;
+}
+
+test("createFruitNinjaLayout scales targets up by fifty percent", () => {
+  const layout = createFruitNinjaLayout(960, 720);
+  assert.equal(layout.targetRadius, 56.16);
+});
 
 test("computeSwipeSegments keeps only fast enough motion segments", () => {
   const segments = computeSwipeSegments(
@@ -129,6 +139,25 @@ test("stepFruitNinjaGame scores simultaneous fruit and bomb slices consistently"
   assert.equal(fruitFirst.score, bombFirst.score);
   assert.equal(fruitFirst.comboCount, bombFirst.comboCount);
   assert.equal(fruitFirst.lives, bombFirst.lives);
+});
+
+test("stepFruitNinjaGame spawns targets that can rise to roughly the top quarter of the screen", () => {
+  const game = createFruitNinjaGame(960, 720);
+  const nextState = stepFruitNinjaGame(
+    {
+      ...game,
+      spawnCooldownMs: 0,
+    },
+    0,
+    null,
+    0,
+    constantRng(0),
+  );
+
+  assert.equal(nextState.targets.length, 1);
+  const target = nextState.targets[0];
+  const apexY = target.y - (target.vy * target.vy) / (2 * 1380);
+  assert.ok(apexY <= nextState.layout.height * 0.26);
 });
 
 test("stepFruitNinjaGame leaves targets and score unchanged after gameover", () => {

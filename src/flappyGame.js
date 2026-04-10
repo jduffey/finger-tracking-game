@@ -7,6 +7,7 @@ export const FLAPPY_PIPE_SCORE = 1;
 const MAX_STEP_SECONDS = 0.05;
 const PIPE_CENTER_MARGIN = 72;
 const INITIAL_PIPE_COUNT = 3;
+const PIPE_RENDER_STRIDE = 3;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -14,7 +15,11 @@ function clamp(value, min, max) {
 
 function createIdFactory(start = 1) {
   let next = start;
-  return () => next++;
+  return () => {
+    const current = next;
+    next += PIPE_RENDER_STRIDE;
+    return current;
+  };
 }
 
 function createPipe(layout, x, pipeId, rng = Math.random) {
@@ -77,10 +82,11 @@ export function createFlappyLayout(width, height) {
 export function createFlappyGame(width, height, rng = Math.random) {
   const layout = createFlappyLayout(width, height);
   const createPipeId = createIdFactory(1);
+  const visiblePipeSpacing = layout.pipeSpacing * PIPE_RENDER_STRIDE;
   const pipes = Array.from({ length: INITIAL_PIPE_COUNT }, (_, index) =>
     createPipe(
       layout,
-      layout.width + index * layout.pipeSpacing,
+      layout.width + index * visiblePipeSpacing,
       createPipeId(),
       rng,
     ),
@@ -98,7 +104,7 @@ export function createFlappyGame(width, height, rng = Math.random) {
     score: 0,
     status: "ready",
     message: "Pinch to flap",
-    nextPipeId: INITIAL_PIPE_COUNT + 1,
+    nextPipeId: 1 + INITIAL_PIPE_COUNT * PIPE_RENDER_STRIDE,
   };
 
   flappyLog.info("Created flappy game state", {
@@ -155,6 +161,7 @@ export function stepFlappyGame(state, dtSeconds, rng = Math.random) {
   }
 
   const layout = state.layout;
+  const visiblePipeSpacing = layout.pipeSpacing * PIPE_RENDER_STRIDE;
   const nextBirdY = state.bird.y + state.bird.vy * safeDt + 0.5 * layout.gravity * safeDt * safeDt;
   const nextBirdVy = state.bird.vy + layout.gravity * safeDt;
   const movedPipes = state.pipes
@@ -169,11 +176,11 @@ export function stepFlappyGame(state, dtSeconds, rng = Math.random) {
     Number.NEGATIVE_INFINITY,
   );
   let spawnedPipe = false;
-  if (rightMostPipeX <= layout.width - layout.pipeSpacing) {
+  if (rightMostPipeX <= layout.width - visiblePipeSpacing) {
     movedPipes.push(
       createPipe(
         layout,
-        Number.isFinite(rightMostPipeX) ? rightMostPipeX + layout.pipeSpacing : layout.width,
+        Number.isFinite(rightMostPipeX) ? rightMostPipeX + visiblePipeSpacing : layout.width,
         state.nextPipeId,
         rng,
       ),
@@ -218,6 +225,6 @@ export function stepFlappyGame(state, dtSeconds, rng = Math.random) {
     score: state.score + scoreDelta,
     status: gameOver ? "gameover" : "playing",
     message: gameOver ? "Pinch to restart" : "",
-    nextPipeId: spawnedPipe ? state.nextPipeId + 1 : state.nextPipeId,
+    nextPipeId: spawnedPipe ? state.nextPipeId + PIPE_RENDER_STRIDE : state.nextPipeId,
   };
 }

@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   getMinorityReportAnchoredZoomTransform,
   getMinorityReportFocusTransform,
+  getMinorityReportOverviewTransform,
+  getMinorityReportPinchSequenceAction,
   getMinorityReportZoomTransform,
   normalizeMinorityReportStageTransform,
   shouldResetMinorityReportFocus,
@@ -83,6 +85,70 @@ test("getMinorityReportAnchoredZoomTransform keeps the pinch anchor stable while
       currentMidpoint: { x: 0.5, y: 0.5 },
     }),
     { x: 416, y: 260, scale: 1.3, rotation: 0 },
+  );
+});
+
+test("getMinorityReportOverviewTransform scales a larger workspace down to fit on load", () => {
+  assert.deepEqual(
+    getMinorityReportOverviewTransform(
+      { width: 960, height: 640 },
+      { width: 1974, height: 1334, centerX: 987, centerY: 667 },
+    ),
+    {
+      x: -228.64407796101943,
+      y: -156.48815592203894,
+      scale: 0.4509745127436281,
+      rotation: 0,
+    },
+  );
+});
+
+test("getMinorityReportPinchSequenceAction focuses on a second pinch in the same sector", () => {
+  assert.deepEqual(
+    getMinorityReportPinchSequenceAction(
+      { timestamp: 1000, tileIndex: 12, count: 1 },
+      12,
+      1200,
+      320,
+    ),
+    {
+      action: "focus",
+      state: null,
+    },
+  );
+});
+
+test("getMinorityReportPinchSequenceAction resets to overview on a third outside pinch", () => {
+  assert.deepEqual(
+    getMinorityReportPinchSequenceAction(
+      { timestamp: 1200, tileIndex: null, count: 2 },
+      null,
+      1400,
+      320,
+    ),
+    {
+      action: "overview",
+      state: null,
+    },
+  );
+});
+
+test("getMinorityReportPinchSequenceAction keeps counting outside pinches before the third one", () => {
+  assert.deepEqual(
+    getMinorityReportPinchSequenceAction(
+      { timestamp: 1000, tileIndex: null, count: 1 },
+      null,
+      1200,
+      320,
+    ),
+    {
+      action: null,
+      state: {
+        timestamp: 1200,
+        tileIndex: null,
+        count: 2,
+      },
+    },
   );
 });
 
