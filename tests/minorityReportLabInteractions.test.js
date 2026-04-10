@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  getMinorityReportAnchoredZoomTransform,
   getMinorityReportFocusTransform,
   getMinorityReportZoomTransform,
   normalizeMinorityReportStageTransform,
@@ -67,5 +68,19 @@ test("getMinorityReportFocusTransform centers a sector and scales it toward full
       scale: 2.6,
       rotation: 0,
     },
+  );
+});
+
+test("getMinorityReportAnchoredZoomTransform keeps the pinch anchor stable while zooming out", () => {
+  assert.deepEqual(
+    getMinorityReportAnchoredZoomTransform({
+      baseTransform: { x: 832, y: 520, scale: 2.6, rotation: 0 },
+      baseDistance: 0.5,
+      currentDistance: 0.25,
+      stageSize: { width: 960, height: 640 },
+      baseLocalAnchor: { x: 160, y: 120 },
+      currentMidpoint: { x: 0.5, y: 0.5 },
+    }),
+    { x: 416, y: 260, scale: 1.3, rotation: 0 },
   );
 });

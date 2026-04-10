@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import GestureDebugPanel from "./GestureDebugPanel.jsx";
 import { GESTURE_IDS } from "../gestures/constants.js";
 import {
+  getMinorityReportAnchoredZoomTransform,
   getMinorityReportFocusTransform,
   getMinorityReportZoomTransform,
   normalizeMinorityReportStageTransform,
@@ -560,21 +561,33 @@ export default function MinorityReportLab(props) {
       }
       const currentTransform = normalizeMinorityReportStageTransform(stageTransformRef.current);
       if (!twoHandManipRef.current.active) {
+        const baseLocalAnchor = pointerToLocal(
+          twoHand.midpoint ?? { x: 0.5, y: 0.5 },
+          stageSize,
+          currentTransform,
+        );
         twoHandManipRef.current = {
           active: true,
           base: {
             distance: twoHand.distance,
             transform: currentTransform,
+            localAnchor: baseLocalAnchor,
           },
         };
+        if (focusedTileIndex !== null) {
+          setFocusedTileIndex(null);
+        }
       }
 
       const base = twoHandManipRef.current.base;
-      const nextTransform = getMinorityReportZoomTransform(
-        base.transform,
-        base.distance,
-        twoHand.distance,
-      );
+      const nextTransform = getMinorityReportAnchoredZoomTransform({
+        baseTransform: base.transform,
+        baseDistance: base.distance,
+        currentDistance: twoHand.distance,
+        stageSize,
+        baseLocalAnchor: base.localAnchor,
+        currentMidpoint: twoHand.midpoint,
+      });
       setStageTransform(nextTransform);
       stageTransformRef.current = nextTransform;
       grabRef.current = null;

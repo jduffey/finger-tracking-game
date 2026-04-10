@@ -32,6 +32,38 @@ export function getMinorityReportZoomTransform(baseTransform, baseDistance, curr
   });
 }
 
+export function getMinorityReportAnchoredZoomTransform({
+  baseTransform,
+  baseDistance,
+  currentDistance,
+  stageSize,
+  baseLocalAnchor,
+  currentMidpoint,
+}) {
+  const normalizedBase = normalizeMinorityReportStageTransform(baseTransform);
+  const distanceRatio = currentDistance / Math.max(0.02, baseDistance);
+  const nextScale = clamp(
+    normalizedBase.scale * distanceRatio,
+    MINORITY_REPORT_STAGE_MIN_SCALE,
+    MINORITY_REPORT_STAGE_MAX_SCALE,
+  );
+
+  const width = Math.max(1, stageSize?.width ?? 960);
+  const height = Math.max(1, stageSize?.height ?? 640);
+  const centerX = width * 0.5;
+  const centerY = height * 0.5;
+  const anchorX = Number.isFinite(baseLocalAnchor?.x) ? baseLocalAnchor.x : centerX;
+  const anchorY = Number.isFinite(baseLocalAnchor?.y) ? baseLocalAnchor.y : centerY;
+  const midpointX = (Number.isFinite(currentMidpoint?.x) ? currentMidpoint.x : 0.5) * width;
+  const midpointY = (Number.isFinite(currentMidpoint?.y) ? currentMidpoint.y : 0.5) * height;
+
+  return normalizeMinorityReportStageTransform({
+    x: midpointX - centerX - (anchorX - centerX) * nextScale,
+    y: midpointY - centerY - (anchorY - centerY) * nextScale,
+    scale: nextScale,
+  });
+}
+
 export function getMinorityReportFocusTransform(stageSize, tileBounds) {
   const width = Math.max(1, stageSize?.width ?? 960);
   const height = Math.max(1, stageSize?.height ?? 640);
