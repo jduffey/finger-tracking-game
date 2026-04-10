@@ -73,7 +73,7 @@ function createFruitTarget(layout, nextId, rng = Math.random) {
   const vx =
     horizontalDirection * randomBetween(layout.width * 0.09, layout.width * 0.22, rng) +
     randomBetween(-30, 30, rng);
-  const vy = -randomBetween(layout.height * 1.64, layout.height * 1.78, rng);
+  const vy = -randomBetween(layout.height * 1.82, layout.height * 1.96, rng);
   const palette = randomChoice(FRUIT_COLORS, rng) ?? FRUIT_COLORS[0];
   return {
     id: createTargetId("fruit", nextId),
@@ -100,7 +100,7 @@ function createBombTarget(layout, nextId, rng = Math.random) {
   const vx =
     horizontalDirection * randomBetween(layout.width * 0.08, layout.width * 0.18, rng) +
     randomBetween(-40, 40, rng);
-  const vy = -randomBetween(layout.height * 1.54, layout.height * 1.7, rng);
+  const vy = -randomBetween(layout.height * 1.78, layout.height * 1.92, rng);
   return {
     id: createTargetId("bomb", nextId),
     kind: "bomb",
