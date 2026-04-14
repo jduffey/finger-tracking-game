@@ -3,7 +3,7 @@ const HAND_LABEL_MEMORY_MS = 1400;
 const HAND_LABEL_SINGLE_STATE_MS = 1200;
 const HAND_LABEL_SINGLE_POSITION_MATCH_RADIUS = 0.18;
 const HAND_LABEL_SINGLE_SWITCH_CONFIRM_MS = 420;
-const HAND_LABEL_SINGLE_SWITCH_MARGIN = 0.08;
+const HAND_LABEL_SINGLE_SWITCH_MARGIN = 0.01;
 const HAND_LABEL_SINGLE_IMMEDIATE_SWITCH_MARGIN = 0.16;
 const HAND_WRIST_INDEX = 0;
 
@@ -398,7 +398,16 @@ export function assignStableHandLabels(hands, options = {}) {
     if (labeled.length !== 1) {
       memory.singleHandState = null;
     }
+    const freezeSingleHandLabelMemory =
+      labeled.length === 1 &&
+      memory.singleHandState &&
+      memory.singleHandState.label === labeled[0]?.label &&
+      memory.singleHandState.pendingLabel &&
+      memory.singleHandState.pendingLabel !== labeled[0]?.label;
     for (const hand of labeled) {
+      if (freezeSingleHandLabelMemory && hand.label === labeled[0]?.label) {
+        continue;
+      }
       const anchor = getHandAnchorPoint(hand);
       memory.byLabel[hand.label] = {
         x: anchor.x,

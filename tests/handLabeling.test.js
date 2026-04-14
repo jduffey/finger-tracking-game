@@ -51,6 +51,27 @@ test("single visible hand can switch labels when the evidence moves strongly to 
   assert.equal(switchedFrame[0].label, "Left");
 });
 
+test("single visible hand can complete a gradual crossover without getting stuck", () => {
+  const memory = { byLabel: {} };
+
+  assignStableHandLabels(
+    [createHand({ x: 0.74, y: 0.5, handedness: "Right" })],
+    { memory, timestamp: 1000 },
+  );
+
+  const positions = [0.68, 0.62, 0.56, 0.5, 0.44, 0.38, 0.32, 0.26, 0.26, 0.26, 0.26, 0.26];
+  let labeled = null;
+
+  for (const [index, x] of positions.entries()) {
+    labeled = assignStableHandLabels(
+      [createHand({ x, y: 0.5, handedness: x < 0.5 ? "Left" : "Right" })],
+      { memory, timestamp: 1120 + index * 120 },
+    );
+  }
+
+  assert.equal(labeled?.[0]?.label, "Left");
+});
+
 test("two visible hands still resolve into distinct left and right labels", () => {
   const memory = { byLabel: {} };
   const labeled = assignStableHandLabels(
