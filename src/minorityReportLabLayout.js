@@ -4,10 +4,10 @@ export const MINORITY_REPORT_SUPER_SECTOR_COLUMNS = 2;
 export const MINORITY_REPORT_SUPER_SECTOR_ROWS = 2;
 export const MINORITY_REPORT_TILE_GAP = 18;
 export const MINORITY_REPORT_SUPER_SECTOR_GAP = 54;
-export const MINORITY_REPORT_MIN_COLUMNS_PER_TILE = 3;
-export const MINORITY_REPORT_MAX_COLUMNS_PER_TILE = 5;
+export const MINORITY_REPORT_MIN_COLUMNS_PER_TILE = 1;
+export const MINORITY_REPORT_MAX_COLUMNS_PER_TILE = 1;
 export const MINORITY_REPORT_MIN_CARDS_PER_COLUMN = 1;
-export const MINORITY_REPORT_MAX_CARDS_PER_COLUMN = 4;
+export const MINORITY_REPORT_MAX_CARDS_PER_COLUMN = 1;
 export const MINORITY_REPORT_TILE_GRID_COLUMNS = 8;
 export const MINORITY_REPORT_TILE_GRID_ROWS = 6;
 export const MINORITY_REPORT_MIN_PANELS_PER_TILE =
@@ -57,76 +57,26 @@ function clampColumnCardCount(value) {
   );
 }
 
-function getRandomCount(min, max, random) {
-  const span = max - min + 1;
-  return min + Math.floor(Math.max(0, Math.min(0.999999, random())) * span);
-}
-
-function getRandomColumnCount(random) {
-  return getRandomCount(
-    MINORITY_REPORT_MIN_COLUMNS_PER_TILE,
-    MINORITY_REPORT_MAX_COLUMNS_PER_TILE,
-    random,
-  );
-}
-
-function getRandomColumnCardCount(random) {
-  return getRandomCount(
-    MINORITY_REPORT_MIN_CARDS_PER_COLUMN,
-    MINORITY_REPORT_MAX_CARDS_PER_COLUMN,
-    random,
-  );
-}
-
-function getMinorityReportDefaultGridColumnIndex(tileColumnIndex, tileColumnCount) {
-  const centeredOffset = Math.floor(
-    (MINORITY_REPORT_TILE_GRID_COLUMNS - tileColumnCount) * 0.5,
-  );
-  return clamp(centeredOffset + tileColumnIndex, 0, MINORITY_REPORT_TILE_GRID_COLUMNS - 1);
+function getMinorityReportDefaultGridColumnIndex(tileColumnIndex) {
+  return clamp(tileColumnIndex, 0, MINORITY_REPORT_TILE_GRID_COLUMNS - 1);
 }
 
 export function getMinorityReportRandomPanelAssignments(random = Math.random) {
+  void random;
   const assignments = [];
   for (let tileIndex = 0; tileIndex < MINORITY_REPORT_TILE_COUNT; tileIndex += 1) {
-    const tileColumnCount = getRandomColumnCount(random);
-    const columnCardCounts = Array.from({ length: tileColumnCount }, () =>
-      getRandomColumnCardCount(random),
-    );
-    const tileSlotCount = columnCardCounts.reduce((sum, count) => sum + count, 0);
-    const tileMaxColumnCardCount = columnCardCounts.reduce(
-      (max, count) => Math.max(max, count),
-      MINORITY_REPORT_MIN_CARDS_PER_COLUMN,
-    );
-    const defaultGridColumnOffset = Math.floor(
-      (MINORITY_REPORT_TILE_GRID_COLUMNS - tileColumnCount) * 0.5,
-    );
-    let tileSlotIndex = 0;
-    for (let tileColumnIndex = 0; tileColumnIndex < tileColumnCount; tileColumnIndex += 1) {
-      const columnCardCount = columnCardCounts[tileColumnIndex];
-      for (let columnCardIndex = 0; columnCardIndex < columnCardCount; columnCardIndex += 1) {
-        assignments.push({
-          tileIndex,
-          tileSlotIndex,
-          tileSlotCount,
-          tileColumnIndex,
-          tileColumnCount,
-          columnCardIndex,
-          columnCardCount,
-          tileMaxColumnCardCount,
-          gridColumnIndex: clamp(
-            defaultGridColumnOffset + tileColumnIndex,
-            0,
-            MINORITY_REPORT_TILE_GRID_COLUMNS - 1,
-          ),
-          gridRowIndex: clamp(
-            columnCardIndex,
-            0,
-            MINORITY_REPORT_TILE_GRID_ROWS - 1,
-          ),
-        });
-        tileSlotIndex += 1;
-      }
-    }
+    assignments.push({
+      tileIndex,
+      tileSlotIndex: 0,
+      tileSlotCount: 1,
+      tileColumnIndex: 0,
+      tileColumnCount: 1,
+      columnCardIndex: 0,
+      columnCardCount: 1,
+      tileMaxColumnCardCount: 1,
+      gridColumnIndex: 0,
+      gridRowIndex: 0,
+    });
   }
   return assignments;
 }

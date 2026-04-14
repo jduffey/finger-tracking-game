@@ -1,12 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  MINORITY_REPORT_MAX_CARDS_PER_COLUMN,
-  MINORITY_REPORT_MAX_COLUMNS_PER_TILE,
-  MINORITY_REPORT_MAX_PANELS_PER_TILE,
-  MINORITY_REPORT_MIN_CARDS_PER_COLUMN,
-  MINORITY_REPORT_MIN_COLUMNS_PER_TILE,
-  MINORITY_REPORT_MIN_PANELS_PER_TILE,
   MINORITY_REPORT_SUPER_SECTOR_COUNT,
   MINORITY_REPORT_TILE_GRID_COLUMNS,
   MINORITY_REPORT_TILE_GRID_ROWS,
@@ -35,38 +29,24 @@ test("getMinorityReportTileBoundsList returns a 2x2 super grid of 3x2 subsets", 
   assert.ok(interSectorGap > intraSectorGap);
 });
 
-test("getMinorityReportRandomPanelAssignments creates 3-5 columns with 1-4 cards each", () => {
-  const randomValues = [0, 0.31, 0.62, 0.93, 0.18, 0.48, 0.79];
-  let randomIndex = 0;
-  const assignments = getMinorityReportRandomPanelAssignments(() => {
-    const value = randomValues[randomIndex % randomValues.length];
-    randomIndex += 1;
-    return value;
-  });
-  const perTile = new Map();
-  for (const assignment of assignments) {
-    const tileState = perTile.get(assignment.tileIndex) ?? {
-      count: 0,
-      columns: new Map(),
-    };
-    tileState.count += 1;
-    tileState.columns.set(
-      assignment.tileColumnIndex,
-      (tileState.columns.get(assignment.tileColumnIndex) ?? 0) + 1,
-    );
-    perTile.set(assignment.tileIndex, tileState);
-  }
+test("getMinorityReportRandomPanelAssignments creates one top-left card per sector", () => {
+  const assignments = getMinorityReportRandomPanelAssignments(() => 0.5);
+  const tileIndexes = new Set();
 
-  assert.equal(perTile.size, MINORITY_REPORT_TILE_COUNT);
-  for (const tileState of perTile.values()) {
-    assert.ok(tileState.count >= MINORITY_REPORT_MIN_PANELS_PER_TILE);
-    assert.ok(tileState.count <= MINORITY_REPORT_MAX_PANELS_PER_TILE);
-    assert.ok(tileState.columns.size >= MINORITY_REPORT_MIN_COLUMNS_PER_TILE);
-    assert.ok(tileState.columns.size <= MINORITY_REPORT_MAX_COLUMNS_PER_TILE);
-    for (const columnCount of tileState.columns.values()) {
-      assert.ok(columnCount >= MINORITY_REPORT_MIN_CARDS_PER_COLUMN);
-      assert.ok(columnCount <= MINORITY_REPORT_MAX_CARDS_PER_COLUMN);
-    }
+  assert.equal(assignments.length, MINORITY_REPORT_TILE_COUNT);
+
+  for (const assignment of assignments) {
+    assert.equal(tileIndexes.has(assignment.tileIndex), false);
+    tileIndexes.add(assignment.tileIndex);
+    assert.equal(assignment.tileSlotIndex, 0);
+    assert.equal(assignment.tileSlotCount, 1);
+    assert.equal(assignment.tileColumnIndex, 0);
+    assert.equal(assignment.tileColumnCount, 1);
+    assert.equal(assignment.columnCardIndex, 0);
+    assert.equal(assignment.columnCardCount, 1);
+    assert.equal(assignment.tileMaxColumnCardCount, 1);
+    assert.equal(assignment.gridColumnIndex, 0);
+    assert.equal(assignment.gridRowIndex, 0);
   }
 });
 
@@ -88,19 +68,18 @@ test("getMinorityReportTileGridMetrics exposes an 8 by 6 snap grid for each sect
   assert.ok(metrics.panelHeight < metrics.rowHeight);
 });
 
-test("getMinorityReportRandomPanelAssignments gives each card a unique grid slot", () => {
+test("getMinorityReportRandomPanelAssignments places each sector card in the top-left grid slot", () => {
   const assignments = getMinorityReportRandomPanelAssignments(() => 0.5);
-  const perTileSlots = new Map();
+  const stageSize = { width: 960, height: 640 };
 
   for (const assignment of assignments) {
-    const key = `${assignment.gridColumnIndex}:${assignment.gridRowIndex}`;
-    const tileSlots = perTileSlots.get(assignment.tileIndex) ?? new Set();
-    assert.equal(tileSlots.has(key), false);
-    tileSlots.add(key);
-    perTileSlots.set(assignment.tileIndex, tileSlots);
+    const metrics = getMinorityReportTileGridMetrics(stageSize, assignment.tileIndex);
+    const placement = getMinorityReportPanelPlacement(0, assignment, stageSize);
+    assert.equal(placement.gridColumnIndex, 0);
+    assert.equal(placement.gridRowIndex, 0);
+    assert.equal(placement.x, metrics.left + (0.5 * metrics.columnWidth));
+    assert.equal(placement.y, metrics.top + (0.5 * metrics.rowHeight));
   }
-
-  assert.equal(perTileSlots.size, MINORITY_REPORT_TILE_COUNT);
 });
 
 test("getMinorityReportPanelPlacement centers cards on their assigned grid cells", () => {
