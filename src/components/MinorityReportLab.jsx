@@ -13,6 +13,7 @@ import {
 import {
   getMinorityReportPanelPlacement,
   getMinorityReportRandomPanelAssignments,
+  resolveMinorityReportPanelGridOccupancy,
   getMinorityReportSuperSectorBoundsList,
   getMinorityReportTileBounds,
   getMinorityReportTileIndexAtPoint,
@@ -83,7 +84,7 @@ function formatPanelSubtitle(placement) {
 }
 
 function createPanels(sceneIndex, stageSize, panelAssignments) {
-  return panelAssignments.map((panelAssignment, index) => {
+  const basePanels = panelAssignments.map((panelAssignment, index) => {
     const scenePlacement = getMinorityReportPanelPlacement(sceneIndex, panelAssignment, stageSize);
     return {
       id: `panel-${index + 1}`,
@@ -109,10 +110,19 @@ function createPanels(sceneIndex, stageSize, panelAssignments) {
       throwingUntil: 0,
     };
   });
+
+  return resolveMinorityReportPanelGridOccupancy(
+    basePanels,
+    stageSize,
+    (panel) => ({ x: panel.x, y: panel.y }),
+  ).map((panel) => ({
+    ...panel,
+    subtitle: formatPanelSubtitle(panel),
+  }));
 }
 
 function applySceneLayout(existingPanels, sceneIndex, stageSize, panelAssignments) {
-  return existingPanels.map((panel, index) => {
+  const nextPanels = existingPanels.map((panel, index) => {
     const nextPlacement = getMinorityReportPanelPlacement(
       sceneIndex,
       panelAssignments[index] ?? {
@@ -152,6 +162,15 @@ function applySceneLayout(existingPanels, sceneIndex, stageSize, panelAssignment
       throwingUntil: 0,
     };
   });
+
+  return resolveMinorityReportPanelGridOccupancy(
+    nextPanels,
+    stageSize,
+    (panel) => ({ x: panel.x, y: panel.y }),
+  ).map((panel) => ({
+    ...panel,
+    subtitle: formatPanelSubtitle(panel),
+  }));
 }
 
 function applySnappedPanelPlacement(
@@ -562,9 +581,18 @@ export default function MinorityReportLab(props) {
       if (previous.length === 0) {
         return createPanels(sceneIndexRef.current, stageSize, panelAssignments);
       }
-      return previous.map((panel) =>
-        applySnappedPanelPlacement(panel, stageSize, previous),
-      );
+      const repositionedPanels = previous.map((panel) => ({
+        ...panel,
+        ...getMinorityReportPanelPlacement(sceneIndexRef.current, panel, stageSize),
+      }));
+      return resolveMinorityReportPanelGridOccupancy(
+        repositionedPanels,
+        stageSize,
+        (panel) => ({ x: panel.x, y: panel.y }),
+      ).map((panel) => ({
+        ...panel,
+        subtitle: formatPanelSubtitle(panel),
+      }));
     });
     if (stageViewModeRef.current === "overview") {
       const overviewTransform = getDefaultStageTransform(stageSize);

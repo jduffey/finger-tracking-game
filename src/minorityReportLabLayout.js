@@ -5,9 +5,9 @@ export const MINORITY_REPORT_SUPER_SECTOR_ROWS = 2;
 export const MINORITY_REPORT_TILE_GAP = 18;
 export const MINORITY_REPORT_SUPER_SECTOR_GAP = 54;
 export const MINORITY_REPORT_MIN_COLUMNS_PER_TILE = 1;
-export const MINORITY_REPORT_MAX_COLUMNS_PER_TILE = 1;
+export const MINORITY_REPORT_MAX_COLUMNS_PER_TILE = 5;
 export const MINORITY_REPORT_MIN_CARDS_PER_COLUMN = 1;
-export const MINORITY_REPORT_MAX_CARDS_PER_COLUMN = 1;
+export const MINORITY_REPORT_MAX_CARDS_PER_COLUMN = 4;
 export const MINORITY_REPORT_TILE_GRID_COLUMNS = 8;
 export const MINORITY_REPORT_TILE_GRID_ROWS = 6;
 export const MINORITY_REPORT_MIN_PANELS_PER_TILE =
@@ -65,18 +65,20 @@ export function getMinorityReportRandomPanelAssignments(random = Math.random) {
   void random;
   const assignments = [];
   for (let tileIndex = 0; tileIndex < MINORITY_REPORT_TILE_COUNT; tileIndex += 1) {
-    assignments.push({
-      tileIndex,
-      tileSlotIndex: 0,
-      tileSlotCount: 1,
-      tileColumnIndex: 0,
-      tileColumnCount: 1,
-      columnCardIndex: 0,
-      columnCardCount: 1,
-      tileMaxColumnCardCount: 1,
-      gridColumnIndex: 0,
-      gridRowIndex: 0,
-    });
+    for (let tileSlotIndex = 0; tileSlotIndex < 2; tileSlotIndex += 1) {
+      assignments.push({
+        tileIndex,
+        tileSlotIndex,
+        tileSlotCount: 2,
+        tileColumnIndex: tileSlotIndex,
+        tileColumnCount: 2,
+        columnCardIndex: 0,
+        columnCardCount: 1,
+        tileMaxColumnCardCount: 1,
+        gridColumnIndex: tileSlotIndex,
+        gridRowIndex: 0,
+      });
+    }
   }
   return assignments;
 }
@@ -440,6 +442,32 @@ export function snapMinorityReportPanelToGrid(
     },
     stageSize,
   );
+}
+
+export function resolveMinorityReportPanelGridOccupancy(
+  panels,
+  stageSize,
+  getPreferredPoint = null,
+) {
+  const resolvedPanels = [];
+  for (const panel of Array.isArray(panels) ? panels : []) {
+    const preferredPoint =
+      typeof getPreferredPoint === "function"
+        ? getPreferredPoint(panel)
+        : null;
+    const snapped = snapMinorityReportPanelToGrid(
+      panel,
+      stageSize,
+      resolvedPanels,
+      preferredPoint,
+    );
+    const nextPanel = {
+      ...panel,
+      ...snapped,
+    };
+    resolvedPanels.push(nextPanel);
+  }
+  return resolvedPanels;
 }
 
 export function clampMinorityReportPanelPosition(panel, stageSize) {

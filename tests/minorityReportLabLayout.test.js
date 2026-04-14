@@ -15,6 +15,7 @@ import {
   getMinorityReportTileBounds,
   getMinorityReportTileGridMetrics,
   getMinorityReportTileBoundsList,
+  resolveMinorityReportPanelGridOccupancy,
   snapMinorityReportPanelToGrid,
 } from "../src/minorityReportLabLayout.js";
 
@@ -29,24 +30,42 @@ test("getMinorityReportTileBoundsList returns a 2x2 super grid of 3x2 subsets", 
   assert.ok(interSectorGap > intraSectorGap);
 });
 
-test("getMinorityReportRandomPanelAssignments creates one top-left card per sector", () => {
+test("getMinorityReportRandomPanelAssignments creates two top-row cards per sector", () => {
   const assignments = getMinorityReportRandomPanelAssignments(() => 0.5);
-  const tileIndexes = new Set();
+  const perTileAssignments = new Map();
 
-  assert.equal(assignments.length, MINORITY_REPORT_TILE_COUNT);
+  assert.equal(assignments.length, MINORITY_REPORT_TILE_COUNT * 2);
 
   for (const assignment of assignments) {
-    assert.equal(tileIndexes.has(assignment.tileIndex), false);
-    tileIndexes.add(assignment.tileIndex);
-    assert.equal(assignment.tileSlotIndex, 0);
-    assert.equal(assignment.tileSlotCount, 1);
-    assert.equal(assignment.tileColumnIndex, 0);
-    assert.equal(assignment.tileColumnCount, 1);
+    const tileAssignments = perTileAssignments.get(assignment.tileIndex) ?? [];
+    tileAssignments.push(assignment);
+    perTileAssignments.set(assignment.tileIndex, tileAssignments);
+    assert.equal(assignment.tileSlotCount, 2);
+    assert.equal(assignment.tileColumnCount, 2);
     assert.equal(assignment.columnCardIndex, 0);
     assert.equal(assignment.columnCardCount, 1);
     assert.equal(assignment.tileMaxColumnCardCount, 1);
-    assert.equal(assignment.gridColumnIndex, 0);
     assert.equal(assignment.gridRowIndex, 0);
+  }
+
+  assert.equal(perTileAssignments.size, MINORITY_REPORT_TILE_COUNT);
+  for (const tileAssignments of perTileAssignments.values()) {
+    assert.equal(tileAssignments.length, 2);
+    const sortedAssignments = [...tileAssignments].sort(
+      (first, second) => first.tileSlotIndex - second.tileSlotIndex,
+    );
+    assert.deepEqual(
+      sortedAssignments.map((assignment) => assignment.tileSlotIndex),
+      [0, 1],
+    );
+    assert.deepEqual(
+      sortedAssignments.map((assignment) => assignment.tileColumnIndex),
+      [0, 1],
+    );
+    assert.deepEqual(
+      sortedAssignments.map((assignment) => assignment.gridColumnIndex),
+      [0, 1],
+    );
   }
 });
 
@@ -68,18 +87,91 @@ test("getMinorityReportTileGridMetrics exposes an 8 by 6 snap grid for each sect
   assert.ok(metrics.panelHeight < metrics.rowHeight);
 });
 
-test("getMinorityReportRandomPanelAssignments places each sector card in the top-left grid slot", () => {
+test("getMinorityReportRandomPanelAssignments places each sector card in neighboring top-row slots", () => {
   const assignments = getMinorityReportRandomPanelAssignments(() => 0.5);
   const stageSize = { width: 960, height: 640 };
+  const perTilePlacements = new Map();
 
   for (const assignment of assignments) {
     const metrics = getMinorityReportTileGridMetrics(stageSize, assignment.tileIndex);
     const placement = getMinorityReportPanelPlacement(0, assignment, stageSize);
-    assert.equal(placement.gridColumnIndex, 0);
+    const tilePlacements = perTilePlacements.get(assignment.tileIndex) ?? [];
+    tilePlacements.push(placement);
+    perTilePlacements.set(assignment.tileIndex, tilePlacements);
     assert.equal(placement.gridRowIndex, 0);
-    assert.equal(placement.x, metrics.left + (0.5 * metrics.columnWidth));
+    assert.equal(
+      placement.x,
+      metrics.left + ((assignment.gridColumnIndex + 0.5) * metrics.columnWidth),
+    );
     assert.equal(placement.y, metrics.top + (0.5 * metrics.rowHeight));
   }
+
+  for (const tilePlacements of perTilePlacements.values()) {
+    const slotKeys = new Set(
+      tilePlacements.map((placement) => `${placement.gridColumnIndex}:${placement.gridRowIndex}`),
+    );
+    assert.equal(slotKeys.size, 2);
+    assert.equal(slotKeys.has("0:0"), true);
+    assert.equal(slotKeys.has("1:0"), true);
+  }
+});
+
+test("resolveMinorityReportPanelGridOccupancy eliminates duplicate load-time grid cells", () => {
+  const stageSize = { width: 960, height: 640 };
+  const duplicatePanels = [
+    {
+      id: "panel-a",
+      ...getMinorityReportPanelPlacement(
+        0,
+        {
+          tileIndex: 0,
+          tileSlotIndex: 0,
+          tileSlotCount: 2,
+          tileColumnIndex: 0,
+          tileColumnCount: 2,
+          columnCardIndex: 0,
+          columnCardCount: 1,
+          tileMaxColumnCardCount: 1,
+          gridColumnIndex: 0,
+          gridRowIndex: 0,
+        },
+        stageSize,
+      ),
+    },
+    {
+      id: "panel-b",
+      ...getMinorityReportPanelPlacement(
+        0,
+        {
+          tileIndex: 0,
+          tileSlotIndex: 1,
+          tileSlotCount: 2,
+          tileColumnIndex: 1,
+          tileColumnCount: 2,
+          columnCardIndex: 0,
+          columnCardCount: 1,
+          tileMaxColumnCardCount: 1,
+          gridColumnIndex: 0,
+          gridRowIndex: 0,
+        },
+        stageSize,
+      ),
+    },
+  ];
+
+  const resolvedPanels = resolveMinorityReportPanelGridOccupancy(
+    duplicatePanels,
+    stageSize,
+    (panel) => ({ x: panel.x, y: panel.y }),
+  );
+
+  assert.equal(resolvedPanels.length, 2);
+  assert.notEqual(
+    `${resolvedPanels[0].gridColumnIndex}:${resolvedPanels[0].gridRowIndex}`,
+    `${resolvedPanels[1].gridColumnIndex}:${resolvedPanels[1].gridRowIndex}`,
+  );
+  assert.equal(resolvedPanels[0].gridColumnIndex, 0);
+  assert.equal(resolvedPanels[0].gridRowIndex, 0);
 });
 
 test("getMinorityReportPanelPlacement centers cards on their assigned grid cells", () => {
