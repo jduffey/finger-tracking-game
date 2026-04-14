@@ -1,17 +1,27 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  MINORITY_REPORT_MAX_CARDS_PER_COLUMN,
+  MINORITY_REPORT_MAX_COLUMNS_PER_TILE,
   MINORITY_REPORT_MAX_PANELS_PER_TILE,
+  MINORITY_REPORT_MIN_CARDS_PER_COLUMN,
+  MINORITY_REPORT_MIN_COLUMNS_PER_TILE,
   MINORITY_REPORT_MIN_PANELS_PER_TILE,
   MINORITY_REPORT_SUPER_SECTOR_COUNT,
+  MINORITY_REPORT_TILE_GRID_COLUMNS,
+  MINORITY_REPORT_TILE_GRID_ROWS,
   MINORITY_REPORT_TILE_COUNT,
   clampMinorityReportPanelPosition,
+  getMinorityReportGridSlotAtPoint,
+  getMinorityReportNearestOpenGridSlot,
   getMinorityReportPanelPlacement,
   getMinorityReportRandomPanelAssignments,
   getMinorityReportSuperSectorBoundsList,
   getMinorityReportTileIndexAtPoint,
   getMinorityReportTileBounds,
+  getMinorityReportTileGridMetrics,
   getMinorityReportTileBoundsList,
+  snapMinorityReportPanelToGrid,
 } from "../src/minorityReportLabLayout.js";
 
 test("getMinorityReportTileBoundsList returns a 2x2 super grid of 3x2 subsets", () => {
@@ -25,47 +35,184 @@ test("getMinorityReportTileBoundsList returns a 2x2 super grid of 3x2 subsets", 
   assert.ok(interSectorGap > intraSectorGap);
 });
 
-test("getMinorityReportRandomPanelAssignments keeps every sector between 2 and 5 cards", () => {
-  const randomValues = [0, 0.24, 0.5, 0.74, 0.999];
+test("getMinorityReportRandomPanelAssignments creates 3-5 columns with 1-4 cards each", () => {
+  const randomValues = [0, 0.31, 0.62, 0.93, 0.18, 0.48, 0.79];
   let randomIndex = 0;
   const assignments = getMinorityReportRandomPanelAssignments(() => {
     const value = randomValues[randomIndex % randomValues.length];
     randomIndex += 1;
     return value;
   });
-  const perTileCounts = new Map();
+  const perTile = new Map();
   for (const assignment of assignments) {
-    perTileCounts.set(
-      assignment.tileIndex,
-      (perTileCounts.get(assignment.tileIndex) ?? 0) + 1,
+    const tileState = perTile.get(assignment.tileIndex) ?? {
+      count: 0,
+      columns: new Map(),
+    };
+    tileState.count += 1;
+    tileState.columns.set(
+      assignment.tileColumnIndex,
+      (tileState.columns.get(assignment.tileColumnIndex) ?? 0) + 1,
     );
+    perTile.set(assignment.tileIndex, tileState);
   }
 
-  assert.equal(perTileCounts.size, MINORITY_REPORT_TILE_COUNT);
-  for (const count of perTileCounts.values()) {
-    assert.ok(count >= MINORITY_REPORT_MIN_PANELS_PER_TILE);
-    assert.ok(count <= MINORITY_REPORT_MAX_PANELS_PER_TILE);
+  assert.equal(perTile.size, MINORITY_REPORT_TILE_COUNT);
+  for (const tileState of perTile.values()) {
+    assert.ok(tileState.count >= MINORITY_REPORT_MIN_PANELS_PER_TILE);
+    assert.ok(tileState.count <= MINORITY_REPORT_MAX_PANELS_PER_TILE);
+    assert.ok(tileState.columns.size >= MINORITY_REPORT_MIN_COLUMNS_PER_TILE);
+    assert.ok(tileState.columns.size <= MINORITY_REPORT_MAX_COLUMNS_PER_TILE);
+    for (const columnCount of tileState.columns.values()) {
+      assert.ok(columnCount >= MINORITY_REPORT_MIN_CARDS_PER_COLUMN);
+      assert.ok(columnCount <= MINORITY_REPORT_MAX_CARDS_PER_COLUMN);
+    }
   }
 });
 
-test("getMinorityReportPanelPlacement respects the generated per-sector card counts", () => {
+test("getMinorityReportTileGridMetrics exposes an 8 by 6 snap grid for each sector", () => {
+  const metrics = getMinorityReportTileGridMetrics({ width: 960, height: 640 }, 0);
+  assert.ok(metrics.width > 0);
+  assert.ok(metrics.height > 0);
+  assert.equal(
+    Math.round(metrics.width / metrics.columnWidth),
+    MINORITY_REPORT_TILE_GRID_COLUMNS,
+  );
+  assert.equal(
+    Math.round(metrics.height / metrics.rowHeight),
+    MINORITY_REPORT_TILE_GRID_ROWS,
+  );
+  assert.ok(metrics.panelScale > 0);
+  assert.equal(metrics.panelWidth, metrics.panelHeight);
+  assert.ok(metrics.panelWidth < metrics.columnWidth);
+  assert.ok(metrics.panelHeight < metrics.rowHeight);
+});
+
+test("getMinorityReportRandomPanelAssignments gives each card a unique grid slot", () => {
   const assignments = getMinorityReportRandomPanelAssignments(() => 0.5);
-  const perTileCounts = new Map();
+  const perTileSlots = new Map();
+
   for (const assignment of assignments) {
-    const placement = getMinorityReportPanelPlacement(0, assignment, {
-      width: 960,
-      height: 640,
-    });
-    perTileCounts.set(
-      placement.tileIndex,
-      (perTileCounts.get(placement.tileIndex) ?? 0) + 1,
-    );
+    const key = `${assignment.gridColumnIndex}:${assignment.gridRowIndex}`;
+    const tileSlots = perTileSlots.get(assignment.tileIndex) ?? new Set();
+    assert.equal(tileSlots.has(key), false);
+    tileSlots.add(key);
+    perTileSlots.set(assignment.tileIndex, tileSlots);
   }
 
-  assert.equal(perTileCounts.size, MINORITY_REPORT_TILE_COUNT);
-  for (const count of perTileCounts.values()) {
-    assert.equal(count, 4);
-  }
+  assert.equal(perTileSlots.size, MINORITY_REPORT_TILE_COUNT);
+});
+
+test("getMinorityReportPanelPlacement centers cards on their assigned grid cells", () => {
+  const stageSize = { width: 960, height: 640 };
+  const metrics = getMinorityReportTileGridMetrics(stageSize, 0);
+  const placement = getMinorityReportPanelPlacement(
+    0,
+    {
+      tileIndex: 0,
+      tileSlotIndex: 2,
+      tileSlotCount: 7,
+      tileColumnIndex: 1,
+      tileColumnCount: 3,
+      columnCardIndex: 2,
+      columnCardCount: 4,
+      tileMaxColumnCardCount: 4,
+      gridColumnIndex: 5,
+      gridRowIndex: 3,
+    },
+    stageSize,
+  );
+
+  assert.equal(placement.gridColumnIndex, 5);
+  assert.equal(placement.gridRowIndex, 3);
+  assert.equal(placement.rotation, 0);
+  assert.equal(placement.x, metrics.left + (5.5 * metrics.columnWidth));
+  assert.equal(placement.y, metrics.top + (3.5 * metrics.rowHeight));
+});
+
+test("snapMinorityReportPanelToGrid picks a different open slot when the nearest one is occupied", () => {
+  const stageSize = { width: 960, height: 640 };
+  const occupiedPanel = getMinorityReportPanelPlacement(
+    0,
+    {
+      id: "panel-occupied",
+      tileIndex: 0,
+      tileSlotIndex: 0,
+      tileSlotCount: 2,
+      tileColumnIndex: 0,
+      tileColumnCount: 3,
+      columnCardIndex: 0,
+      columnCardCount: 2,
+      tileMaxColumnCardCount: 2,
+      gridColumnIndex: 3,
+      gridRowIndex: 2,
+    },
+    stageSize,
+  );
+  const incomingPanel = getMinorityReportPanelPlacement(
+    0,
+    {
+      id: "panel-incoming",
+      tileIndex: 0,
+      tileSlotIndex: 1,
+      tileSlotCount: 2,
+      tileColumnIndex: 1,
+      tileColumnCount: 3,
+      columnCardIndex: 0,
+      columnCardCount: 2,
+      tileMaxColumnCardCount: 2,
+      gridColumnIndex: 4,
+      gridRowIndex: 2,
+    },
+    stageSize,
+  );
+  const preferredPoint = {
+    x: occupiedPanel.x,
+    y: occupiedPanel.y,
+  };
+
+  const snapped = snapMinorityReportPanelToGrid(
+    {
+      ...incomingPanel,
+      id: "panel-incoming",
+    },
+    stageSize,
+    [
+      { ...occupiedPanel, id: "panel-occupied" },
+      { ...incomingPanel, id: "panel-incoming" },
+    ],
+    preferredPoint,
+  );
+
+  assert.notEqual(snapped.gridColumnIndex, occupiedPanel.gridColumnIndex);
+  assert.notEqual(
+    `${snapped.gridColumnIndex}:${snapped.gridRowIndex}`,
+    `${occupiedPanel.gridColumnIndex}:${occupiedPanel.gridRowIndex}`,
+  );
+  assert.deepEqual(
+    getMinorityReportGridSlotAtPoint(
+      { x: snapped.x, y: snapped.y },
+      stageSize,
+      snapped.tileIndex,
+    ),
+    {
+      gridColumnIndex: snapped.gridColumnIndex,
+      gridRowIndex: snapped.gridRowIndex,
+    },
+  );
+});
+
+test("getMinorityReportNearestOpenGridSlot resolves an open cell inside the 8 by 6 grid", () => {
+  const slot = getMinorityReportNearestOpenGridSlot({
+    point: { x: 0, y: 0 },
+    stageSize: { width: 960, height: 640 },
+    tileIndex: 0,
+    occupiedSlotKeys: new Set(["0:0:0"]),
+  });
+
+  assert.ok(slot.gridColumnIndex >= 0 && slot.gridColumnIndex < MINORITY_REPORT_TILE_GRID_COLUMNS);
+  assert.ok(slot.gridRowIndex >= 0 && slot.gridRowIndex < MINORITY_REPORT_TILE_GRID_ROWS);
+  assert.notDeepEqual(slot, { gridColumnIndex: 0, gridRowIndex: 0 });
 });
 
 test("clampMinorityReportPanelPosition keeps a card inside its assigned sector", () => {
