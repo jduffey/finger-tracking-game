@@ -279,6 +279,39 @@ function getMinorityReportGridSlotCenter(metrics, gridColumnIndex, gridRowIndex)
   };
 }
 
+function getMinorityReportSceneCellTransform(sceneIndex, panelAssignment) {
+  const slotCount = clampPanelCount(panelAssignment?.tileSlotCount ?? 2);
+  const slotIndex = clamp(panelAssignment?.tileSlotIndex ?? 0, 0, slotCount - 1);
+  const normalizedIndex = slotCount <= 1 ? 0.5 : slotIndex / (slotCount - 1);
+  const centeredIndex = normalizedIndex - 0.5;
+
+  if (sceneIndex === 1) {
+    return {
+      offsetX: centeredIndex * 0.24,
+      offsetY: centeredIndex * -0.12,
+      rotation: centeredIndex * 0.16,
+      scale: 0.96,
+    };
+  }
+
+  if (sceneIndex === 2) {
+    const angle = normalizedIndex * Math.PI * 2 - Math.PI * 0.5;
+    return {
+      offsetX: Math.cos(angle) * 0.14,
+      offsetY: Math.sin(angle) * 0.18,
+      rotation: centeredIndex * 0.24,
+      scale: 0.98,
+    };
+  }
+
+  return {
+    offsetX: 0,
+    offsetY: 0,
+    rotation: 0,
+    scale: 1,
+  };
+}
+
 export function getMinorityReportGridSlotAtPoint(point, stageSize, tileIndex) {
   if (!point) {
     return null;
@@ -354,7 +387,7 @@ export function getMinorityReportNearestOpenGridSlot({
   return winner ?? getMinorityReportGridSlotAtPoint(anchor, stageSize, tileIndex);
 }
 
-export function getMinorityReportPanelPlacement(_sceneIndex, panelAssignment, stageSize) {
+export function getMinorityReportPanelPlacement(sceneIndex, panelAssignment, stageSize) {
   const tileIndex = panelAssignment?.tileIndex ?? 0;
   const slotIndex = panelAssignment?.tileSlotIndex ?? 0;
   const tileSlotCount = clampPanelCount(panelAssignment?.tileSlotCount ?? 3);
@@ -377,6 +410,10 @@ export function getMinorityReportPanelPlacement(_sceneIndex, panelAssignment, st
   const tileBounds = getMinorityReportTileBounds(stageSize, tileIndex);
   const metrics = getMinorityReportTileGridMetrics(stageSize, tileIndex);
   const center = getMinorityReportGridSlotCenter(metrics, gridColumnIndex, gridRowIndex);
+  const sceneTransform = getMinorityReportSceneCellTransform(
+    sceneIndex,
+    panelAssignment,
+  );
   return clampMinorityReportPanelPosition(
     {
       tileIndex,
@@ -391,10 +428,10 @@ export function getMinorityReportPanelPlacement(_sceneIndex, panelAssignment, st
       tileMaxColumnCardCount,
       gridColumnIndex,
       gridRowIndex,
-      x: center.x,
-      y: center.y,
-      rotation: 0,
-      scale: metrics.panelScale,
+      x: center.x + metrics.columnWidth * sceneTransform.offsetX,
+      y: center.y + metrics.rowHeight * sceneTransform.offsetY,
+      rotation: sceneTransform.rotation,
+      scale: metrics.panelScale * sceneTransform.scale,
     },
     stageSize,
   );
@@ -405,6 +442,7 @@ export function snapMinorityReportPanelToGrid(
   stageSize,
   allPanels = [],
   preferredPoint = null,
+  sceneIndex = 0,
 ) {
   const tileIndex = panel?.tileIndex ?? 0;
   const occupiedSlotKeys = new Set();
@@ -422,7 +460,7 @@ export function snapMinorityReportPanelToGrid(
     );
   }
 
-  const placement = getMinorityReportPanelPlacement(0, panel, stageSize);
+  const placement = getMinorityReportPanelPlacement(sceneIndex, panel, stageSize);
   const slot = getMinorityReportNearestOpenGridSlot({
     point:
       preferredPoint ??
@@ -434,7 +472,7 @@ export function snapMinorityReportPanelToGrid(
     occupiedSlotKeys,
   });
   return getMinorityReportPanelPlacement(
-    0,
+    sceneIndex,
     {
       ...panel,
       gridColumnIndex: slot.gridColumnIndex,
@@ -448,6 +486,7 @@ export function resolveMinorityReportPanelGridOccupancy(
   panels,
   stageSize,
   getPreferredPoint = null,
+  sceneIndex = 0,
 ) {
   const resolvedPanels = [];
   for (const panel of Array.isArray(panels) ? panels : []) {
@@ -460,6 +499,7 @@ export function resolveMinorityReportPanelGridOccupancy(
       stageSize,
       resolvedPanels,
       preferredPoint,
+      sceneIndex,
     );
     const nextPanel = {
       ...panel,
