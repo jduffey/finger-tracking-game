@@ -7,6 +7,9 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
   const timestamp = 1234;
 
   runFullscreenOverlayGameUpdates(timestamp, {
+    updateFullscreenHandBounceSimulation(nextTimestamp) {
+      calls.push(["hand-bounce", nextTimestamp]);
+    },
     updateFullscreenBrickDodgerSimulation(nextTimestamp) {
       calls.push(["brick-dodger", nextTimestamp]);
     },
@@ -31,6 +34,7 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
   });
 
   assert.deepEqual(calls, [
+    ["hand-bounce", timestamp],
     ["brick-dodger", timestamp],
     ["breakout", timestamp],
     ["breakout-coop", timestamp],
