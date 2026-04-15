@@ -11,14 +11,16 @@ import {
   shouldUseMinorityReportZoom,
 } from "../minorityReportLabInteractions.js";
 import {
-  clampMinorityReportPanelPosition,
   getMinorityReportPanelPlacement,
   getMinorityReportRandomPanelAssignments,
+  resolveMinorityReportPanelGridOccupancy,
   getMinorityReportSuperSectorBoundsList,
   getMinorityReportTileBounds,
   getMinorityReportTileIndexAtPoint,
+  getMinorityReportTileGridMetrics,
   getMinorityReportTileBoundsList,
   getMinorityReportWorkspaceBounds,
+  snapMinorityReportPanelToGrid,
 } from "../minorityReportLabLayout.js";
 
 const STAGE_DEFAULT_SIZE = { width: 960, height: 640 };
@@ -78,11 +80,11 @@ function getDefaultStageTransform(stageSize) {
 }
 
 function formatPanelSubtitle(placement) {
-  return `Super Sector ${placement.superSectorIndex + 1} · Sector ${placement.localTileIndex + 1} · Card ${placement.tileSlotIndex + 1}`;
+  return `Sector ${placement.localTileIndex + 1} · Grid ${placement.gridColumnIndex + 1},${placement.gridRowIndex + 1}`;
 }
 
 function createPanels(sceneIndex, stageSize, panelAssignments) {
-  return panelAssignments.map((panelAssignment, index) => {
+  const basePanels = panelAssignments.map((panelAssignment, index) => {
     const scenePlacement = getMinorityReportPanelPlacement(sceneIndex, panelAssignment, stageSize);
     return {
       id: `panel-${index + 1}`,
@@ -93,6 +95,13 @@ function createPanels(sceneIndex, stageSize, panelAssignments) {
       localTileIndex: scenePlacement.localTileIndex,
       tileSlotIndex: scenePlacement.tileSlotIndex,
       tileSlotCount: scenePlacement.tileSlotCount,
+      tileColumnIndex: scenePlacement.tileColumnIndex,
+      tileColumnCount: scenePlacement.tileColumnCount,
+      columnCardIndex: scenePlacement.columnCardIndex,
+      columnCardCount: scenePlacement.columnCardCount,
+      tileMaxColumnCardCount: scenePlacement.tileMaxColumnCardCount,
+      gridColumnIndex: scenePlacement.gridColumnIndex,
+      gridRowIndex: scenePlacement.gridRowIndex,
       x: scenePlacement.x,
       y: scenePlacement.y,
       rotation: scenePlacement.rotation,
@@ -101,16 +110,33 @@ function createPanels(sceneIndex, stageSize, panelAssignments) {
       throwingUntil: 0,
     };
   });
+
+  return resolveMinorityReportPanelGridOccupancy(
+    basePanels,
+    stageSize,
+    (panel) => ({ x: panel.x, y: panel.y }),
+    sceneIndex,
+  ).map((panel) => ({
+    ...panel,
+    subtitle: formatPanelSubtitle(panel),
+  }));
 }
 
 function applySceneLayout(existingPanels, sceneIndex, stageSize, panelAssignments) {
-  return existingPanels.map((panel, index) => {
+  const nextPanels = existingPanels.map((panel, index) => {
     const nextPlacement = getMinorityReportPanelPlacement(
       sceneIndex,
       panelAssignments[index] ?? {
         tileIndex: panel.tileIndex,
         tileSlotIndex: panel.tileSlotIndex,
         tileSlotCount: panel.tileSlotCount,
+        tileColumnIndex: panel.tileColumnIndex,
+        tileColumnCount: panel.tileColumnCount,
+        columnCardIndex: panel.columnCardIndex,
+        columnCardCount: panel.columnCardCount,
+        tileMaxColumnCardCount: panel.tileMaxColumnCardCount,
+        gridColumnIndex: panel.gridColumnIndex,
+        gridRowIndex: panel.gridRowIndex,
       },
       stageSize,
     );
@@ -121,6 +147,13 @@ function applySceneLayout(existingPanels, sceneIndex, stageSize, panelAssignment
       localTileIndex: nextPlacement.localTileIndex,
       tileSlotIndex: nextPlacement.tileSlotIndex,
       tileSlotCount: nextPlacement.tileSlotCount,
+      tileColumnIndex: nextPlacement.tileColumnIndex,
+      tileColumnCount: nextPlacement.tileColumnCount,
+      columnCardIndex: nextPlacement.columnCardIndex,
+      columnCardCount: nextPlacement.columnCardCount,
+      tileMaxColumnCardCount: nextPlacement.tileMaxColumnCardCount,
+      gridColumnIndex: nextPlacement.gridColumnIndex,
+      gridRowIndex: nextPlacement.gridRowIndex,
       subtitle: formatPanelSubtitle(nextPlacement),
       x: nextPlacement.x,
       y: nextPlacement.y,
@@ -130,6 +163,57 @@ function applySceneLayout(existingPanels, sceneIndex, stageSize, panelAssignment
       throwingUntil: 0,
     };
   });
+
+  return resolveMinorityReportPanelGridOccupancy(
+    nextPanels,
+    stageSize,
+    (panel) => ({ x: panel.x, y: panel.y }),
+    sceneIndex,
+  ).map((panel) => ({
+    ...panel,
+    subtitle: formatPanelSubtitle(panel),
+  }));
+}
+
+function applySnappedPanelPlacement(
+  panel,
+  stageSize,
+  allPanels,
+  sceneIndex,
+  preferredPoint = null,
+  extra = {},
+) {
+  const basePanel = {
+    ...panel,
+    ...extra,
+  };
+  const snappedPlacement = snapMinorityReportPanelToGrid(
+    basePanel,
+    stageSize,
+    allPanels,
+    preferredPoint,
+    sceneIndex,
+  );
+  return {
+    ...basePanel,
+    tileIndex: snappedPlacement.tileIndex,
+    superSectorIndex: snappedPlacement.superSectorIndex,
+    localTileIndex: snappedPlacement.localTileIndex,
+    tileSlotIndex: snappedPlacement.tileSlotIndex,
+    tileSlotCount: snappedPlacement.tileSlotCount,
+    tileColumnIndex: snappedPlacement.tileColumnIndex,
+    tileColumnCount: snappedPlacement.tileColumnCount,
+    columnCardIndex: snappedPlacement.columnCardIndex,
+    columnCardCount: snappedPlacement.columnCardCount,
+    tileMaxColumnCardCount: snappedPlacement.tileMaxColumnCardCount,
+    gridColumnIndex: snappedPlacement.gridColumnIndex,
+    gridRowIndex: snappedPlacement.gridRowIndex,
+    subtitle: formatPanelSubtitle(snappedPlacement),
+    x: snappedPlacement.x,
+    y: snappedPlacement.y,
+    rotation: snappedPlacement.rotation,
+    scale: snappedPlacement.scale,
+  };
 }
 
 function pointerToLocal(pointer, stageSize, transform) {
@@ -393,6 +477,11 @@ export default function MinorityReportLab(props) {
   const focusedSuperSectorIndex = Number.isInteger(focusedTileIndex)
     ? tileBounds[focusedTileIndex]?.superSectorIndex ?? null
     : null;
+  const tileGridMetrics = useMemo(
+    () =>
+      tileBounds.map((tile) => getMinorityReportTileGridMetrics(stageSize, tile.index)),
+    [stageSize, tileBounds],
+  );
   const superSectorElements = useMemo(
     () =>
       superSectorBounds.map((superSector) => (
@@ -418,7 +507,7 @@ export default function MinorityReportLab(props) {
   );
   const tileElements = useMemo(
     () =>
-      tileBounds.map((tile) => (
+      tileBounds.map((tile, index) => (
         <div
           key={`minority-tile-${tile.index}`}
           className={`minority-stage-drag-bounds ${focusedTileIndex === tile.index ? "focused" : ""} ${
@@ -438,12 +527,28 @@ export default function MinorityReportLab(props) {
           }}
           aria-hidden="true"
         >
+          <span
+            className="minority-stage-sector-grid"
+            style={{
+              left: `${tileGridMetrics[index].left - tile.left}px`,
+              top: `${tileGridMetrics[index].top - tile.top}px`,
+              width: `${tileGridMetrics[index].width}px`,
+              height: `${tileGridMetrics[index].height}px`,
+              backgroundSize: `${tileGridMetrics[index].columnWidth}px 100%, 100% ${tileGridMetrics[index].rowHeight}px`,
+            }}
+          />
           <span className="minority-stage-sector-label">
             Sector {tile.localTileIndex + 1}
           </span>
         </div>
       )),
-    [focusedTileIndex, hoveredTileByHand.Left, hoveredTileByHand.Right, tileBounds],
+    [
+      focusedTileIndex,
+      hoveredTileByHand.Left,
+      hoveredTileByHand.Right,
+      tileBounds,
+      tileGridMetrics,
+    ],
   );
   const panelElements = useMemo(
     () =>
@@ -480,7 +585,19 @@ export default function MinorityReportLab(props) {
       if (previous.length === 0) {
         return createPanels(sceneIndexRef.current, stageSize, panelAssignments);
       }
-      return previous.map((panel) => clampMinorityReportPanelPosition(panel, stageSize));
+      const repositionedPanels = previous.map((panel) => ({
+        ...panel,
+        ...getMinorityReportPanelPlacement(sceneIndexRef.current, panel, stageSize),
+      }));
+      return resolveMinorityReportPanelGridOccupancy(
+        repositionedPanels,
+        stageSize,
+        (panel) => ({ x: panel.x, y: panel.y }),
+        sceneIndexRef.current,
+      ).map((panel) => ({
+        ...panel,
+        subtitle: formatPanelSubtitle(panel),
+      }));
     });
     if (stageViewModeRef.current === "overview") {
       const overviewTransform = getDefaultStageTransform(stageSize);
@@ -730,15 +847,18 @@ export default function MinorityReportLab(props) {
               if (panel.id !== grabbed.panelId) {
                 return panel;
               }
-              return clampMinorityReportPanelPosition(
+              return applySnappedPanelPlacement(
+                panel,
+                stageSize,
+                currentPanels,
+                sceneIndexRef.current,
                 {
-                  ...panel,
                   x: panel.x + throwDistanceX,
                   y: panel.y + throwDistanceY,
-                  rotation: panel.rotation + throwDirection * 0.46,
+                },
+                {
                   throwingUntil: Date.now() + 650,
                 },
-                stageSize,
               );
             }),
           );
@@ -815,14 +935,18 @@ export default function MinorityReportLab(props) {
               if (panel.id !== currentGrab.panelId) {
                 return panel;
               }
-              return clampMinorityReportPanelPosition(
+              return applySnappedPanelPlacement(
+                panel,
+                stageSize,
+                currentPanels,
+                sceneIndexRef.current,
                 {
-                  ...panel,
                   x: localPointer.x - currentGrab.offsetX,
                   y: localPointer.y - currentGrab.offsetY,
+                },
+                {
                   throwingUntil: 0,
                 },
-                stageSize,
               );
             }),
           );
@@ -852,13 +976,16 @@ export default function MinorityReportLab(props) {
       setPanels((currentPanels) =>
         currentPanels.map((panel) => ({
           ...(panel.id === nearest.panel.id
-            ? clampMinorityReportPanelPosition(
+            ? applySnappedPanelPlacement(
+                panel,
+                stageSize,
+                currentPanels,
+                sceneIndexRef.current,
+                null,
                 {
-                  ...panel,
                   selected: true,
                   throwingUntil: 0,
                 },
-                stageSize,
               )
             : {
                 ...panel,
