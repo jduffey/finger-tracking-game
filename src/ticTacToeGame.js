@@ -319,8 +319,8 @@ export function createTicTacToeLayout(width, height) {
   const safeHeight = Math.max(440, Number.isFinite(height) ? height : 440);
   const minimumPlayableBoardSize = 180;
   const edgePadding = clamp(safeWidth * 0.032 * TIC_TAC_TOE_LAYOUT_SCALE, 14, 42);
-  const railGap = clamp(safeWidth * 0.022 * TIC_TAC_TOE_LAYOUT_SCALE, 14, 34);
-  const railWidth = clamp(safeWidth * 0.15 * TIC_TAC_TOE_LAYOUT_SCALE, 98, 196);
+  const railGap = clamp(safeWidth * 0.022 * TIC_TAC_TOE_LAYOUT_SCALE, 10, 34);
+  const railWidth = clamp(safeWidth * 0.15 * TIC_TAC_TOE_LAYOUT_SCALE, 84, 196);
   const resetBoxWidth = clamp(railWidth * 1.08, 120, 216);
   const boardMaxWidth =
     safeWidth - edgePadding * 2 - railWidth - railWidth - resetBoxWidth - railGap * 3;
@@ -329,7 +329,9 @@ export function createTicTacToeLayout(width, height) {
   const boardSize = clamp(Math.min(safeHeight * 0.82, resolvedBoardMaxWidth), boardMinSize, 680);
   const gameWidth = railWidth + railGap + boardSize + railGap + railWidth + railGap + resetBoxWidth;
   const idealGameLeft = (safeWidth - gameWidth) / 2;
-  const minGameLeft = -railWidth / 2;
+  // Keep enough of the player rail's pinch ellipse on-screen to remain reachable
+  // while still allowing the whole cluster to shift left on narrow screens.
+  const minGameLeft = -(railWidth * 0.95);
   const maxGameLeft = safeWidth - edgePadding - (railWidth + railGap + boardSize);
   const gameLeft = clamp(idealGameLeft, minGameLeft, Math.max(minGameLeft, maxGameLeft));
   const boardLeft = gameLeft + railWidth + railGap;

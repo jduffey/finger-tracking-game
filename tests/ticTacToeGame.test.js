@@ -79,9 +79,27 @@ test("createTicTacToeGame keeps the player rail reachable on narrow fullscreen v
 
   assert.ok(game.layout.boardSize >= 180);
   assert.ok(game.layout.cellSize > 0);
-  assert.ok(game.layout.playerRailCenterX >= 0);
   assert.ok(pickedUp.draggingPiece);
   assert.equal(dropped.board[0], TIC_TAC_TOE_PLAYER_MARK);
+});
+
+test("createTicTacToeGame keeps the reset box reachable on narrow portrait fullscreen viewports", () => {
+  const game = {
+    ...createTicTacToeGame(360, 640),
+    board: [TIC_TAC_TOE_PLAYER_MARK, null, null, null, null, null, null, null, null],
+  };
+  const reachableX = game.layout.width - 1;
+  const reachableY = game.layout.resetBoxTop + game.layout.resetBoxHeight / 2;
+
+  const holdingReset = stepTicTacToeGame(game, 1 / 60, {
+    pointerActive: true,
+    pointerX: reachableX,
+    pointerY: reachableY,
+    pinchActive: false,
+  });
+
+  assert.ok(game.layout.resetBoxLeft < game.layout.width);
+  assert.equal(holdingReset.resetHoldActive, true);
 });
 
 test("stepTicTacToeGame lets the player drag a piece from the left rail into the board", () => {
