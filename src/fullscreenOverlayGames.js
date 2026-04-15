@@ -9,6 +9,7 @@ export function runFullscreenOverlayGameUpdates(
     updateFullscreenInvadersSimulation,
     updateFullscreenFlappySimulation,
     updateFullscreenMissileCommandSimulation,
+    updateFullscreenTicTacToeSimulation,
   } = {},
 ) {
   if (typeof updateFullscreenHandBounceSimulation === "function") {
@@ -41,5 +42,9 @@ export function runFullscreenOverlayGameUpdates(
 
   if (typeof updateFullscreenMissileCommandSimulation === "function") {
     updateFullscreenMissileCommandSimulation(timestamp);
+  }
+
+  if (typeof updateFullscreenTicTacToeSimulation === "function") {
+    updateFullscreenTicTacToeSimulation(timestamp);
   }
 }

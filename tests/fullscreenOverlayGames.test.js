@@ -31,6 +31,9 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
     updateFullscreenMissileCommandSimulation(nextTimestamp) {
       calls.push(["missile-command", nextTimestamp]);
     },
+    updateFullscreenTicTacToeSimulation(nextTimestamp) {
+      calls.push(["tic-tac-toe", nextTimestamp]);
+    },
   });
 
   assert.deepEqual(calls, [
@@ -42,6 +45,7 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
     ["invaders", timestamp],
     ["flappy", timestamp],
     ["missile-command", timestamp],
+    ["tic-tac-toe", timestamp],
   ]);
 });
 
