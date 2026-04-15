@@ -607,6 +607,18 @@ export function stepTicTacToeGame(state, dtSeconds, input) {
     };
   }
 
+  if (draggingPiece && !pointer.active) {
+    return {
+      ...nextState,
+      draggingPiece: null,
+      previewCellIndex: -1,
+      hoverCellIndex: -1,
+      resetHoldActive: false,
+      resetHoldMs: 0,
+      message: PLAYER_PROMPT,
+    };
+  }
+
   const hoverCellIndex =
     pointer.active && !draggingPiece
       ? getTicTacToeCellIndex(nextState.layout, pointer.x, pointer.y)

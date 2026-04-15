@@ -116,6 +116,26 @@ test("stepTicTacToeGame rejects drops on occupied cells", () => {
   assert.equal(rejected.message, "Open squares only. Grab another X from the rail");
 });
 
+test("stepTicTacToeGame cancels a drag instead of placing when tracking drops out", () => {
+  const game = createTicTacToeGame(1280, 720);
+  const pickedUp = startDrag(game);
+  const hovering = dragToCell(pickedUp, 0);
+
+  const droppedByTrackingLoss = stepTicTacToeGame(hovering, 1 / 60, {
+    pointerActive: false,
+    pinchActive: false,
+  });
+
+  assert.deepEqual(droppedByTrackingLoss.board, Array(9).fill(null));
+  assert.equal(droppedByTrackingLoss.status, "player-turn");
+  assert.equal(droppedByTrackingLoss.draggingPiece, null);
+  assert.equal(droppedByTrackingLoss.previewCellIndex, -1);
+  assert.equal(
+    droppedByTrackingLoss.message,
+    "Pinch an X on the left rail and drag it into an open square",
+  );
+});
+
 test("pickBestTicTacToeMove takes a winning move before blocking", () => {
   const winningMove = pickBestTicTacToeMove([
     TIC_TAC_TOE_AI_MARK,
