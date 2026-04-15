@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  getFullscreenTrackedHandLimit,
   getFullscreenTrackedFingerNames,
+  shouldShowFullscreenHandSkeleton,
   shouldShowFullscreenInvadersBanner,
 } from "../src/fullscreenGameUi.js";
 
@@ -16,6 +18,16 @@ test("getFullscreenTrackedFingerNames preserves all fingertips for other fullscr
   const fingerNames = ["thumb", "index", "middle", "ring", "pinky"];
 
   assert.deepEqual(getFullscreenTrackedFingerNames("voronoi", fingerNames), fingerNames);
+});
+
+test("getFullscreenTrackedHandLimit locks tic tac toe to one hand", () => {
+  assert.equal(getFullscreenTrackedHandLimit("tic-tac-toe", 2), 1);
+  assert.equal(getFullscreenTrackedHandLimit("flappy", 2), 2);
+});
+
+test("shouldShowFullscreenHandSkeleton reuses the Minority Report hand overlay for tic tac toe", () => {
+  assert.equal(shouldShowFullscreenHandSkeleton("tic-tac-toe"), true);
+  assert.equal(shouldShowFullscreenHandSkeleton("brick-dodger"), false);
 });
 
 test("shouldShowFullscreenInvadersBanner hides the banner while the round is active", () => {

@@ -1,4 +1,6 @@
 const FULLSCREEN_INDEX_ONLY_TRACKING_MODES = new Set(["tip-ripples", "tip-ripples-v2"]);
+const FULLSCREEN_ONE_HAND_ONLY_MODES = new Set(["tic-tac-toe"]);
+const FULLSCREEN_HAND_SKELETON_MODES = new Set(["tic-tac-toe"]);
 
 export function getFullscreenTrackedFingerNames(mode, fingerNames) {
   const safeFingerNames = Array.isArray(fingerNames)
@@ -18,4 +20,16 @@ export function shouldShowFullscreenInvadersBanner(state) {
   }
 
   return state.status === "gameover" || state.status === "cleared";
+}
+
+export function getFullscreenTrackedHandLimit(mode, fallback = 2) {
+  return FULLSCREEN_ONE_HAND_ONLY_MODES.has(mode)
+    ? 1
+    : Number.isFinite(fallback) && fallback > 0
+    ? fallback
+    : 1;
+}
+
+export function shouldShowFullscreenHandSkeleton(mode) {
+  return FULLSCREEN_HAND_SKELETON_MODES.has(mode);
 }

@@ -7,8 +7,13 @@ export const TIC_TAC_TOE_AI_MARK = "O";
 export const TIC_TAC_TOE_AI_MOVE_DELAY_MS = 680;
 export const TIC_TAC_TOE_PLAYER_PIECE_LIMIT = 5;
 export const TIC_TAC_TOE_AI_PIECE_LIMIT = 4;
+export const TIC_TAC_TOE_RESET_HOLD_MS = 3000;
+export const TIC_TAC_TOE_LAYOUT_SCALE = 1.75;
 
 const MAX_STEP_SECONDS = 0.05;
+const PLAYER_PROMPT = "Pinch an X on the left rail and drag it into an open square";
+const DRAG_PROMPT = "Release over an open square";
+const INVALID_DROP_PROMPT = "Open squares only. Grab another X from the rail";
 const WIN_LINES = [
   [0, 1, 2],
   [3, 4, 5],
@@ -78,13 +83,15 @@ function buildRoundState(layout, stats = {}) {
     layout,
     board: createEmptyBoard(),
     status: "player-turn",
-    message: "Pinch an X on the left rail and drag it into an open square",
+    message: stats.message ?? PLAYER_PROMPT,
     draggingPiece: null,
     hoverCellIndex: -1,
     previewCellIndex: -1,
     winningLine: null,
     lastMoveIndex: -1,
     aiMoveTimerMs: 0,
+    resetHoldActive: false,
+    resetHoldMs: 0,
     previousPinchActive: false,
     nextPieceId: 1,
     playerWins: Number.isFinite(stats.playerWins) ? stats.playerWins : 0,
@@ -112,6 +119,8 @@ function getResolvedRoundState(state, board, mark, cellIndex) {
       hoverCellIndex: -1,
       draggingPiece: null,
       aiMoveTimerMs: 0,
+      resetHoldActive: false,
+      resetHoldMs: 0,
       playerWins: state.playerWins + 1,
     };
   }
@@ -128,6 +137,8 @@ function getResolvedRoundState(state, board, mark, cellIndex) {
       hoverCellIndex: -1,
       draggingPiece: null,
       aiMoveTimerMs: 0,
+      resetHoldActive: false,
+      resetHoldMs: 0,
       aiWins: state.aiWins + 1,
     };
   }
@@ -144,6 +155,8 @@ function getResolvedRoundState(state, board, mark, cellIndex) {
       hoverCellIndex: -1,
       draggingPiece: null,
       aiMoveTimerMs: 0,
+      resetHoldActive: false,
+      resetHoldMs: 0,
       draws: state.draws + 1,
     };
   }
@@ -160,6 +173,8 @@ function getResolvedRoundState(state, board, mark, cellIndex) {
       hoverCellIndex: -1,
       draggingPiece: null,
       aiMoveTimerMs: TIC_TAC_TOE_AI_MOVE_DELAY_MS,
+      resetHoldActive: false,
+      resetHoldMs: 0,
     };
   }
 
@@ -167,13 +182,15 @@ function getResolvedRoundState(state, board, mark, cellIndex) {
     ...state,
     board,
     status: "player-turn",
-    message: "Pinch an X on the left rail and drag it into an open square",
+    message: PLAYER_PROMPT,
     winningLine: null,
     lastMoveIndex: cellIndex,
     previewCellIndex: -1,
     hoverCellIndex: -1,
     draggingPiece: null,
     aiMoveTimerMs: 0,
+    resetHoldActive: false,
+    resetHoldMs: 0,
   };
 }
 
@@ -216,6 +233,19 @@ function updateDraggingPiece(layout, draggingPiece, pointer) {
     x: clamp(pointer.x, layout.activePieceSize / 2, layout.width - layout.activePieceSize / 2),
     y: clamp(pointer.y, layout.activePieceSize / 2, layout.height - layout.activePieceSize / 2),
   };
+}
+
+function isPointerInResetBox(layout, pointer) {
+  if (!layout || !pointer?.active) {
+    return false;
+  }
+
+  return (
+    pointer.x >= layout.resetBoxLeft &&
+    pointer.x <= layout.resetBoxLeft + layout.resetBoxWidth &&
+    pointer.y >= layout.resetBoxTop &&
+    pointer.y <= layout.resetBoxTop + layout.resetBoxHeight
+  );
 }
 
 function scoreTerminalBoard(board, aiMark, playerMark, depth) {
@@ -261,19 +291,42 @@ function minimax(board, aiMark, playerMark, aiTurn, depth) {
 export function createTicTacToeLayout(width, height) {
   const safeWidth = Math.max(320, Number.isFinite(width) ? width : 320);
   const safeHeight = Math.max(440, Number.isFinite(height) ? height : 440);
-  const edgePadding = clamp(safeWidth * 0.032, 12, 32);
-  const railGap = clamp(safeWidth * 0.022, 10, 28);
-  const railWidth = clamp(safeWidth * 0.15, 56, 120);
-  const boardMaxWidth = safeWidth - edgePadding * 2 - railWidth * 2 - railGap * 2;
-  const boardMinSize = Math.min(180, boardMaxWidth);
-  const boardSize = clamp(Math.min(safeHeight * 0.72, boardMaxWidth), boardMinSize, 560);
-  const boardLeft = (safeWidth - boardSize) / 2;
+  const edgePadding = clamp(safeWidth * 0.032 * TIC_TAC_TOE_LAYOUT_SCALE, 14, 42);
+  const railGap = clamp(safeWidth * 0.022 * TIC_TAC_TOE_LAYOUT_SCALE, 14, 34);
+  const railWidth = clamp(safeWidth * 0.15 * TIC_TAC_TOE_LAYOUT_SCALE, 98, 196);
+  const resetBoxWidth = clamp(railWidth * 1.08, 120, 216);
+  const rightColumnWidth = Math.max(railWidth, resetBoxWidth);
+  const boardMaxWidth =
+    safeWidth - edgePadding * 2 - railWidth - rightColumnWidth - railGap * 2;
+  const boardMinSize = Math.min(240, boardMaxWidth);
+  const boardSize = clamp(Math.min(safeHeight * 0.82, boardMaxWidth), boardMinSize, 680);
+  const rightColumnLeft = safeWidth - edgePadding - rightColumnWidth;
+  const boardLeft = Math.max(
+    edgePadding + railWidth + railGap,
+    rightColumnLeft - railGap - boardSize,
+  );
   const boardTop = (safeHeight - boardSize) / 2;
   const cellSize = boardSize / 3;
-  const activePieceSize = clamp(cellSize * 0.54, 34, 72);
-  const reserveStepY = clamp(activePieceSize * 0.98, 34, 72);
-  const railHeight = clamp(boardSize * 0.86, activePieceSize * 3.6, safeHeight - edgePadding * 2);
-  const trayCenterY = safeHeight / 2;
+  const activePieceSize = clamp(cellSize * 0.94, 60, 128);
+  const reservePieceSize = clamp(activePieceSize * 0.92, 54, 118);
+  const reserveStepY = clamp(activePieceSize * 1.15, 56, 128);
+  const trayCenterY = boardTop + boardSize / 2;
+  const resetBoxHeight = clamp(activePieceSize * 1.72, 108, 190);
+  const verticalGap = clamp(18 * TIC_TAC_TOE_LAYOUT_SCALE, 18, 36);
+  const railMaxHeight = Math.max(
+    activePieceSize * 3.1,
+    safeHeight - edgePadding * 2 - resetBoxHeight - verticalGap,
+  );
+  const railHeight = clamp(boardSize * 0.72, activePieceSize * 3.1, railMaxHeight);
+  const railTop = clamp(
+    trayCenterY - railHeight / 2,
+    edgePadding,
+    safeHeight - edgePadding - resetBoxHeight - verticalGap - railHeight,
+  );
+  const resetBoxTop = Math.min(
+    safeHeight - edgePadding - resetBoxHeight,
+    railTop + railHeight + verticalGap,
+  );
 
   return {
     width: safeWidth,
@@ -282,16 +335,20 @@ export function createTicTacToeLayout(width, height) {
     boardTop,
     boardSize,
     cellSize,
-    cellInset: clamp(cellSize * 0.07, 6, 18),
+    cellInset: clamp(cellSize * 0.1, 10, 28),
     activePieceSize,
-    reservePieceSize: clamp(activePieceSize * 0.88, 28, 60),
+    reservePieceSize,
     reserveStepY,
     railWidth,
     railHeight,
-    railTop: trayCenterY - railHeight / 2,
+    railTop,
     trayCenterY,
     playerRailCenterX: boardLeft - railGap - railWidth / 2,
-    aiRailCenterX: boardLeft + boardSize + railGap + railWidth / 2,
+    aiRailCenterX: rightColumnLeft + rightColumnWidth / 2,
+    resetBoxLeft: rightColumnLeft + (rightColumnWidth - resetBoxWidth) / 2,
+    resetBoxTop,
+    resetBoxWidth,
+    resetBoxHeight,
   };
 }
 
@@ -431,6 +488,26 @@ export function stepTicTacToeGame(state, dtSeconds, input) {
     previousPinchActive: pinchActive,
   };
 
+  const resetHoldActive =
+    pointer.active && !nextState.draggingPiece && isPointerInResetBox(nextState.layout, pointer);
+  let resetHoldMs = 0;
+
+  if (resetHoldActive) {
+    resetHoldMs = nextState.resetHoldActive
+      ? Math.min(TIC_TAC_TOE_RESET_HOLD_MS, nextState.resetHoldMs + elapsedMs)
+      : 0;
+  }
+
+  nextState = {
+    ...nextState,
+    resetHoldActive,
+    resetHoldMs,
+  };
+
+  if (resetHoldActive && resetHoldMs >= TIC_TAC_TOE_RESET_HOLD_MS) {
+    return restartTicTacToeRound(nextState);
+  }
+
   if (nextState.status === "ai-turn") {
     const remainingTimer = Math.max(0, nextState.aiMoveTimerMs - elapsedMs);
     if (remainingTimer > 0) {
@@ -483,7 +560,9 @@ export function stepTicTacToeGame(state, dtSeconds, input) {
       ...nextState,
       draggingPiece,
       nextPieceId: nextState.nextPieceId + 1,
-      message: "Release over an open square",
+      resetHoldActive: false,
+      resetHoldMs: 0,
+      message: DRAG_PROMPT,
     };
   }
 
@@ -523,7 +602,9 @@ export function stepTicTacToeGame(state, dtSeconds, input) {
       draggingPiece: null,
       previewCellIndex: -1,
       hoverCellIndex: -1,
-      message: "Open squares only. Grab another X from the rail",
+      resetHoldActive: false,
+      resetHoldMs: 0,
+      message: INVALID_DROP_PROMPT,
     };
   }
 

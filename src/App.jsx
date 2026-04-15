@@ -54,7 +54,9 @@ import {
 } from "./fingerPongGame.js";
 import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
 import {
+  getFullscreenTrackedHandLimit,
   getFullscreenTrackedFingerNames,
+  shouldShowFullscreenHandSkeleton,
   shouldShowFullscreenInvadersBanner,
 } from "./fullscreenGameUi.js";
 import { runFullscreenOverlayGameUpdates } from "./fullscreenOverlayGames.js";
@@ -76,6 +78,7 @@ import {
   TIC_TAC_TOE_AI_PIECE_LIMIT,
   TIC_TAC_TOE_PLAYER_MARK,
   TIC_TAC_TOE_PLAYER_PIECE_LIMIT,
+  TIC_TAC_TOE_RESET_HOLD_MS,
   createTicTacToeGame,
   getTicTacToeCellRect,
   restartTicTacToeRound,
@@ -1669,6 +1672,12 @@ export default function App() {
     0,
     TIC_TAC_TOE_AI_PIECE_LIMIT - fullscreenTicTacToeAiCount,
   );
+  const fullscreenTicTacToeResetCountdown = (
+    Math.max(
+      0,
+      TIC_TAC_TOE_RESET_HOLD_MS - (fullscreenTicTacToeState?.resetHoldMs ?? 0),
+    ) / 1000
+  ).toFixed(2);
   const isSandboxPhase = phase === PHASES.SANDBOX;
   const isCalibrationLayoutPhase =
     phase === PHASES.CALIBRATION ||
@@ -6605,9 +6614,18 @@ export default function App() {
       fullscreenGridModeRef.current === "fruit-ninja" ||
       fullscreenGridModeRef.current === "invaders" ||
       fullscreenGridModeRef.current === "flappy" ||
-      fullscreenGridModeRef.current === "missile-command" ||
-      fullscreenGridModeRef.current === "tic-tac-toe"
+      fullscreenGridModeRef.current === "missile-command"
     ) {
+      return {
+        indexPoints,
+        tipPoints,
+      };
+    }
+
+    if (shouldShowFullscreenHandSkeleton(fullscreenGridModeRef.current)) {
+      drawCameraOverlayHands(hands, {
+        showSkeleton: true,
+      });
       return {
         indexPoints,
         tipPoints,
@@ -8157,11 +8175,15 @@ export default function App() {
         }
 
         if (!cancelled && mountedRef.current) {
+          const fullscreenTrackedHandLimit =
+            phaseRef.current === PHASES.FULLSCREEN_CAMERA
+              ? getFullscreenTrackedHandLimit(fullscreenGridModeRef.current, TRACKING_MAX_HANDS)
+              : TRACKING_MAX_HANDS;
           const stableHands = assignStableHandLabels(detectedHands, {
             memory: handLabelMemoryRef.current,
             timestamp,
             pose: minorityReportPose,
-          }).slice(0, TRACKING_MAX_HANDS);
+          }).slice(0, fullscreenTrackedHandLimit);
           fullscreenHandsRef.current = stableHands;
           const primaryHand = stableHands[0] ?? null;
           fullscreenPrimaryHandIdRef.current = primaryHand?.id ?? primaryHand?.label ?? null;
@@ -9178,6 +9200,27 @@ export default function App() {
                   {fullscreenTicTacToeAiReserveCount} left
                 </div>
               </div>
+              <div
+                className={`fullscreen-camera-tic-tac-toe-reset-box ${
+                  fullscreenTicTacToeState?.resetHoldActive ? "active" : ""
+                }`}
+                style={{
+                  left: `${fullscreenTicTacToeLayout?.resetBoxLeft ?? 0}px`,
+                  top: `${fullscreenTicTacToeLayout?.resetBoxTop ?? 0}px`,
+                  width: `${fullscreenTicTacToeLayout?.resetBoxWidth ?? 0}px`,
+                  height: `${fullscreenTicTacToeLayout?.resetBoxHeight ?? 0}px`,
+                }}
+              >
+                <span className="fullscreen-camera-tic-tac-toe-reset-title">Reset</span>
+                <span className="fullscreen-camera-tic-tac-toe-reset-countdown">
+                  {fullscreenTicTacToeResetCountdown}
+                </span>
+                <span className="fullscreen-camera-tic-tac-toe-reset-hint">
+                  {fullscreenTicTacToeState?.resetHoldActive
+                    ? "Keep your index inside"
+                    : "Hold your index inside"}
+                </span>
+              </div>
               {Array.from({ length: 9 }, (_, index) => {
                 const cellRect = getTicTacToeCellRect(fullscreenTicTacToeLayout, index);
                 const mark = fullscreenTicTacToeState?.board?.[index] ?? null;
@@ -9653,7 +9696,7 @@ export default function App() {
                   : fullscreenGridMode === "finger-pong"
                   ? `Finger Pong keeps the full webcam visible behind a one-player rally. Your bottom paddle follows smoothed horizontal fingertip motion, the opening countdown is ${FINGER_PONG_COUNTDOWN_MS / 1000} seconds, and off-center contacts steer the return angle while rallies gently speed up.`
                   : fullscreenGridMode === "tic-tac-toe"
-                  ? "Tic Tac Toe turns the live camera into a tabletop board. Pinch an X from the left rail, drag it into any open square, and release to place it while the right rail answers with a perfect-play O move."
+                  ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lets you pinch-drag X pieces from the left rail, and adds a right-side reset box that clears the board after a 3.00 second index-fingertip hold."
                   : fullscreenGridMode === "fruit-ninja"
                   ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
                   : fullscreenGridMode === "invaders"

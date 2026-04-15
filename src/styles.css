@@ -433,17 +433,17 @@ body {
       rgba(215, 234, 255, 0.18) calc(66.666% - 2px) calc(66.666% + 2px),
       transparent calc(66.666% + 2px)
     );
-  border: 2px solid rgba(227, 239, 255, 0.22);
-  border-radius: 30px;
+  border: 3px solid rgba(227, 239, 255, 0.22);
+  border-radius: 40px;
   box-shadow:
-    0 24px 48px rgba(0, 0, 0, 0.34),
+    0 28px 56px rgba(0, 0, 0, 0.34),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
   position: absolute;
 }
 
 .fullscreen-camera-tic-tac-toe-cell {
   align-items: center;
-  border-radius: 22px;
+  border-radius: 30px;
   display: flex;
   justify-content: center;
   position: absolute;
@@ -459,7 +459,7 @@ body {
 
 .fullscreen-camera-tic-tac-toe-cell.preview {
   background: rgba(255, 208, 116, 0.08);
-  box-shadow: inset 0 0 0 2px rgba(255, 214, 140, 0.24);
+  box-shadow: inset 0 0 0 3px rgba(255, 214, 140, 0.24);
 }
 
 .fullscreen-camera-tic-tac-toe-cell.occupied {
@@ -467,22 +467,22 @@ body {
 }
 
 .fullscreen-camera-tic-tac-toe-cell.last-move {
-  box-shadow: inset 0 0 0 2px rgba(145, 208, 255, 0.22);
+  box-shadow: inset 0 0 0 3px rgba(145, 208, 255, 0.22);
 }
 
 .fullscreen-camera-tic-tac-toe-cell.winning {
   background: rgba(117, 255, 185, 0.12);
   box-shadow:
-    inset 0 0 0 2px rgba(117, 255, 185, 0.3),
-    0 0 28px rgba(117, 255, 185, 0.16);
+    inset 0 0 0 3px rgba(117, 255, 185, 0.3),
+    0 0 38px rgba(117, 255, 185, 0.2);
 }
 
 .fullscreen-camera-tic-tac-toe-mark {
-  font-size: clamp(2.6rem, 8vw, 5.8rem);
+  font-size: clamp(4.4rem, 13vw, 10rem);
   font-weight: 900;
   letter-spacing: 0.04em;
   line-height: 1;
-  text-shadow: 0 10px 24px rgba(0, 0, 0, 0.26);
+  text-shadow: 0 14px 30px rgba(0, 0, 0, 0.26);
 }
 
 .fullscreen-camera-tic-tac-toe-mark.player {
@@ -501,9 +501,9 @@ body {
   background:
     linear-gradient(180deg, rgba(9, 17, 27, 0.8), rgba(6, 12, 20, 0.92)),
     linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 48%);
-  border: 1px solid rgba(223, 236, 252, 0.18);
-  border-radius: 28px;
-  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.28);
+  border: 2px solid rgba(223, 236, 252, 0.18);
+  border-radius: 36px;
+  box-shadow: 0 22px 42px rgba(0, 0, 0, 0.28);
   position: absolute;
 }
 
@@ -530,16 +530,16 @@ body {
 }
 
 .fullscreen-camera-tic-tac-toe-rail-label {
-  font-size: 0.8rem;
+  font-size: 1.08rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  top: 14px;
+  top: 18px;
 }
 
 .fullscreen-camera-tic-tac-toe-rail-count {
-  bottom: 12px;
-  font-size: 0.84rem;
+  bottom: 16px;
+  font-size: 1.05rem;
   font-weight: 700;
 }
 
@@ -602,17 +602,66 @@ body {
 
 .fullscreen-camera-tic-tac-toe-piece-label {
   color: #101723;
-  font-size: clamp(1.4rem, 4.2vw, 3.2rem);
+  font-size: clamp(2.4rem, 7.35vw, 5.6rem);
   font-weight: 900;
   line-height: 1;
+}
+
+.fullscreen-camera-tic-tac-toe-reset-box {
+  align-items: center;
+  background:
+    linear-gradient(180deg, rgba(44, 18, 18, 0.9), rgba(20, 10, 12, 0.95)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 48%);
+  border: 2px solid rgba(255, 181, 166, 0.18);
+  border-radius: 34px;
+  box-shadow: 0 22px 42px rgba(0, 0, 0, 0.3);
+  color: #fff6f1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 16px 14px;
+  position: absolute;
+  text-align: center;
+}
+
+.fullscreen-camera-tic-tac-toe-reset-box.active {
+  background:
+    linear-gradient(180deg, rgba(126, 34, 34, 0.92), rgba(58, 14, 16, 0.97)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 48%);
+  border-color: rgba(255, 213, 178, 0.32);
+  box-shadow:
+    0 0 0 6px rgba(255, 126, 97, 0.14),
+    0 24px 44px rgba(0, 0, 0, 0.32);
+}
+
+.fullscreen-camera-tic-tac-toe-reset-title {
+  font-size: 1.12rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-tic-tac-toe-reset-countdown {
+  font-size: clamp(2rem, 4.6vw, 3.6rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  margin-top: 8px;
+}
+
+.fullscreen-camera-tic-tac-toe-reset-hint {
+  font-size: 0.96rem;
+  line-height: 1.2;
+  margin-top: 10px;
+  max-width: 14ch;
 }
 
 .fullscreen-camera-tic-tac-toe-scoreboard,
 .fullscreen-camera-tic-tac-toe-legend,
 .fullscreen-camera-tic-tac-toe-status {
   background: rgba(9, 17, 27, 0.74);
-  border: 1px solid rgba(202, 220, 239, 0.22);
-  border-radius: 14px;
+  border: 2px solid rgba(202, 220, 239, 0.22);
+  border-radius: 18px;
   color: #f4f7fb;
   position: absolute;
 }
@@ -621,29 +670,29 @@ body {
 .fullscreen-camera-tic-tac-toe-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
   left: 18px;
-  padding: 10px 14px;
+  padding: 14px 18px;
 }
 
 .fullscreen-camera-tic-tac-toe-scoreboard {
-  font-size: 0.95rem;
+  font-size: 1.22rem;
   font-weight: 700;
-  top: 18px;
+  top: 92px;
 }
 
 .fullscreen-camera-tic-tac-toe-legend {
   bottom: 18px;
-  font-size: 0.82rem;
-  max-width: min(440px, calc(100% - 36px));
+  font-size: 1rem;
+  max-width: min(560px, calc(100% - 36px));
 }
 
 .fullscreen-camera-tic-tac-toe-status {
-  font-size: clamp(1rem, 2.5vw, 1.45rem);
+  font-size: clamp(1.25rem, 3vw, 1.9rem);
   font-weight: 800;
   left: 50%;
-  max-width: min(72vw, 520px);
-  padding: 12px 16px;
+  max-width: min(72vw, 640px);
+  padding: 14px 18px;
   text-align: center;
   top: 18px;
   transform: translateX(-50%);

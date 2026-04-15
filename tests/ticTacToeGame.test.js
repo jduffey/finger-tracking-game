@@ -4,6 +4,7 @@ import {
   TIC_TAC_TOE_AI_MARK,
   TIC_TAC_TOE_AI_MOVE_DELAY_MS,
   TIC_TAC_TOE_PLAYER_MARK,
+  TIC_TAC_TOE_RESET_HOLD_MS,
   createTicTacToeGame,
   evaluateTicTacToeBoard,
   getTicTacToeCellRect,
@@ -17,6 +18,13 @@ function getBoardCenter(layout, cellIndex) {
   return {
     x: rect.centerX,
     y: rect.centerY,
+  };
+}
+
+function getResetBoxCenter(layout) {
+  return {
+    x: layout.resetBoxLeft + layout.resetBoxWidth / 2,
+    y: layout.resetBoxTop + layout.resetBoxHeight / 2,
   };
 }
 
@@ -56,6 +64,8 @@ test("createTicTacToeGame starts on the player's drag turn", () => {
   assert.equal(game.message, "Pinch an X on the left rail and drag it into an open square");
   assert.deepEqual(game.board, Array(9).fill(null));
   assert.ok(game.layout.boardSize > 0);
+  assert.ok(game.layout.resetBoxLeft > game.layout.boardLeft + game.layout.boardSize);
+  assert.ok(game.layout.activePieceSize >= 60);
 });
 
 test("stepTicTacToeGame lets the player drag a piece from the left rail into the board", () => {
@@ -201,6 +211,62 @@ test("restartTicTacToeRound preserves the running match tally", () => {
   assert.equal(restarted.aiWins, 1);
   assert.equal(restarted.draws, 3);
   assert.equal(restarted.status, "player-turn");
+});
+
+test("stepTicTacToeGame starts the reset countdown at 3.00 and clears the board after three seconds", () => {
+  const base = {
+    ...createTicTacToeGame(1280, 720),
+    playerWins: 2,
+    aiWins: 1,
+    draws: 3,
+    board: [
+      TIC_TAC_TOE_PLAYER_MARK,
+      TIC_TAC_TOE_AI_MARK,
+      TIC_TAC_TOE_PLAYER_MARK,
+      null,
+      TIC_TAC_TOE_AI_MARK,
+      null,
+      null,
+      null,
+      null,
+    ],
+  };
+  const resetPoint = getResetBoxCenter(base.layout);
+
+  let held = stepTicTacToeGame(base, 1 / 60, {
+    pointerActive: true,
+    pointerX: resetPoint.x,
+    pointerY: resetPoint.y,
+    pinchActive: false,
+  });
+
+  assert.equal(held.resetHoldActive, true);
+  assert.equal(held.resetHoldMs, 0);
+  assert.deepEqual(held.board, base.board);
+
+  const stepsToReset = Math.ceil((TIC_TAC_TOE_RESET_HOLD_MS / 1000) * 60);
+  let didReset = false;
+  for (let index = 0; index < stepsToReset + 2; index += 1) {
+    held = stepTicTacToeGame(held, 1 / 60, {
+      pointerActive: true,
+      pointerX: resetPoint.x,
+      pointerY: resetPoint.y,
+      pinchActive: false,
+    });
+    if (held.board.every((cell) => cell === null)) {
+      didReset = true;
+      break;
+    }
+  }
+
+  assert.equal(didReset, true);
+  assert.deepEqual(held.board, Array(9).fill(null));
+  assert.equal(held.status, "player-turn");
+  assert.equal(held.playerWins, 2);
+  assert.equal(held.aiWins, 1);
+  assert.equal(held.draws, 3);
+  assert.equal(held.resetHoldActive, false);
+  assert.equal(held.resetHoldMs, 0);
 });
 
 test("evaluateTicTacToeBoard reports wins and draws", () => {
