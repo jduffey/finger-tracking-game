@@ -72,6 +72,18 @@ test("createTicTacToeGame starts on the player's drag turn", () => {
   assert.ok(Math.abs(leftMargin - rightMargin) < 1);
 });
 
+test("createTicTacToeGame keeps the player rail reachable on narrow fullscreen viewports", () => {
+  const game = createTicTacToeGame(320, 440);
+  const pickedUp = startDrag(game);
+  const dropped = dropOnCell(dragToCell(pickedUp, 0), 0);
+
+  assert.ok(game.layout.boardSize >= 180);
+  assert.ok(game.layout.cellSize > 0);
+  assert.ok(game.layout.playerRailCenterX >= 0);
+  assert.ok(pickedUp.draggingPiece);
+  assert.equal(dropped.board[0], TIC_TAC_TOE_PLAYER_MARK);
+});
+
 test("stepTicTacToeGame lets the player drag a piece from the left rail into the board", () => {
   const game = createTicTacToeGame(1280, 720);
   const pickedUp = startDrag(game);

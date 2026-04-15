@@ -115,6 +115,7 @@ function createPanels(sceneIndex, stageSize, panelAssignments) {
     basePanels,
     stageSize,
     (panel) => ({ x: panel.x, y: panel.y }),
+    sceneIndex,
   ).map((panel) => ({
     ...panel,
     subtitle: formatPanelSubtitle(panel),
@@ -167,6 +168,7 @@ function applySceneLayout(existingPanels, sceneIndex, stageSize, panelAssignment
     nextPanels,
     stageSize,
     (panel) => ({ x: panel.x, y: panel.y }),
+    sceneIndex,
   ).map((panel) => ({
     ...panel,
     subtitle: formatPanelSubtitle(panel),
@@ -177,6 +179,7 @@ function applySnappedPanelPlacement(
   panel,
   stageSize,
   allPanels,
+  sceneIndex,
   preferredPoint = null,
   extra = {},
 ) {
@@ -189,6 +192,7 @@ function applySnappedPanelPlacement(
     stageSize,
     allPanels,
     preferredPoint,
+    sceneIndex,
   );
   return {
     ...basePanel,
@@ -589,6 +593,7 @@ export default function MinorityReportLab(props) {
         repositionedPanels,
         stageSize,
         (panel) => ({ x: panel.x, y: panel.y }),
+        sceneIndexRef.current,
       ).map((panel) => ({
         ...panel,
         subtitle: formatPanelSubtitle(panel),
@@ -846,6 +851,7 @@ export default function MinorityReportLab(props) {
                 panel,
                 stageSize,
                 currentPanels,
+                sceneIndexRef.current,
                 {
                   x: panel.x + throwDistanceX,
                   y: panel.y + throwDistanceY,
@@ -933,6 +939,7 @@ export default function MinorityReportLab(props) {
                 panel,
                 stageSize,
                 currentPanels,
+                sceneIndexRef.current,
                 {
                   x: localPointer.x - currentGrab.offsetX,
                   y: localPointer.y - currentGrab.offsetY,
@@ -973,6 +980,7 @@ export default function MinorityReportLab(props) {
                 panel,
                 stageSize,
                 currentPanels,
+                sceneIndexRef.current,
                 null,
                 {
                   selected: true,

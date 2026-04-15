@@ -317,16 +317,21 @@ function pickAiTicTacToeMove(
 export function createTicTacToeLayout(width, height) {
   const safeWidth = Math.max(320, Number.isFinite(width) ? width : 320);
   const safeHeight = Math.max(440, Number.isFinite(height) ? height : 440);
+  const minimumPlayableBoardSize = 180;
   const edgePadding = clamp(safeWidth * 0.032 * TIC_TAC_TOE_LAYOUT_SCALE, 14, 42);
   const railGap = clamp(safeWidth * 0.022 * TIC_TAC_TOE_LAYOUT_SCALE, 14, 34);
   const railWidth = clamp(safeWidth * 0.15 * TIC_TAC_TOE_LAYOUT_SCALE, 98, 196);
   const resetBoxWidth = clamp(railWidth * 1.08, 120, 216);
   const boardMaxWidth =
     safeWidth - edgePadding * 2 - railWidth - railWidth - resetBoxWidth - railGap * 3;
-  const boardMinSize = Math.min(240, boardMaxWidth);
-  const boardSize = clamp(Math.min(safeHeight * 0.82, boardMaxWidth), boardMinSize, 680);
+  const resolvedBoardMaxWidth = Math.max(minimumPlayableBoardSize, boardMaxWidth);
+  const boardMinSize = Math.min(240, resolvedBoardMaxWidth);
+  const boardSize = clamp(Math.min(safeHeight * 0.82, resolvedBoardMaxWidth), boardMinSize, 680);
   const gameWidth = railWidth + railGap + boardSize + railGap + railWidth + railGap + resetBoxWidth;
-  const gameLeft = (safeWidth - gameWidth) / 2;
+  const idealGameLeft = (safeWidth - gameWidth) / 2;
+  const minGameLeft = -railWidth / 2;
+  const maxGameLeft = safeWidth - edgePadding - (railWidth + railGap + boardSize);
+  const gameLeft = clamp(idealGameLeft, minGameLeft, Math.max(minGameLeft, maxGameLeft));
   const boardLeft = gameLeft + railWidth + railGap;
   const aiRailLeft = boardLeft + boardSize + railGap;
   const resetBoxLeft = aiRailLeft + railWidth + railGap;
@@ -367,7 +372,7 @@ export function createTicTacToeLayout(width, height) {
     trayCenterY,
     gameLeft,
     gameWidth,
-    playerRailCenterX: boardLeft - railGap - railWidth / 2,
+    playerRailCenterX: gameLeft + railWidth / 2,
     aiRailCenterX: aiRailLeft + railWidth / 2,
     resetBoxLeft,
     resetBoxTop,

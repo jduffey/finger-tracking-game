@@ -9,7 +9,7 @@ Finger Tracking Game is a webcam-driven hand- and pose-tracking playground built
 - **Calibration Input Test**: the home screen for camera/model readiness, live overlays, calibration controls, and navigation.
 - **Core modes**: Whack-a-Mole, Pinch Sandbox, Track Runner, Star Flight, Conveyor Toss, Roulette, and Spatial Gesture Memory.
 - **Labs**: Body Pose Lab, Off-Axis Forest Walk, Minority Report Lab, Gesture Analytics Lab, Gesture Art Lab, and Gesture Control OS.
-- **Fullscreen Camera**: a fullscreen webcam playground with visual overlays (`Squares`, `Hex`, `Voronoi`, `Rings`, `Pulse`, `Tip Ripples`, `Tip Ripples v2`, `Static`) plus webcam-backed games (`Brick Dodger`, `Breakout Co-op`, `Breakout`, `Finger Pong`, `Tic Tac Toe`, `Slice Air`, `Invaders`, `Flappy`, `Missile Command`).
+- **Fullscreen Camera**: a fullscreen webcam playground with visual overlays (`Squares`, `Hex`, `Voronoi`, `Rings`, `Pulse`, `Tip Ripples`, `Tip Ripples v2`, `Static`) plus webcam-backed games (`Hand Bounce`, `Brick Dodger`, `Breakout Co-op`, `Breakout`, `Finger Pong`, `Tic Tac Toe`, `Slice Air`, `Invaders`, `Flappy`, `Missile Command`).
 
 ### Secondary page (`/circle-of-fifths.html`)
 

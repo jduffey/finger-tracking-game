@@ -52,6 +52,10 @@ import {
   createFingerPongGame,
   stepFingerPongGame,
 } from "./fingerPongGame.js";
+import {
+  createFullscreenHandBounceGame,
+  stepFullscreenHandBounceGame,
+} from "./fullscreenHandBounceGame.js";
 import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
 import {
   getFullscreenTrackedHandLimit,
@@ -524,6 +528,11 @@ const HAND_ROOT_CONNECTIONS = [
   [0, 13],
   [0, 17],
 ];
+const HAND_WRIST_INDEX = 0;
+const HAND_PALM_LANDMARK_INDEXES = [0, 5, 9, 13, 17];
+const HAND_INDEX_KNUCKLE_INDEX = 5;
+const HAND_MIDDLE_KNUCKLE_INDEX = 9;
+const HAND_PINKY_KNUCKLE_INDEX = 17;
 const HAND_FINGER_CHAINS = [
   [1, 2, 3, 4],
   [5, 6, 7, 8],
@@ -1401,6 +1410,7 @@ export default function App() {
   const [fullscreenRingTrailNow, setFullscreenRingTrailNow] = useState(() => performance.now());
   const [fullscreenPulseBursts, setFullscreenPulseBursts] = useState([]);
   const [fullscreenPulseNow, setFullscreenPulseNow] = useState(() => performance.now());
+  const [fullscreenHandBounceState, setFullscreenHandBounceState] = useState(null);
   const [fullscreenBrickDodgerState, setFullscreenBrickDodgerState] = useState(null);
   const [fullscreenBreakoutState, setFullscreenBreakoutState] = useState(null);
   const [fullscreenBreakoutCoopState, setFullscreenBreakoutCoopState] = useState(null);
@@ -1503,6 +1513,9 @@ export default function App() {
   const fullscreenGridModeRef = useRef(fullscreenGridMode);
   const fullscreenHandsRef = useRef([]);
   const fullscreenPrimaryHandIdRef = useRef(null);
+  const fullscreenHandBounceStateRef = useRef(null);
+  const fullscreenHandBounceViewportRef = useRef(null);
+  const fullscreenHandBounceLastTickRef = useRef(0);
   const fullscreenBrickDodgerStateRef = useRef(null);
   const fullscreenBrickDodgerViewportRef = useRef(null);
   const fullscreenBrickDodgerLastTickRef = useRef(0);
@@ -1627,6 +1640,10 @@ export default function App() {
   const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
   const isMinorityReportLabPhase = phase === PHASES.MINORITY_REPORT_LAB;
   const isImmersiveAppPhase = shouldUseImmersiveAppLayout(phase);
+  const isFullscreenHandBounceMode =
+    isFullscreenCameraPhase &&
+    fullscreenGridMode === "hand-bounce" &&
+    Boolean(fullscreenHandBounceState);
   const isFullscreenBrickDodgerMode =
     isFullscreenCameraPhase &&
     fullscreenGridMode === "brick-dodger" &&
@@ -2231,6 +2248,7 @@ export default function App() {
       setFullscreenTipPoints([]);
       setFullscreenRingTrail([]);
       setFullscreenPulseBursts([]);
+      setFullscreenHandBounceState(null);
       setFullscreenBrickDodgerState(null);
       setFullscreenBreakoutState(null);
       setFullscreenBreakoutCoopState(null);
@@ -2246,6 +2264,14 @@ export default function App() {
   useEffect(() => {
     fullscreenGridModeRef.current = fullscreenGridMode;
   }, [fullscreenGridMode]);
+
+  useEffect(() => {
+    fullscreenHandBounceStateRef.current = fullscreenHandBounceState;
+  }, [fullscreenHandBounceState]);
+
+  useEffect(() => {
+    fullscreenHandBounceViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
 
   useEffect(() => {
     fullscreenBrickDodgerStateRef.current = fullscreenBrickDodgerState;
@@ -2333,6 +2359,30 @@ export default function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isImmersiveAppPhase, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== "hand-bounce" ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenHandBounceLastTickRef.current = 0;
+      if (fullscreenHandBounceStateRef.current) {
+        fullscreenHandBounceStateRef.current = null;
+        setFullscreenHandBounceState(null);
+      }
+      return undefined;
+    }
+
+    const nextGame = createFullscreenHandBounceGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenHandBounceLastTickRef.current = 0;
+    fullscreenHandBounceStateRef.current = nextGame;
+    setFullscreenHandBounceState(nextGame);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
   useEffect(() => {
     if (
@@ -5720,6 +5770,20 @@ export default function App() {
     setFullscreenBrickDodgerState(nextGame);
   }
 
+  function restartFullscreenHandBounceGame() {
+    const viewportMetrics = fullscreenHandBounceViewportRef.current;
+    if (!viewportMetrics) {
+      return;
+    }
+    const nextGame = createFullscreenHandBounceGame(
+      viewportMetrics.width,
+      viewportMetrics.height,
+    );
+    fullscreenHandBounceLastTickRef.current = 0;
+    fullscreenHandBounceStateRef.current = nextGame;
+    setFullscreenHandBounceState(nextGame);
+  }
+
   function restartFullscreenFingerPongGame() {
     const viewportMetrics = fullscreenFingerPongViewportRef.current;
     if (!viewportMetrics) {
@@ -6589,6 +6653,90 @@ export default function App() {
     });
   }
 
+  function getFullscreenHandBouncePaddleInput() {
+    const viewportMetrics = fullscreenHandBounceViewportRef.current;
+    if (!viewportMetrics) {
+      return null;
+    }
+
+    const renderMetrics = computeCameraRenderMetrics("contain");
+    const primaryHand = Array.isArray(fullscreenHandsRef.current)
+      ? fullscreenHandsRef.current[0] ?? null
+      : null;
+    if (!renderMetrics || !primaryHand) {
+      return null;
+    }
+
+    const pointByIndex = new Map();
+    for (const landmarkIndex of HAND_PALM_LANDMARK_INDEXES) {
+      const landmark = primaryHand.landmarks?.[landmarkIndex];
+      const projectedPoint = projectCameraPointToCanvas(landmark, renderMetrics);
+      if (!projectedPoint) {
+        continue;
+      }
+
+      pointByIndex.set(landmarkIndex, {
+        x: projectedPoint.x - viewportMetrics.left,
+        y: projectedPoint.y - viewportMetrics.top,
+      });
+    }
+
+    const knucklePoints = [
+      pointByIndex.get(HAND_INDEX_KNUCKLE_INDEX),
+      pointByIndex.get(HAND_MIDDLE_KNUCKLE_INDEX),
+      pointByIndex.get(HAND_PINKY_KNUCKLE_INDEX),
+    ].filter(Boolean);
+
+    if (knucklePoints.length === 0) {
+      return null;
+    }
+
+    const ballRadius = fullscreenHandBounceStateRef.current?.layout?.ballRadius ?? 32;
+    const centerX =
+      knucklePoints.reduce((sum, point) => sum + point.x, 0) / knucklePoints.length;
+    const knuckleY =
+      knucklePoints.reduce((sum, point) => sum + point.y, 0) / knucklePoints.length;
+    const wristPoint = pointByIndex.get(HAND_WRIST_INDEX) ?? null;
+    const wristY = wristPoint?.y ?? knuckleY + ballRadius * 0.92;
+    const indexKnuckle = pointByIndex.get(HAND_INDEX_KNUCKLE_INDEX) ?? null;
+    const pinkyKnuckle = pointByIndex.get(HAND_PINKY_KNUCKLE_INDEX) ?? null;
+    const palmSpan =
+      indexKnuckle && pinkyKnuckle
+        ? Math.hypot(
+            pinkyKnuckle.x - indexKnuckle.x,
+            pinkyKnuckle.y - indexKnuckle.y,
+          )
+        : ballRadius * 1.95;
+    const width = clampValue(
+      palmSpan * 1.68,
+      ballRadius * 2.15,
+      viewportMetrics.width * 0.34,
+    );
+    const palmDepth = Math.abs(wristY - knuckleY);
+    const height = clampValue(
+      palmDepth * 1.45,
+      ballRadius * 0.9,
+      ballRadius * 1.55,
+    );
+    const x = clampValue(
+      centerX,
+      width / 2 + 6,
+      viewportMetrics.width - width / 2 - 6,
+    );
+    const y = clampValue(
+      knuckleY + (wristY - knuckleY) * 0.38,
+      height / 2 + ballRadius * 0.42,
+      viewportMetrics.height - height / 2 - ballRadius * 0.24,
+    );
+
+    return {
+      x,
+      y,
+      width,
+      height,
+    };
+  }
+
   function drawFullscreenOverlay(hands) {
     const canvas = overlayCanvasRef.current;
     if (!canvas) {
@@ -6610,6 +6758,7 @@ export default function App() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (
+      fullscreenGridModeRef.current === "hand-bounce" ||
       fullscreenGridModeRef.current === "brick-dodger" ||
       fullscreenGridModeRef.current === "breakout-coop" ||
       fullscreenGridModeRef.current === "breakout" ||
@@ -6660,6 +6809,34 @@ export default function App() {
       indexPoints,
       tipPoints,
     };
+  }
+
+  function updateFullscreenHandBounceSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== "hand-bounce" ||
+      !fullscreenHandBounceStateRef.current
+    ) {
+      fullscreenHandBounceLastTickRef.current = timestamp;
+      return;
+    }
+
+    if (!fullscreenHandBounceViewportRef.current) {
+      fullscreenHandBounceLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenHandBounceLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenHandBounceLastTickRef.current = timestamp;
+
+    const nextState = stepFullscreenHandBounceGame(
+      fullscreenHandBounceStateRef.current,
+      deltaSeconds,
+      getFullscreenHandBouncePaddleInput(),
+    );
+    fullscreenHandBounceStateRef.current = nextState;
+    setFullscreenHandBounceState(nextState);
   }
 
   function updateFullscreenBreakoutSimulation(timestamp) {
@@ -7010,6 +7187,7 @@ export default function App() {
 
   function updateFullscreenOverlayGames(timestamp) {
     runFullscreenOverlayGameUpdates(timestamp, {
+      updateFullscreenHandBounceSimulation,
       updateFullscreenBrickDodgerSimulation,
       updateFullscreenBreakoutSimulation,
       updateFullscreenBreakoutCoopSimulation,
@@ -9306,7 +9484,7 @@ export default function App() {
               <div className="fullscreen-camera-tic-tac-toe-legend">
                 <span>Pinch to grab</span>
                 <span>Release to place</span>
-                <span>Perfect-play O opponent</span>
+                <span>Random opening, optimal after</span>
               </div>
               {fullscreenTicTacToeState?.message ? (
                 <div
@@ -9315,6 +9493,84 @@ export default function App() {
                   }`}
                 >
                   {fullscreenTicTacToeState.message}
+                </div>
+              ) : null}
+            </div>
+          ) : fullscreenGridMode === "hand-bounce" ? (
+            <div
+              className="fullscreen-camera-hand-bounce"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              <div className="fullscreen-camera-hand-bounce-backdrop" />
+              {fullscreenHandBounceState?.ball ? (
+                <div
+                  className="fullscreen-camera-hand-bounce-ball-shadow"
+                  style={{
+                    left: `${fullscreenHandBounceState.ball.x - fullscreenHandBounceState.ball.radius * (0.62 + Math.min(0.5, (fullscreenHandBounceState.ball.y / Math.max(1, fullscreenHandBounceState.layout.height)) * 0.45))}px`,
+                    top: `${(fullscreenHandBounceState.layout.height ?? 0) - fullscreenHandBounceState.ball.radius * 0.46}px`,
+                    width: `${fullscreenHandBounceState.ball.radius * 2 * (0.62 + Math.min(0.5, (fullscreenHandBounceState.ball.y / Math.max(1, fullscreenHandBounceState.layout.height)) * 0.45))}px`,
+                    height: `${fullscreenHandBounceState.ball.radius * 0.6}px`,
+                    opacity: Math.min(
+                      0.5,
+                      0.16 +
+                        (fullscreenHandBounceState.ball.y /
+                          Math.max(1, fullscreenHandBounceState.layout.height)) *
+                          0.28,
+                    ),
+                  }}
+                />
+              ) : null}
+              {fullscreenHandBounceState?.paddle ? (
+                <div
+                  className="fullscreen-camera-hand-bounce-paddle"
+                  style={{
+                    left: `${fullscreenHandBounceState.paddle.x - fullscreenHandBounceState.paddle.width / 2}px`,
+                    top: `${fullscreenHandBounceState.paddle.y - fullscreenHandBounceState.paddle.height / 2}px`,
+                    width: `${fullscreenHandBounceState.paddle.width}px`,
+                    height: `${fullscreenHandBounceState.paddle.height}px`,
+                  }}
+                />
+              ) : null}
+              {fullscreenHandBounceState?.ball ? (
+                <div
+                  className="fullscreen-camera-hand-bounce-ball"
+                  style={{
+                    left: `${fullscreenHandBounceState.ball.x - fullscreenHandBounceState.ball.radius}px`,
+                    top: `${fullscreenHandBounceState.ball.y - fullscreenHandBounceState.ball.radius}px`,
+                    width: `${fullscreenHandBounceState.ball.radius * 2}px`,
+                    height: `${fullscreenHandBounceState.ball.radius * 2}px`,
+                    transform: `rotate(${Math.atan2(
+                      fullscreenHandBounceState.ball.vy ?? 0,
+                      fullscreenHandBounceState.ball.vx ?? 0,
+                    )}rad)`,
+                  }}
+                />
+              ) : null}
+              <div className="fullscreen-camera-hand-bounce-scoreboard">
+                <span>Saves {fullscreenHandBounceState?.score ?? 0}</span>
+                <span>Best {fullscreenHandBounceState?.bestScore ?? 0}</span>
+                <span>
+                  Speed{" "}
+                  {Math.round(
+                    Math.hypot(
+                      fullscreenHandBounceState?.ball?.vx ?? 0,
+                      fullscreenHandBounceState?.ball?.vy ?? 0,
+                    ),
+                  )}
+                </span>
+              </div>
+              <div className="fullscreen-camera-hand-bounce-legend">
+                <span>No pinch needed</span>
+                <span>Use your palm to volley</span>
+                <span>Miss the bottom and the round ends</span>
+              </div>
+              {fullscreenHandBounceState?.message ? (
+                <div
+                  className={`fullscreen-camera-hand-bounce-banner ${
+                    fullscreenHandBounceState.status === "gameover" ? "game-over" : ""
+                  }`}
+                >
+                  {fullscreenHandBounceState.message}
                 </div>
               ) : null}
             </div>
@@ -9695,6 +9951,8 @@ export default function App() {
               <span className="fullscreen-camera-note">
                 {fullscreenGridMode === "breakout-coop"
                   ? `Breakout Co-op keeps index-finger steering on the paddle, uses support-hand pinch for a ${Math.round(BREAKOUT_COOP_SHIELD_DURATION_MS / 1000)} second shield pulse, and prism bricks split the ball while the shield recharges over about ${Math.round(BREAKOUT_COOP_SHIELD_COOLDOWN_MS / 1000)} seconds.`
+                  : fullscreenGridMode === "hand-bounce"
+                  ? "Hand Bounce turns your tracked palm into a bounce surface. The ball uses gravity-driven motion, rebounds off the side walls, and you only need to keep your hand under it."
                   : fullscreenGridMode === "brick-dodger"
                   ? "Brick Dodger uses the existing smoothed index-fingertip X position only. Drift across the full webcam overlay to dodge falling hazards, chase adjacent bonus pickups, and stretch the run as the descent speed ramps up."
                   : fullscreenGridMode === "breakout"
@@ -9702,7 +9960,7 @@ export default function App() {
                   : fullscreenGridMode === "finger-pong"
                   ? `Finger Pong keeps the full webcam visible behind a one-player rally. Your bottom paddle follows smoothed horizontal fingertip motion, the opening countdown is ${FINGER_PONG_COUNTDOWN_MS / 1000} seconds, and off-center contacts steer the return angle while rallies gently speed up.`
                   : fullscreenGridMode === "tic-tac-toe"
-                  ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lets you pinch-drag X pieces from the left rail, and adds a right-side reset box that clears the board after a 1.00 second index-fingertip hold."
+                  ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lets you pinch-drag X pieces from the left rail, adds a right-side reset box that clears the board after a 1.00 second index-fingertip hold, and gives O a random opening before switching to optimal play."
                   : fullscreenGridMode === "fruit-ninja"
                   ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
                   : fullscreenGridMode === "invaders"
@@ -9772,6 +10030,13 @@ export default function App() {
                 </button>
                 <button
                   type="button"
+                  className={fullscreenGridMode === "hand-bounce" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("hand-bounce")}
+                >
+                  Hand Bounce
+                </button>
+                <button
+                  type="button"
                   className={fullscreenGridMode === "brick-dodger" ? "" : "secondary"}
                   onClick={() => setFullscreenGridMode("brick-dodger")}
                 >
@@ -9836,6 +10101,11 @@ export default function App() {
                 {fullscreenGridMode === "brick-dodger" ? (
                   <button type="button" className="secondary" onClick={restartFullscreenBrickDodgerGame}>
                     Restart Run
+                  </button>
+                ) : null}
+                {fullscreenGridMode === "hand-bounce" ? (
+                  <button type="button" className="secondary" onClick={restartFullscreenHandBounceGame}>
+                    Restart Bounce
                   </button>
                 ) : null}
                 {fullscreenGridMode === "finger-pong" ? (

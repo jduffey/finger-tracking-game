@@ -201,6 +201,62 @@ test("getMinorityReportPanelPlacement centers cards on their assigned grid cells
   assert.equal(placement.y, metrics.top + (3.5 * metrics.rowHeight));
 });
 
+test("scene-aware placement and snapping preserve distinct scene transforms", () => {
+  const stageSize = { width: 960, height: 640 };
+  const assignment = {
+    id: "panel-1",
+    tileIndex: 0,
+    tileSlotIndex: 1,
+    tileSlotCount: 2,
+    tileColumnIndex: 1,
+    tileColumnCount: 2,
+    columnCardIndex: 0,
+    columnCardCount: 1,
+    tileMaxColumnCardCount: 1,
+    gridColumnIndex: 1,
+    gridRowIndex: 0,
+  };
+
+  const analysisPlacement = getMinorityReportPanelPlacement(0, assignment, stageSize);
+  const timelinePlacement = getMinorityReportPanelPlacement(1, assignment, stageSize);
+  const briefingPlacement = snapMinorityReportPanelToGrid(
+    assignment,
+    stageSize,
+    [],
+    null,
+    2,
+  );
+
+  assert.notDeepEqual(
+    {
+      x: timelinePlacement.x,
+      y: timelinePlacement.y,
+      rotation: timelinePlacement.rotation,
+      scale: timelinePlacement.scale,
+    },
+    {
+      x: analysisPlacement.x,
+      y: analysisPlacement.y,
+      rotation: analysisPlacement.rotation,
+      scale: analysisPlacement.scale,
+    },
+  );
+  assert.notDeepEqual(
+    {
+      x: briefingPlacement.x,
+      y: briefingPlacement.y,
+      rotation: briefingPlacement.rotation,
+      scale: briefingPlacement.scale,
+    },
+    {
+      x: analysisPlacement.x,
+      y: analysisPlacement.y,
+      rotation: analysisPlacement.rotation,
+      scale: analysisPlacement.scale,
+    },
+  );
+});
+
 test("snapMinorityReportPanelToGrid picks a different open slot when the nearest one is occupied", () => {
   const stageSize = { width: 960, height: 640 };
   const occupiedPanel = getMinorityReportPanelPlacement(
