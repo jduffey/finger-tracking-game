@@ -393,6 +393,7 @@ body {
 }
 
 .fullscreen-camera-fruit-ninja,
+.fullscreen-camera-hand-bounce,
 .fullscreen-camera-flappy {
   overflow: hidden;
   pointer-events: none;
@@ -675,6 +676,96 @@ body {
   font-size: clamp(4rem, 14vw, 7rem);
   letter-spacing: 0.08em;
   padding: 0;
+}
+
+.fullscreen-camera-hand-bounce-backdrop {
+  background:
+    radial-gradient(circle at 50% -10%, rgba(255, 245, 203, 0.26), transparent 42%),
+    linear-gradient(180deg, rgba(9, 17, 27, 0.1), rgba(7, 13, 20, 0.34));
+  inset: 0;
+  position: absolute;
+}
+
+.fullscreen-camera-hand-bounce-ball-shadow {
+  background: radial-gradient(circle, rgba(5, 8, 12, 0.42), rgba(5, 8, 12, 0.06));
+  border-radius: 50%;
+  filter: blur(4px);
+  position: absolute;
+}
+
+.fullscreen-camera-hand-bounce-paddle {
+  background:
+    linear-gradient(180deg, rgba(255, 252, 231, 0.96), rgba(255, 210, 131, 0.92)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.42), transparent 58%);
+  border: 3px solid rgba(24, 17, 9, 0.96);
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 1px rgba(255, 248, 214, 0.22),
+    0 14px 30px rgba(0, 0, 0, 0.3);
+  position: absolute;
+}
+
+.fullscreen-camera-hand-bounce-paddle::before {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.6), transparent 70%);
+  border-radius: inherit;
+  content: "";
+  inset: 16% 10%;
+  position: absolute;
+}
+
+.fullscreen-camera-hand-bounce-ball {
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.96) 0 16%, transparent 17%),
+    radial-gradient(circle at 66% 70%, rgba(255, 163, 77, 0.92) 0 18%, transparent 19%),
+    linear-gradient(180deg, #ffd37c, #ff9c42);
+  border: 4px solid rgba(27, 20, 8, 0.95);
+  border-radius: 50%;
+  box-shadow:
+    0 0 26px rgba(255, 185, 88, 0.34),
+    0 16px 28px rgba(0, 0, 0, 0.28);
+  position: absolute;
+  transform-origin: center;
+}
+
+.fullscreen-camera-hand-bounce-scoreboard,
+.fullscreen-camera-hand-bounce-legend,
+.fullscreen-camera-hand-bounce-banner {
+  background: rgba(9, 17, 27, 0.74);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 14px;
+  color: #f4f7fb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  left: 18px;
+  padding: 10px 14px;
+  position: absolute;
+}
+
+.fullscreen-camera-hand-bounce-scoreboard {
+  font-size: 0.95rem;
+  font-weight: 700;
+  left: auto;
+  right: 18px;
+  top: 18px;
+}
+
+.fullscreen-camera-hand-bounce-legend {
+  bottom: 18px;
+  font-size: 0.82rem;
+}
+
+.fullscreen-camera-hand-bounce-banner {
+  font-size: 0.9rem;
+  left: 50%;
+  max-width: min(540px, calc(100% - 36px));
+  text-align: center;
+  top: 18px;
+  transform: translateX(-50%);
+}
+
+.fullscreen-camera-hand-bounce-banner.game-over {
+  background: rgba(53, 13, 13, 0.82);
 }
 
 .fullscreen-camera-flappy-pipe {
@@ -3324,6 +3415,9 @@ button:disabled {
   .fullscreen-camera-fruit-scoreboard,
   .fullscreen-camera-fruit-legend,
   .fullscreen-camera-fruit-banner,
+  .fullscreen-camera-hand-bounce-scoreboard,
+  .fullscreen-camera-hand-bounce-legend,
+  .fullscreen-camera-hand-bounce-banner,
   .fullscreen-camera-invaders-scoreboard,
   .fullscreen-camera-flappy-scoreboard,
   .fullscreen-camera-invaders-legend,
@@ -3338,6 +3432,7 @@ button:disabled {
 
   .fullscreen-camera-breakout-scoreboard,
   .fullscreen-camera-brick-dodger-scoreboard,
+  .fullscreen-camera-hand-bounce-scoreboard,
   .fullscreen-camera-invaders-scoreboard,
   .fullscreen-camera-flappy-scoreboard,
   .fullscreen-camera-missile-scoreboard {
@@ -3346,6 +3441,7 @@ button:disabled {
 
   .fullscreen-camera-breakout-legend,
   .fullscreen-camera-brick-dodger-legend,
+  .fullscreen-camera-hand-bounce-legend,
   .fullscreen-camera-invaders-legend,
   .fullscreen-camera-flappy-legend,
   .fullscreen-camera-missile-legend {
@@ -3363,6 +3459,11 @@ button:disabled {
   }
 
   .fullscreen-camera-fruit-banner {
+    left: 50%;
+    right: auto;
+  }
+
+  .fullscreen-camera-hand-bounce-banner {
     left: 50%;
     right: auto;
   }
