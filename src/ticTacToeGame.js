@@ -1,0 +1,544 @@
+import { createScopedLogger } from "./logger.js";
+
+const ticTacToeLog = createScopedLogger("ticTacToeGame");
+
+export const TIC_TAC_TOE_PLAYER_MARK = "X";
+export const TIC_TAC_TOE_AI_MARK = "O";
+export const TIC_TAC_TOE_AI_MOVE_DELAY_MS = 680;
+export const TIC_TAC_TOE_PLAYER_PIECE_LIMIT = 5;
+export const TIC_TAC_TOE_AI_PIECE_LIMIT = 4;
+
+const MAX_STEP_SECONDS = 0.05;
+const WIN_LINES = [
+  [0, 1, 2],
+  [3, 4, 5],
+  [6, 7, 8],
+  [0, 3, 6],
+  [1, 4, 7],
+  [2, 5, 8],
+  [0, 4, 8],
+  [2, 4, 6],
+];
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function countMarks(board, mark) {
+  return Array.isArray(board) ? board.filter((cell) => cell === mark).length : 0;
+}
+
+function getOpenCellIndexes(board) {
+  return Array.isArray(board)
+    ? board.flatMap((cell, index) => (cell ? [] : [index]))
+    : [];
+}
+
+function getMovePreference(index) {
+  if (index === 4) {
+    return 0;
+  }
+  if (index === 0 || index === 2 || index === 6 || index === 8) {
+    return 1;
+  }
+  return 2;
+}
+
+function isPlayableBoard(board) {
+  return Array.isArray(board) && board.length === 9;
+}
+
+function normalizePointer(layout, input) {
+  const hasFinitePoint =
+    Number.isFinite(input?.pointerX) &&
+    Number.isFinite(input?.pointerY) &&
+    Boolean(layout);
+
+  if (!hasFinitePoint) {
+    return {
+      active: false,
+      x: 0,
+      y: 0,
+    };
+  }
+
+  return {
+    active: input?.pointerActive !== false,
+    x: clamp(input.pointerX, 0, layout.width),
+    y: clamp(input.pointerY, 0, layout.height),
+  };
+}
+
+function createEmptyBoard() {
+  return Array(9).fill(null);
+}
+
+function buildRoundState(layout, stats = {}) {
+  return {
+    layout,
+    board: createEmptyBoard(),
+    status: "player-turn",
+    message: "Pinch an X on the left rail and drag it into an open square",
+    draggingPiece: null,
+    hoverCellIndex: -1,
+    previewCellIndex: -1,
+    winningLine: null,
+    lastMoveIndex: -1,
+    aiMoveTimerMs: 0,
+    previousPinchActive: false,
+    nextPieceId: 1,
+    playerWins: Number.isFinite(stats.playerWins) ? stats.playerWins : 0,
+    aiWins: Number.isFinite(stats.aiWins) ? stats.aiWins : 0,
+    draws: Number.isFinite(stats.draws) ? stats.draws : 0,
+  };
+}
+
+function isRoundOver(state) {
+  return state?.status === "player-win" || state?.status === "ai-win" || state?.status === "draw";
+}
+
+function getResolvedRoundState(state, board, mark, cellIndex) {
+  const evaluation = evaluateTicTacToeBoard(board);
+
+  if (evaluation.winner === TIC_TAC_TOE_PLAYER_MARK) {
+    return {
+      ...state,
+      board,
+      status: "player-win",
+      message: "You win the board",
+      winningLine: evaluation.line,
+      lastMoveIndex: cellIndex,
+      previewCellIndex: -1,
+      hoverCellIndex: -1,
+      draggingPiece: null,
+      aiMoveTimerMs: 0,
+      playerWins: state.playerWins + 1,
+    };
+  }
+
+  if (evaluation.winner === TIC_TAC_TOE_AI_MARK) {
+    return {
+      ...state,
+      board,
+      status: "ai-win",
+      message: "O closes the line",
+      winningLine: evaluation.line,
+      lastMoveIndex: cellIndex,
+      previewCellIndex: -1,
+      hoverCellIndex: -1,
+      draggingPiece: null,
+      aiMoveTimerMs: 0,
+      aiWins: state.aiWins + 1,
+    };
+  }
+
+  if (evaluation.draw) {
+    return {
+      ...state,
+      board,
+      status: "draw",
+      message: "Draw board",
+      winningLine: null,
+      lastMoveIndex: cellIndex,
+      previewCellIndex: -1,
+      hoverCellIndex: -1,
+      draggingPiece: null,
+      aiMoveTimerMs: 0,
+      draws: state.draws + 1,
+    };
+  }
+
+  if (mark === TIC_TAC_TOE_PLAYER_MARK) {
+    return {
+      ...state,
+      board,
+      status: "ai-turn",
+      message: "O is thinking...",
+      winningLine: null,
+      lastMoveIndex: cellIndex,
+      previewCellIndex: -1,
+      hoverCellIndex: -1,
+      draggingPiece: null,
+      aiMoveTimerMs: TIC_TAC_TOE_AI_MOVE_DELAY_MS,
+    };
+  }
+
+  return {
+    ...state,
+    board,
+    status: "player-turn",
+    message: "Pinch an X on the left rail and drag it into an open square",
+    winningLine: null,
+    lastMoveIndex: cellIndex,
+    previewCellIndex: -1,
+    hoverCellIndex: -1,
+    draggingPiece: null,
+    aiMoveTimerMs: 0,
+  };
+}
+
+function isPointerOnPlayerRail(layout, pointer) {
+  if (!layout || !pointer?.active) {
+    return false;
+  }
+
+  const dx = pointer.x - layout.playerRailCenterX;
+  const dy = pointer.y - layout.trayCenterY;
+  const radiusX = layout.railWidth * 0.45;
+  const radiusY = layout.activePieceSize * 0.72;
+  if (radiusX <= 0 || radiusY <= 0) {
+    return false;
+  }
+
+  return dx * dx / (radiusX * radiusX) + dy * dy / (radiusY * radiusY) <= 1;
+}
+
+function createDraggingPiece(layout, pointer, pieceId) {
+  return {
+    id: `player-piece-${pieceId}`,
+    x: clamp(pointer.x, layout.activePieceSize / 2, layout.width - layout.activePieceSize / 2),
+    y: clamp(pointer.y, layout.activePieceSize / 2, layout.height - layout.activePieceSize / 2),
+    size: layout.activePieceSize,
+  };
+}
+
+function updateDraggingPiece(layout, draggingPiece, pointer) {
+  if (!layout || !draggingPiece) {
+    return draggingPiece;
+  }
+
+  if (!pointer?.active) {
+    return draggingPiece;
+  }
+
+  return {
+    ...draggingPiece,
+    x: clamp(pointer.x, layout.activePieceSize / 2, layout.width - layout.activePieceSize / 2),
+    y: clamp(pointer.y, layout.activePieceSize / 2, layout.height - layout.activePieceSize / 2),
+  };
+}
+
+function scoreTerminalBoard(board, aiMark, playerMark, depth) {
+  const evaluation = evaluateTicTacToeBoard(board);
+  if (evaluation.winner === aiMark) {
+    return 10 - depth;
+  }
+  if (evaluation.winner === playerMark) {
+    return depth - 10;
+  }
+  if (evaluation.draw) {
+    return 0;
+  }
+  return null;
+}
+
+function minimax(board, aiMark, playerMark, aiTurn, depth) {
+  const terminalScore = scoreTerminalBoard(board, aiMark, playerMark, depth);
+  if (terminalScore !== null) {
+    return terminalScore;
+  }
+
+  const openCellIndexes = getOpenCellIndexes(board);
+  if (aiTurn) {
+    let bestScore = Number.NEGATIVE_INFINITY;
+    for (const cellIndex of openCellIndexes) {
+      const nextBoard = [...board];
+      nextBoard[cellIndex] = aiMark;
+      bestScore = Math.max(bestScore, minimax(nextBoard, aiMark, playerMark, false, depth + 1));
+    }
+    return bestScore;
+  }
+
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const cellIndex of openCellIndexes) {
+    const nextBoard = [...board];
+    nextBoard[cellIndex] = playerMark;
+    bestScore = Math.min(bestScore, minimax(nextBoard, aiMark, playerMark, true, depth + 1));
+  }
+  return bestScore;
+}
+
+export function createTicTacToeLayout(width, height) {
+  const safeWidth = Math.max(320, Number.isFinite(width) ? width : 320);
+  const safeHeight = Math.max(440, Number.isFinite(height) ? height : 440);
+  const edgePadding = clamp(safeWidth * 0.032, 12, 32);
+  const railGap = clamp(safeWidth * 0.022, 10, 28);
+  const railWidth = clamp(safeWidth * 0.15, 56, 120);
+  const boardMaxWidth = safeWidth - edgePadding * 2 - railWidth * 2 - railGap * 2;
+  const boardMinSize = Math.min(180, boardMaxWidth);
+  const boardSize = clamp(Math.min(safeHeight * 0.72, boardMaxWidth), boardMinSize, 560);
+  const boardLeft = (safeWidth - boardSize) / 2;
+  const boardTop = (safeHeight - boardSize) / 2;
+  const cellSize = boardSize / 3;
+  const activePieceSize = clamp(cellSize * 0.54, 34, 72);
+  const reserveStepY = clamp(activePieceSize * 0.98, 34, 72);
+  const railHeight = clamp(boardSize * 0.86, activePieceSize * 3.6, safeHeight - edgePadding * 2);
+  const trayCenterY = safeHeight / 2;
+
+  return {
+    width: safeWidth,
+    height: safeHeight,
+    boardLeft,
+    boardTop,
+    boardSize,
+    cellSize,
+    cellInset: clamp(cellSize * 0.07, 6, 18),
+    activePieceSize,
+    reservePieceSize: clamp(activePieceSize * 0.88, 28, 60),
+    reserveStepY,
+    railWidth,
+    railHeight,
+    railTop: trayCenterY - railHeight / 2,
+    trayCenterY,
+    playerRailCenterX: boardLeft - railGap - railWidth / 2,
+    aiRailCenterX: boardLeft + boardSize + railGap + railWidth / 2,
+  };
+}
+
+export function getTicTacToeCellIndex(layout, x, y) {
+  if (
+    !layout ||
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    x < layout.boardLeft ||
+    y < layout.boardTop ||
+    x >= layout.boardLeft + layout.boardSize ||
+    y >= layout.boardTop + layout.boardSize
+  ) {
+    return -1;
+  }
+
+  const column = clamp(Math.floor((x - layout.boardLeft) / layout.cellSize), 0, 2);
+  const row = clamp(Math.floor((y - layout.boardTop) / layout.cellSize), 0, 2);
+  return row * 3 + column;
+}
+
+export function getTicTacToeCellRect(layout, index) {
+  if (!layout || !Number.isInteger(index) || index < 0 || index > 8) {
+    return null;
+  }
+
+  const row = Math.floor(index / 3);
+  const column = index % 3;
+  return {
+    left: layout.boardLeft + column * layout.cellSize,
+    top: layout.boardTop + row * layout.cellSize,
+    width: layout.cellSize,
+    height: layout.cellSize,
+    centerX: layout.boardLeft + column * layout.cellSize + layout.cellSize / 2,
+    centerY: layout.boardTop + row * layout.cellSize + layout.cellSize / 2,
+  };
+}
+
+export function evaluateTicTacToeBoard(board) {
+  if (!isPlayableBoard(board)) {
+    return {
+      winner: null,
+      line: null,
+      draw: false,
+    };
+  }
+
+  for (const line of WIN_LINES) {
+    const [a, b, c] = line;
+    if (board[a] && board[a] === board[b] && board[b] === board[c]) {
+      return {
+        winner: board[a],
+        line,
+        draw: false,
+      };
+    }
+  }
+
+  return {
+    winner: null,
+    line: null,
+    draw: board.every(Boolean),
+  };
+}
+
+export function pickBestTicTacToeMove(
+  board,
+  aiMark = TIC_TAC_TOE_AI_MARK,
+  playerMark = TIC_TAC_TOE_PLAYER_MARK,
+) {
+  if (!isPlayableBoard(board)) {
+    return -1;
+  }
+
+  const openCellIndexes = getOpenCellIndexes(board);
+  if (openCellIndexes.length === 0) {
+    return -1;
+  }
+
+  let bestMove = openCellIndexes[0];
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const cellIndex of openCellIndexes) {
+    const nextBoard = [...board];
+    nextBoard[cellIndex] = aiMark;
+    const score = minimax(nextBoard, aiMark, playerMark, false, 1);
+    const betterPreference = getMovePreference(cellIndex) < getMovePreference(bestMove);
+
+    if (score > bestScore || (score === bestScore && betterPreference)) {
+      bestScore = score;
+      bestMove = cellIndex;
+    }
+  }
+
+  return bestMove;
+}
+
+export function createTicTacToeGame(width, height, stats = {}) {
+  const layout = createTicTacToeLayout(width, height);
+  const state = buildRoundState(layout, stats);
+
+  ticTacToeLog.info("Created tic-tac-toe game state", {
+    width: layout.width,
+    height: layout.height,
+    boardSize: layout.boardSize,
+  });
+
+  return state;
+}
+
+export function restartTicTacToeRound(state) {
+  if (!state?.layout) {
+    return state;
+  }
+
+  return createTicTacToeGame(state.layout.width, state.layout.height, {
+    playerWins: state.playerWins,
+    aiWins: state.aiWins,
+    draws: state.draws,
+  });
+}
+
+export function stepTicTacToeGame(state, dtSeconds, input) {
+  if (!state?.layout || !isPlayableBoard(state.board)) {
+    return state;
+  }
+
+  const safeDt = clamp(Number.isFinite(dtSeconds) ? dtSeconds : 0, 0, MAX_STEP_SECONDS);
+  const elapsedMs = safeDt * 1000;
+  const pointer = normalizePointer(state.layout, input);
+  const pinchActive = Boolean(input?.pinchActive) && pointer.active;
+  const pinchStarted = pinchActive && !state.previousPinchActive;
+  const pinchEnded = !pinchActive && state.previousPinchActive;
+
+  let nextState = {
+    ...state,
+    previousPinchActive: pinchActive,
+  };
+
+  if (nextState.status === "ai-turn") {
+    const remainingTimer = Math.max(0, nextState.aiMoveTimerMs - elapsedMs);
+    if (remainingTimer > 0) {
+      return {
+        ...nextState,
+        aiMoveTimerMs: remainingTimer,
+        hoverCellIndex: -1,
+        previewCellIndex: -1,
+        draggingPiece: null,
+      };
+    }
+
+    const aiMoveIndex = pickBestTicTacToeMove(nextState.board);
+    if (aiMoveIndex < 0) {
+      return {
+        ...nextState,
+        status: "draw",
+        message: "Draw board",
+        aiMoveTimerMs: 0,
+        draws: nextState.draws + 1,
+      };
+    }
+
+    const nextBoard = [...nextState.board];
+    nextBoard[aiMoveIndex] = TIC_TAC_TOE_AI_MARK;
+    return getResolvedRoundState(
+      {
+        ...nextState,
+        aiMoveTimerMs: 0,
+      },
+      nextBoard,
+      TIC_TAC_TOE_AI_MARK,
+      aiMoveIndex,
+    );
+  }
+
+  if (isRoundOver(nextState)) {
+    return {
+      ...nextState,
+      hoverCellIndex: -1,
+      previewCellIndex: -1,
+      draggingPiece: null,
+    };
+  }
+
+  let draggingPiece = nextState.draggingPiece;
+  if (pinchStarted && !draggingPiece && isPointerOnPlayerRail(nextState.layout, pointer)) {
+    draggingPiece = createDraggingPiece(nextState.layout, pointer, nextState.nextPieceId);
+    nextState = {
+      ...nextState,
+      draggingPiece,
+      nextPieceId: nextState.nextPieceId + 1,
+      message: "Release over an open square",
+    };
+  }
+
+  if (draggingPiece) {
+    draggingPiece = updateDraggingPiece(nextState.layout, draggingPiece, pointer);
+    nextState = {
+      ...nextState,
+      draggingPiece,
+    };
+  }
+
+  const hoverCellIndex =
+    pointer.active && !draggingPiece
+      ? getTicTacToeCellIndex(nextState.layout, pointer.x, pointer.y)
+      : -1;
+  const draggingCellIndex = draggingPiece
+    ? getTicTacToeCellIndex(nextState.layout, draggingPiece.x, draggingPiece.y)
+    : -1;
+  const previewCellIndex =
+    draggingCellIndex >= 0 && !nextState.board[draggingCellIndex] ? draggingCellIndex : -1;
+
+  nextState = {
+    ...nextState,
+    hoverCellIndex,
+    previewCellIndex,
+  };
+
+  if (pinchEnded && draggingPiece) {
+    if (previewCellIndex >= 0) {
+      const nextBoard = [...nextState.board];
+      nextBoard[previewCellIndex] = TIC_TAC_TOE_PLAYER_MARK;
+      return getResolvedRoundState(nextState, nextBoard, TIC_TAC_TOE_PLAYER_MARK, previewCellIndex);
+    }
+
+    return {
+      ...nextState,
+      draggingPiece: null,
+      previewCellIndex: -1,
+      hoverCellIndex: -1,
+      message: "Open squares only. Grab another X from the rail",
+    };
+  }
+
+  const playerMarksPlaced = countMarks(nextState.board, TIC_TAC_TOE_PLAYER_MARK);
+  if (playerMarksPlaced >= TIC_TAC_TOE_PLAYER_PIECE_LIMIT && !draggingPiece) {
+    return {
+      ...nextState,
+      status: "draw",
+      message: "Draw board",
+      previewCellIndex: -1,
+      hoverCellIndex: -1,
+      draggingPiece: null,
+      draws: nextState.draws + 1,
+    };
+  }
+
+  return nextState;
+}
