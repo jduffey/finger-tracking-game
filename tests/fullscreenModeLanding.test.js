@@ -18,15 +18,37 @@ function getBoxCenter(box) {
   };
 }
 
-test("createFullscreenModeLandingLayout reuses the Tic Tac Toe reset box size", () => {
+test("createFullscreenModeLandingLayout includes every mode and keeps box proportions", () => {
   const width = 1366;
   const height = 768;
   const layout = createFullscreenModeLandingLayout(width, height);
   const ticTacToeLayout = createTicTacToeLayout(width, height);
 
-  assert.equal(layout.boxWidth, ticTacToeLayout.resetBoxWidth);
-  assert.equal(layout.boxHeight, ticTacToeLayout.resetBoxHeight);
   assert.equal(layout.boxes.length, FULLSCREEN_CAMERA_MODE_OPTIONS.length);
+  assert.ok(layout.boxWidth > 0);
+  assert.ok(layout.boxHeight > 0);
+  assert.ok(
+    Math.abs(layout.boxWidth / layout.boxHeight - ticTacToeLayout.resetBoxWidth / ticTacToeLayout.resetBoxHeight) < 1e-6,
+  );
+});
+
+test("createFullscreenModeLandingLayout keeps the full menu inside representative viewports", () => {
+  for (const [width, height] of [
+    [1280, 720],
+    [768, 1024],
+    [390, 844],
+  ]) {
+    const layout = createFullscreenModeLandingLayout(width, height);
+    const minLeft = Math.min(...layout.boxes.map((box) => box.left));
+    const minTop = Math.min(...layout.boxes.map((box) => box.top));
+    const maxRight = Math.max(...layout.boxes.map((box) => box.left + box.width));
+    const maxBottom = Math.max(...layout.boxes.map((box) => box.top + box.height));
+
+    assert.ok(minLeft >= 0, `${width}x${height} should not overflow left`);
+    assert.ok(minTop >= 0, `${width}x${height} should not overflow top`);
+    assert.ok(maxRight <= layout.width, `${width}x${height} should not overflow right`);
+    assert.ok(maxBottom <= layout.height, `${width}x${height} should not overflow bottom`);
+  }
 });
 
 test("hasVerifiedFullscreenMenuHand only accepts hands with all five fingertips", () => {

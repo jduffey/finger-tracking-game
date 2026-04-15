@@ -60,28 +60,42 @@ export function hasVerifiedFullscreenMenuHand(hand) {
 
 export function createFullscreenModeLandingLayout(width, height) {
   const ticTacToeLayout = createTicTacToeLayout(width, height);
-  const boxWidth = ticTacToeLayout.resetBoxWidth;
-  const boxHeight = ticTacToeLayout.resetBoxHeight;
-  const columnGap = clamp(boxWidth * 0.11, 12, 26);
-  const rowGap = clamp(boxHeight * 0.1, 12, 24);
+  const baseBoxWidth = ticTacToeLayout.resetBoxWidth;
+  const baseBoxHeight = ticTacToeLayout.resetBoxHeight;
+  const baseColumnGap = clamp(baseBoxWidth * 0.11, 12, 26);
+  const baseRowGap = clamp(baseBoxHeight * 0.1, 12, 24);
   const edgePadding = clamp(Math.min(ticTacToeLayout.width, ticTacToeLayout.height) * 0.04, 18, 42);
   const maxColumns = Math.min(MAX_COLUMNS, FULLSCREEN_CAMERA_MODE_OPTIONS.length);
+  const availableWidth = Math.max(1, ticTacToeLayout.width - edgePadding * 2);
+  const availableHeight = Math.max(1, ticTacToeLayout.height - edgePadding * 2);
 
-  let columns = maxColumns;
-  for (let candidate = maxColumns; candidate >= 1; candidate -= 1) {
+  let bestColumns = 1;
+  let bestRows = FULLSCREEN_CAMERA_MODE_OPTIONS.length;
+  let bestScale = 0;
+
+  for (let candidate = 1; candidate <= maxColumns; candidate += 1) {
     const rows = Math.ceil(FULLSCREEN_CAMERA_MODE_OPTIONS.length / candidate);
-    const totalWidth = candidate * boxWidth + (candidate - 1) * columnGap;
-    const totalHeight = rows * boxHeight + (rows - 1) * rowGap;
+    const totalBaseWidth = candidate * baseBoxWidth + (candidate - 1) * baseColumnGap;
+    const totalBaseHeight = rows * baseBoxHeight + (rows - 1) * baseRowGap;
+    const scale = Math.min(1, availableWidth / totalBaseWidth, availableHeight / totalBaseHeight);
+
     if (
-      totalWidth <= ticTacToeLayout.width - edgePadding * 2 &&
-      totalHeight <= ticTacToeLayout.height - edgePadding * 2
+      scale > bestScale + 1e-6 ||
+      (Math.abs(scale - bestScale) <= 1e-6 && rows < bestRows)
     ) {
-      columns = candidate;
-      break;
+      bestColumns = candidate;
+      bestRows = rows;
+      bestScale = scale;
     }
   }
 
-  const rows = Math.ceil(FULLSCREEN_CAMERA_MODE_OPTIONS.length / columns);
+  const columns = bestColumns;
+  const rows = bestRows;
+  const scale = Math.max(0.01, bestScale);
+  const boxWidth = baseBoxWidth * scale;
+  const boxHeight = baseBoxHeight * scale;
+  const columnGap = baseColumnGap * scale;
+  const rowGap = baseRowGap * scale;
   const totalHeight = rows * boxHeight + (rows - 1) * rowGap;
   const startY = (ticTacToeLayout.height - totalHeight) / 2;
   const boxes = FULLSCREEN_CAMERA_MODE_OPTIONS.map((option, index) => {
@@ -112,6 +126,7 @@ export function createFullscreenModeLandingLayout(width, height) {
     rowGap,
     columns,
     rows,
+    scale,
     boxes,
   };
 }

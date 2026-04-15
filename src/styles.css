@@ -2149,7 +2149,8 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 16px 14px;
+  overflow: hidden;
+  padding: 10px 8px;
   pointer-events: none;
   position: absolute;
   text-align: center;
@@ -2175,34 +2176,34 @@ body {
 
 .fullscreen-camera-mode-landing-category {
   color: rgba(213, 228, 247, 0.78);
-  font-size: 0.84rem;
+  font-size: clamp(0.56rem, 1vw, 0.84rem);
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
 .fullscreen-camera-mode-landing-title {
-  font-size: clamp(1rem, 1.7vw, 1.28rem);
+  font-size: clamp(0.72rem, 1.7vw, 1.28rem);
   font-weight: 900;
   letter-spacing: 0.04em;
   line-height: 1.08;
-  margin-top: 10px;
+  margin-top: 6px;
   max-width: 11ch;
 }
 
 .fullscreen-camera-mode-landing-countdown {
-  font-size: clamp(1.8rem, 3.5vw, 3rem);
+  font-size: clamp(1.05rem, 2.8vw, 3rem);
   font-weight: 900;
   letter-spacing: 0.04em;
   line-height: 1;
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .fullscreen-camera-mode-landing-hint {
   color: rgba(232, 239, 249, 0.82);
-  font-size: 0.94rem;
+  font-size: clamp(0.6rem, 1vw, 0.94rem);
   line-height: 1.2;
-  margin-top: 10px;
+  margin-top: 6px;
   max-width: 13ch;
 }
 
