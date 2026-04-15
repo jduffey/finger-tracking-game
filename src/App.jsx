@@ -63,6 +63,18 @@ import {
   shouldShowFullscreenHandSkeleton,
   shouldShowFullscreenInvadersBanner,
 } from "./fullscreenGameUi.js";
+import {
+  FULLSCREEN_CAMERA_MODE_OPTIONS,
+  FULLSCREEN_LANDING_MODE,
+  FULLSCREEN_MODE_LANDING_HOLD_MS,
+  createFullscreenModeLandingState,
+  hasVerifiedFullscreenMenuHand,
+  stepFullscreenModeLanding,
+} from "./fullscreenModeLanding.js";
+import {
+  createFullscreenExitControlState,
+  stepFullscreenExitControl,
+} from "./fullscreenExitControl.js";
 import { runFullscreenOverlayGameUpdates } from "./fullscreenOverlayGames.js";
 import {
   MISSILE_COMMAND_COUNTDOWN_MS,
@@ -1405,7 +1417,9 @@ export default function App() {
   const [gestureControlOSSessionKey, setGestureControlOSSessionKey] = useState(0);
   const [fullscreenIndexPoints, setFullscreenIndexPoints] = useState([]);
   const [fullscreenTipPoints, setFullscreenTipPoints] = useState([]);
-  const [fullscreenGridMode, setFullscreenGridMode] = useState("square");
+  const [fullscreenGridMode, setFullscreenGridMode] = useState(FULLSCREEN_LANDING_MODE);
+  const [fullscreenModeLandingState, setFullscreenModeLandingState] = useState(null);
+  const [fullscreenExitControlState, setFullscreenExitControlState] = useState(null);
   const [fullscreenRingTrail, setFullscreenRingTrail] = useState([]);
   const [fullscreenRingTrailNow, setFullscreenRingTrailNow] = useState(() => performance.now());
   const [fullscreenPulseBursts, setFullscreenPulseBursts] = useState([]);
@@ -1511,6 +1525,12 @@ export default function App() {
   const fullscreenPulseBurstsRef = useRef([]);
   const fullscreenPulseLastEmitByIdRef = useRef({});
   const fullscreenGridModeRef = useRef(fullscreenGridMode);
+  const fullscreenModeLandingStateRef = useRef(null);
+  const fullscreenModeLandingViewportRef = useRef(null);
+  const fullscreenModeLandingLastTickRef = useRef(0);
+  const fullscreenExitControlStateRef = useRef(null);
+  const fullscreenExitControlViewportRef = useRef(null);
+  const fullscreenExitControlLastTickRef = useRef(0);
   const fullscreenHandsRef = useRef([]);
   const fullscreenPrimaryHandIdRef = useRef(null);
   const fullscreenHandBounceStateRef = useRef(null);
@@ -1640,6 +1660,8 @@ export default function App() {
   const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
   const isMinorityReportLabPhase = phase === PHASES.MINORITY_REPORT_LAB;
   const isImmersiveAppPhase = shouldUseImmersiveAppLayout(phase);
+  const isFullscreenModeLanding =
+    isFullscreenCameraPhase && fullscreenGridMode === FULLSCREEN_LANDING_MODE;
   const isFullscreenHandBounceMode =
     isFullscreenCameraPhase &&
     fullscreenGridMode === "hand-bounce" &&
@@ -1695,6 +1717,18 @@ export default function App() {
     Math.max(
       0,
       TIC_TAC_TOE_RESET_HOLD_MS - (fullscreenTicTacToeState?.resetHoldMs ?? 0),
+    ) / 1000
+  ).toFixed(2);
+  const fullscreenModeLandingCountdown = (
+    Math.max(
+      0,
+      FULLSCREEN_MODE_LANDING_HOLD_MS - (fullscreenModeLandingState?.holdMs ?? 0),
+    ) / 1000
+  ).toFixed(2);
+  const fullscreenExitControlCountdown = (
+    Math.max(
+      0,
+      FULLSCREEN_MODE_LANDING_HOLD_MS - (fullscreenExitControlState?.holdMs ?? 0),
     ) / 1000
   ).toFixed(2);
   const isSandboxPhase = phase === PHASES.SANDBOX;
@@ -2246,6 +2280,8 @@ export default function App() {
     if (phase !== PHASES.FULLSCREEN_CAMERA) {
       setFullscreenIndexPoints([]);
       setFullscreenTipPoints([]);
+      setFullscreenModeLandingState(null);
+      setFullscreenExitControlState(null);
       setFullscreenRingTrail([]);
       setFullscreenPulseBursts([]);
       setFullscreenHandBounceState(null);
@@ -2264,6 +2300,22 @@ export default function App() {
   useEffect(() => {
     fullscreenGridModeRef.current = fullscreenGridMode;
   }, [fullscreenGridMode]);
+
+  useEffect(() => {
+    fullscreenModeLandingStateRef.current = fullscreenModeLandingState;
+  }, [fullscreenModeLandingState]);
+
+  useEffect(() => {
+    fullscreenExitControlStateRef.current = fullscreenExitControlState;
+  }, [fullscreenExitControlState]);
+
+  useEffect(() => {
+    fullscreenModeLandingViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
+
+  useEffect(() => {
+    fullscreenExitControlViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
 
   useEffect(() => {
     fullscreenHandBounceStateRef.current = fullscreenHandBounceState;
@@ -2359,6 +2411,54 @@ export default function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isImmersiveAppPhase, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== FULLSCREEN_LANDING_MODE ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenModeLandingLastTickRef.current = 0;
+      if (fullscreenModeLandingStateRef.current) {
+        fullscreenModeLandingStateRef.current = null;
+        setFullscreenModeLandingState(null);
+      }
+      return undefined;
+    }
+
+    const nextLandingState = createFullscreenModeLandingState(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenModeLandingLastTickRef.current = 0;
+    fullscreenModeLandingStateRef.current = nextLandingState;
+    setFullscreenModeLandingState(nextLandingState);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode === FULLSCREEN_LANDING_MODE ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenExitControlLastTickRef.current = 0;
+      if (fullscreenExitControlStateRef.current) {
+        fullscreenExitControlStateRef.current = null;
+        setFullscreenExitControlState(null);
+      }
+      return undefined;
+    }
+
+    const nextExitControlState = createFullscreenExitControlState(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenExitControlLastTickRef.current = 0;
+    fullscreenExitControlStateRef.current = nextExitControlState;
+    setFullscreenExitControlState(nextExitControlState);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
   useEffect(() => {
     if (
@@ -3934,6 +4034,7 @@ export default function App() {
     isCalibratingRef.current = false;
     calibrationSampleRef.current = null;
     setCalibrationSampleFrames(0);
+    setFullscreenGridMode(FULLSCREEN_LANDING_MODE);
     setPhase(PHASES.FULLSCREEN_CAMERA);
     phaseRef.current = PHASES.FULLSCREEN_CAMERA;
     setCalibrationMessage(
@@ -3958,6 +4059,15 @@ export default function App() {
     setPhase(PHASES.CALIBRATION);
     phaseRef.current = PHASES.CALIBRATION;
     setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
+  function returnToFullscreenCameraMenu(reason = "manual_mode_select") {
+    appLog.info("Returning to fullscreen camera menu", {
+      reason,
+      previousMode: fullscreenGridModeRef.current,
+    });
+    fullscreenGridModeRef.current = FULLSCREEN_LANDING_MODE;
+    setFullscreenGridMode(FULLSCREEN_LANDING_MODE);
   }
 
   function updateSandboxPhysics(timestamp, pointerPoint, hasHand, grabNow) {
@@ -6610,7 +6720,11 @@ export default function App() {
   function getFullscreenIndexOverlayPoints(hands) {
     const renderMetrics = computeCameraRenderMetrics("contain");
     const safeHands = Array.isArray(hands) ? hands : [];
-    return safeHands
+    const eligibleHands =
+      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE
+        ? safeHands.filter((hand) => hasVerifiedFullscreenMenuHand(hand))
+        : safeHands;
+    return eligibleHands
       .map((hand, handIndex) => {
         const indexTip = hand?.fingerTips?.index ?? hand?.indexTip ?? null;
         const projectedPoint = projectCameraPointToCanvas(indexTip, renderMetrics);
@@ -6630,11 +6744,15 @@ export default function App() {
   function getFullscreenTipOverlayPoints(hands) {
     const renderMetrics = computeCameraRenderMetrics("contain");
     const safeHands = Array.isArray(hands) ? hands : [];
+    const eligibleHands =
+      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE
+        ? safeHands.filter((hand) => hasVerifiedFullscreenMenuHand(hand))
+        : safeHands;
     const trackedFingerNames = getFullscreenTrackedFingerNames(
       fullscreenGridModeRef.current,
       EXTENT_FINGER_NAMES,
     );
-    return safeHands.flatMap((hand, handIndex) => {
+    return eligibleHands.flatMap((hand, handIndex) => {
       const handId = hand?.id ?? hand?.label ?? `hand-${handIndex}`;
       return trackedFingerNames.map((fingerName) => {
         const tip = hand?.fingerTips?.[fingerName] ?? hand?.[`${fingerName}Tip`] ?? null;
@@ -6809,6 +6927,92 @@ export default function App() {
       indexPoints,
       tipPoints,
     };
+  }
+
+  function updateFullscreenModeLandingSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== FULLSCREEN_LANDING_MODE ||
+      !fullscreenModeLandingStateRef.current
+    ) {
+      fullscreenModeLandingLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenModeLandingViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenModeLandingLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenModeLandingLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenModeLandingLastTickRef.current = timestamp;
+    const primaryHand = Array.isArray(fullscreenHandsRef.current)
+      ? fullscreenHandsRef.current[0] ?? null
+      : null;
+    const handVerified = hasVerifiedFullscreenMenuHand(primaryHand);
+
+    const pointerActive =
+      handDetectedRef.current &&
+      handVerified &&
+      Number.isFinite(cursorRef.current?.x) &&
+      Number.isFinite(cursorRef.current?.y);
+    const nextState = stepFullscreenModeLanding(fullscreenModeLandingStateRef.current, deltaSeconds, {
+      handVerified,
+      pointerActive,
+      pointerX: pointerActive ? cursorRef.current.x - viewportMetrics.left : 0,
+      pointerY: pointerActive ? cursorRef.current.y - viewportMetrics.top : 0,
+    });
+    fullscreenModeLandingStateRef.current = nextState;
+    setFullscreenModeLandingState(nextState);
+
+    if (nextState.selectedModeId && nextState.selectedModeId !== fullscreenGridModeRef.current) {
+      setFullscreenGridMode(nextState.selectedModeId);
+    }
+  }
+
+  function updateFullscreenExitControlSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE ||
+      !fullscreenExitControlStateRef.current
+    ) {
+      fullscreenExitControlLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenExitControlViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenExitControlLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenExitControlLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenExitControlLastTickRef.current = timestamp;
+    const primaryHand = Array.isArray(fullscreenHandsRef.current)
+      ? fullscreenHandsRef.current[0] ?? null
+      : null;
+    const handVerified = hasVerifiedFullscreenMenuHand(primaryHand);
+    const pointerActive =
+      handDetectedRef.current &&
+      handVerified &&
+      Number.isFinite(cursorRef.current?.x) &&
+      Number.isFinite(cursorRef.current?.y);
+
+    const nextState = stepFullscreenExitControl(fullscreenExitControlStateRef.current, deltaSeconds, {
+      handVerified,
+      pointerActive,
+      pointerX: pointerActive ? cursorRef.current.x - viewportMetrics.left : 0,
+      pointerY: pointerActive ? cursorRef.current.y - viewportMetrics.top : 0,
+    });
+    fullscreenExitControlStateRef.current = nextState;
+    setFullscreenExitControlState(nextState);
+
+    if (nextState.shouldExit) {
+      returnToFullscreenCameraMenu("exit_box_hold");
+    }
   }
 
   function updateFullscreenHandBounceSimulation(timestamp) {
@@ -7187,6 +7391,8 @@ export default function App() {
 
   function updateFullscreenOverlayGames(timestamp) {
     runFullscreenOverlayGameUpdates(timestamp, {
+      updateFullscreenModeLandingSimulation,
+      updateFullscreenExitControlSimulation,
       updateFullscreenHandBounceSimulation,
       updateFullscreenBrickDodgerSimulation,
       updateFullscreenBreakoutSimulation,
@@ -8835,7 +9041,43 @@ export default function App() {
             autoPlay
           />
           <canvas ref={overlayCanvasRef} className="camera-overlay" />
-          {fullscreenGridMode === "hex" ? (
+          {isFullscreenModeLanding ? (
+            <div
+              className="fullscreen-camera-mode-landing"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenModeLandingState?.layout?.boxes?.map((box) => (
+                <div
+                  key={box.id}
+                  className={`fullscreen-camera-mode-landing-box ${box.category.toLowerCase()} ${
+                    fullscreenModeLandingState?.holdModeId === box.id ? "active" : ""
+                  }`}
+                  style={{
+                    left: `${box.left}px`,
+                    top: `${box.top}px`,
+                    width: `${box.width}px`,
+                    height: `${box.height}px`,
+                  }}
+                >
+                  <span className="fullscreen-camera-mode-landing-category">{box.category}</span>
+                  <span className="fullscreen-camera-mode-landing-title">{box.label}</span>
+                  <span className="fullscreen-camera-mode-landing-countdown">
+                    {fullscreenModeLandingState?.handVerified &&
+                    fullscreenModeLandingState?.holdModeId === box.id
+                      ? fullscreenModeLandingCountdown
+                      : (FULLSCREEN_MODE_LANDING_HOLD_MS / 1000).toFixed(2)}
+                  </span>
+                  <span className="fullscreen-camera-mode-landing-hint">
+                    {!fullscreenModeLandingState?.handVerified
+                      ? "Show 5 tips"
+                      : fullscreenModeLandingState?.holdModeId === box.id
+                      ? "Keep holding"
+                      : "Hold to open"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : fullscreenGridMode === "hex" ? (
             <div className="fullscreen-camera-hex-grid" style={fullscreenHexGridMetrics?.style ?? undefined}>
               {fullscreenHexGridMetrics?.cells?.map((cell) => (
                 <div
@@ -9940,6 +10182,38 @@ export default function App() {
             </div>
           )}
 
+          {!isFullscreenModeLanding && fullscreenExitControlState?.layout ? (
+            <div
+              className={`fullscreen-camera-exit-box ${
+                fullscreenExitControlState.handVerified ? "" : "disabled"
+              } ${fullscreenExitControlState.holdActive ? "active" : ""}`}
+              style={{
+                left: `${
+                  (fullscreenCameraViewport?.left ?? 0) + fullscreenExitControlState.layout.left
+                }px`,
+                top: `${
+                  (fullscreenCameraViewport?.top ?? 0) + fullscreenExitControlState.layout.top
+                }px`,
+                width: `${fullscreenExitControlState.layout.boxWidth}px`,
+                height: `${fullscreenExitControlState.layout.boxHeight}px`,
+              }}
+            >
+              <span className="fullscreen-camera-exit-title">Exit</span>
+              <span className="fullscreen-camera-exit-countdown">
+                {fullscreenExitControlState.handVerified && fullscreenExitControlState.holdActive
+                  ? fullscreenExitControlCountdown
+                  : (FULLSCREEN_MODE_LANDING_HOLD_MS / 1000).toFixed(2)}
+              </span>
+              <span className="fullscreen-camera-exit-hint">
+                {!fullscreenExitControlState.handVerified
+                  ? "Show 5 tips"
+                  : fullscreenExitControlState.holdActive
+                  ? "Keep holding"
+                  : "Hold to exit"}
+              </span>
+            </div>
+          ) : null}
+
           <div className="fullscreen-camera-hud">
             <div className="fullscreen-camera-meta">
               <span className="fullscreen-camera-chip">{cameraPanelTitle}</span>
@@ -9949,7 +10223,11 @@ export default function App() {
             </div>
             <div className="fullscreen-camera-meta fullscreen-camera-actions">
               <span className="fullscreen-camera-note">
-                {fullscreenGridMode === "breakout-coop"
+                {fullscreenGridMode === FULLSCREEN_LANDING_MODE
+                  ? fullscreenModeLandingState?.handVerified
+                    ? "Hold your index fingertip over a box for 2.00 seconds to open that fullscreen mode. The buttons below still work if you want to switch instantly."
+                    : "Show all five fingertips first so the menu can verify it sees a real hand before hover selection starts."
+                  : fullscreenGridMode === "breakout-coop"
                   ? `Breakout Co-op keeps index-finger steering on the paddle, uses support-hand pinch for a ${Math.round(BREAKOUT_COOP_SHIELD_DURATION_MS / 1000)} second shield pulse, and prism bricks split the ball while the shield recharges over about ${Math.round(BREAKOUT_COOP_SHIELD_COOLDOWN_MS / 1000)} seconds.`
                   : fullscreenGridMode === "hand-bounce"
                   ? "Hand Bounce turns your tracked palm into a bounce surface. The ball uses gravity-driven motion, rebounds off the side walls, and you only need to keep your hand under it."
@@ -9974,130 +10252,21 @@ export default function App() {
               <div className="button-row compact fullscreen-camera-mode-row">
                 <button
                   type="button"
-                  className={fullscreenGridMode === "square" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("square")}
+                  className={fullscreenGridMode === FULLSCREEN_LANDING_MODE ? "" : "secondary"}
+                  onClick={() => returnToFullscreenCameraMenu("mode_select_button")}
                 >
-                  Squares
+                  Mode Select
                 </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "hex" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("hex")}
-                >
-                  Hex
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "voronoi" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("voronoi")}
-                >
-                  Voronoi
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "rings" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("rings")}
-                >
-                  Rings
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "pulse" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("pulse")}
-                >
-                  Pulse
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "tip-ripples" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("tip-ripples")}
-                >
-                  Tip Ripples
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "tip-ripples-v2" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("tip-ripples-v2")}
-                >
-                  Tip Ripples v2
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "static" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("static")}
-                >
-                  Static
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "hand-bounce" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("hand-bounce")}
-                >
-                  Hand Bounce
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "brick-dodger" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("brick-dodger")}
-                >
-                  Brick Dodger
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "breakout-coop" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("breakout-coop")}
-                >
-                  Breakout Co-op
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "breakout" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("breakout")}
-                >
-                  Breakout
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "finger-pong" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("finger-pong")}
-                >
-                  Finger Pong
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "tic-tac-toe" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("tic-tac-toe")}
-                >
-                  Tic Tac Toe
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "fruit-ninja" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("fruit-ninja")}
-                >
-                  Slice Air
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "invaders" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("invaders")}
-                >
-                  Invaders
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "flappy" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("flappy")}
-                >
-                  Flappy
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "missile-command" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("missile-command")}
-                >
-                  Missile Command
-                </button>
+                {FULLSCREEN_CAMERA_MODE_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={fullscreenGridMode === option.id ? "" : "secondary"}
+                    onClick={() => setFullscreenGridMode(option.id)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
                 {fullscreenGridMode === "brick-dodger" ? (
                   <button type="button" className="secondary" onClick={restartFullscreenBrickDodgerGame}>
                     Restart Run

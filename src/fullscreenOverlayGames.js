@@ -1,6 +1,8 @@
 export function runFullscreenOverlayGameUpdates(
   timestamp,
   {
+    updateFullscreenModeLandingSimulation,
+    updateFullscreenExitControlSimulation,
     updateFullscreenHandBounceSimulation,
     updateFullscreenBrickDodgerSimulation,
     updateFullscreenBreakoutSimulation,
@@ -12,6 +14,14 @@ export function runFullscreenOverlayGameUpdates(
     updateFullscreenTicTacToeSimulation,
   } = {},
 ) {
+  if (typeof updateFullscreenModeLandingSimulation === "function") {
+    updateFullscreenModeLandingSimulation(timestamp);
+  }
+
+  if (typeof updateFullscreenExitControlSimulation === "function") {
+    updateFullscreenExitControlSimulation(timestamp);
+  }
+
   if (typeof updateFullscreenHandBounceSimulation === "function") {
     updateFullscreenHandBounceSimulation(timestamp);
   }

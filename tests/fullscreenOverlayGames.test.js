@@ -7,6 +7,12 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
   const timestamp = 1234;
 
   runFullscreenOverlayGameUpdates(timestamp, {
+    updateFullscreenModeLandingSimulation(nextTimestamp) {
+      calls.push(["landing", nextTimestamp]);
+    },
+    updateFullscreenExitControlSimulation(nextTimestamp) {
+      calls.push(["exit", nextTimestamp]);
+    },
     updateFullscreenHandBounceSimulation(nextTimestamp) {
       calls.push(["hand-bounce", nextTimestamp]);
     },
@@ -37,6 +43,8 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
   });
 
   assert.deepEqual(calls, [
+    ["landing", timestamp],
+    ["exit", timestamp],
     ["hand-bounce", timestamp],
     ["brick-dodger", timestamp],
     ["breakout", timestamp],
