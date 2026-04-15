@@ -7,7 +7,7 @@ export const TIC_TAC_TOE_AI_MARK = "O";
 export const TIC_TAC_TOE_AI_MOVE_DELAY_MS = 680;
 export const TIC_TAC_TOE_PLAYER_PIECE_LIMIT = 5;
 export const TIC_TAC_TOE_AI_PIECE_LIMIT = 4;
-export const TIC_TAC_TOE_RESET_HOLD_MS = 3000;
+export const TIC_TAC_TOE_RESET_HOLD_MS = 1000;
 export const TIC_TAC_TOE_LAYOUT_SCALE = 1.75;
 
 const MAX_STEP_SECONDS = 0.05;
@@ -31,6 +31,10 @@ function clamp(value, min, max) {
 
 function countMarks(board, mark) {
   return Array.isArray(board) ? board.filter((cell) => cell === mark).length : 0;
+}
+
+function hasBoardMarks(board) {
+  return Array.isArray(board) && board.some(Boolean);
 }
 
 function getOpenCellIndexes(board) {
@@ -295,16 +299,15 @@ export function createTicTacToeLayout(width, height) {
   const railGap = clamp(safeWidth * 0.022 * TIC_TAC_TOE_LAYOUT_SCALE, 14, 34);
   const railWidth = clamp(safeWidth * 0.15 * TIC_TAC_TOE_LAYOUT_SCALE, 98, 196);
   const resetBoxWidth = clamp(railWidth * 1.08, 120, 216);
-  const rightColumnWidth = Math.max(railWidth, resetBoxWidth);
   const boardMaxWidth =
-    safeWidth - edgePadding * 2 - railWidth - rightColumnWidth - railGap * 2;
+    safeWidth - edgePadding * 2 - railWidth - railWidth - resetBoxWidth - railGap * 3;
   const boardMinSize = Math.min(240, boardMaxWidth);
   const boardSize = clamp(Math.min(safeHeight * 0.82, boardMaxWidth), boardMinSize, 680);
-  const rightColumnLeft = safeWidth - edgePadding - rightColumnWidth;
-  const boardLeft = Math.max(
-    edgePadding + railWidth + railGap,
-    rightColumnLeft - railGap - boardSize,
-  );
+  const gameWidth = railWidth + railGap + boardSize + railGap + railWidth + railGap + resetBoxWidth;
+  const gameLeft = (safeWidth - gameWidth) / 2;
+  const boardLeft = gameLeft + railWidth + railGap;
+  const aiRailLeft = boardLeft + boardSize + railGap;
+  const resetBoxLeft = aiRailLeft + railWidth + railGap;
   const boardTop = (safeHeight - boardSize) / 2;
   const cellSize = boardSize / 3;
   const activePieceSize = clamp(cellSize * 0.94, 60, 128);
@@ -312,20 +315,17 @@ export function createTicTacToeLayout(width, height) {
   const reserveStepY = clamp(activePieceSize * 1.15, 56, 128);
   const trayCenterY = boardTop + boardSize / 2;
   const resetBoxHeight = clamp(activePieceSize * 1.72, 108, 190);
-  const verticalGap = clamp(18 * TIC_TAC_TOE_LAYOUT_SCALE, 18, 36);
-  const railMaxHeight = Math.max(
-    activePieceSize * 3.1,
-    safeHeight - edgePadding * 2 - resetBoxHeight - verticalGap,
-  );
+  const railMaxHeight = Math.max(activePieceSize * 3.1, safeHeight - edgePadding * 2);
   const railHeight = clamp(boardSize * 0.72, activePieceSize * 3.1, railMaxHeight);
   const railTop = clamp(
     trayCenterY - railHeight / 2,
     edgePadding,
-    safeHeight - edgePadding - resetBoxHeight - verticalGap - railHeight,
+    safeHeight - edgePadding - railHeight,
   );
-  const resetBoxTop = Math.min(
+  const resetBoxTop = clamp(
+    trayCenterY - resetBoxHeight / 2,
+    edgePadding,
     safeHeight - edgePadding - resetBoxHeight,
-    railTop + railHeight + verticalGap,
   );
 
   return {
@@ -343,9 +343,11 @@ export function createTicTacToeLayout(width, height) {
     railHeight,
     railTop,
     trayCenterY,
+    gameLeft,
+    gameWidth,
     playerRailCenterX: boardLeft - railGap - railWidth / 2,
-    aiRailCenterX: rightColumnLeft + rightColumnWidth / 2,
-    resetBoxLeft: rightColumnLeft + (rightColumnWidth - resetBoxWidth) / 2,
+    aiRailCenterX: aiRailLeft + railWidth / 2,
+    resetBoxLeft,
     resetBoxTop,
     resetBoxWidth,
     resetBoxHeight,
@@ -488,8 +490,12 @@ export function stepTicTacToeGame(state, dtSeconds, input) {
     previousPinchActive: pinchActive,
   };
 
+  const boardHasMarks = hasBoardMarks(nextState.board);
   const resetHoldActive =
-    pointer.active && !nextState.draggingPiece && isPointerInResetBox(nextState.layout, pointer);
+    boardHasMarks &&
+    pointer.active &&
+    !nextState.draggingPiece &&
+    isPointerInResetBox(nextState.layout, pointer);
   let resetHoldMs = 0;
 
   if (resetHoldActive) {

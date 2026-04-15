@@ -624,6 +624,15 @@ body {
   text-align: center;
 }
 
+.fullscreen-camera-tic-tac-toe-reset-box.disabled {
+  background:
+    linear-gradient(180deg, rgba(40, 44, 50, 0.84), rgba(20, 24, 30, 0.92)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 48%);
+  border-color: rgba(182, 192, 206, 0.16);
+  box-shadow: 0 18px 32px rgba(0, 0, 0, 0.22);
+  color: rgba(233, 239, 247, 0.62);
+}
+
 .fullscreen-camera-tic-tac-toe-reset-box.active {
   background:
     linear-gradient(180deg, rgba(126, 34, 34, 0.92), rgba(58, 14, 16, 0.97)),
@@ -639,6 +648,12 @@ body {
   font-weight: 900;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.fullscreen-camera-tic-tac-toe-reset-box.disabled .fullscreen-camera-tic-tac-toe-reset-title,
+.fullscreen-camera-tic-tac-toe-reset-box.disabled .fullscreen-camera-tic-tac-toe-reset-countdown,
+.fullscreen-camera-tic-tac-toe-reset-box.disabled .fullscreen-camera-tic-tac-toe-reset-hint {
+  opacity: 0.72;
 }
 
 .fullscreen-camera-tic-tac-toe-reset-countdown {

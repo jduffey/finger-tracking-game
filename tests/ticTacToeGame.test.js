@@ -59,13 +59,17 @@ function dropOnCell(game, cellIndex) {
 
 test("createTicTacToeGame starts on the player's drag turn", () => {
   const game = createTicTacToeGame(1280, 720);
+  const leftMargin = game.layout.gameLeft;
+  const rightMargin = game.layout.width - (game.layout.gameLeft + game.layout.gameWidth);
+  const aiRailRightEdge = game.layout.aiRailCenterX + game.layout.railWidth / 2;
 
   assert.equal(game.status, "player-turn");
   assert.equal(game.message, "Pinch an X on the left rail and drag it into an open square");
   assert.deepEqual(game.board, Array(9).fill(null));
   assert.ok(game.layout.boardSize > 0);
-  assert.ok(game.layout.resetBoxLeft > game.layout.boardLeft + game.layout.boardSize);
+  assert.ok(game.layout.resetBoxLeft > aiRailRightEdge);
   assert.ok(game.layout.activePieceSize >= 60);
+  assert.ok(Math.abs(leftMargin - rightMargin) < 1);
 });
 
 test("stepTicTacToeGame lets the player drag a piece from the left rail into the board", () => {
@@ -213,7 +217,7 @@ test("restartTicTacToeRound preserves the running match tally", () => {
   assert.equal(restarted.status, "player-turn");
 });
 
-test("stepTicTacToeGame starts the reset countdown at 3.00 and clears the board after three seconds", () => {
+test("stepTicTacToeGame starts the reset countdown at 1.00 and clears the board after one second", () => {
   const base = {
     ...createTicTacToeGame(1280, 720),
     playerWins: 2,
@@ -267,6 +271,21 @@ test("stepTicTacToeGame starts the reset countdown at 3.00 and clears the board 
   assert.equal(held.draws, 3);
   assert.equal(held.resetHoldActive, false);
   assert.equal(held.resetHoldMs, 0);
+});
+
+test("stepTicTacToeGame keeps reset disabled when the board is empty", () => {
+  const emptyGame = createTicTacToeGame(1280, 720);
+  const resetPoint = getResetBoxCenter(emptyGame.layout);
+  const held = stepTicTacToeGame(emptyGame, 0.5, {
+    pointerActive: true,
+    pointerX: resetPoint.x,
+    pointerY: resetPoint.y,
+    pinchActive: false,
+  });
+
+  assert.equal(held.resetHoldActive, false);
+  assert.equal(held.resetHoldMs, 0);
+  assert.deepEqual(held.board, Array(9).fill(null));
 });
 
 test("evaluateTicTacToeBoard reports wins and draws", () => {

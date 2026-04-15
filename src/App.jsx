@@ -1658,6 +1658,8 @@ export default function App() {
     fullscreenGridMode === "tic-tac-toe" &&
     Boolean(fullscreenTicTacToeState);
   const fullscreenTicTacToeLayout = fullscreenTicTacToeState?.layout ?? null;
+  const fullscreenTicTacToeHasActiveBoard =
+    fullscreenTicTacToeState?.board?.some(Boolean) ?? false;
   const fullscreenTicTacToePlayerCount =
     fullscreenTicTacToeState?.board?.filter((mark) => mark === TIC_TAC_TOE_PLAYER_MARK).length ?? 0;
   const fullscreenTicTacToeAiCount =
@@ -9202,6 +9204,8 @@ export default function App() {
               </div>
               <div
                 className={`fullscreen-camera-tic-tac-toe-reset-box ${
+                  !fullscreenTicTacToeHasActiveBoard ? "disabled" : ""
+                } ${
                   fullscreenTicTacToeState?.resetHoldActive ? "active" : ""
                 }`}
                 style={{
@@ -9216,7 +9220,9 @@ export default function App() {
                   {fullscreenTicTacToeResetCountdown}
                 </span>
                 <span className="fullscreen-camera-tic-tac-toe-reset-hint">
-                  {fullscreenTicTacToeState?.resetHoldActive
+                  {!fullscreenTicTacToeHasActiveBoard
+                    ? "No active board"
+                    : fullscreenTicTacToeState?.resetHoldActive
                     ? "Keep your index inside"
                     : "Hold your index inside"}
                 </span>
@@ -9696,7 +9702,7 @@ export default function App() {
                   : fullscreenGridMode === "finger-pong"
                   ? `Finger Pong keeps the full webcam visible behind a one-player rally. Your bottom paddle follows smoothed horizontal fingertip motion, the opening countdown is ${FINGER_PONG_COUNTDOWN_MS / 1000} seconds, and off-center contacts steer the return angle while rallies gently speed up.`
                   : fullscreenGridMode === "tic-tac-toe"
-                  ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lets you pinch-drag X pieces from the left rail, and adds a right-side reset box that clears the board after a 3.00 second index-fingertip hold."
+                  ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lets you pinch-drag X pieces from the left rail, and adds a right-side reset box that clears the board after a 1.00 second index-fingertip hold."
                   : fullscreenGridMode === "fruit-ninja"
                   ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
                   : fullscreenGridMode === "invaders"
