@@ -54,7 +54,9 @@ import {
 } from "./fingerPongGame.js";
 import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
 import {
+  getFullscreenTrackedHandLimit,
   getFullscreenTrackedFingerNames,
+  shouldShowFullscreenHandSkeleton,
   shouldShowFullscreenInvadersBanner,
 } from "./fullscreenGameUi.js";
 import { runFullscreenOverlayGameUpdates } from "./fullscreenOverlayGames.js";
@@ -71,6 +73,17 @@ import {
   createSpaceInvadersGame,
   stepSpaceInvadersGame,
 } from "./spaceInvadersGame.js";
+import {
+  TIC_TAC_TOE_AI_MARK,
+  TIC_TAC_TOE_AI_PIECE_LIMIT,
+  TIC_TAC_TOE_PLAYER_MARK,
+  TIC_TAC_TOE_PLAYER_PIECE_LIMIT,
+  TIC_TAC_TOE_RESET_HOLD_MS,
+  createTicTacToeGame,
+  getTicTacToeCellRect,
+  restartTicTacToeRound,
+  stepTicTacToeGame,
+} from "./ticTacToeGame.js";
 import {
   FRUIT_NINJA_BASE_SCORE,
   FRUIT_NINJA_BLADE_TRAIL_MS,
@@ -1396,6 +1409,7 @@ export default function App() {
   const [fullscreenInvadersState, setFullscreenInvadersState] = useState(null);
   const [fullscreenFlappyState, setFullscreenFlappyState] = useState(null);
   const [fullscreenMissileCommandState, setFullscreenMissileCommandState] = useState(null);
+  const [fullscreenTicTacToeState, setFullscreenTicTacToeState] = useState(null);
   const [poseModelReady, setPoseModelReady] = useState(false);
   const [poseModelError, setPoseModelError] = useState("");
   const [poseStatus, setPoseStatus] = useState(createEmptyPoseStatus);
@@ -1513,6 +1527,9 @@ export default function App() {
   const fullscreenMissileCommandStateRef = useRef(null);
   const fullscreenMissileCommandViewportRef = useRef(null);
   const fullscreenMissileCommandLastTickRef = useRef(0);
+  const fullscreenTicTacToeStateRef = useRef(null);
+  const fullscreenTicTacToeViewportRef = useRef(null);
+  const fullscreenTicTacToeLastTickRef = useRef(0);
   const debugRef = useRef(debugEnabled);
   const labConfidenceThresholdRef = useRef(labConfidenceThreshold);
   const labShowSkeletonRef = useRef(labShowSkeleton);
@@ -1636,6 +1653,33 @@ export default function App() {
     isFullscreenCameraPhase &&
     fullscreenGridMode === "missile-command" &&
     Boolean(fullscreenMissileCommandState);
+  const isFullscreenTicTacToeMode =
+    isFullscreenCameraPhase &&
+    fullscreenGridMode === "tic-tac-toe" &&
+    Boolean(fullscreenTicTacToeState);
+  const fullscreenTicTacToeLayout = fullscreenTicTacToeState?.layout ?? null;
+  const fullscreenTicTacToeHasActiveBoard =
+    fullscreenTicTacToeState?.board?.some(Boolean) ?? false;
+  const fullscreenTicTacToePlayerCount =
+    fullscreenTicTacToeState?.board?.filter((mark) => mark === TIC_TAC_TOE_PLAYER_MARK).length ?? 0;
+  const fullscreenTicTacToeAiCount =
+    fullscreenTicTacToeState?.board?.filter((mark) => mark === TIC_TAC_TOE_AI_MARK).length ?? 0;
+  const fullscreenTicTacToePlayerReserveCount = Math.max(
+    0,
+    TIC_TAC_TOE_PLAYER_PIECE_LIMIT -
+      fullscreenTicTacToePlayerCount -
+      (fullscreenTicTacToeState?.draggingPiece ? 1 : 0),
+  );
+  const fullscreenTicTacToeAiReserveCount = Math.max(
+    0,
+    TIC_TAC_TOE_AI_PIECE_LIMIT - fullscreenTicTacToeAiCount,
+  );
+  const fullscreenTicTacToeResetCountdown = (
+    Math.max(
+      0,
+      TIC_TAC_TOE_RESET_HOLD_MS - (fullscreenTicTacToeState?.resetHoldMs ?? 0),
+    ) / 1000
+  ).toFixed(2);
   const isSandboxPhase = phase === PHASES.SANDBOX;
   const isCalibrationLayoutPhase =
     phase === PHASES.CALIBRATION ||
@@ -2195,6 +2239,7 @@ export default function App() {
       setFullscreenInvadersState(null);
       setFullscreenFlappyState(null);
       setFullscreenMissileCommandState(null);
+      setFullscreenTicTacToeState(null);
     }
   }, [phase]);
 
@@ -2256,6 +2301,14 @@ export default function App() {
 
   useEffect(() => {
     fullscreenMissileCommandViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
+
+  useEffect(() => {
+    fullscreenTicTacToeStateRef.current = fullscreenTicTacToeState;
+  }, [fullscreenTicTacToeState]);
+
+  useEffect(() => {
+    fullscreenTicTacToeViewportRef.current = fullscreenCameraViewport;
   }, [fullscreenCameraViewport]);
 
   useEffect(() => {
@@ -2476,6 +2529,30 @@ export default function App() {
     fullscreenMissileCommandLastTickRef.current = 0;
     fullscreenMissileCommandStateRef.current = nextGame;
     setFullscreenMissileCommandState(nextGame);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== "tic-tac-toe" ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenTicTacToeLastTickRef.current = 0;
+      if (fullscreenTicTacToeStateRef.current) {
+        fullscreenTicTacToeStateRef.current = null;
+        setFullscreenTicTacToeState(null);
+      }
+      return undefined;
+    }
+
+    const nextGame = createTicTacToeGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenTicTacToeLastTickRef.current = 0;
+    fullscreenTicTacToeStateRef.current = nextGame;
+    setFullscreenTicTacToeState(nextGame);
     return undefined;
   }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
@@ -5654,6 +5731,26 @@ export default function App() {
     setFullscreenFingerPongState(nextGame);
   }
 
+  function restartFullscreenTicTacToeGame() {
+    const existingGame = fullscreenTicTacToeStateRef.current;
+    if (existingGame?.layout) {
+      const nextGame = restartTicTacToeRound(existingGame);
+      fullscreenTicTacToeLastTickRef.current = 0;
+      fullscreenTicTacToeStateRef.current = nextGame;
+      setFullscreenTicTacToeState(nextGame);
+      return;
+    }
+
+    const viewportMetrics = fullscreenTicTacToeViewportRef.current;
+    if (!viewportMetrics) {
+      return;
+    }
+    const nextGame = createTicTacToeGame(viewportMetrics.width, viewportMetrics.height);
+    fullscreenTicTacToeLastTickRef.current = 0;
+    fullscreenTicTacToeStateRef.current = nextGame;
+    setFullscreenTicTacToeState(nextGame);
+  }
+
   function handlePinchClick(timestamp) {
     appLog.debug("Pinch click detected", {
       timestamp,
@@ -6527,6 +6624,16 @@ export default function App() {
       };
     }
 
+    if (shouldShowFullscreenHandSkeleton(fullscreenGridModeRef.current)) {
+      drawCameraOverlayHands(hands, {
+        showSkeleton: true,
+      });
+      return {
+        indexPoints,
+        tipPoints,
+      };
+    }
+
     if (fullscreenGridModeRef.current === "voronoi") {
       for (const point of tipPoints) {
         ctx.fillStyle = "rgba(255, 255, 255, 0.98)";
@@ -6867,6 +6974,40 @@ export default function App() {
     setFullscreenMissileCommandState(nextState);
   }
 
+  function updateFullscreenTicTacToeSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== "tic-tac-toe" ||
+      !fullscreenTicTacToeStateRef.current
+    ) {
+      fullscreenTicTacToeLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenTicTacToeViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenTicTacToeLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenTicTacToeLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenTicTacToeLastTickRef.current = timestamp;
+
+    const pointerActive =
+      handDetectedRef.current &&
+      Number.isFinite(cursorRef.current?.x) &&
+      Number.isFinite(cursorRef.current?.y);
+    const nextState = stepTicTacToeGame(fullscreenTicTacToeStateRef.current, deltaSeconds, {
+      pointerActive,
+      pointerX: pointerActive ? cursorRef.current.x - viewportMetrics.left : 0,
+      pointerY: pointerActive ? cursorRef.current.y - viewportMetrics.top : 0,
+      pinchActive: handDetectedRef.current && pinchStateRef.current,
+    });
+    fullscreenTicTacToeStateRef.current = nextState;
+    setFullscreenTicTacToeState(nextState);
+  }
+
   function updateFullscreenOverlayGames(timestamp) {
     runFullscreenOverlayGameUpdates(timestamp, {
       updateFullscreenBrickDodgerSimulation,
@@ -6876,6 +7017,7 @@ export default function App() {
       updateFullscreenInvadersSimulation,
       updateFullscreenFlappySimulation,
       updateFullscreenMissileCommandSimulation,
+      updateFullscreenTicTacToeSimulation,
     });
     updateFullscreenFruitNinjaSimulation(timestamp);
   }
@@ -8035,11 +8177,15 @@ export default function App() {
         }
 
         if (!cancelled && mountedRef.current) {
+          const fullscreenTrackedHandLimit =
+            phaseRef.current === PHASES.FULLSCREEN_CAMERA
+              ? getFullscreenTrackedHandLimit(fullscreenGridModeRef.current, TRACKING_MAX_HANDS)
+              : TRACKING_MAX_HANDS;
           const stableHands = assignStableHandLabels(detectedHands, {
             memory: handLabelMemoryRef.current,
             timestamp,
             pose: minorityReportPose,
-          }).slice(0, TRACKING_MAX_HANDS);
+          }).slice(0, fullscreenTrackedHandLimit);
           fullscreenHandsRef.current = stableHands;
           const primaryHand = stableHands[0] ?? null;
           fullscreenPrimaryHandIdRef.current = primaryHand?.id ?? primaryHand?.label ?? null;
@@ -8940,6 +9086,238 @@ export default function App() {
                 </div>
               ) : null}
             </div>
+          ) : fullscreenGridMode === "tic-tac-toe" ? (
+            <div
+              className="fullscreen-camera-tic-tac-toe"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              <div
+                className="fullscreen-camera-tic-tac-toe-board"
+                style={{
+                  left: `${fullscreenTicTacToeLayout?.boardLeft ?? 0}px`,
+                  top: `${fullscreenTicTacToeLayout?.boardTop ?? 0}px`,
+                  width: `${fullscreenTicTacToeLayout?.boardSize ?? 0}px`,
+                  height: `${fullscreenTicTacToeLayout?.boardSize ?? 0}px`,
+                }}
+              />
+              <div
+                className={`fullscreen-camera-tic-tac-toe-rail player ${
+                  fullscreenTicTacToeState?.status === "player-turn" ? "active" : ""
+                } ${fullscreenTicTacToeState?.draggingPiece ? "dragging" : ""}`}
+                style={{
+                  left: `${(fullscreenTicTacToeLayout?.playerRailCenterX ?? 0) - (fullscreenTicTacToeLayout?.railWidth ?? 0) / 2}px`,
+                  top: `${fullscreenTicTacToeLayout?.railTop ?? 0}px`,
+                  width: `${fullscreenTicTacToeLayout?.railWidth ?? 0}px`,
+                  height: `${fullscreenTicTacToeLayout?.railHeight ?? 0}px`,
+                }}
+              >
+                {[-1, 0, 1].map((offset, index) => (
+                  <div
+                    key={`tic-tac-toe-player-stack-${index}`}
+                    className="fullscreen-camera-tic-tac-toe-reserve-piece player"
+                    style={{
+                      left: "50%",
+                      top: `${(fullscreenTicTacToeLayout?.railHeight ?? 0) / 2 + offset * (fullscreenTicTacToeLayout?.reserveStepY ?? 0)}px`,
+                      width: `${fullscreenTicTacToeLayout?.reservePieceSize ?? 0}px`,
+                      height: `${fullscreenTicTacToeLayout?.reservePieceSize ?? 0}px`,
+                      opacity:
+                        fullscreenTicTacToePlayerReserveCount <= 0
+                          ? 0.08
+                          : offset === 0
+                          ? 0.34
+                          : 0.18,
+                    }}
+                  >
+                    <span className="fullscreen-camera-tic-tac-toe-piece-label">
+                      {TIC_TAC_TOE_PLAYER_MARK}
+                    </span>
+                  </div>
+                ))}
+                <div
+                  className={`fullscreen-camera-tic-tac-toe-active-piece player ${
+                    fullscreenTicTacToeState?.draggingPiece ? "hidden" : ""
+                  }`}
+                  style={{
+                    width: `${fullscreenTicTacToeLayout?.activePieceSize ?? 0}px`,
+                    height: `${fullscreenTicTacToeLayout?.activePieceSize ?? 0}px`,
+                  }}
+                >
+                  <span className="fullscreen-camera-tic-tac-toe-piece-label">
+                    {TIC_TAC_TOE_PLAYER_MARK}
+                  </span>
+                </div>
+                <div className="fullscreen-camera-tic-tac-toe-rail-label">Your Rail</div>
+                <div className="fullscreen-camera-tic-tac-toe-rail-count">
+                  {fullscreenTicTacToePlayerReserveCount} left
+                </div>
+              </div>
+              <div
+                className={`fullscreen-camera-tic-tac-toe-rail ai ${
+                  fullscreenTicTacToeState?.status === "ai-turn" ? "thinking" : ""
+                }`}
+                style={{
+                  left: `${(fullscreenTicTacToeLayout?.aiRailCenterX ?? 0) - (fullscreenTicTacToeLayout?.railWidth ?? 0) / 2}px`,
+                  top: `${fullscreenTicTacToeLayout?.railTop ?? 0}px`,
+                  width: `${fullscreenTicTacToeLayout?.railWidth ?? 0}px`,
+                  height: `${fullscreenTicTacToeLayout?.railHeight ?? 0}px`,
+                }}
+              >
+                {[-1, 0, 1].map((offset, index) => (
+                  <div
+                    key={`tic-tac-toe-ai-stack-${index}`}
+                    className="fullscreen-camera-tic-tac-toe-reserve-piece ai"
+                    style={{
+                      left: "50%",
+                      top: `${(fullscreenTicTacToeLayout?.railHeight ?? 0) / 2 + offset * (fullscreenTicTacToeLayout?.reserveStepY ?? 0)}px`,
+                      width: `${fullscreenTicTacToeLayout?.reservePieceSize ?? 0}px`,
+                      height: `${fullscreenTicTacToeLayout?.reservePieceSize ?? 0}px`,
+                      opacity:
+                        fullscreenTicTacToeAiReserveCount <= 0
+                          ? 0.08
+                          : offset === 0
+                          ? 0.34
+                          : 0.18,
+                    }}
+                  >
+                    <span className="fullscreen-camera-tic-tac-toe-piece-label">
+                      {TIC_TAC_TOE_AI_MARK}
+                    </span>
+                  </div>
+                ))}
+                <div
+                  className={`fullscreen-camera-tic-tac-toe-active-piece ai ${
+                    fullscreenTicTacToeState?.status === "ai-turn" ? "thinking" : ""
+                  }`}
+                  style={{
+                    width: `${fullscreenTicTacToeLayout?.activePieceSize ?? 0}px`,
+                    height: `${fullscreenTicTacToeLayout?.activePieceSize ?? 0}px`,
+                  }}
+                >
+                  <span className="fullscreen-camera-tic-tac-toe-piece-label">
+                    {TIC_TAC_TOE_AI_MARK}
+                  </span>
+                </div>
+                <div className="fullscreen-camera-tic-tac-toe-rail-label">O Rail</div>
+                <div className="fullscreen-camera-tic-tac-toe-rail-count">
+                  {fullscreenTicTacToeAiReserveCount} left
+                </div>
+              </div>
+              <div
+                className={`fullscreen-camera-tic-tac-toe-reset-box ${
+                  !fullscreenTicTacToeHasActiveBoard ? "disabled" : ""
+                } ${
+                  fullscreenTicTacToeState?.resetHoldActive ? "active" : ""
+                }`}
+                style={{
+                  left: `${fullscreenTicTacToeLayout?.resetBoxLeft ?? 0}px`,
+                  top: `${fullscreenTicTacToeLayout?.resetBoxTop ?? 0}px`,
+                  width: `${fullscreenTicTacToeLayout?.resetBoxWidth ?? 0}px`,
+                  height: `${fullscreenTicTacToeLayout?.resetBoxHeight ?? 0}px`,
+                }}
+              >
+                <span className="fullscreen-camera-tic-tac-toe-reset-title">Reset</span>
+                <span className="fullscreen-camera-tic-tac-toe-reset-countdown">
+                  {fullscreenTicTacToeResetCountdown}
+                </span>
+                <span className="fullscreen-camera-tic-tac-toe-reset-hint">
+                  {!fullscreenTicTacToeHasActiveBoard
+                    ? "No active board"
+                    : fullscreenTicTacToeState?.resetHoldActive
+                    ? "Keep your index inside"
+                    : "Hold your index inside"}
+                </span>
+              </div>
+              {Array.from({ length: 9 }, (_, index) => {
+                const cellRect = getTicTacToeCellRect(fullscreenTicTacToeLayout, index);
+                const mark = fullscreenTicTacToeState?.board?.[index] ?? null;
+                if (!cellRect) {
+                  return null;
+                }
+
+                const isPreview = fullscreenTicTacToeState?.previewCellIndex === index;
+                const isHover =
+                  fullscreenTicTacToeState?.status === "player-turn" &&
+                  fullscreenTicTacToeState?.hoverCellIndex === index &&
+                  !mark;
+                const isWinning = fullscreenTicTacToeState?.winningLine?.includes(index);
+                const isLastMove = fullscreenTicTacToeState?.lastMoveIndex === index;
+                const cellClassName = [
+                  "fullscreen-camera-tic-tac-toe-cell",
+                  mark ? "occupied" : "empty",
+                  isPreview ? "preview" : "",
+                  isHover ? "hover" : "",
+                  isWinning ? "winning" : "",
+                  isLastMove ? "last-move" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ");
+
+                return (
+                  <div
+                    key={`tic-tac-toe-cell-${index}`}
+                    className={cellClassName}
+                    style={{
+                      left: `${cellRect.left}px`,
+                      top: `${cellRect.top}px`,
+                      width: `${cellRect.width}px`,
+                      height: `${cellRect.height}px`,
+                    }}
+                  >
+                    {mark ? (
+                      <span
+                        className={`fullscreen-camera-tic-tac-toe-mark ${
+                          mark === TIC_TAC_TOE_PLAYER_MARK ? "player" : "ai"
+                        }`}
+                      >
+                        {mark}
+                      </span>
+                    ) : null}
+                    {!mark && isPreview ? (
+                      <span className="fullscreen-camera-tic-tac-toe-mark player preview">
+                        {TIC_TAC_TOE_PLAYER_MARK}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })}
+              {fullscreenTicTacToeState?.draggingPiece ? (
+                <div
+                  className="fullscreen-camera-tic-tac-toe-drag-piece player"
+                  style={{
+                    left: `${fullscreenTicTacToeState.draggingPiece.x - fullscreenTicTacToeState.draggingPiece.size / 2}px`,
+                    top: `${fullscreenTicTacToeState.draggingPiece.y - fullscreenTicTacToeState.draggingPiece.size / 2}px`,
+                    width: `${fullscreenTicTacToeState.draggingPiece.size}px`,
+                    height: `${fullscreenTicTacToeState.draggingPiece.size}px`,
+                  }}
+                >
+                  <span className="fullscreen-camera-tic-tac-toe-piece-label">
+                    {TIC_TAC_TOE_PLAYER_MARK}
+                  </span>
+                </div>
+              ) : null}
+              <div className="fullscreen-camera-tic-tac-toe-scoreboard">
+                <span>You {fullscreenTicTacToeState?.playerWins ?? 0}</span>
+                <span>O {fullscreenTicTacToeState?.aiWins ?? 0}</span>
+                <span>Draws {fullscreenTicTacToeState?.draws ?? 0}</span>
+                <span>
+                  Board {fullscreenTicTacToePlayerCount + fullscreenTicTacToeAiCount}/9
+                </span>
+              </div>
+              <div className="fullscreen-camera-tic-tac-toe-legend">
+                <span>Pinch to grab</span>
+                <span>Release to place</span>
+                <span>Perfect-play O opponent</span>
+              </div>
+              {fullscreenTicTacToeState?.message ? (
+                <div
+                  className={`fullscreen-camera-tic-tac-toe-status ${
+                    fullscreenTicTacToeState?.status ?? ""
+                  }`}
+                >
+                  {fullscreenTicTacToeState.message}
+                </div>
+              ) : null}
+            </div>
           ) : fullscreenGridMode === "fruit-ninja" ? (
             <div
               className="fullscreen-camera-fruit-ninja"
@@ -9323,6 +9701,8 @@ export default function App() {
                   ? `Index fingertip steers the paddle left and right. Bricks use the Rings palette, the launch countdown is ${BREAKOUT_COUNTDOWN_MS / 1000} seconds, and each capsule adds one extra ball.`
                   : fullscreenGridMode === "finger-pong"
                   ? `Finger Pong keeps the full webcam visible behind a one-player rally. Your bottom paddle follows smoothed horizontal fingertip motion, the opening countdown is ${FINGER_PONG_COUNTDOWN_MS / 1000} seconds, and off-center contacts steer the return angle while rallies gently speed up.`
+                  : fullscreenGridMode === "tic-tac-toe"
+                  ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lets you pinch-drag X pieces from the left rail, and adds a right-side reset box that clears the board after a 1.00 second index-fingertip hold."
                   : fullscreenGridMode === "fruit-ninja"
                   ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
                   : fullscreenGridMode === "invaders"
@@ -9420,6 +9800,13 @@ export default function App() {
                 </button>
                 <button
                   type="button"
+                  className={fullscreenGridMode === "tic-tac-toe" ? "" : "secondary"}
+                  onClick={() => setFullscreenGridMode("tic-tac-toe")}
+                >
+                  Tic Tac Toe
+                </button>
+                <button
+                  type="button"
                   className={fullscreenGridMode === "fruit-ninja" ? "" : "secondary"}
                   onClick={() => setFullscreenGridMode("fruit-ninja")}
                 >
@@ -9454,6 +9841,11 @@ export default function App() {
                 {fullscreenGridMode === "finger-pong" ? (
                   <button type="button" className="secondary" onClick={restartFullscreenFingerPongGame}>
                     Restart Rally
+                  </button>
+                ) : null}
+                {fullscreenGridMode === "tic-tac-toe" ? (
+                  <button type="button" className="secondary" onClick={restartFullscreenTicTacToeGame}>
+                    New Board
                   </button>
                 ) : null}
                 {fullscreenGridMode === "fruit-ninja" ? (

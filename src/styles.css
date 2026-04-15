@@ -407,6 +407,342 @@ body {
   z-index: 2;
 }
 
+.fullscreen-camera-tic-tac-toe {
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.fullscreen-camera-tic-tac-toe-board {
+  background:
+    linear-gradient(180deg, rgba(10, 22, 35, 0.82), rgba(6, 11, 20, 0.92)),
+    linear-gradient(
+      90deg,
+      transparent 0 calc(33.333% - 2px),
+      rgba(215, 234, 255, 0.18) calc(33.333% - 2px) calc(33.333% + 2px),
+      transparent calc(33.333% + 2px) calc(66.666% - 2px),
+      rgba(215, 234, 255, 0.18) calc(66.666% - 2px) calc(66.666% + 2px),
+      transparent calc(66.666% + 2px)
+    ),
+    linear-gradient(
+      180deg,
+      transparent 0 calc(33.333% - 2px),
+      rgba(215, 234, 255, 0.18) calc(33.333% - 2px) calc(33.333% + 2px),
+      transparent calc(33.333% + 2px) calc(66.666% - 2px),
+      rgba(215, 234, 255, 0.18) calc(66.666% - 2px) calc(66.666% + 2px),
+      transparent calc(66.666% + 2px)
+    );
+  border: 3px solid rgba(227, 239, 255, 0.22);
+  border-radius: 40px;
+  box-shadow:
+    0 28px 56px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  position: absolute;
+}
+
+.fullscreen-camera-tic-tac-toe-cell {
+  align-items: center;
+  border-radius: 30px;
+  display: flex;
+  justify-content: center;
+  position: absolute;
+  transition:
+    background 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.fullscreen-camera-tic-tac-toe-cell.empty.hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.fullscreen-camera-tic-tac-toe-cell.preview {
+  background: rgba(255, 208, 116, 0.08);
+  box-shadow: inset 0 0 0 3px rgba(255, 214, 140, 0.24);
+}
+
+.fullscreen-camera-tic-tac-toe-cell.occupied {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.fullscreen-camera-tic-tac-toe-cell.last-move {
+  box-shadow: inset 0 0 0 3px rgba(145, 208, 255, 0.22);
+}
+
+.fullscreen-camera-tic-tac-toe-cell.winning {
+  background: rgba(117, 255, 185, 0.12);
+  box-shadow:
+    inset 0 0 0 3px rgba(117, 255, 185, 0.3),
+    0 0 38px rgba(117, 255, 185, 0.2);
+}
+
+.fullscreen-camera-tic-tac-toe-mark {
+  font-size: clamp(4.4rem, 13vw, 10rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-shadow: 0 14px 30px rgba(0, 0, 0, 0.26);
+}
+
+.fullscreen-camera-tic-tac-toe-mark.player {
+  color: #ffd565;
+}
+
+.fullscreen-camera-tic-tac-toe-mark.ai {
+  color: #82f5d9;
+}
+
+.fullscreen-camera-tic-tac-toe-mark.preview {
+  opacity: 0.42;
+}
+
+.fullscreen-camera-tic-tac-toe-rail {
+  background:
+    linear-gradient(180deg, rgba(9, 17, 27, 0.8), rgba(6, 12, 20, 0.92)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 48%);
+  border: 2px solid rgba(223, 236, 252, 0.18);
+  border-radius: 36px;
+  box-shadow: 0 22px 42px rgba(0, 0, 0, 0.28);
+  position: absolute;
+}
+
+.fullscreen-camera-tic-tac-toe-rail.player.active {
+  box-shadow:
+    0 0 0 2px rgba(255, 214, 140, 0.18),
+    0 18px 34px rgba(0, 0, 0, 0.28);
+}
+
+.fullscreen-camera-tic-tac-toe-rail.ai.thinking {
+  box-shadow:
+    0 0 0 2px rgba(130, 245, 217, 0.18),
+    0 18px 34px rgba(0, 0, 0, 0.28);
+}
+
+.fullscreen-camera-tic-tac-toe-rail-label,
+.fullscreen-camera-tic-tac-toe-rail-count {
+  color: #f4f7fb;
+  left: 50%;
+  position: absolute;
+  text-align: center;
+  transform: translateX(-50%);
+  width: calc(100% - 18px);
+}
+
+.fullscreen-camera-tic-tac-toe-rail-label {
+  font-size: 1.08rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  top: 18px;
+}
+
+.fullscreen-camera-tic-tac-toe-rail-count {
+  bottom: 16px;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.fullscreen-camera-tic-tac-toe-reserve-piece,
+.fullscreen-camera-tic-tac-toe-active-piece,
+.fullscreen-camera-tic-tac-toe-drag-piece {
+  align-items: center;
+  border-radius: 24px;
+  display: flex;
+  justify-content: center;
+  position: absolute;
+}
+
+.fullscreen-camera-tic-tac-toe-reserve-piece,
+.fullscreen-camera-tic-tac-toe-active-piece {
+  transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-tic-tac-toe-active-piece {
+  left: 50%;
+  top: 50%;
+}
+
+.fullscreen-camera-tic-tac-toe-active-piece.hidden {
+  opacity: 0.14;
+  transform: translate(-50%, -50%) scale(0.88);
+}
+
+.fullscreen-camera-tic-tac-toe-active-piece.ai.thinking {
+  animation: tic-tac-toe-rail-pulse 780ms ease-in-out infinite;
+}
+
+.fullscreen-camera-tic-tac-toe-reserve-piece.player,
+.fullscreen-camera-tic-tac-toe-active-piece.player,
+.fullscreen-camera-tic-tac-toe-drag-piece.player {
+  background:
+    linear-gradient(180deg, rgba(255, 250, 214, 0.98), rgba(255, 208, 102, 0.95)),
+    linear-gradient(180deg, rgba(255, 160, 81, 0.92), rgba(211, 92, 34, 0.96));
+  border: 3px solid rgba(38, 24, 7, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 14px 28px rgba(73, 28, 7, 0.24);
+}
+
+.fullscreen-camera-tic-tac-toe-reserve-piece.ai,
+.fullscreen-camera-tic-tac-toe-active-piece.ai {
+  background:
+    linear-gradient(180deg, rgba(223, 255, 247, 0.98), rgba(130, 245, 217, 0.95)),
+    linear-gradient(180deg, rgba(79, 215, 187, 0.92), rgba(18, 121, 112, 0.96));
+  border: 3px solid rgba(6, 35, 33, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    0 14px 28px rgba(4, 28, 27, 0.26);
+}
+
+.fullscreen-camera-tic-tac-toe-drag-piece {
+  transform: rotate(-5deg);
+  z-index: 3;
+}
+
+.fullscreen-camera-tic-tac-toe-piece-label {
+  color: #101723;
+  font-size: clamp(2.4rem, 7.35vw, 5.6rem);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.fullscreen-camera-tic-tac-toe-reset-box {
+  align-items: center;
+  background:
+    linear-gradient(180deg, rgba(44, 18, 18, 0.9), rgba(20, 10, 12, 0.95)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 48%);
+  border: 2px solid rgba(255, 181, 166, 0.18);
+  border-radius: 34px;
+  box-shadow: 0 22px 42px rgba(0, 0, 0, 0.3);
+  color: #fff6f1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 16px 14px;
+  position: absolute;
+  text-align: center;
+}
+
+.fullscreen-camera-tic-tac-toe-reset-box.disabled {
+  background:
+    linear-gradient(180deg, rgba(40, 44, 50, 0.84), rgba(20, 24, 30, 0.92)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 48%);
+  border-color: rgba(182, 192, 206, 0.16);
+  box-shadow: 0 18px 32px rgba(0, 0, 0, 0.22);
+  color: rgba(233, 239, 247, 0.62);
+}
+
+.fullscreen-camera-tic-tac-toe-reset-box.active {
+  background:
+    linear-gradient(180deg, rgba(126, 34, 34, 0.92), rgba(58, 14, 16, 0.97)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 48%);
+  border-color: rgba(255, 213, 178, 0.32);
+  box-shadow:
+    0 0 0 6px rgba(255, 126, 97, 0.14),
+    0 24px 44px rgba(0, 0, 0, 0.32);
+}
+
+.fullscreen-camera-tic-tac-toe-reset-title {
+  font-size: 1.12rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-tic-tac-toe-reset-box.disabled .fullscreen-camera-tic-tac-toe-reset-title,
+.fullscreen-camera-tic-tac-toe-reset-box.disabled .fullscreen-camera-tic-tac-toe-reset-countdown,
+.fullscreen-camera-tic-tac-toe-reset-box.disabled .fullscreen-camera-tic-tac-toe-reset-hint {
+  opacity: 0.72;
+}
+
+.fullscreen-camera-tic-tac-toe-reset-countdown {
+  font-size: clamp(2rem, 4.6vw, 3.6rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  margin-top: 8px;
+}
+
+.fullscreen-camera-tic-tac-toe-reset-hint {
+  font-size: 0.96rem;
+  line-height: 1.2;
+  margin-top: 10px;
+  max-width: 14ch;
+}
+
+.fullscreen-camera-tic-tac-toe-scoreboard,
+.fullscreen-camera-tic-tac-toe-legend,
+.fullscreen-camera-tic-tac-toe-status {
+  background: rgba(9, 17, 27, 0.74);
+  border: 2px solid rgba(202, 220, 239, 0.22);
+  border-radius: 18px;
+  color: #f4f7fb;
+  position: absolute;
+}
+
+.fullscreen-camera-tic-tac-toe-scoreboard,
+.fullscreen-camera-tic-tac-toe-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  left: 18px;
+  padding: 14px 18px;
+}
+
+.fullscreen-camera-tic-tac-toe-scoreboard {
+  font-size: 1.22rem;
+  font-weight: 700;
+  top: 92px;
+}
+
+.fullscreen-camera-tic-tac-toe-legend {
+  bottom: 18px;
+  font-size: 1rem;
+  max-width: min(560px, calc(100% - 36px));
+}
+
+.fullscreen-camera-tic-tac-toe-status {
+  font-size: clamp(1.25rem, 3vw, 1.9rem);
+  font-weight: 800;
+  left: 50%;
+  max-width: min(72vw, 640px);
+  padding: 14px 18px;
+  text-align: center;
+  top: 18px;
+  transform: translateX(-50%);
+}
+
+.fullscreen-camera-tic-tac-toe-status.player-win {
+  background: rgba(20, 59, 34, 0.82);
+}
+
+.fullscreen-camera-tic-tac-toe-status.ai-win {
+  background: rgba(20, 47, 59, 0.82);
+}
+
+.fullscreen-camera-tic-tac-toe-status.draw {
+  background: rgba(56, 51, 23, 0.82);
+}
+
+@keyframes tic-tac-toe-rail-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.26),
+      0 14px 28px rgba(4, 28, 27, 0.26);
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.34),
+      0 0 0 6px rgba(130, 245, 217, 0.16),
+      0 16px 30px rgba(4, 28, 27, 0.3);
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+}
+
 .fullscreen-camera-brick-dodger-lane {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02));
   border-left: 1px solid rgba(255, 255, 255, 0.14);
@@ -3329,6 +3665,9 @@ button:disabled {
   .fullscreen-camera-invaders-legend,
   .fullscreen-camera-flappy-legend,
   .fullscreen-camera-brick-dodger-legend,
+  .fullscreen-camera-tic-tac-toe-scoreboard,
+  .fullscreen-camera-tic-tac-toe-legend,
+  .fullscreen-camera-tic-tac-toe-status,
   .fullscreen-camera-missile-scoreboard,
   .fullscreen-camera-missile-legend {
     gap: 8px;
@@ -3340,6 +3679,7 @@ button:disabled {
   .fullscreen-camera-brick-dodger-scoreboard,
   .fullscreen-camera-invaders-scoreboard,
   .fullscreen-camera-flappy-scoreboard,
+  .fullscreen-camera-tic-tac-toe-scoreboard,
   .fullscreen-camera-missile-scoreboard {
     right: 12px;
   }
@@ -3348,6 +3688,7 @@ button:disabled {
   .fullscreen-camera-brick-dodger-legend,
   .fullscreen-camera-invaders-legend,
   .fullscreen-camera-flappy-legend,
+  .fullscreen-camera-tic-tac-toe-legend,
   .fullscreen-camera-missile-legend {
     bottom: 12px;
     right: auto;
@@ -3365,6 +3706,13 @@ button:disabled {
   .fullscreen-camera-fruit-banner {
     left: 50%;
     right: auto;
+  }
+
+  .fullscreen-camera-tic-tac-toe-status {
+    left: 50%;
+    max-width: calc(100% - 24px);
+    right: auto;
+    top: 12px;
   }
 
   .body-pose-status-grid {
