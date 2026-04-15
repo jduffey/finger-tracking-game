@@ -56,7 +56,7 @@ test("hasVerifiedFullscreenMenuHand only accepts hands with all five fingertips"
   );
 });
 
-test("stepFullscreenModeLanding waits for a verified hand before starting a 2.00 second hold", () => {
+test("stepFullscreenModeLanding waits for a verified hand before starting a 1.00 second hold", () => {
   const base = createFullscreenModeLandingState(1280, 720);
   const targetBox = base.layout.boxes.find((box) => box.id === "tic-tac-toe");
   const pointer = getBoxCenter(targetBox);

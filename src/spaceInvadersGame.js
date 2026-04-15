@@ -12,6 +12,7 @@ const INVADERS_FIRE_COOLDOWN_MS = 240;
 const INVADERS_ENEMY_FIRE_INTERVAL_MS = 900;
 const INVADERS_RESTART_COOLDOWN_MS = 700;
 const INVADERS_MIN_DANGER_DESCENTS = 4;
+const INVADERS_ELEMENT_SCALE = 1.15;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -25,17 +26,26 @@ function createIdFactory(prefix, start = 1) {
 export function createSpaceInvadersLayout(width, height) {
   const safeWidth = Math.max(320, Number.isFinite(width) ? width : 320);
   const safeHeight = Math.max(240, Number.isFinite(height) ? height : 240);
-  const enemyWidth = clamp(safeWidth * 0.06, 24, 58);
-  const enemyHeight = clamp(safeHeight * 0.04, 22, 40);
-  const enemyGapX = clamp(enemyWidth * 0.35, 10, 22);
-  const enemyGapY = clamp(enemyHeight * 0.45, 10, 20);
+  const baseEnemyWidth = clamp(safeWidth * 0.06, 24, 58);
+  const baseEnemyHeight = clamp(safeHeight * 0.04, 22, 40);
+  const enemyWidth = baseEnemyWidth * INVADERS_ELEMENT_SCALE;
+  const enemyHeight = baseEnemyHeight * INVADERS_ELEMENT_SCALE;
+  const enemyGapX = clamp(baseEnemyWidth * 0.35, 10, 22);
+  const enemyGapY = clamp(baseEnemyHeight * 0.45, 10, 20);
   const formationWidth = INVADERS_COLUMNS * enemyWidth + (INVADERS_COLUMNS - 1) * enemyGapX;
-  const topPadding = clamp(safeHeight * 0.12, 48, 96);
+  const baseTopPadding = clamp(safeHeight * 0.12, 48, 96);
   const baseSidePadding = clamp(safeWidth * 0.08, 18, 76);
-  const shipWidth = clamp(safeWidth * 0.12, 68, 122);
-  const shipHeight = clamp(safeHeight * 0.05, 24, 42);
+  const shipWidth = clamp(safeWidth * 0.12, 68, 122) * INVADERS_ELEMENT_SCALE;
+  const shipHeight = clamp(safeHeight * 0.05, 24, 42) * INVADERS_ELEMENT_SCALE;
   const enemySpeed = Math.max(54, safeWidth * 0.085);
   const descendStep = clamp(safeHeight * 0.045, 18, 34);
+  const maxTopPaddingForHeadroom =
+    safeHeight -
+    3 -
+    INVADERS_ROWS * enemyHeight -
+    (INVADERS_ROWS - 1) * enemyGapY -
+    descendStep * INVADERS_MIN_DANGER_DESCENTS;
+  const topPadding = Math.max(24, Math.min(baseTopPadding, maxTopPaddingForHeadroom));
   // Reserve about one enemy-width of sweep on each side before the first descent.
   const minFormationTravelWidth = enemyWidth * 2;
   const sidePadding = Math.max(
@@ -45,8 +55,8 @@ export function createSpaceInvadersLayout(width, height) {
   const shipY = safeHeight - clamp(safeHeight * 0.13, 58, 92);
   const shipMinX = shipWidth / 2 + sidePadding * 0.35;
   const shipMaxX = safeWidth - shipMinX;
-  const shotWidth = clamp(enemyWidth * 0.18, 6, 10);
-  const shotHeight = clamp(safeHeight * 0.035, 16, 28);
+  const shotWidth = clamp(baseEnemyWidth * 0.18, 6, 10) * INVADERS_ELEMENT_SCALE;
+  const shotHeight = clamp(safeHeight * 0.035, 16, 28) * INVADERS_ELEMENT_SCALE;
   const initialFormationBottom =
     topPadding + INVADERS_ROWS * enemyHeight + (INVADERS_ROWS - 1) * enemyGapY;
   const desiredDangerLineY = shipY - clamp(shipHeight * 1.4, 30, 56);

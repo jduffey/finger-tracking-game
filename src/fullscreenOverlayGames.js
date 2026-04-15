@@ -8,6 +8,7 @@ export function runFullscreenOverlayGameUpdates(
     updateFullscreenBreakoutSimulation,
     updateFullscreenBreakoutCoopSimulation,
     updateFullscreenFingerPongSimulation,
+    updateFullscreenSkyPatrolSimulation,
     updateFullscreenInvadersSimulation,
     updateFullscreenFlappySimulation,
     updateFullscreenMissileCommandSimulation,
@@ -40,6 +41,10 @@ export function runFullscreenOverlayGameUpdates(
 
   if (typeof updateFullscreenFingerPongSimulation === "function") {
     updateFullscreenFingerPongSimulation(timestamp);
+  }
+
+  if (typeof updateFullscreenSkyPatrolSimulation === "function") {
+    updateFullscreenSkyPatrolSimulation(timestamp);
   }
 
   if (typeof updateFullscreenInvadersSimulation === "function") {

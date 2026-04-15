@@ -1273,6 +1273,316 @@ body {
   transition: width 140ms linear;
 }
 
+.fullscreen-camera-sky-patrol {
+  background:
+    linear-gradient(180deg, rgba(139, 197, 255, 0.92), rgba(65, 128, 191, 0.7) 18%, rgba(20, 38, 56, 0.28) 44%, transparent 56%),
+    linear-gradient(180deg, #0c2740 0%, #163a55 24%, #19506e 52%, #1b4b63 100%);
+  image-rendering: pixelated;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.fullscreen-camera-sky-patrol::before,
+.fullscreen-camera-sky-patrol::after {
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.fullscreen-camera-sky-patrol::before {
+  background:
+    radial-gradient(circle at 18% 16%, rgba(255, 255, 255, 0.18), transparent 18%),
+    radial-gradient(circle at 76% 14%, rgba(255, 255, 255, 0.16), transparent 14%),
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.03) 0,
+      rgba(255, 255, 255, 0.03) 2px,
+      transparent 2px,
+      transparent 9px
+    );
+  opacity: 0.48;
+}
+
+.fullscreen-camera-sky-patrol::after {
+  background:
+    radial-gradient(circle at 50% 92%, rgba(0, 0, 0, 0.34), transparent 34%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(2, 8, 14, 0.26) 100%);
+  z-index: 0;
+}
+
+.fullscreen-camera-sky-patrol-terrain-row,
+.fullscreen-camera-sky-patrol-terrain-segment,
+.fullscreen-camera-sky-patrol-player,
+.fullscreen-camera-sky-patrol-enemy,
+.fullscreen-camera-sky-patrol-ground-target,
+.fullscreen-camera-sky-patrol-shot,
+.fullscreen-camera-sky-patrol-explosion {
+  position: absolute;
+}
+
+.fullscreen-camera-sky-patrol-terrain-row {
+  left: 0;
+  right: 0;
+  z-index: 1;
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment {
+  box-sizing: border-box;
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment.deep-water {
+  background:
+    linear-gradient(180deg, rgba(142, 224, 255, 0.18), rgba(6, 66, 104, 0.12)),
+    repeating-linear-gradient(
+      90deg,
+      #0d5175 0,
+      #0d5175 calc(var(--sky-patrol-tile, 20px) * 0.34),
+      #0a4060 calc(var(--sky-patrol-tile, 20px) * 0.34),
+      #0a4060 calc(var(--sky-patrol-tile, 20px) * 0.68),
+      #0b486b calc(var(--sky-patrol-tile, 20px) * 0.68),
+      #0b486b var(--sky-patrol-tile, 20px)
+    );
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment.shallow-water {
+  background:
+    linear-gradient(180deg, rgba(201, 249, 255, 0.16), rgba(31, 112, 141, 0.08)),
+    repeating-linear-gradient(
+      90deg,
+      #12708f 0,
+      #12708f calc(var(--sky-patrol-tile, 20px) * 0.3),
+      #1590aa calc(var(--sky-patrol-tile, 20px) * 0.3),
+      #1590aa calc(var(--sky-patrol-tile, 20px) * 0.62),
+      #10798d calc(var(--sky-patrol-tile, 20px) * 0.62),
+      #10798d var(--sky-patrol-tile, 20px)
+    );
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment.beach {
+  background:
+    linear-gradient(180deg, rgba(255, 248, 205, 0.2), rgba(255, 221, 149, 0.08)),
+    repeating-linear-gradient(
+      90deg,
+      #e4c27b 0,
+      #e4c27b calc(var(--sky-patrol-tile, 20px) * 0.32),
+      #d6ad63 calc(var(--sky-patrol-tile, 20px) * 0.32),
+      #d6ad63 calc(var(--sky-patrol-tile, 20px) * 0.7),
+      #edcf8f calc(var(--sky-patrol-tile, 20px) * 0.7),
+      #edcf8f var(--sky-patrol-tile, 20px)
+    );
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment.grass {
+  background:
+    linear-gradient(180deg, rgba(223, 255, 210, 0.18), rgba(69, 115, 58, 0.08)),
+    repeating-linear-gradient(
+      90deg,
+      #4a8b4c 0,
+      #4a8b4c calc(var(--sky-patrol-tile, 20px) * 0.34),
+      #3f7c43 calc(var(--sky-patrol-tile, 20px) * 0.34),
+      #3f7c43 calc(var(--sky-patrol-tile, 20px) * 0.68),
+      #589c59 calc(var(--sky-patrol-tile, 20px) * 0.68),
+      #589c59 var(--sky-patrol-tile, 20px)
+    );
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment.forest {
+  background:
+    linear-gradient(180deg, rgba(214, 255, 211, 0.12), rgba(29, 63, 29, 0.08)),
+    repeating-linear-gradient(
+      90deg,
+      #1f4f2d 0,
+      #1f4f2d calc(var(--sky-patrol-tile, 20px) * 0.28),
+      #2e6338 calc(var(--sky-patrol-tile, 20px) * 0.28),
+      #2e6338 calc(var(--sky-patrol-tile, 20px) * 0.56),
+      #274f30 calc(var(--sky-patrol-tile, 20px) * 0.56),
+      #274f30 var(--sky-patrol-tile, 20px)
+    );
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment.runway {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0) 0,
+      rgba(0, 0, 0, 0) 42%,
+      rgba(244, 242, 230, 0.92) 42%,
+      rgba(244, 242, 230, 0.92) 58%,
+      rgba(0, 0, 0, 0) 58%,
+      rgba(0, 0, 0, 0) 100%
+    ),
+    repeating-linear-gradient(
+      90deg,
+      #4f5367 0,
+      #4f5367 calc(var(--sky-patrol-tile, 20px) * 0.5),
+      #5f667d calc(var(--sky-patrol-tile, 20px) * 0.5),
+      #5f667d var(--sky-patrol-tile, 20px)
+    );
+  border-bottom: 1px solid rgba(21, 26, 32, 0.44);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment.road {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0) 0,
+      rgba(0, 0, 0, 0) 45%,
+      rgba(240, 214, 105, 0.82) 45%,
+      rgba(240, 214, 105, 0.82) 55%,
+      rgba(0, 0, 0, 0) 55%,
+      rgba(0, 0, 0, 0) 100%
+    ),
+    repeating-linear-gradient(
+      90deg,
+      #655845 0,
+      #655845 calc(var(--sky-patrol-tile, 20px) * 0.52),
+      #766650 calc(var(--sky-patrol-tile, 20px) * 0.52),
+      #766650 var(--sky-patrol-tile, 20px)
+    );
+}
+
+.fullscreen-camera-sky-patrol-player,
+.fullscreen-camera-sky-patrol-enemy,
+.fullscreen-camera-sky-patrol-ground-target,
+.fullscreen-camera-sky-patrol-shot,
+.fullscreen-camera-sky-patrol-explosion {
+  z-index: 2;
+}
+
+.fullscreen-camera-sky-patrol-player {
+  background:
+    linear-gradient(180deg, rgba(255, 251, 235, 0.98), rgba(255, 179, 74, 0.92)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.28), transparent);
+  border: 3px solid rgba(16, 18, 24, 0.94);
+  clip-path: polygon(50% 0, 68% 16%, 88% 18%, 100% 56%, 72% 62%, 62% 100%, 38% 100%, 28% 62%, 0 56%, 12% 18%, 32% 16%);
+  filter: drop-shadow(0 12px 20px rgba(4, 12, 22, 0.42));
+  z-index: 3;
+}
+
+.fullscreen-camera-sky-patrol-player.invulnerable {
+  opacity: 0.52;
+  filter: drop-shadow(0 0 18px rgba(255, 214, 122, 0.7));
+}
+
+.fullscreen-camera-sky-patrol-enemy {
+  background:
+    linear-gradient(180deg, rgba(255, 240, 214, 0.96), rgba(255, 108, 87, 0.9)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.26), transparent);
+  border: 3px solid rgba(18, 13, 15, 0.94);
+  clip-path: polygon(50% 0, 72% 18%, 92% 20%, 100% 52%, 78% 62%, 60% 100%, 40% 100%, 22% 62%, 0 52%, 8% 20%, 28% 18%);
+  filter: drop-shadow(0 10px 18px rgba(36, 10, 15, 0.4));
+}
+
+.fullscreen-camera-sky-patrol-ground-target {
+  border: 3px solid rgba(17, 21, 28, 0.92);
+  box-shadow: 0 8px 16px rgba(6, 10, 14, 0.24);
+}
+
+.fullscreen-camera-sky-patrol-ground-target.turret {
+  background:
+    linear-gradient(180deg, rgba(238, 253, 225, 0.22), rgba(84, 102, 61, 0.08)),
+    linear-gradient(135deg, #485a3b, #72835d);
+  border-radius: 8px;
+  clip-path: polygon(20% 0, 80% 0, 100% 30%, 100% 100%, 0 100%, 0 30%);
+}
+
+.fullscreen-camera-sky-patrol-ground-target.depot {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(105, 91, 69, 0.08)),
+    linear-gradient(135deg, #6a5e4b, #a28a64);
+  border-radius: 10px;
+}
+
+.fullscreen-camera-sky-patrol-shot {
+  border-radius: 999px;
+}
+
+.fullscreen-camera-sky-patrol-shot.player {
+  background: linear-gradient(180deg, rgba(255, 250, 204, 0.98), rgba(255, 116, 64, 0.94));
+  border: 2px solid rgba(18, 16, 21, 0.95);
+  box-shadow: 0 0 14px rgba(255, 200, 115, 0.68);
+}
+
+.fullscreen-camera-sky-patrol-shot.enemy {
+  background: linear-gradient(180deg, rgba(225, 255, 255, 0.96), rgba(115, 226, 255, 0.9));
+  border: 2px solid rgba(12, 18, 26, 0.92);
+  box-shadow: 0 0 12px rgba(115, 226, 255, 0.52);
+}
+
+.fullscreen-camera-sky-patrol-explosion {
+  border-radius: 50%;
+  mix-blend-mode: screen;
+}
+
+.fullscreen-camera-sky-patrol-explosion.air,
+.fullscreen-camera-sky-patrol-explosion.player,
+.fullscreen-camera-sky-patrol-explosion.crash {
+  background: radial-gradient(circle, rgba(255, 252, 205, 0.96) 0%, rgba(255, 167, 65, 0.92) 42%, rgba(255, 91, 70, 0.34) 72%, transparent 100%);
+}
+
+.fullscreen-camera-sky-patrol-explosion.ground {
+  background: radial-gradient(circle, rgba(255, 246, 196, 0.94) 0%, rgba(255, 132, 69, 0.92) 38%, rgba(110, 64, 29, 0.36) 72%, transparent 100%);
+}
+
+.fullscreen-camera-sky-patrol-explosion.spark {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.96) 0%, rgba(255, 219, 122, 0.82) 34%, transparent 100%);
+}
+
+.fullscreen-camera-sky-patrol-scoreboard,
+.fullscreen-camera-sky-patrol-legend,
+.fullscreen-camera-sky-patrol-banner {
+  background: rgba(9, 17, 27, 0.72);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 14px;
+  color: #f4f7fb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 14px;
+  position: absolute;
+  z-index: 4;
+}
+
+.fullscreen-camera-sky-patrol-scoreboard {
+  font-size: 0.95rem;
+  font-weight: 700;
+  left: 18px;
+  top: 18px;
+}
+
+.fullscreen-camera-sky-patrol-legend {
+  bottom: 18px;
+  font-size: 0.82rem;
+  left: 18px;
+}
+
+.fullscreen-camera-sky-patrol-banner {
+  font-size: 0.88rem;
+  font-weight: 700;
+  left: 50%;
+  max-width: min(72vw, 520px);
+  text-align: center;
+  top: 18px;
+  transform: translateX(-50%);
+}
+
+.fullscreen-camera-sky-patrol-banner.game-over {
+  font-size: clamp(1.25rem, 3.4vw, 2.35rem);
+  font-weight: 900;
+  left: 50%;
+  max-width: min(86vw, 620px);
+  padding: 16px 20px;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.42);
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
 .fullscreen-camera-invaders {
   overflow: hidden;
   pointer-events: none;
@@ -3894,6 +4204,9 @@ button:disabled {
   .fullscreen-camera-hand-bounce-scoreboard,
   .fullscreen-camera-hand-bounce-legend,
   .fullscreen-camera-hand-bounce-banner,
+  .fullscreen-camera-sky-patrol-scoreboard,
+  .fullscreen-camera-sky-patrol-legend,
+  .fullscreen-camera-sky-patrol-banner,
   .fullscreen-camera-invaders-scoreboard,
   .fullscreen-camera-flappy-scoreboard,
   .fullscreen-camera-invaders-legend,
@@ -3912,6 +4225,7 @@ button:disabled {
   .fullscreen-camera-breakout-scoreboard,
   .fullscreen-camera-brick-dodger-scoreboard,
   .fullscreen-camera-hand-bounce-scoreboard,
+  .fullscreen-camera-sky-patrol-scoreboard,
   .fullscreen-camera-invaders-scoreboard,
   .fullscreen-camera-flappy-scoreboard,
   .fullscreen-camera-tic-tac-toe-scoreboard,
@@ -3922,6 +4236,7 @@ button:disabled {
   .fullscreen-camera-breakout-legend,
   .fullscreen-camera-brick-dodger-legend,
   .fullscreen-camera-hand-bounce-legend,
+  .fullscreen-camera-sky-patrol-legend,
   .fullscreen-camera-invaders-legend,
   .fullscreen-camera-flappy-legend,
   .fullscreen-camera-tic-tac-toe-legend,
@@ -3942,6 +4257,13 @@ button:disabled {
   .fullscreen-camera-fruit-banner {
     left: 50%;
     right: auto;
+  }
+
+  .fullscreen-camera-sky-patrol-banner {
+    left: 50%;
+    max-width: calc(100% - 24px);
+    right: auto;
+    top: 12px;
   }
 
   .fullscreen-camera-tic-tac-toe-status {

@@ -90,6 +90,15 @@ import {
   stepSpaceInvadersGame,
 } from "./spaceInvadersGame.js";
 import {
+  SKY_PATROL_DEPOT_SCORE,
+  SKY_PATROL_FIGHTER_SCORE,
+  SKY_PATROL_STARTING_LIVES,
+  SKY_PATROL_TURRET_SCORE,
+  createSkyPatrolGame,
+  getSkyPatrolVisibleTerrainRows,
+  stepSkyPatrolGame,
+} from "./skyPatrolGame.js";
+import {
   TIC_TAC_TOE_AI_MARK,
   TIC_TAC_TOE_AI_PIECE_LIMIT,
   TIC_TAC_TOE_PLAYER_MARK,
@@ -1430,6 +1439,7 @@ export default function App() {
   const [fullscreenBreakoutCoopState, setFullscreenBreakoutCoopState] = useState(null);
   const [fullscreenFingerPongState, setFullscreenFingerPongState] = useState(null);
   const [fullscreenFruitNinjaState, setFullscreenFruitNinjaState] = useState(null);
+  const [fullscreenSkyPatrolState, setFullscreenSkyPatrolState] = useState(null);
   const [fullscreenInvadersState, setFullscreenInvadersState] = useState(null);
   const [fullscreenFlappyState, setFullscreenFlappyState] = useState(null);
   const [fullscreenMissileCommandState, setFullscreenMissileCommandState] = useState(null);
@@ -1543,6 +1553,7 @@ export default function App() {
   const fullscreenBreakoutCoopStateRef = useRef(null);
   const fullscreenFingerPongStateRef = useRef(null);
   const fullscreenFruitNinjaStateRef = useRef(null);
+  const fullscreenSkyPatrolStateRef = useRef(null);
   const fullscreenInvadersStateRef = useRef(null);
   const fullscreenBreakoutViewportRef = useRef(null);
   const fullscreenFingerPongViewportRef = useRef(null);
@@ -1553,6 +1564,8 @@ export default function App() {
   const fullscreenBreakoutCoopSecondaryPinchLatchRef = useRef(false);
   const fullscreenFingerPongLastTickRef = useRef(0);
   const fullscreenFruitNinjaLastTickRef = useRef(0);
+  const fullscreenSkyPatrolViewportRef = useRef(null);
+  const fullscreenSkyPatrolLastTickRef = useRef(0);
   const fullscreenInvadersLastTickRef = useRef(0);
   const fullscreenFlappyStateRef = useRef(null);
   const fullscreenFlappyViewportRef = useRef(null);
@@ -1684,6 +1697,10 @@ export default function App() {
     isFullscreenCameraPhase &&
     fullscreenGridMode === "fruit-ninja" &&
     Boolean(fullscreenFruitNinjaState);
+  const isFullscreenSkyPatrolMode =
+    isFullscreenCameraPhase &&
+    fullscreenGridMode === "sky-patrol" &&
+    Boolean(fullscreenSkyPatrolState);
   const isFullscreenInvadersMode =
     isFullscreenCameraPhase && fullscreenGridMode === "invaders" && Boolean(fullscreenInvadersState);
   const isFullscreenFlappyMode =
@@ -1703,6 +1720,14 @@ export default function App() {
     fullscreenTicTacToeState?.board?.filter((mark) => mark === TIC_TAC_TOE_PLAYER_MARK).length ?? 0;
   const fullscreenTicTacToeAiCount =
     fullscreenTicTacToeState?.board?.filter((mark) => mark === TIC_TAC_TOE_AI_MARK).length ?? 0;
+  const fullscreenSkyPatrolTerrainRows = useMemo(
+    () =>
+      getSkyPatrolVisibleTerrainRows(
+        fullscreenSkyPatrolState?.layout ?? null,
+        fullscreenSkyPatrolState?.scrollOffset ?? 0,
+      ),
+    [fullscreenSkyPatrolState?.layout, fullscreenSkyPatrolState?.scrollOffset],
+  );
   const fullscreenTicTacToePlayerReserveCount = Math.max(
     0,
     TIC_TAC_TOE_PLAYER_PIECE_LIMIT -
@@ -2350,6 +2375,10 @@ export default function App() {
   }, [fullscreenFruitNinjaState]);
 
   useEffect(() => {
+    fullscreenSkyPatrolStateRef.current = fullscreenSkyPatrolState;
+  }, [fullscreenSkyPatrolState]);
+
+  useEffect(() => {
     fullscreenInvadersStateRef.current = fullscreenInvadersState;
   }, [fullscreenInvadersState]);
 
@@ -2363,6 +2392,10 @@ export default function App() {
 
   useEffect(() => {
     fullscreenFingerPongViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
+
+  useEffect(() => {
+    fullscreenSkyPatrolViewportRef.current = fullscreenCameraViewport;
   }, [fullscreenCameraViewport]);
 
   useEffect(() => {
@@ -2583,6 +2616,30 @@ export default function App() {
     fullscreenFruitNinjaLastTickRef.current = 0;
     fullscreenFruitNinjaStateRef.current = nextGame;
     setFullscreenFruitNinjaState(nextGame);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== "sky-patrol" ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenSkyPatrolLastTickRef.current = 0;
+      if (fullscreenSkyPatrolStateRef.current) {
+        fullscreenSkyPatrolStateRef.current = null;
+        setFullscreenSkyPatrolState(null);
+      }
+      return undefined;
+    }
+
+    const nextGame = createSkyPatrolGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenSkyPatrolLastTickRef.current = 0;
+    fullscreenSkyPatrolStateRef.current = nextGame;
+    setFullscreenSkyPatrolState(nextGame);
     return undefined;
   }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
@@ -5905,6 +5962,17 @@ export default function App() {
     setFullscreenFingerPongState(nextGame);
   }
 
+  function restartFullscreenSkyPatrolGame() {
+    const viewportMetrics = fullscreenSkyPatrolViewportRef.current;
+    if (!viewportMetrics) {
+      return;
+    }
+    const nextGame = createSkyPatrolGame(viewportMetrics.width, viewportMetrics.height);
+    fullscreenSkyPatrolLastTickRef.current = 0;
+    fullscreenSkyPatrolStateRef.current = nextGame;
+    setFullscreenSkyPatrolState(nextGame);
+  }
+
   function restartFullscreenTicTacToeGame() {
     const existingGame = fullscreenTicTacToeStateRef.current;
     if (existingGame?.layout) {
@@ -6881,6 +6949,7 @@ export default function App() {
       fullscreenGridModeRef.current === "breakout-coop" ||
       fullscreenGridModeRef.current === "breakout" ||
       fullscreenGridModeRef.current === "fruit-ninja" ||
+      fullscreenGridModeRef.current === "sky-patrol" ||
       fullscreenGridModeRef.current === "invaders" ||
       fullscreenGridModeRef.current === "flappy" ||
       fullscreenGridModeRef.current === "missile-command"
@@ -7264,6 +7333,47 @@ export default function App() {
     setFullscreenFruitNinjaState(nextState);
   }
 
+  function updateFullscreenSkyPatrolSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== "sky-patrol" ||
+      !fullscreenSkyPatrolStateRef.current
+    ) {
+      fullscreenSkyPatrolLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenSkyPatrolViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenSkyPatrolLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenSkyPatrolLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenSkyPatrolLastTickRef.current = timestamp;
+
+    const nextState = stepSkyPatrolGame(
+      fullscreenSkyPatrolStateRef.current,
+      deltaSeconds,
+      {
+        pointerActive:
+          handDetectedRef.current &&
+          Number.isFinite(cursorRef.current?.x) &&
+          Number.isFinite(cursorRef.current?.y),
+        pointerX: handDetectedRef.current
+          ? clampValue(cursorRef.current?.x - viewportMetrics.left, 0, viewportMetrics.width)
+          : fullscreenSkyPatrolStateRef.current.ship.x,
+        pointerY: handDetectedRef.current
+          ? clampValue(cursorRef.current?.y - viewportMetrics.top, 0, viewportMetrics.height)
+          : fullscreenSkyPatrolStateRef.current.ship.y,
+        fireRequested: handDetectedRef.current && pinchStateRef.current,
+      },
+    );
+    fullscreenSkyPatrolStateRef.current = nextState;
+    setFullscreenSkyPatrolState(nextState);
+  }
+
   function updateFullscreenInvadersSimulation(timestamp) {
     if (
       phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
@@ -7398,6 +7508,7 @@ export default function App() {
       updateFullscreenBreakoutSimulation,
       updateFullscreenBreakoutCoopSimulation,
       updateFullscreenFingerPongSimulation,
+      updateFullscreenSkyPatrolSimulation,
       updateFullscreenInvadersSimulation,
       updateFullscreenFlappySimulation,
       updateFullscreenMissileCommandSimulation,
@@ -9901,6 +10012,139 @@ export default function App() {
                 <div className="fullscreen-camera-fruit-gameover">Round Over</div>
               ) : null}
             </div>
+          ) : fullscreenGridMode === "sky-patrol" ? (
+            <div
+              className="fullscreen-camera-sky-patrol"
+              style={{
+                ...(fullscreenCameraViewport?.style ?? {}),
+                "--sky-patrol-tile": `${fullscreenSkyPatrolState?.layout?.tileSize ?? 20}px`,
+              }}
+            >
+              {fullscreenSkyPatrolTerrainRows.map((row) => (
+                <div
+                  key={`terrain-row-${row.worldRow}`}
+                  className="fullscreen-camera-sky-patrol-terrain-row"
+                  style={{
+                    top: `${row.y}px`,
+                    height: `${fullscreenSkyPatrolState?.layout?.tileSize ?? 0}px`,
+                  }}
+                >
+                  {row.segments.map((segment) => (
+                    <div
+                      key={`${row.worldRow}-${segment.startColumn}-${segment.terrain}`}
+                      className={`fullscreen-camera-sky-patrol-terrain-segment ${segment.terrain}`}
+                      style={{
+                        left: `${segment.startColumn * (fullscreenSkyPatrolState?.layout?.tileSize ?? 0)}px`,
+                        width: `${segment.length * (fullscreenSkyPatrolState?.layout?.tileSize ?? 0)}px`,
+                        height: `${fullscreenSkyPatrolState?.layout?.tileSize ?? 0}px`,
+                      }}
+                    />
+                  ))}
+                </div>
+              ))}
+              {fullscreenSkyPatrolState?.groundTargets?.map((target) => (
+                <div
+                  key={target.id}
+                  className={`fullscreen-camera-sky-patrol-ground-target ${target.kind}`}
+                  style={{
+                    left: `${target.x - target.width / 2}px`,
+                    top: `${target.y - target.height / 2}px`,
+                    width: `${target.width}px`,
+                    height: `${target.height}px`,
+                  }}
+                />
+              ))}
+              {fullscreenSkyPatrolState?.airEnemies?.map((enemy) => (
+                <div
+                  key={enemy.id}
+                  className="fullscreen-camera-sky-patrol-enemy"
+                  style={{
+                    left: `${enemy.x - enemy.width / 2}px`,
+                    top: `${enemy.y - enemy.height / 2}px`,
+                    width: `${enemy.width}px`,
+                    height: `${enemy.height}px`,
+                  }}
+                />
+              ))}
+              {fullscreenSkyPatrolState?.playerShots?.map((shot) => (
+                <div
+                  key={shot.id}
+                  className="fullscreen-camera-sky-patrol-shot player"
+                  style={{
+                    left: `${shot.x - shot.width / 2}px`,
+                    top: `${shot.y - shot.height / 2}px`,
+                    width: `${shot.width}px`,
+                    height: `${shot.height}px`,
+                  }}
+                />
+              ))}
+              {fullscreenSkyPatrolState?.enemyShots?.map((shot) => (
+                <div
+                  key={shot.id}
+                  className="fullscreen-camera-sky-patrol-shot enemy"
+                  style={{
+                    left: `${shot.x - shot.width / 2}px`,
+                    top: `${shot.y - shot.height / 2}px`,
+                    width: `${shot.width}px`,
+                    height: `${shot.height}px`,
+                  }}
+                />
+              ))}
+              {fullscreenSkyPatrolState?.explosions?.map((explosion) => {
+                const progress = explosion.ageMs / explosion.ttlMs;
+                const size = (fullscreenSkyPatrolState?.layout?.tileSize ?? 20) * (1.1 + progress * 2.1);
+                return (
+                  <div
+                    key={explosion.id}
+                    className={`fullscreen-camera-sky-patrol-explosion ${explosion.kind}`}
+                    style={{
+                      left: `${explosion.x - size / 2}px`,
+                      top: `${explosion.y - size / 2}px`,
+                      width: `${size}px`,
+                      height: `${size}px`,
+                      opacity: Math.max(0, 1 - progress),
+                    }}
+                  />
+                );
+              })}
+              {fullscreenSkyPatrolState?.ship ? (
+                <div
+                  className={`fullscreen-camera-sky-patrol-player ${
+                    fullscreenSkyPatrolState.ship.invulnerableMs > 0 ? "invulnerable" : ""
+                  }`}
+                  style={{
+                    left: `${fullscreenSkyPatrolState.ship.x - fullscreenSkyPatrolState.ship.width / 2}px`,
+                    top: `${fullscreenSkyPatrolState.ship.y - fullscreenSkyPatrolState.ship.height / 2}px`,
+                    width: `${fullscreenSkyPatrolState.ship.width}px`,
+                    height: `${fullscreenSkyPatrolState.ship.height}px`,
+                  }}
+                />
+              ) : null}
+              <div className="fullscreen-camera-sky-patrol-scoreboard">
+                <span>Score {fullscreenSkyPatrolState?.score ?? 0}</span>
+                <span>Lives {fullscreenSkyPatrolState?.lives ?? SKY_PATROL_STARTING_LIVES}</span>
+                <span>
+                  Targets{" "}
+                  {(
+                    (fullscreenSkyPatrolState?.airEnemies?.length ?? 0) +
+                    (fullscreenSkyPatrolState?.groundTargets?.length ?? 0)
+                  ).toString()}
+                </span>
+              </div>
+              <div className="fullscreen-camera-sky-patrol-legend">
+                <span>Fighter +{SKY_PATROL_FIGHTER_SCORE}</span>
+                <span>Turret +{SKY_PATROL_TURRET_SCORE}</span>
+                <span>Depot +{SKY_PATROL_DEPOT_SCORE}</span>
+                <span>Pinch fires</span>
+              </div>
+              <div
+                className={`fullscreen-camera-sky-patrol-banner ${
+                  fullscreenSkyPatrolState?.status === "gameover" ? "game-over" : ""
+                }`}
+              >
+                {fullscreenSkyPatrolState?.message}
+              </div>
+            </div>
           ) : fullscreenGridMode === "invaders" ? (
             <div
               className="fullscreen-camera-invaders"
@@ -10225,7 +10469,7 @@ export default function App() {
               <span className="fullscreen-camera-note">
                 {fullscreenGridMode === FULLSCREEN_LANDING_MODE
                   ? fullscreenModeLandingState?.handVerified
-                    ? "Hold your index fingertip over a box for 2.00 seconds to open that fullscreen mode. The buttons below still work if you want to switch instantly."
+                    ? "Hold your index fingertip over a box for 1.00 second to open that fullscreen mode. The buttons below still work if you want to switch instantly."
                     : "Show all five fingertips first so the menu can verify it sees a real hand before hover selection starts."
                   : fullscreenGridMode === "breakout-coop"
                   ? `Breakout Co-op keeps index-finger steering on the paddle, uses support-hand pinch for a ${Math.round(BREAKOUT_COOP_SHIELD_DURATION_MS / 1000)} second shield pulse, and prism bricks split the ball while the shield recharges over about ${Math.round(BREAKOUT_COOP_SHIELD_COOLDOWN_MS / 1000)} seconds.`
@@ -10241,6 +10485,8 @@ export default function App() {
                   ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lets you pinch-drag X pieces from the left rail, adds a right-side reset box that clears the board after a 1.00 second index-fingertip hold, and gives O a random opening before switching to optimal play."
                   : fullscreenGridMode === "fruit-ninja"
                   ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
+                  : fullscreenGridMode === "sky-patrol"
+                  ? "Index fingertip steers a fighter across a vertically scrolling 16-bit coastline. Pinch fires twin cannons, air fighters weave in from above, ground emplacements ride the terrain below, and pinching after a loss relaunches the sortie."
                   : fullscreenGridMode === "invaders"
                   ? "Index fingertip steers the ship with the existing fullscreen smoothing. Pinch fires on a short cooldown, enemies descend in arcade sweeps, and pinch restarts the wave after a loss."
                   : fullscreenGridMode === "missile-command"
@@ -10290,6 +10536,11 @@ export default function App() {
                 {fullscreenGridMode === "fruit-ninja" ? (
                   <button type="button" className="secondary" onClick={restartFullscreenFruitNinjaGame}>
                     Restart Round
+                  </button>
+                ) : null}
+                {fullscreenGridMode === "sky-patrol" ? (
+                  <button type="button" className="secondary" onClick={restartFullscreenSkyPatrolGame}>
+                    Restart Sortie
                   </button>
                 ) : null}
                 {fullscreenGridMode === "missile-command" ? (

@@ -1,7 +1,7 @@
 import { TIC_TAC_TOE_RESET_HOLD_MS, createTicTacToeLayout } from "./ticTacToeGame.js";
 
 export const FULLSCREEN_LANDING_MODE = "landing";
-export const FULLSCREEN_MODE_LANDING_HOLD_MS = TIC_TAC_TOE_RESET_HOLD_MS * 2;
+export const FULLSCREEN_MODE_LANDING_HOLD_MS = TIC_TAC_TOE_RESET_HOLD_MS;
 
 export const FULLSCREEN_CAMERA_MODE_OPTIONS = [
   { id: "square", label: "Squares", category: "Visual" },
@@ -19,6 +19,7 @@ export const FULLSCREEN_CAMERA_MODE_OPTIONS = [
   { id: "finger-pong", label: "Finger Pong", category: "Game" },
   { id: "tic-tac-toe", label: "Tic Tac Toe", category: "Game" },
   { id: "fruit-ninja", label: "Slice Air", category: "Game" },
+  { id: "sky-patrol", label: "Sky Patrol", category: "Game" },
   { id: "invaders", label: "Invaders", category: "Game" },
   { id: "flappy", label: "Flappy", category: "Game" },
   { id: "missile-command", label: "Missile Command", category: "Game" },

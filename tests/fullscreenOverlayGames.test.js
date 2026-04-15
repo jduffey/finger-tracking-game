@@ -28,6 +28,9 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
     updateFullscreenFingerPongSimulation(nextTimestamp) {
       calls.push(["finger-pong", nextTimestamp]);
     },
+    updateFullscreenSkyPatrolSimulation(nextTimestamp) {
+      calls.push(["sky-patrol", nextTimestamp]);
+    },
     updateFullscreenInvadersSimulation(nextTimestamp) {
       calls.push(["invaders", nextTimestamp]);
     },
@@ -50,6 +53,7 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
     ["breakout", timestamp],
     ["breakout-coop", timestamp],
     ["finger-pong", timestamp],
+    ["sky-patrol", timestamp],
     ["invaders", timestamp],
     ["flappy", timestamp],
     ["missile-command", timestamp],

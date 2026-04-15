@@ -24,7 +24,7 @@ test("createFullscreenExitControlLayout anchors the exit box in the top right", 
   assert.equal(layout.top + layout.boxHeight <= layout.height, true);
 });
 
-test("stepFullscreenExitControl waits for a verified hand before starting the exit hold", () => {
+test("stepFullscreenExitControl waits for a verified hand before starting the 1.00 second exit hold", () => {
   const base = createFullscreenExitControlState(1280, 720);
   const pointer = getBoxCenter(base.layout);
 
