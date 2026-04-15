@@ -6,13 +6,15 @@ function clamp(value, min, max) {
 }
 
 function isPointerInExitBox(layout, pointer) {
+  const boxWidth = layout?.boxWidth ?? layout?.width ?? 0;
+  const boxHeight = layout?.boxHeight ?? layout?.height ?? 0;
   return (
     layout &&
     pointer &&
     pointer.x >= layout.left &&
-    pointer.x <= layout.left + layout.width &&
+    pointer.x <= layout.left + boxWidth &&
     pointer.y >= layout.top &&
-    pointer.y <= layout.top + layout.height
+    pointer.y <= layout.top + boxHeight
   );
 }
 

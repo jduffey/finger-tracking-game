@@ -93,3 +93,22 @@ test("stepFullscreenExitControl clears the hold when the pointer leaves the box"
   assert.equal(cleared.holdMs, 0);
   assert.equal(cleared.shouldExit, false);
 });
+
+test("stepFullscreenExitControl does not count points that are outside the visible exit box", () => {
+  const base = createFullscreenExitControlState(1280, 720);
+  const outsidePointer = {
+    x: base.layout.left + base.layout.boxWidth / 2,
+    y: base.layout.boxHeight + 32,
+  };
+
+  const next = stepFullscreenExitControl(base, 1 / 60, {
+    handVerified: true,
+    pointerActive: true,
+    pointerX: outsidePointer.x,
+    pointerY: outsidePointer.y,
+  });
+
+  assert.equal(next.holdActive, false);
+  assert.equal(next.holdMs, 0);
+  assert.equal(next.shouldExit, false);
+});
