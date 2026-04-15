@@ -292,6 +292,28 @@ function minimax(board, aiMark, playerMark, aiTurn, depth) {
   return bestScore;
 }
 
+function pickRandomTicTacToeMove(board) {
+  const openCellIndexes = getOpenCellIndexes(board);
+  if (openCellIndexes.length === 0) {
+    return -1;
+  }
+
+  const randomIndex = Math.floor(Math.random() * openCellIndexes.length);
+  return openCellIndexes[randomIndex];
+}
+
+function pickAiTicTacToeMove(
+  board,
+  aiMark = TIC_TAC_TOE_AI_MARK,
+  playerMark = TIC_TAC_TOE_PLAYER_MARK,
+) {
+  if (countMarks(board, aiMark) === 0) {
+    return pickRandomTicTacToeMove(board);
+  }
+
+  return pickBestTicTacToeMove(board, aiMark, playerMark);
+}
+
 export function createTicTacToeLayout(width, height) {
   const safeWidth = Math.max(320, Number.isFinite(width) ? width : 320);
   const safeHeight = Math.max(440, Number.isFinite(height) ? height : 440);
@@ -526,7 +548,7 @@ export function stepTicTacToeGame(state, dtSeconds, input) {
       };
     }
 
-    const aiMoveIndex = pickBestTicTacToeMove(nextState.board);
+    const aiMoveIndex = pickAiTicTacToeMove(nextState.board);
     if (aiMoveIndex < 0) {
       return {
         ...nextState,

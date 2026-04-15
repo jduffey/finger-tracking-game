@@ -191,6 +191,74 @@ test("stepTicTacToeGame resolves the AI move after its think delay", () => {
   assert.equal(resolved.message, "Pinch an X on the left rail and drag it into an open square");
 });
 
+test("stepTicTacToeGame uses a random open square for the AI's first move", () => {
+  const originalRandom = Math.random;
+  Math.random = () => 0;
+
+  try {
+    const game = {
+      ...createTicTacToeGame(1280, 720),
+      board: [
+        TIC_TAC_TOE_PLAYER_MARK,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+      ],
+      status: "ai-turn",
+      aiMoveTimerMs: 0,
+      message: "O is thinking...",
+    };
+
+    const resolved = stepTicTacToeGame(game, 1 / 60, {
+      pointerActive: false,
+      pinchActive: false,
+    });
+
+    assert.equal(resolved.board[1], TIC_TAC_TOE_AI_MARK);
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test("stepTicTacToeGame chooses optimally after the AI has already moved once", () => {
+  const originalRandom = Math.random;
+  Math.random = () => 0;
+
+  try {
+    const game = {
+      ...createTicTacToeGame(1280, 720),
+      board: [
+        TIC_TAC_TOE_PLAYER_MARK,
+        TIC_TAC_TOE_PLAYER_MARK,
+        null,
+        null,
+        TIC_TAC_TOE_AI_MARK,
+        null,
+        null,
+        null,
+        null,
+      ],
+      status: "ai-turn",
+      aiMoveTimerMs: 0,
+      message: "O is thinking...",
+    };
+
+    const resolved = stepTicTacToeGame(game, 1 / 60, {
+      pointerActive: false,
+      pinchActive: false,
+    });
+
+    assert.equal(resolved.board[2], TIC_TAC_TOE_AI_MARK);
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
 test("restartTicTacToeRound preserves the running match tally", () => {
   const restarted = restartTicTacToeRound({
     ...createTicTacToeGame(1280, 720),
