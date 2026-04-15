@@ -1313,6 +1313,17 @@ body {
   z-index: 0;
 }
 
+.fullscreen-camera-sky-patrol-canvas {
+  display: block;
+  height: 100%;
+  image-rendering: pixelated;
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+  z-index: 1;
+}
+
 .fullscreen-camera-sky-patrol-terrain-row,
 .fullscreen-camera-sky-patrol-terrain-segment,
 .fullscreen-camera-sky-patrol-player,

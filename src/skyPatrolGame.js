@@ -11,11 +11,16 @@ const SKY_PATROL_MAX_STEP_SECONDS = 0.05;
 const SKY_PATROL_ELEMENT_SCALE = 1;
 const SKY_PATROL_PLAYER_FIRE_COOLDOWN_MS = 130;
 const SKY_PATROL_ENEMY_SPAWN_COOLDOWN_MS = 680;
-const SKY_PATROL_GROUND_SPAWN_COOLDOWN_MS = 980;
+const SKY_PATROL_GROUND_SPAWN_COOLDOWN_MS = 1320;
 const SKY_PATROL_PLAYER_INVULNERABLE_MS = 980;
 const SKY_PATROL_RESTART_COOLDOWN_MS = 700;
 const SKY_PATROL_EXPLOSION_TTL_MS = 460;
 const SKY_PATROL_SCROLL_TILES_BUFFER = 2;
+const SKY_PATROL_SECONDARY_ISLAND_THRESHOLD = 0.72;
+const SKY_PATROL_RUNWAY_PERIOD_ROWS = 140;
+const SKY_PATROL_RUNWAY_START_ROW = 42;
+const SKY_PATROL_RUNWAY_END_ROW = 45;
+const SKY_PATROL_ROAD_PERIOD_ROWS = 88;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -161,11 +166,11 @@ function createSkyPatrolTerrainRow(layout, worldRow) {
     },
   ];
   const secondaryChance = hashNoise(worldRow, 41);
-  if (secondaryChance > 0.48) {
+  if (secondaryChance > SKY_PATROL_SECONDARY_ISLAND_THRESHOLD) {
     const direction = secondaryChance > 0.72 ? -1 : 1;
     const center =
       primaryCenter + direction * (primaryHalfWidth + layout.columns * (0.08 + 0.05 * secondaryChance));
-    const halfWidth = layout.columns * (0.055 + 0.045 * hashNoise(worldRow, 91));
+    const halfWidth = layout.columns * (0.04 + 0.024 * hashNoise(worldRow, 91));
     if (center > -halfWidth && center < layout.columns + halfWidth) {
       islands.push({ center, halfWidth });
     }
@@ -199,9 +204,13 @@ function createSkyPatrolTerrainRow(layout, worldRow) {
     }
   }
 
-  const runwayBand = positiveModulo(worldRow, 96);
-  if (runwayBand >= 28 && runwayBand <= 34 && primaryHalfWidth > 5) {
-    const runwayHalfWidth = Math.max(2, Math.min(Math.floor(primaryHalfWidth * 0.34), 5));
+  const runwayBand = positiveModulo(worldRow, SKY_PATROL_RUNWAY_PERIOD_ROWS);
+  if (
+    runwayBand >= SKY_PATROL_RUNWAY_START_ROW &&
+    runwayBand <= SKY_PATROL_RUNWAY_END_ROW &&
+    primaryHalfWidth > 5
+  ) {
+    const runwayHalfWidth = Math.max(2, Math.min(Math.floor(primaryHalfWidth * 0.24), 4));
     const runwayCenter = Math.round(primaryCenter + Math.sin(worldRow * 0.09) * 1.4);
     for (let column = runwayCenter - runwayHalfWidth; column <= runwayCenter + runwayHalfWidth; column += 1) {
       if (column < 0 || column >= layout.columns || !isLandTerrain(tiles[column])) {
@@ -211,10 +220,10 @@ function createSkyPatrolTerrainRow(layout, worldRow) {
     }
   }
 
-  const roadBand = positiveModulo(worldRow + 17, 54);
-  if (roadBand <= 1) {
+  const roadBand = positiveModulo(worldRow + 17, SKY_PATROL_ROAD_PERIOD_ROWS);
+  if (roadBand === 0) {
     const roadCenter = Math.round(primaryCenter + Math.sin(worldRow * 0.11) * 1.8);
-    for (let column = roadCenter - 1; column <= roadCenter + 1; column += 1) {
+    for (let column = roadCenter; column <= roadCenter; column += 1) {
       if (column < 0 || column >= layout.columns || !isLandTerrain(tiles[column])) {
         continue;
       }
@@ -228,6 +237,19 @@ function createSkyPatrolTerrainRow(layout, worldRow) {
   };
 }
 
+export function getSkyPatrolTerrainRows(layout, startWorldRow, rowCount) {
+  if (!layout) {
+    return [];
+  }
+
+  const safeStartWorldRow = Number.isFinite(startWorldRow) ? Math.floor(startWorldRow) : 0;
+  const safeRowCount = Math.max(0, Number.isFinite(rowCount) ? Math.ceil(rowCount) : 0);
+
+  return Array.from({ length: safeRowCount }, (_, index) =>
+    createSkyPatrolTerrainRow(layout, safeStartWorldRow + index),
+  );
+}
+
 export function getSkyPatrolVisibleTerrainRows(layout, scrollOffset) {
   if (!layout) {
     return [];
@@ -236,21 +258,19 @@ export function getSkyPatrolVisibleTerrainRows(layout, scrollOffset) {
   const safeScrollOffset = Math.max(0, Number.isFinite(scrollOffset) ? scrollOffset : 0);
   const baseWorldRow = Math.floor(safeScrollOffset / layout.tileSize);
   const rowOffset = safeScrollOffset - baseWorldRow * layout.tileSize;
-  const rows = [];
-
-  for (let rowIndex = -1; rowIndex <= layout.visibleTerrainRows; rowIndex += 1) {
-    const worldRow = baseWorldRow + rowIndex;
-    const y = rowIndex * layout.tileSize + rowOffset;
-    if (y <= -layout.tileSize || y >= layout.height + layout.tileSize) {
-      continue;
-    }
-    rows.push({
-      ...createSkyPatrolTerrainRow(layout, worldRow),
-      y,
-    });
-  }
-
-  return rows;
+  return getSkyPatrolTerrainRows(
+    layout,
+    baseWorldRow - 1,
+    layout.visibleTerrainRows + SKY_PATROL_SCROLL_TILES_BUFFER + 1,
+  )
+    .map((row, index) => {
+      const rowIndex = index - 1;
+      return {
+        ...row,
+        y: rowIndex * layout.tileSize + rowOffset,
+      };
+    })
+    .filter((row) => row.y > -layout.tileSize && row.y < layout.height + layout.tileSize);
 }
 
 function createGroundTarget(layout, scrollOffset, nextId, rng = Math.random) {

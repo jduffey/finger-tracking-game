@@ -32,6 +32,35 @@ test("getSkyPatrolVisibleTerrainRows yields water, land, and runway terrain band
   assert.ok(terrains.has("runway"));
 });
 
+test("getSkyPatrolVisibleTerrainRows keeps built ground features relatively sparse", () => {
+  const layout = createSkyPatrolLayout(960, 720);
+  const rowTerrains = new Map();
+
+  for (let scroll = 0; scroll < layout.tileSize * 240; scroll += layout.tileSize) {
+    for (const row of getSkyPatrolVisibleTerrainRows(layout, scroll)) {
+      const terrainSet = rowTerrains.get(row.worldRow) ?? new Set();
+      for (const segment of row.segments) {
+        terrainSet.add(segment.terrain);
+      }
+      rowTerrains.set(row.worldRow, terrainSet);
+    }
+  }
+
+  let builtFeatureRows = 0;
+  let runwayRows = 0;
+  for (const terrains of rowTerrains.values()) {
+    if (terrains.has("runway")) {
+      runwayRows += 1;
+    }
+    if (terrains.has("runway") || terrains.has("road")) {
+      builtFeatureRows += 1;
+    }
+  }
+
+  assert.ok(runwayRows > 0);
+  assert.ok(builtFeatureRows / rowTerrains.size < 0.06);
+});
+
 test("createSkyPatrolGame starts with a centered ship and full lives", () => {
   const game = createSkyPatrolGame(960, 720, constantRng(0.5));
 
@@ -136,6 +165,7 @@ test("stepSkyPatrolGame can spawn ground targets over the scrolling terrain", ()
   );
 
   assert.ok(next.groundTargets.length >= 1);
+  assert.ok(next.groundSpawnCooldownMs > 1000);
 });
 
 test("stepSkyPatrolGame enters game over on a hit and restarts on pinch", () => {

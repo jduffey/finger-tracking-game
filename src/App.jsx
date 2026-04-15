@@ -95,9 +95,13 @@ import {
   SKY_PATROL_STARTING_LIVES,
   SKY_PATROL_TURRET_SCORE,
   createSkyPatrolGame,
-  getSkyPatrolVisibleTerrainRows,
   stepSkyPatrolGame,
 } from "./skyPatrolGame.js";
+import {
+  areSkyPatrolHudStatesEqual,
+  createSkyPatrolCanvasRenderer,
+  getSkyPatrolHudState,
+} from "./skyPatrolCanvas.js";
 import {
   TIC_TAC_TOE_AI_MARK,
   TIC_TAC_TOE_AI_PIECE_LIMIT,
@@ -1439,7 +1443,7 @@ export default function App() {
   const [fullscreenBreakoutCoopState, setFullscreenBreakoutCoopState] = useState(null);
   const [fullscreenFingerPongState, setFullscreenFingerPongState] = useState(null);
   const [fullscreenFruitNinjaState, setFullscreenFruitNinjaState] = useState(null);
-  const [fullscreenSkyPatrolState, setFullscreenSkyPatrolState] = useState(null);
+  const [fullscreenSkyPatrolHud, setFullscreenSkyPatrolHud] = useState(null);
   const [fullscreenInvadersState, setFullscreenInvadersState] = useState(null);
   const [fullscreenFlappyState, setFullscreenFlappyState] = useState(null);
   const [fullscreenMissileCommandState, setFullscreenMissileCommandState] = useState(null);
@@ -1506,6 +1510,7 @@ export default function App() {
   const flightCanvasRef = useRef(null);
   const runnerStageRef = useRef(null);
   const runnerCanvasRef = useRef(null);
+  const fullscreenSkyPatrolCanvasRef = useRef(null);
   const inputTestCellRefs = useRef([]);
   const leftPaneResizeStateRef = useRef({
     startWidth: 0,
@@ -1553,7 +1558,9 @@ export default function App() {
   const fullscreenBreakoutCoopStateRef = useRef(null);
   const fullscreenFingerPongStateRef = useRef(null);
   const fullscreenFruitNinjaStateRef = useRef(null);
+  const fullscreenSkyPatrolHudRef = useRef(null);
   const fullscreenSkyPatrolStateRef = useRef(null);
+  const fullscreenSkyPatrolRendererRef = useRef(null);
   const fullscreenInvadersStateRef = useRef(null);
   const fullscreenBreakoutViewportRef = useRef(null);
   const fullscreenFingerPongViewportRef = useRef(null);
@@ -1700,7 +1707,7 @@ export default function App() {
   const isFullscreenSkyPatrolMode =
     isFullscreenCameraPhase &&
     fullscreenGridMode === "sky-patrol" &&
-    Boolean(fullscreenSkyPatrolState);
+    Boolean(fullscreenSkyPatrolHud);
   const isFullscreenInvadersMode =
     isFullscreenCameraPhase && fullscreenGridMode === "invaders" && Boolean(fullscreenInvadersState);
   const isFullscreenFlappyMode =
@@ -1720,14 +1727,6 @@ export default function App() {
     fullscreenTicTacToeState?.board?.filter((mark) => mark === TIC_TAC_TOE_PLAYER_MARK).length ?? 0;
   const fullscreenTicTacToeAiCount =
     fullscreenTicTacToeState?.board?.filter((mark) => mark === TIC_TAC_TOE_AI_MARK).length ?? 0;
-  const fullscreenSkyPatrolTerrainRows = useMemo(
-    () =>
-      getSkyPatrolVisibleTerrainRows(
-        fullscreenSkyPatrolState?.layout ?? null,
-        fullscreenSkyPatrolState?.scrollOffset ?? 0,
-      ),
-    [fullscreenSkyPatrolState?.layout, fullscreenSkyPatrolState?.scrollOffset],
-  );
   const fullscreenTicTacToePlayerReserveCount = Math.max(
     0,
     TIC_TAC_TOE_PLAYER_PIECE_LIMIT -
@@ -2375,10 +2374,6 @@ export default function App() {
   }, [fullscreenFruitNinjaState]);
 
   useEffect(() => {
-    fullscreenSkyPatrolStateRef.current = fullscreenSkyPatrolState;
-  }, [fullscreenSkyPatrolState]);
-
-  useEffect(() => {
     fullscreenInvadersStateRef.current = fullscreenInvadersState;
   }, [fullscreenInvadersState]);
 
@@ -2626,10 +2621,11 @@ export default function App() {
       !fullscreenCameraViewport
     ) {
       fullscreenSkyPatrolLastTickRef.current = 0;
-      if (fullscreenSkyPatrolStateRef.current) {
-        fullscreenSkyPatrolStateRef.current = null;
-        setFullscreenSkyPatrolState(null);
-      }
+      fullscreenSkyPatrolStateRef.current = null;
+      fullscreenSkyPatrolHudRef.current = null;
+      fullscreenSkyPatrolRendererRef.current?.clear();
+      fullscreenSkyPatrolRendererRef.current = null;
+      setFullscreenSkyPatrolHud(null);
       return undefined;
     }
 
@@ -2638,8 +2634,7 @@ export default function App() {
       fullscreenCameraViewport.height,
     );
     fullscreenSkyPatrolLastTickRef.current = 0;
-    fullscreenSkyPatrolStateRef.current = nextGame;
-    setFullscreenSkyPatrolState(nextGame);
+    publishFullscreenSkyPatrolState(nextGame);
     return undefined;
   }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
@@ -5969,8 +5964,37 @@ export default function App() {
     }
     const nextGame = createSkyPatrolGame(viewportMetrics.width, viewportMetrics.height);
     fullscreenSkyPatrolLastTickRef.current = 0;
-    fullscreenSkyPatrolStateRef.current = nextGame;
-    setFullscreenSkyPatrolState(nextGame);
+    publishFullscreenSkyPatrolState(nextGame);
+  }
+
+  function syncFullscreenSkyPatrolRenderer() {
+    const canvas = fullscreenSkyPatrolCanvasRef.current;
+    const viewportMetrics = fullscreenSkyPatrolViewportRef.current;
+    if (!canvas || !viewportMetrics) {
+      return null;
+    }
+
+    let renderer = fullscreenSkyPatrolRendererRef.current;
+    if (!renderer || renderer.canvas !== canvas) {
+      renderer = createSkyPatrolCanvasRenderer(canvas);
+      fullscreenSkyPatrolRendererRef.current = renderer;
+    }
+
+    renderer.resize(viewportMetrics.width, viewportMetrics.height);
+    return renderer;
+  }
+
+  function publishFullscreenSkyPatrolState(nextState) {
+    fullscreenSkyPatrolStateRef.current = nextState;
+
+    const nextHud = getSkyPatrolHudState(nextState);
+    if (!areSkyPatrolHudStatesEqual(fullscreenSkyPatrolHudRef.current, nextHud)) {
+      fullscreenSkyPatrolHudRef.current = nextHud;
+      setFullscreenSkyPatrolHud(nextHud);
+    }
+
+    const renderer = syncFullscreenSkyPatrolRenderer();
+    renderer?.draw(nextState);
   }
 
   function restartFullscreenTicTacToeGame() {
@@ -7370,8 +7394,7 @@ export default function App() {
         fireRequested: handDetectedRef.current && pinchStateRef.current,
       },
     );
-    fullscreenSkyPatrolStateRef.current = nextState;
-    setFullscreenSkyPatrolState(nextState);
+    publishFullscreenSkyPatrolState(nextState);
   }
 
   function updateFullscreenInvadersSimulation(timestamp) {
@@ -10015,120 +10038,17 @@ export default function App() {
           ) : fullscreenGridMode === "sky-patrol" ? (
             <div
               className="fullscreen-camera-sky-patrol"
-              style={{
-                ...(fullscreenCameraViewport?.style ?? {}),
-                "--sky-patrol-tile": `${fullscreenSkyPatrolState?.layout?.tileSize ?? 20}px`,
-              }}
+              style={fullscreenCameraViewport?.style ?? undefined}
             >
-              {fullscreenSkyPatrolTerrainRows.map((row) => (
-                <div
-                  key={`terrain-row-${row.worldRow}`}
-                  className="fullscreen-camera-sky-patrol-terrain-row"
-                  style={{
-                    top: `${row.y}px`,
-                    height: `${fullscreenSkyPatrolState?.layout?.tileSize ?? 0}px`,
-                  }}
-                >
-                  {row.segments.map((segment) => (
-                    <div
-                      key={`${row.worldRow}-${segment.startColumn}-${segment.terrain}`}
-                      className={`fullscreen-camera-sky-patrol-terrain-segment ${segment.terrain}`}
-                      style={{
-                        left: `${segment.startColumn * (fullscreenSkyPatrolState?.layout?.tileSize ?? 0)}px`,
-                        width: `${segment.length * (fullscreenSkyPatrolState?.layout?.tileSize ?? 0)}px`,
-                        height: `${fullscreenSkyPatrolState?.layout?.tileSize ?? 0}px`,
-                      }}
-                    />
-                  ))}
-                </div>
-              ))}
-              {fullscreenSkyPatrolState?.groundTargets?.map((target) => (
-                <div
-                  key={target.id}
-                  className={`fullscreen-camera-sky-patrol-ground-target ${target.kind}`}
-                  style={{
-                    left: `${target.x - target.width / 2}px`,
-                    top: `${target.y - target.height / 2}px`,
-                    width: `${target.width}px`,
-                    height: `${target.height}px`,
-                  }}
-                />
-              ))}
-              {fullscreenSkyPatrolState?.airEnemies?.map((enemy) => (
-                <div
-                  key={enemy.id}
-                  className="fullscreen-camera-sky-patrol-enemy"
-                  style={{
-                    left: `${enemy.x - enemy.width / 2}px`,
-                    top: `${enemy.y - enemy.height / 2}px`,
-                    width: `${enemy.width}px`,
-                    height: `${enemy.height}px`,
-                  }}
-                />
-              ))}
-              {fullscreenSkyPatrolState?.playerShots?.map((shot) => (
-                <div
-                  key={shot.id}
-                  className="fullscreen-camera-sky-patrol-shot player"
-                  style={{
-                    left: `${shot.x - shot.width / 2}px`,
-                    top: `${shot.y - shot.height / 2}px`,
-                    width: `${shot.width}px`,
-                    height: `${shot.height}px`,
-                  }}
-                />
-              ))}
-              {fullscreenSkyPatrolState?.enemyShots?.map((shot) => (
-                <div
-                  key={shot.id}
-                  className="fullscreen-camera-sky-patrol-shot enemy"
-                  style={{
-                    left: `${shot.x - shot.width / 2}px`,
-                    top: `${shot.y - shot.height / 2}px`,
-                    width: `${shot.width}px`,
-                    height: `${shot.height}px`,
-                  }}
-                />
-              ))}
-              {fullscreenSkyPatrolState?.explosions?.map((explosion) => {
-                const progress = explosion.ageMs / explosion.ttlMs;
-                const size = (fullscreenSkyPatrolState?.layout?.tileSize ?? 20) * (1.1 + progress * 2.1);
-                return (
-                  <div
-                    key={explosion.id}
-                    className={`fullscreen-camera-sky-patrol-explosion ${explosion.kind}`}
-                    style={{
-                      left: `${explosion.x - size / 2}px`,
-                      top: `${explosion.y - size / 2}px`,
-                      width: `${size}px`,
-                      height: `${size}px`,
-                      opacity: Math.max(0, 1 - progress),
-                    }}
-                  />
-                );
-              })}
-              {fullscreenSkyPatrolState?.ship ? (
-                <div
-                  className={`fullscreen-camera-sky-patrol-player ${
-                    fullscreenSkyPatrolState.ship.invulnerableMs > 0 ? "invulnerable" : ""
-                  }`}
-                  style={{
-                    left: `${fullscreenSkyPatrolState.ship.x - fullscreenSkyPatrolState.ship.width / 2}px`,
-                    top: `${fullscreenSkyPatrolState.ship.y - fullscreenSkyPatrolState.ship.height / 2}px`,
-                    width: `${fullscreenSkyPatrolState.ship.width}px`,
-                    height: `${fullscreenSkyPatrolState.ship.height}px`,
-                  }}
-                />
-              ) : null}
+              <canvas
+                ref={fullscreenSkyPatrolCanvasRef}
+                className="fullscreen-camera-sky-patrol-canvas"
+              />
               <div className="fullscreen-camera-sky-patrol-scoreboard">
-                <span>Score {fullscreenSkyPatrolState?.score ?? 0}</span>
-                <span>Lives {fullscreenSkyPatrolState?.lives ?? SKY_PATROL_STARTING_LIVES}</span>
+                <span>Score {fullscreenSkyPatrolHud?.score ?? 0}</span>
+                <span>Lives {fullscreenSkyPatrolHud?.lives ?? SKY_PATROL_STARTING_LIVES}</span>
                 <span>
-                  Targets{" "}
-                  {(
-                    (fullscreenSkyPatrolState?.airEnemies?.length ?? 0) +
-                    (fullscreenSkyPatrolState?.groundTargets?.length ?? 0)
-                  ).toString()}
+                  Targets {(fullscreenSkyPatrolHud?.activeTargetCount ?? 0).toString()}
                 </span>
               </div>
               <div className="fullscreen-camera-sky-patrol-legend">
@@ -10139,10 +10059,10 @@ export default function App() {
               </div>
               <div
                 className={`fullscreen-camera-sky-patrol-banner ${
-                  fullscreenSkyPatrolState?.status === "gameover" ? "game-over" : ""
+                  fullscreenSkyPatrolHud?.status === "gameover" ? "game-over" : ""
                 }`}
               >
-                {fullscreenSkyPatrolState?.message}
+                {fullscreenSkyPatrolHud?.message}
               </div>
             </div>
           ) : fullscreenGridMode === "invaders" ? (
