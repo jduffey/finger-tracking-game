@@ -1,4 +1,8 @@
-import { SKY_PATROL_STARTING_LIVES, getSkyPatrolTerrainRows } from "./skyPatrolGame.js";
+import {
+  SKY_PATROL_STARTING_LIVES,
+  getSkyPatrolTerrainRows,
+  getSkyPatrolTerrainScrollMetrics,
+} from "./skyPatrolGame.js";
 
 const SKY_PATROL_TERRAIN_CACHE_EXTRA_ROWS = 4;
 
@@ -184,7 +188,7 @@ function paintTerrainBuffer(renderer, layout, scrollOffset) {
     return;
   }
 
-  const startWorldRow = Math.floor(scrollOffset / layout.tileSize) - 1;
+  const { startWorldRow } = getSkyPatrolTerrainScrollMetrics(layout, scrollOffset);
   const rowCount = layout.visibleTerrainRows + SKY_PATROL_TERRAIN_CACHE_EXTRA_ROWS;
   const width = Math.max(1, roundPixel(layout.width));
   const height = Math.max(1, Math.ceil(rowCount * layout.tileSize));
@@ -238,8 +242,7 @@ function drawTerrain(ctx, renderer, state) {
     return;
   }
 
-  const baseWorldRow = Math.floor(scrollOffset / layout.tileSize);
-  const rowOffset = scrollOffset - baseWorldRow * layout.tileSize;
+  const { rowOffset } = getSkyPatrolTerrainScrollMetrics(layout, scrollOffset);
   const drawY = roundPixel(rowOffset - layout.tileSize);
   ctx.drawImage(renderer.terrainCanvas, 0, drawY);
 }

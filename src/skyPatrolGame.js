@@ -250,17 +250,36 @@ export function getSkyPatrolTerrainRows(layout, startWorldRow, rowCount) {
   );
 }
 
+export function getSkyPatrolTerrainScrollMetrics(layout, scrollOffset) {
+  if (!layout || !Number.isFinite(layout.tileSize) || layout.tileSize <= 0) {
+    return {
+      baseWorldRow: 0,
+      rowOffset: 0,
+      safeScrollOffset: 0,
+      startWorldRow: -1,
+    };
+  }
+
+  const safeScrollOffset = Math.max(0, Number.isFinite(scrollOffset) ? scrollOffset : 0);
+  const baseWorldRow = Math.floor(safeScrollOffset / layout.tileSize);
+
+  return {
+    baseWorldRow,
+    rowOffset: safeScrollOffset - baseWorldRow * layout.tileSize,
+    safeScrollOffset,
+    startWorldRow: -baseWorldRow - 1,
+  };
+}
+
 export function getSkyPatrolVisibleTerrainRows(layout, scrollOffset) {
   if (!layout) {
     return [];
   }
 
-  const safeScrollOffset = Math.max(0, Number.isFinite(scrollOffset) ? scrollOffset : 0);
-  const baseWorldRow = Math.floor(safeScrollOffset / layout.tileSize);
-  const rowOffset = safeScrollOffset - baseWorldRow * layout.tileSize;
+  const { rowOffset, startWorldRow } = getSkyPatrolTerrainScrollMetrics(layout, scrollOffset);
   return getSkyPatrolTerrainRows(
     layout,
-    baseWorldRow - 1,
+    startWorldRow,
     layout.visibleTerrainRows + SKY_PATROL_SCROLL_TILES_BUFFER + 1,
   )
     .map((row, index) => {
@@ -274,9 +293,9 @@ export function getSkyPatrolVisibleTerrainRows(layout, scrollOffset) {
 }
 
 function createGroundTarget(layout, scrollOffset, nextId, rng = Math.random) {
-  const baseWorldRow = Math.floor(Math.max(0, scrollOffset) / layout.tileSize);
+  const { startWorldRow } = getSkyPatrolTerrainScrollMetrics(layout, scrollOffset);
   for (let attempt = 0; attempt < 6; attempt += 1) {
-    const spawnWorldRow = baseWorldRow - 2 - attempt;
+    const spawnWorldRow = startWorldRow - 1 - attempt;
     const terrainRow = createSkyPatrolTerrainRow(layout, spawnWorldRow);
     const viableSegments = terrainRow.segments.filter(
       (segment) => isLandTerrain(segment.terrain) && segment.length >= 2,

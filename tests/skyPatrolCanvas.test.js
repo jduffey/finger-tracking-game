@@ -1,8 +1,80 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { areSkyPatrolHudStatesEqual, getSkyPatrolHudState } from "../src/skyPatrolCanvas.js";
-import { createSkyPatrolGame } from "../src/skyPatrolGame.js";
+import {
+  areSkyPatrolHudStatesEqual,
+  createSkyPatrolCanvasRenderer,
+  getSkyPatrolHudState,
+} from "../src/skyPatrolCanvas.js";
+import { createSkyPatrolGame, createSkyPatrolLayout } from "../src/skyPatrolGame.js";
+
+function createMockContext() {
+  return {
+    drawImageCalls: [],
+    beginPath() {},
+    clearRect() {},
+    closePath() {},
+    fill() {},
+    fillRect() {},
+    lineTo() {},
+    moveTo() {},
+    restore() {},
+    save() {},
+    stroke() {},
+    drawImage(image, x, y) {
+      this.drawImageCalls.push({ image, x, y });
+    },
+  };
+}
+
+function createMockCanvas(context, ownerDocument) {
+  return {
+    width: 0,
+    height: 0,
+    ownerDocument,
+    getContext(type) {
+      assert.equal(type, "2d");
+      return context;
+    },
+  };
+}
+
+function createMockRenderer() {
+  const ownerDocument = {
+    createElement(tagName) {
+      assert.equal(tagName, "canvas");
+      return createMockCanvas(createMockContext(), ownerDocument);
+    },
+  };
+  const context = createMockContext();
+  const canvas = createMockCanvas(context, ownerDocument);
+
+  return {
+    context,
+    renderer: createSkyPatrolCanvasRenderer(canvas),
+  };
+}
+
+function getRenderedTerrainRowY(renderer, context, layout, scrollOffset, worldRow) {
+  context.drawImageCalls.length = 0;
+  renderer.draw({
+    layout,
+    scrollOffset,
+    ship: null,
+    airEnemies: [],
+    groundTargets: [],
+    playerShots: [],
+    enemyShots: [],
+    explosions: [],
+  });
+
+  const terrainDraw = context.drawImageCalls[0];
+  assert.ok(terrainDraw, "expected the terrain buffer to be drawn");
+  const startWorldRow = Number(renderer.terrainCacheKey.split("|")[3]);
+  assert.ok(Number.isFinite(startWorldRow), "expected a numeric terrain cache start row");
+
+  return terrainDraw.y + (worldRow - startWorldRow) * layout.tileSize;
+}
 
 test("getSkyPatrolHudState summarizes the visible Sky Patrol HUD values", () => {
   const game = {
@@ -47,5 +119,29 @@ test("areSkyPatrolHudStatesEqual only changes when the rendered HUD changes", ()
       message: "Direct hit. Regroup and re-engage.",
     }),
     false,
+  );
+});
+
+test("createSkyPatrolCanvasRenderer keeps terrain rows continuous when the cache wraps", () => {
+  const layout = createSkyPatrolLayout(960, 720);
+  const { context, renderer } = createMockRenderer();
+  const beforeWrapY = getRenderedTerrainRowY(
+    renderer,
+    context,
+    layout,
+    layout.tileSize * 0.99,
+    0,
+  );
+  const afterWrapY = getRenderedTerrainRowY(
+    renderer,
+    context,
+    layout,
+    layout.tileSize * 1.01,
+    0,
+  );
+
+  assert.ok(
+    Math.abs(afterWrapY - beforeWrapY) < 2,
+    `expected cached terrain to move continuously, saw ${beforeWrapY} -> ${afterWrapY}`,
   );
 });

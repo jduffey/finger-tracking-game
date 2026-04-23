@@ -61,6 +61,23 @@ test("getSkyPatrolVisibleTerrainRows keeps built ground features relatively spar
   assert.ok(builtFeatureRows / rowTerrains.size < 0.06);
 });
 
+test("getSkyPatrolVisibleTerrainRows keeps rows continuous across tile boundaries", () => {
+  const layout = createSkyPatrolLayout(960, 720);
+  const beforeWrap = getSkyPatrolVisibleTerrainRows(layout, layout.tileSize * 0.99).find(
+    (row) => row.worldRow === 0,
+  );
+  const afterWrap = getSkyPatrolVisibleTerrainRows(layout, layout.tileSize * 1.01).find(
+    (row) => row.worldRow === 0,
+  );
+
+  assert.ok(beforeWrap);
+  assert.ok(afterWrap);
+  assert.ok(
+    Math.abs(afterWrap.y - beforeWrap.y) < 2,
+    `expected terrain row 0 to move continuously, saw ${beforeWrap.y} -> ${afterWrap.y}`,
+  );
+});
+
 test("createSkyPatrolGame starts with a centered ship and full lives", () => {
   const game = createSkyPatrolGame(960, 720, constantRng(0.5));
 
