@@ -109,10 +109,21 @@ import {
   TIC_TAC_TOE_PLAYER_PIECE_LIMIT,
   TIC_TAC_TOE_RESET_HOLD_MS,
   createTicTacToeGame,
+  getTicTacToeCellIndex,
   getTicTacToeCellRect,
   restartTicTacToeRound,
   stepTicTacToeGame,
 } from "./ticTacToeGame.js";
+import {
+  getTicTacToeCellUi,
+  getTicTacToeCursorUi,
+  getTicTacToeHudUi,
+  getTicTacToeMarkUi,
+  getTicTacToeReservePips,
+  getTicTacToeResetUi,
+  getTicTacToeTurnUi,
+  getTicTacToeWinningLineUi,
+} from "./ticTacToeUi.js";
 import {
   FRUIT_NINJA_BASE_SCORE,
   FRUIT_NINJA_BLADE_TRAIL_MS,
@@ -1737,12 +1748,42 @@ export default function App() {
     0,
     TIC_TAC_TOE_AI_PIECE_LIMIT - fullscreenTicTacToeAiCount,
   );
-  const fullscreenTicTacToeResetCountdown = (
-    Math.max(
-      0,
-      TIC_TAC_TOE_RESET_HOLD_MS - (fullscreenTicTacToeState?.resetHoldMs ?? 0),
-    ) / 1000
-  ).toFixed(2);
+  const fullscreenTicTacToePlayerReservePips = getTicTacToeReservePips(
+    fullscreenTicTacToePlayerReserveCount,
+    TIC_TAC_TOE_PLAYER_PIECE_LIMIT,
+  );
+  const fullscreenTicTacToeAiReservePips = getTicTacToeReservePips(
+    fullscreenTicTacToeAiReserveCount,
+    TIC_TAC_TOE_AI_PIECE_LIMIT,
+  );
+  const fullscreenTicTacToeTurnUi = getTicTacToeTurnUi(fullscreenTicTacToeState);
+  const fullscreenTicTacToeHudUi = getTicTacToeHudUi(fullscreenTicTacToeState, {
+    playerWins: fullscreenTicTacToeState?.playerWins ?? 0,
+    aiWins: fullscreenTicTacToeState?.aiWins ?? 0,
+    draws: fullscreenTicTacToeState?.draws ?? 0,
+    boardCount: fullscreenTicTacToePlayerCount + fullscreenTicTacToeAiCount,
+  });
+  const fullscreenTicTacToeResetUi = getTicTacToeResetUi(fullscreenTicTacToeState, {
+    hasActiveBoard: fullscreenTicTacToeHasActiveBoard,
+    totalMs: TIC_TAC_TOE_RESET_HOLD_MS,
+  });
+  const fullscreenTicTacToeWinningLineUi = getTicTacToeWinningLineUi(
+    fullscreenTicTacToeLayout,
+    fullscreenTicTacToeState?.winningLine,
+  );
+  const fullscreenTicTacToeDraggingCellIndex =
+    fullscreenTicTacToeState?.draggingPiece && fullscreenTicTacToeLayout
+      ? getTicTacToeCellIndex(
+          fullscreenTicTacToeLayout,
+          fullscreenTicTacToeState.draggingPiece.x,
+          fullscreenTicTacToeState.draggingPiece.y,
+        )
+      : -1;
+  const fullscreenTicTacToeCursorUi = getTicTacToeCursorUi(fullscreenTicTacToeState, {
+    handDetected,
+    pinchActive,
+    draggingCellIndex: fullscreenTicTacToeDraggingCellIndex,
+  });
   const fullscreenModeLandingCountdown = (
     Math.max(
       0,
@@ -1897,6 +1938,17 @@ export default function App() {
       Number.isFinite(cameraAspectRatio) && cameraAspectRatio > 0 ? cameraAspectRatio : 4 / 3;
     return createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio);
   }, [cameraAspectRatio, isFullscreenCameraPhase, viewport.height, viewport.width]);
+  const fullscreenTicTacToeCursorPoint =
+    isFullscreenTicTacToeMode &&
+    fullscreenCameraViewport &&
+    handDetected &&
+    Number.isFinite(cursor.x) &&
+    Number.isFinite(cursor.y)
+      ? {
+          x: clampValue(cursor.x - fullscreenCameraViewport.left, 0, fullscreenCameraViewport.width),
+          y: clampValue(cursor.y - fullscreenCameraViewport.top, 0, fullscreenCameraViewport.height),
+        }
+      : null;
 
   const fullscreenCameraGridMetrics = useMemo(() => {
     if (!fullscreenCameraViewport) {
@@ -9656,13 +9708,15 @@ export default function App() {
               />
               <div
                 className={`fullscreen-camera-tic-tac-toe-rail player ${
-                  fullscreenTicTacToeState?.status === "player-turn" ? "active" : ""
-                } ${fullscreenTicTacToeState?.draggingPiece ? "dragging" : ""}`}
+                  fullscreenTicTacToeTurnUi.playerRailState
+                } ${fullscreenTicTacToeLayout?.layoutMode ?? "landscape-rails"} ${
+                  fullscreenTicTacToeState?.draggingPiece ? "dragging" : ""
+                }`}
                 style={{
-                  left: `${(fullscreenTicTacToeLayout?.playerRailCenterX ?? 0) - (fullscreenTicTacToeLayout?.railWidth ?? 0) / 2}px`,
-                  top: `${fullscreenTicTacToeLayout?.railTop ?? 0}px`,
-                  width: `${fullscreenTicTacToeLayout?.railWidth ?? 0}px`,
-                  height: `${fullscreenTicTacToeLayout?.railHeight ?? 0}px`,
+                  left: `${fullscreenTicTacToeLayout?.playerRailLeft ?? 0}px`,
+                  top: `${fullscreenTicTacToeLayout?.playerRailTop ?? 0}px`,
+                  width: `${fullscreenTicTacToeLayout?.playerRailWidth ?? 0}px`,
+                  height: `${fullscreenTicTacToeLayout?.playerRailHeight ?? 0}px`,
                 }}
               >
                 {[-1, 0, 1].map((offset, index) => (
@@ -9670,8 +9724,14 @@ export default function App() {
                     key={`tic-tac-toe-player-stack-${index}`}
                     className="fullscreen-camera-tic-tac-toe-reserve-piece player"
                     style={{
-                      left: "50%",
-                      top: `${(fullscreenTicTacToeLayout?.railHeight ?? 0) / 2 + offset * (fullscreenTicTacToeLayout?.reserveStepY ?? 0)}px`,
+                      left:
+                        fullscreenTicTacToeLayout?.reserveAxis === "x"
+                          ? `${(fullscreenTicTacToeLayout?.playerRailWidth ?? 0) / 2 + offset * (fullscreenTicTacToeLayout?.reserveStepX ?? 0)}px`
+                          : "50%",
+                      top:
+                        fullscreenTicTacToeLayout?.reserveAxis === "x"
+                          ? "50%"
+                          : `${(fullscreenTicTacToeLayout?.playerRailHeight ?? 0) / 2 + offset * (fullscreenTicTacToeLayout?.reserveStepY ?? 0)}px`,
                       width: `${fullscreenTicTacToeLayout?.reservePieceSize ?? 0}px`,
                       height: `${fullscreenTicTacToeLayout?.reservePieceSize ?? 0}px`,
                       opacity:
@@ -9701,19 +9761,29 @@ export default function App() {
                   </span>
                 </div>
                 <div className="fullscreen-camera-tic-tac-toe-rail-label">Your Rail</div>
+                <div className="fullscreen-camera-tic-tac-toe-rail-pips player" aria-hidden="true">
+                  {fullscreenTicTacToePlayerReservePips.map((pip) => (
+                    <span
+                      key={`player-reserve-pip-${pip.index}`}
+                      className={`fullscreen-camera-tic-tac-toe-rail-pip ${pip.className}`}
+                    />
+                  ))}
+                </div>
                 <div className="fullscreen-camera-tic-tac-toe-rail-count">
                   {fullscreenTicTacToePlayerReserveCount} left
                 </div>
               </div>
               <div
                 className={`fullscreen-camera-tic-tac-toe-rail ai ${
+                  fullscreenTicTacToeTurnUi.aiRailState
+                } ${fullscreenTicTacToeLayout?.layoutMode ?? "landscape-rails"} ${
                   fullscreenTicTacToeState?.status === "ai-turn" ? "thinking" : ""
                 }`}
                 style={{
-                  left: `${(fullscreenTicTacToeLayout?.aiRailCenterX ?? 0) - (fullscreenTicTacToeLayout?.railWidth ?? 0) / 2}px`,
-                  top: `${fullscreenTicTacToeLayout?.railTop ?? 0}px`,
-                  width: `${fullscreenTicTacToeLayout?.railWidth ?? 0}px`,
-                  height: `${fullscreenTicTacToeLayout?.railHeight ?? 0}px`,
+                  left: `${fullscreenTicTacToeLayout?.aiRailLeft ?? 0}px`,
+                  top: `${fullscreenTicTacToeLayout?.aiRailTop ?? 0}px`,
+                  width: `${fullscreenTicTacToeLayout?.aiRailWidth ?? 0}px`,
+                  height: `${fullscreenTicTacToeLayout?.aiRailHeight ?? 0}px`,
                 }}
               >
                 {[-1, 0, 1].map((offset, index) => (
@@ -9721,8 +9791,14 @@ export default function App() {
                     key={`tic-tac-toe-ai-stack-${index}`}
                     className="fullscreen-camera-tic-tac-toe-reserve-piece ai"
                     style={{
-                      left: "50%",
-                      top: `${(fullscreenTicTacToeLayout?.railHeight ?? 0) / 2 + offset * (fullscreenTicTacToeLayout?.reserveStepY ?? 0)}px`,
+                      left:
+                        fullscreenTicTacToeLayout?.reserveAxis === "x"
+                          ? `${(fullscreenTicTacToeLayout?.aiRailWidth ?? 0) / 2 + offset * (fullscreenTicTacToeLayout?.reserveStepX ?? 0)}px`
+                          : "50%",
+                      top:
+                        fullscreenTicTacToeLayout?.reserveAxis === "x"
+                          ? "50%"
+                          : `${(fullscreenTicTacToeLayout?.aiRailHeight ?? 0) / 2 + offset * (fullscreenTicTacToeLayout?.reserveStepY ?? 0)}px`,
                       width: `${fullscreenTicTacToeLayout?.reservePieceSize ?? 0}px`,
                       height: `${fullscreenTicTacToeLayout?.reservePieceSize ?? 0}px`,
                       opacity:
@@ -9752,33 +9828,44 @@ export default function App() {
                   </span>
                 </div>
                 <div className="fullscreen-camera-tic-tac-toe-rail-label">O Rail</div>
+                <div className="fullscreen-camera-tic-tac-toe-rail-pips ai" aria-hidden="true">
+                  {fullscreenTicTacToeAiReservePips.map((pip) => (
+                    <span
+                      key={`ai-reserve-pip-${pip.index}`}
+                      className={`fullscreen-camera-tic-tac-toe-rail-pip ${pip.className}`}
+                    />
+                  ))}
+                </div>
                 <div className="fullscreen-camera-tic-tac-toe-rail-count">
                   {fullscreenTicTacToeAiReserveCount} left
                 </div>
               </div>
               <div
                 className={`fullscreen-camera-tic-tac-toe-reset-box ${
-                  !fullscreenTicTacToeHasActiveBoard ? "disabled" : ""
+                  fullscreenTicTacToeResetUi.isDisabled ? "disabled" : ""
                 } ${
-                  fullscreenTicTacToeState?.resetHoldActive ? "active" : ""
+                  fullscreenTicTacToeResetUi.isActive ? "active" : ""
                 }`}
                 style={{
                   left: `${fullscreenTicTacToeLayout?.resetBoxLeft ?? 0}px`,
                   top: `${fullscreenTicTacToeLayout?.resetBoxTop ?? 0}px`,
                   width: `${fullscreenTicTacToeLayout?.resetBoxWidth ?? 0}px`,
                   height: `${fullscreenTicTacToeLayout?.resetBoxHeight ?? 0}px`,
+                  "--tic-tac-toe-reset-progress": fullscreenTicTacToeResetUi.progressDegrees,
                 }}
               >
-                <span className="fullscreen-camera-tic-tac-toe-reset-title">Reset</span>
+                <span
+                  className="fullscreen-camera-tic-tac-toe-reset-progress"
+                  aria-hidden="true"
+                />
+                <span className="fullscreen-camera-tic-tac-toe-reset-title">
+                  {fullscreenTicTacToeResetUi.label}
+                </span>
                 <span className="fullscreen-camera-tic-tac-toe-reset-countdown">
-                  {fullscreenTicTacToeResetCountdown}
+                  {fullscreenTicTacToeResetUi.countdownText}
                 </span>
                 <span className="fullscreen-camera-tic-tac-toe-reset-hint">
-                  {!fullscreenTicTacToeHasActiveBoard
-                    ? "No active board"
-                    : fullscreenTicTacToeState?.resetHoldActive
-                    ? "Keep your index inside"
-                    : "Hold your index inside"}
+                  {fullscreenTicTacToeResetUi.hint}
                 </span>
               </div>
               {Array.from({ length: 9 }, (_, index) => {
@@ -9788,20 +9875,18 @@ export default function App() {
                   return null;
                 }
 
-                const isPreview = fullscreenTicTacToeState?.previewCellIndex === index;
-                const isHover =
-                  fullscreenTicTacToeState?.status === "player-turn" &&
-                  fullscreenTicTacToeState?.hoverCellIndex === index &&
-                  !mark;
-                const isWinning = fullscreenTicTacToeState?.winningLine?.includes(index);
-                const isLastMove = fullscreenTicTacToeState?.lastMoveIndex === index;
+                const cellUi = getTicTacToeCellUi(fullscreenTicTacToeState, index, {
+                  draggingCellIndex: fullscreenTicTacToeDraggingCellIndex,
+                });
+                const markUi = mark
+                  ? getTicTacToeMarkUi(fullscreenTicTacToeState, index, mark, {
+                      playerMark: TIC_TAC_TOE_PLAYER_MARK,
+                      aiMark: TIC_TAC_TOE_AI_MARK,
+                    })
+                  : null;
                 const cellClassName = [
                   "fullscreen-camera-tic-tac-toe-cell",
-                  mark ? "occupied" : "empty",
-                  isPreview ? "preview" : "",
-                  isHover ? "hover" : "",
-                  isWinning ? "winning" : "",
-                  isLastMove ? "last-move" : "",
+                  ...cellUi.classNames,
                 ]
                   .filter(Boolean)
                   .join(" ");
@@ -9820,13 +9905,13 @@ export default function App() {
                     {mark ? (
                       <span
                         className={`fullscreen-camera-tic-tac-toe-mark ${
-                          mark === TIC_TAC_TOE_PLAYER_MARK ? "player" : "ai"
+                          markUi?.classNames.join(" ") ?? ""
                         }`}
                       >
                         {mark}
                       </span>
                     ) : null}
-                    {!mark && isPreview ? (
+                    {cellUi.showPreviewMark ? (
                       <span className="fullscreen-camera-tic-tac-toe-mark player preview">
                         {TIC_TAC_TOE_PLAYER_MARK}
                       </span>
@@ -9834,6 +9919,18 @@ export default function App() {
                   </div>
                 );
               })}
+              {fullscreenTicTacToeWinningLineUi ? (
+                <div
+                  className="fullscreen-camera-tic-tac-toe-winning-line"
+                  style={{
+                    left: `${fullscreenTicTacToeWinningLineUi.left}px`,
+                    top: `${fullscreenTicTacToeWinningLineUi.top}px`,
+                    width: `${fullscreenTicTacToeWinningLineUi.width}px`,
+                    height: `${fullscreenTicTacToeWinningLineUi.thickness}px`,
+                    transform: `translateY(-50%) rotate(${fullscreenTicTacToeWinningLineUi.angleDegrees}deg)`,
+                  }}
+                />
+              ) : null}
               {fullscreenTicTacToeState?.draggingPiece ? (
                 <div
                   className="fullscreen-camera-tic-tac-toe-drag-piece player"
@@ -9849,28 +9946,48 @@ export default function App() {
                   </span>
                 </div>
               ) : null}
-              <div className="fullscreen-camera-tic-tac-toe-scoreboard">
-                <span>You {fullscreenTicTacToeState?.playerWins ?? 0}</span>
-                <span>O {fullscreenTicTacToeState?.aiWins ?? 0}</span>
-                <span>Draws {fullscreenTicTacToeState?.draws ?? 0}</span>
-                <span>
-                  Board {fullscreenTicTacToePlayerCount + fullscreenTicTacToeAiCount}/9
-                </span>
-              </div>
-              <div className="fullscreen-camera-tic-tac-toe-legend">
-                <span>Pinch to grab</span>
-                <span>Release to place</span>
-                <span>Random opening, optimal after</span>
-              </div>
-              {fullscreenTicTacToeState?.message ? (
+              {fullscreenTicTacToeCursorUi.show && fullscreenTicTacToeCursorPoint ? (
                 <div
-                  className={`fullscreen-camera-tic-tac-toe-status ${
-                    fullscreenTicTacToeState?.status ?? ""
-                  }`}
+                  className={`fullscreen-camera-tic-tac-toe-cursor-indicator ${fullscreenTicTacToeCursorUi.tone}`}
+                  style={{
+                    left: `${fullscreenTicTacToeCursorPoint.x}px`,
+                    top: `${fullscreenTicTacToeCursorPoint.y}px`,
+                  }}
                 >
-                  {fullscreenTicTacToeState.message}
+                  {fullscreenTicTacToeCursorUi.label}
                 </div>
               ) : null}
+              <div className="fullscreen-camera-tic-tac-toe-topbar">
+                <div className="fullscreen-camera-tic-tac-toe-scoreboard">
+                  {fullscreenTicTacToeHudUi.scoreItems.map((item) => (
+                    <span key={item}>{item}</span>
+                  ))}
+                </div>
+                {fullscreenTicTacToeHudUi.statusMessage ? (
+                  <div
+                    className={`fullscreen-camera-tic-tac-toe-status ${fullscreenTicTacToeHudUi.statusTone}`}
+                  >
+                    {fullscreenTicTacToeHudUi.statusMessage}
+                  </div>
+                ) : null}
+              </div>
+              {fullscreenTicTacToeHudUi.showLegend ? (
+                <div className="fullscreen-camera-tic-tac-toe-legend">
+                  <span>Pinch to grab</span>
+                  <span>Release to place</span>
+                  <span>Random opening, optimal after</span>
+                </div>
+              ) : null}
+              <div
+                className={`fullscreen-camera-tic-tac-toe-turn-badge ${fullscreenTicTacToeTurnUi.tone}`}
+              >
+                <span className="fullscreen-camera-tic-tac-toe-turn-label">
+                  {fullscreenTicTacToeTurnUi.label}
+                </span>
+                <span className="fullscreen-camera-tic-tac-toe-turn-detail">
+                  {fullscreenTicTacToeTurnUi.detail}
+                </span>
+              </div>
             </div>
           ) : fullscreenGridMode === "hand-bounce" ? (
             <div

@@ -204,8 +204,8 @@ function isPointerOnPlayerRail(layout, pointer) {
   }
 
   const dx = pointer.x - layout.playerRailCenterX;
-  const dy = pointer.y - layout.trayCenterY;
-  const radiusX = layout.railWidth * 0.45;
+  const dy = pointer.y - (layout.playerRailCenterY ?? layout.trayCenterY);
+  const radiusX = (layout.playerRailWidth ?? layout.railWidth) * 0.45;
   const radiusY = layout.activePieceSize * 0.72;
   if (radiusX <= 0 || radiusY <= 0) {
     return false;
@@ -320,6 +320,85 @@ export function createTicTacToeLayout(width, height) {
   const minimumPlayableBoardSize = 180;
   const edgePadding = clamp(safeWidth * 0.032 * TIC_TAC_TOE_LAYOUT_SCALE, 14, 42);
   const railGap = clamp(safeWidth * 0.022 * TIC_TAC_TOE_LAYOUT_SCALE, 10, 34);
+
+  if (safeHeight >= safeWidth * 1.15) {
+    const railHeight = clamp(safeHeight * 0.088, 56, 96);
+    const resetBoxHeight = clamp(safeHeight * 0.095, 64, 112);
+    const boardMaxWidth = safeWidth - edgePadding * 2;
+    const boardMaxHeight =
+      safeHeight - edgePadding * 2 - railHeight * 2 - resetBoxHeight - railGap * 3;
+    const resolvedBoardMaxWidth = Math.max(
+      minimumPlayableBoardSize,
+      Math.min(boardMaxWidth, boardMaxHeight),
+    );
+    const boardMinSize = Math.min(240, resolvedBoardMaxWidth);
+    const boardSize = clamp(resolvedBoardMaxWidth, boardMinSize, 560);
+    const cellSize = boardSize / 3;
+    const railWidth = Math.min(boardSize, safeWidth - edgePadding * 2);
+    const activePieceSize = Math.min(
+      clamp(cellSize * 0.72, 44, 104),
+      railHeight * 0.72,
+    );
+    const reservePieceSize = clamp(activePieceSize * 0.8, 32, 78);
+    const reserveStepX = clamp(activePieceSize * 0.92, 42, 96);
+    const reserveStepY = reserveStepX;
+    const boardLeft = (safeWidth - boardSize) / 2;
+    const playerRailLeft = (safeWidth - railWidth) / 2;
+    const playerRailTop = edgePadding;
+    const boardTop = playerRailTop + railHeight + railGap;
+    const aiRailLeft = playerRailLeft;
+    const aiRailTop = boardTop + boardSize + railGap;
+    const resetBoxWidth = clamp(boardSize * 0.46, 124, Math.min(180, railWidth));
+    const resetBoxLeft = (safeWidth - resetBoxWidth) / 2;
+    const resetBoxTop = clamp(
+      aiRailTop + railHeight + railGap,
+      edgePadding,
+      safeHeight - edgePadding - resetBoxHeight,
+    );
+    const playerRailCenterX = playerRailLeft + railWidth / 2;
+    const playerRailCenterY = playerRailTop + railHeight / 2;
+    const aiRailCenterX = aiRailLeft + railWidth / 2;
+    const aiRailCenterY = aiRailTop + railHeight / 2;
+
+    return {
+      width: safeWidth,
+      height: safeHeight,
+      layoutMode: "portrait-trays",
+      boardLeft,
+      boardTop,
+      boardSize,
+      cellSize,
+      cellInset: clamp(cellSize * 0.1, 10, 28),
+      activePieceSize,
+      reservePieceSize,
+      reserveStepX,
+      reserveStepY,
+      reserveAxis: "x",
+      railWidth,
+      railHeight,
+      railTop: playerRailTop,
+      trayCenterY: playerRailCenterY,
+      gameLeft: boardLeft,
+      gameWidth: boardSize,
+      playerRailLeft,
+      playerRailTop,
+      playerRailWidth: railWidth,
+      playerRailHeight: railHeight,
+      playerRailCenterX,
+      playerRailCenterY,
+      aiRailLeft,
+      aiRailTop,
+      aiRailWidth: railWidth,
+      aiRailHeight: railHeight,
+      aiRailCenterX,
+      aiRailCenterY,
+      resetBoxLeft,
+      resetBoxTop,
+      resetBoxWidth,
+      resetBoxHeight,
+    };
+  }
+
   const railWidth = clamp(safeWidth * 0.15 * TIC_TAC_TOE_LAYOUT_SCALE, 84, 196);
   const resetBoxWidth = clamp(railWidth * 1.08, 120, 216);
   const boardMaxWidth =
@@ -360,6 +439,7 @@ export function createTicTacToeLayout(width, height) {
   return {
     width: safeWidth,
     height: safeHeight,
+    layoutMode: "landscape-rails",
     boardLeft,
     boardTop,
     boardSize,
@@ -374,12 +454,24 @@ export function createTicTacToeLayout(width, height) {
     trayCenterY,
     gameLeft,
     gameWidth,
+    playerRailLeft: gameLeft,
+    playerRailTop: railTop,
+    playerRailWidth: railWidth,
+    playerRailHeight: railHeight,
     playerRailCenterX: gameLeft + railWidth / 2,
+    playerRailCenterY: trayCenterY,
+    aiRailLeft,
+    aiRailTop: railTop,
+    aiRailWidth: railWidth,
+    aiRailHeight: railHeight,
     aiRailCenterX: aiRailLeft + railWidth / 2,
+    aiRailCenterY: trayCenterY,
     resetBoxLeft,
     resetBoxTop,
     resetBoxWidth,
     resetBoxHeight,
+    reserveAxis: "y",
+    reserveStepX: reserveStepY,
   };
 }
 
