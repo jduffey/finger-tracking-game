@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 import { createTicTacToeLayout } from "../src/ticTacToeGame.js";
 import {
+  FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
+  FULLSCREEN_CAMERA_LANDING_OPTIONS,
   FULLSCREEN_CAMERA_MODE_OPTIONS,
   FULLSCREEN_MODE_LANDING_HOLD_MS,
   createFullscreenModeLandingLayout,
@@ -24,12 +26,22 @@ test("createFullscreenModeLandingLayout includes every mode and keeps box propor
   const layout = createFullscreenModeLandingLayout(width, height);
   const ticTacToeLayout = createTicTacToeLayout(width, height);
 
-  assert.equal(layout.boxes.length, FULLSCREEN_CAMERA_MODE_OPTIONS.length);
+  assert.equal(layout.boxes.length, FULLSCREEN_CAMERA_LANDING_OPTIONS.length);
   assert.ok(layout.boxWidth > 0);
   assert.ok(layout.boxHeight > 0);
   assert.ok(
     Math.abs(layout.boxWidth / layout.boxHeight - ticTacToeLayout.resetBoxWidth / ticTacToeLayout.resetBoxHeight) < 1e-6,
   );
+});
+
+test("createFullscreenModeLandingLayout includes a large back to input test tile", () => {
+  const layout = createFullscreenModeLandingLayout(1366, 768);
+  const backBox = layout.boxes.find((box) => box.id === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID);
+
+  assert.ok(backBox);
+  assert.equal(backBox.label, "Back to Input Test");
+  assert.equal(backBox.category, "Navigation");
+  assert.equal(FULLSCREEN_CAMERA_MODE_OPTIONS.some((option) => option.id === backBox.id), false);
 });
 
 test("createFullscreenModeLandingLayout keeps the full menu inside representative viewports", () => {
@@ -155,4 +167,26 @@ test("stepFullscreenModeLanding clears the hold when the pointer leaves the hove
   assert.equal(switched.holdModeId, "hex");
   assert.equal(switched.holdMs, 0);
   assert.equal(switched.selectedModeId, null);
+});
+
+test("stepFullscreenModeLanding selects the back to input test tile after a verified hold", () => {
+  const base = createFullscreenModeLandingState(1280, 720);
+  const backBox = base.layout.boxes.find((box) => box.id === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID);
+  const pointer = getBoxCenter(backBox);
+  const stepsToSelect = Math.ceil((FULLSCREEN_MODE_LANDING_HOLD_MS / 1000) * 60);
+
+  let selectedState = base;
+  for (let index = 0; index < stepsToSelect + 2; index += 1) {
+    selectedState = stepFullscreenModeLanding(selectedState, 1 / 60, {
+      handVerified: true,
+      pointerActive: true,
+      pointerX: pointer.x,
+      pointerY: pointer.y,
+    });
+    if (selectedState.selectedModeId) {
+      break;
+    }
+  }
+
+  assert.equal(selectedState.selectedModeId, FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID);
 });

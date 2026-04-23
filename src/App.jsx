@@ -64,7 +64,7 @@ import {
   shouldShowFullscreenInvadersBanner,
 } from "./fullscreenGameUi.js";
 import {
-  FULLSCREEN_CAMERA_MODE_OPTIONS,
+  FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
   FULLSCREEN_LANDING_MODE,
   FULLSCREEN_MODE_LANDING_HOLD_MS,
   createFullscreenModeLandingState,
@@ -7112,6 +7112,11 @@ export default function App() {
     fullscreenModeLandingStateRef.current = nextState;
     setFullscreenModeLandingState(nextState);
 
+    if (nextState.selectedModeId === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID) {
+      returnFromFullscreenCameraScreen();
+      return;
+    }
+
     if (nextState.selectedModeId && nextState.selectedModeId !== fullscreenGridModeRef.current) {
       setFullscreenGridMode(nextState.selectedModeId);
     }
@@ -10506,7 +10511,7 @@ export default function App() {
               <span className="fullscreen-camera-note">
                 {fullscreenGridMode === FULLSCREEN_LANDING_MODE
                   ? fullscreenModeLandingState?.handVerified
-                    ? "Hold your index fingertip over a box for 1.00 second to open that fullscreen mode. The buttons below still work if you want to switch instantly."
+                    ? "Hold your index fingertip over a box for 1.00 second to open that fullscreen mode."
                     : "Show all five fingertips first so the menu can verify it sees a real hand before hover selection starts."
                   : fullscreenGridMode === "breakout-coop"
                   ? `Breakout Co-op keeps index-finger steering on the paddle, uses support-hand pinch for a ${Math.round(BREAKOUT_COOP_SHIELD_DURATION_MS / 1000)} second shield pulse, and prism bricks split the ball while the shield recharges over about ${Math.round(BREAKOUT_COOP_SHIELD_COOLDOWN_MS / 1000)} seconds.`
@@ -10532,63 +10537,6 @@ export default function App() {
                   ? "Flappy overlay uses pinch rising edges only. Each distinct pinch flaps once, holding a pinch does not retrigger, and pinching after a crash restarts the round."
                   : "Camera fits the window without cropping. Press `Esc` to close."}
               </span>
-              <div className="button-row compact fullscreen-camera-mode-row">
-                <button
-                  type="button"
-                  className={fullscreenGridMode === FULLSCREEN_LANDING_MODE ? "" : "secondary"}
-                  onClick={() => returnToFullscreenCameraMenu("mode_select_button")}
-                >
-                  Mode Select
-                </button>
-                {FULLSCREEN_CAMERA_MODE_OPTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    className={fullscreenGridMode === option.id ? "" : "secondary"}
-                    onClick={() => setFullscreenGridMode(option.id)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-                {fullscreenGridMode === "brick-dodger" ? (
-                  <button type="button" className="secondary" onClick={restartFullscreenBrickDodgerGame}>
-                    Restart Run
-                  </button>
-                ) : null}
-                {fullscreenGridMode === "hand-bounce" ? (
-                  <button type="button" className="secondary" onClick={restartFullscreenHandBounceGame}>
-                    Restart Bounce
-                  </button>
-                ) : null}
-                {fullscreenGridMode === "finger-pong" ? (
-                  <button type="button" className="secondary" onClick={restartFullscreenFingerPongGame}>
-                    Restart Rally
-                  </button>
-                ) : null}
-                {fullscreenGridMode === "tic-tac-toe" ? (
-                  <button type="button" className="secondary" onClick={restartFullscreenTicTacToeGame}>
-                    New Board
-                  </button>
-                ) : null}
-                {fullscreenGridMode === "fruit-ninja" ? (
-                  <button type="button" className="secondary" onClick={restartFullscreenFruitNinjaGame}>
-                    Restart Round
-                  </button>
-                ) : null}
-                {fullscreenGridMode === "sky-patrol" ? (
-                  <button type="button" className="secondary" onClick={restartFullscreenSkyPatrolGame}>
-                    Restart Sortie
-                  </button>
-                ) : null}
-                {fullscreenGridMode === "missile-command" ? (
-                  <button type="button" className="secondary" onClick={restartFullscreenMissileCommandGame}>
-                    Restart Defense
-                  </button>
-                ) : null}
-                <button type="button" className="secondary" onClick={returnFromFullscreenCameraScreen}>
-                  Back to Input Test
-                </button>
-              </div>
             </div>
             {(cameraError || modelError) && (
               <div className="fullscreen-camera-errors">

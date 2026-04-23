@@ -2415,6 +2415,10 @@ body {
   border-color: rgba(153, 221, 244, 0.24);
 }
 
+.fullscreen-camera-mode-landing-box.navigation {
+  border-color: rgba(175, 235, 195, 0.3);
+}
+
 .fullscreen-camera-mode-landing-box.active {
   background:
     linear-gradient(180deg, rgba(154, 52, 25, 0.92), rgba(72, 24, 16, 0.97)),
@@ -2546,10 +2550,6 @@ body {
 .fullscreen-camera-actions {
   align-items: flex-end;
   flex-direction: column;
-}
-
-.fullscreen-camera-mode-row {
-  justify-content: flex-end;
 }
 
 .fullscreen-camera-chip {
