@@ -12,6 +12,7 @@ import {
   getSkyPatrolRadarBlips,
   getSkyPatrolDepthCue,
   getSkyPatrolProjectileUi,
+  getSkyPatrolStartPromptUi,
   getSkyPatrolTargetHealthPips,
   getSkyPatrolThreatUi,
 } from "../src/skyPatrolUi.js";
@@ -163,4 +164,14 @@ test("getSkyPatrolProjectileUi gives each projectile source a readable silhouett
   assert.equal(getSkyPatrolProjectileUi({ kind: "player" }).shape, "player-bolt");
   assert.equal(getSkyPatrolProjectileUi({ kind: "fighter" }).shape, "fighter-round");
   assert.equal(getSkyPatrolProjectileUi({ kind: "turret" }).shape, "turret-shell");
+});
+
+test("getSkyPatrolStartPromptUi shows a short launch prompt only while play begins", () => {
+  const openingPrompt = getSkyPatrolStartPromptUi({ status: "playing", elapsedMs: 900 });
+  const latePrompt = getSkyPatrolStartPromptUi({ status: "playing", elapsedMs: 5200 });
+
+  assert.equal(openingPrompt.visible, true);
+  assert.match(openingPrompt.detail, /Pinch/);
+  assert.equal(latePrompt.visible, false);
+  assert.equal(getSkyPatrolStartPromptUi({ status: "gameover", elapsedMs: 900 }).visible, false);
 });

@@ -6,6 +6,7 @@ import {
 } from "./skyPatrolGame.js";
 
 export const SKY_PATROL_LEGEND_FADE_MS = 6500;
+export const SKY_PATROL_START_PROMPT_MS = 4500;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -270,5 +271,20 @@ export function getSkyPatrolProjectileUi(shot = {}) {
     fill: "#70d6ff",
     core: "#d6f7ff",
     outline: "#123646",
+  };
+}
+
+export function getSkyPatrolStartPromptUi(hud = {}) {
+  const elapsedMs = Number.isFinite(hud.elapsedMs) ? hud.elapsedMs : 0;
+  const visible =
+    hud.status === "playing" &&
+    (typeof hud.startPromptVisible === "boolean"
+      ? hud.startPromptVisible
+      : elapsedMs < SKY_PATROL_START_PROMPT_MS);
+
+  return {
+    visible,
+    title: "Sky Patrol",
+    detail: "Move to strafe. Pinch to fire twin cannons.",
   };
 }

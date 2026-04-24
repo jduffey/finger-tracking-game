@@ -8,6 +8,7 @@ import {
   getSkyPatrolGroundSiteUi,
   getSkyPatrolIncomingIndicators,
   SKY_PATROL_LEGEND_FADE_MS,
+  SKY_PATROL_START_PROMPT_MS,
   getSkyPatrolProjectileUi,
   getSkyPatrolRadarBlips,
   getSkyPatrolTargetHealthPips,
@@ -634,6 +635,9 @@ export function getSkyPatrolHudState(state) {
     incomingIndicators: getSkyPatrolIncomingIndicators(state),
     legendFaded: (state.elapsedMs ?? 0) >= SKY_PATROL_LEGEND_FADE_MS,
     radarBlips: getSkyPatrolRadarBlips(state),
+    startPromptVisible:
+      (state.status ?? "playing") === "playing" &&
+      (state.elapsedMs ?? 0) < SKY_PATROL_START_PROMPT_MS,
     status: state.status ?? "playing",
     message: state.message ?? "",
   };
@@ -658,6 +662,7 @@ export function areSkyPatrolHudStatesEqual(a, b) {
     JSON.stringify(a.incomingIndicators ?? []) === JSON.stringify(b.incomingIndicators ?? []) &&
     a.legendFaded === b.legendFaded &&
     JSON.stringify(a.radarBlips ?? []) === JSON.stringify(b.radarBlips ?? []) &&
+    a.startPromptVisible === b.startPromptVisible &&
     a.status === b.status &&
     a.message === b.message
   );

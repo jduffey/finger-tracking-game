@@ -2031,6 +2031,25 @@ body {
   transform: translateX(-50%);
 }
 
+.fullscreen-camera-sky-patrol-banner.start-prompt {
+  align-items: center;
+  display: grid;
+  gap: 4px;
+  padding: 12px 16px;
+}
+
+.fullscreen-camera-sky-patrol-start-title {
+  color: #fff2a8;
+  font-size: 0.94rem;
+  font-weight: 900;
+}
+
+.fullscreen-camera-sky-patrol-start-detail {
+  color: rgba(235, 244, 255, 0.88);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 .fullscreen-camera-sky-patrol-banner.game-over {
   display: grid;
   gap: 8px;

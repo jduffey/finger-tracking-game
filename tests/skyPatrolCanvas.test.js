@@ -108,6 +108,7 @@ test("getSkyPatrolHudState summarizes the visible Sky Patrol HUD values", () => 
       { id: "turret-1", role: "ground", xPct: 75, yPct: 50 },
       { id: "depot-1", role: "ground", xPct: 50, yPct: 30 },
     ],
+    startPromptVisible: false,
     status: "gameover",
     message: "Squadron down. Pinch to relaunch.",
   });
@@ -149,6 +150,13 @@ test("areSkyPatrolHudStatesEqual only changes when the rendered HUD changes", ()
       { ...hud, radarBlips: [{ id: "ship", xPct: 50, yPct: 78 }] },
       { ...hud, radarBlips: [{ id: "ship", xPct: 51, yPct: 78 }] },
     ),
+    false,
+  );
+  assert.equal(
+    areSkyPatrolHudStatesEqual(hud, {
+      ...hud,
+      startPromptVisible: true,
+    }),
     false,
   );
 });

@@ -125,6 +125,7 @@ import {
   getSkyPatrolHudItems,
   getSkyPatrolLegendUi,
   getSkyPatrolLifeIcons,
+  getSkyPatrolStartPromptUi,
 } from "./skyPatrolUi.js";
 import {
   TIC_TAC_TOE_AI_MARK,
@@ -2152,6 +2153,10 @@ export default function App() {
   );
   const fullscreenSkyPatrolLegendUi = useMemo(
     () => getSkyPatrolLegendUi(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
+  );
+  const fullscreenSkyPatrolStartPromptUi = useMemo(
+    () => getSkyPatrolStartPromptUi(fullscreenSkyPatrolHud),
     [fullscreenSkyPatrolHud],
   );
 
@@ -10483,11 +10488,16 @@ export default function App() {
                     {fullscreenSkyPatrolGameOverUi.restartText}
                   </span>
                 </div>
-              ) : (
-                <div className="fullscreen-camera-sky-patrol-banner">
-                  {fullscreenSkyPatrolHud?.message}
+              ) : fullscreenSkyPatrolStartPromptUi.visible ? (
+                <div className="fullscreen-camera-sky-patrol-banner start-prompt">
+                  <span className="fullscreen-camera-sky-patrol-start-title">
+                    {fullscreenSkyPatrolStartPromptUi.title}
+                  </span>
+                  <span className="fullscreen-camera-sky-patrol-start-detail">
+                    {fullscreenSkyPatrolStartPromptUi.detail}
+                  </span>
                 </div>
-              )}
+              ) : null}
             </div>
           ) : fullscreenGridMode === "invaders" ? (
             <div
