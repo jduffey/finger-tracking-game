@@ -10384,6 +10384,15 @@ export default function App() {
                 ref={fullscreenSkyPatrolCanvasRef}
                 className="fullscreen-camera-sky-patrol-canvas"
               />
+              {fullscreenSkyPatrolHud?.incomingIndicators?.map((indicator) => (
+                <div
+                  key={indicator.id}
+                  className={`fullscreen-camera-sky-patrol-incoming-indicator ${indicator.kind}`}
+                  style={{ left: `${indicator.x}px` }}
+                >
+                  <span />
+                </div>
+              ))}
               <div className="fullscreen-camera-sky-patrol-scoreboard">
                 {fullscreenSkyPatrolHudItems.map((item) => (
                   <span key={item.id} className={`fullscreen-camera-sky-patrol-hud-chip ${item.id}`}>

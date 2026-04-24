@@ -1575,6 +1575,32 @@ body {
   z-index: 1;
 }
 
+.fullscreen-camera-sky-patrol-incoming-indicator {
+  align-items: center;
+  display: flex;
+  height: 28px;
+  justify-content: center;
+  position: absolute;
+  top: 66px;
+  transform: translateX(-50%);
+  width: 34px;
+  z-index: 4;
+}
+
+.fullscreen-camera-sky-patrol-incoming-indicator span {
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-top: 14px solid rgba(255, 229, 124, 0.92);
+  filter: drop-shadow(0 0 10px rgba(255, 192, 82, 0.58));
+  height: 0;
+  width: 0;
+}
+
+.fullscreen-camera-sky-patrol-incoming-indicator.turret span,
+.fullscreen-camera-sky-patrol-incoming-indicator.depot span {
+  border-top-color: rgba(128, 236, 255, 0.9);
+}
+
 .fullscreen-camera-sky-patrol-terrain-row,
 .fullscreen-camera-sky-patrol-terrain-segment,
 .fullscreen-camera-sky-patrol-player,

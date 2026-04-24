@@ -3,6 +3,7 @@ import {
   getSkyPatrolTerrainRows,
   getSkyPatrolTerrainScrollMetrics,
 } from "./skyPatrolGame.js";
+import { getSkyPatrolIncomingIndicators } from "./skyPatrolUi.js";
 
 const SKY_PATROL_TERRAIN_CACHE_EXTRA_ROWS = 4;
 
@@ -425,6 +426,7 @@ export function getSkyPatrolHudState(state) {
     groundTargetCount: state.groundTargets?.length ?? 0,
     fireCooldownMs: state.fireCooldownMs ?? 0,
     fireReady: (state.fireCooldownMs ?? 0) <= 0,
+    incomingIndicators: getSkyPatrolIncomingIndicators(state),
     status: state.status ?? "playing",
     message: state.message ?? "",
   };
@@ -445,6 +447,7 @@ export function areSkyPatrolHudStatesEqual(a, b) {
     a.groundTargetCount === b.groundTargetCount &&
     a.fireCooldownMs === b.fireCooldownMs &&
     a.fireReady === b.fireReady &&
+    JSON.stringify(a.incomingIndicators ?? []) === JSON.stringify(b.incomingIndicators ?? []) &&
     a.status === b.status &&
     a.message === b.message
   );

@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { getSkyPatrolFireCooldownUi, getSkyPatrolHudItems } from "../src/skyPatrolUi.js";
+import {
+  getSkyPatrolFireCooldownUi,
+  getSkyPatrolHudItems,
+  getSkyPatrolIncomingIndicators,
+} from "../src/skyPatrolUi.js";
 
 test("getSkyPatrolHudItems builds tactical HUD chips", () => {
   const items = getSkyPatrolHudItems({
@@ -31,4 +35,22 @@ test("getSkyPatrolFireCooldownUi exposes fire reload progress", () => {
     ready: true,
     progress: 1,
   });
+});
+
+test("getSkyPatrolIncomingIndicators points to threats entering from offscreen", () => {
+  const indicators = getSkyPatrolIncomingIndicators({
+    layout: { width: 960, height: 720 },
+    airEnemies: [
+      { id: "fighter-1", kind: "fighter", x: 320, y: -20, width: 48, height: 52 },
+      { id: "fighter-2", kind: "fighter", x: 520, y: 160, width: 48, height: 52 },
+    ],
+    groundTargets: [{ id: "turret-1", kind: "turret", x: 680, y: -18, width: 32, height: 32 }],
+  });
+
+  assert.deepEqual(
+    indicators.map((indicator) => indicator.id),
+    ["fighter-1", "turret-1"],
+  );
+  assert.equal(indicators[0].edge, "top");
+  assert.equal(indicators[0].x, 320);
 });
