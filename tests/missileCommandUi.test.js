@@ -8,6 +8,7 @@ import {
   getMissileCommandCountdownUi,
   getMissileCommandExplosionUi,
   getMissileCommandGameOverUi,
+  getMissileCommandInterceptorUi,
   getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
   getMissileCommandSceneClassName,
@@ -214,4 +215,24 @@ test("getMissileCommandSceneClassName applies the retro defense identity", () =>
     getMissileCommandSceneClassName(),
     "fullscreen-camera-missile-command retro-defense",
   );
+});
+
+test("Missile Command projectile and structure UI uses shape language", () => {
+  const game = createPlayingMissileCommandGame();
+  const cityUi = getMissileCommandStructureUi(game.structures[0]);
+  const baseUi = getMissileCommandStructureUi(game.structures[1]);
+  const threatUi = getMissileCommandThreatUi({
+    startX: 100,
+    startY: 0,
+    targetX: 100,
+    targetY: 600,
+    x: 100,
+    y: 180,
+  });
+  const interceptorUi = getMissileCommandInterceptorUi();
+
+  assert.equal(cityUi.className.includes("shape-block"), true);
+  assert.equal(baseUi.className.includes("shape-triangle"), true);
+  assert.equal(threatUi.headClassName.includes("shape-diamond"), true);
+  assert.equal(interceptorUi.headClassName.includes("shape-circle"), true);
 });

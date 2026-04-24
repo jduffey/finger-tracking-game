@@ -95,6 +95,7 @@ import {
   getMissileCommandCountdownUi,
   getMissileCommandExplosionUi,
   getMissileCommandGameOverUi,
+  getMissileCommandInterceptorUi,
   getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
   getMissileCommandSceneClassName,
@@ -10616,32 +10617,35 @@ export default function App() {
                   </div>
                 );
               })}
-              {fullscreenMissileCommandState?.interceptors?.map((interceptor) => (
-                <div key={interceptor.id}>
-                  <div
-                    className="fullscreen-camera-missile-trail interceptor"
-                    style={{
-                      left: `${interceptor.originX}px`,
-                      top: `${interceptor.originY}px`,
-                      width: `${Math.hypot(
-                        interceptor.x - interceptor.originX,
-                        interceptor.y - interceptor.originY,
-                      )}px`,
-                      transform: `rotate(${Math.atan2(
-                        interceptor.y - interceptor.originY,
-                        interceptor.x - interceptor.originX,
-                      )}rad)`,
-                    }}
-                  />
-                  <div
-                    className="fullscreen-camera-missile-head interceptor"
-                    style={{
-                      left: `${interceptor.x}px`,
-                      top: `${interceptor.y}px`,
-                    }}
-                  />
-                </div>
-              ))}
+              {fullscreenMissileCommandState?.interceptors?.map((interceptor) => {
+                const interceptorUi = getMissileCommandInterceptorUi();
+                return (
+                  <div key={interceptor.id}>
+                    <div
+                      className={interceptorUi.trailClassName}
+                      style={{
+                        left: `${interceptor.originX}px`,
+                        top: `${interceptor.originY}px`,
+                        width: `${Math.hypot(
+                          interceptor.x - interceptor.originX,
+                          interceptor.y - interceptor.originY,
+                        )}px`,
+                        transform: `rotate(${Math.atan2(
+                          interceptor.y - interceptor.originY,
+                          interceptor.x - interceptor.originX,
+                        )}rad)`,
+                      }}
+                    />
+                    <div
+                      className={interceptorUi.headClassName}
+                      style={{
+                        left: `${interceptor.x}px`,
+                        top: `${interceptor.y}px`,
+                      }}
+                    />
+                  </div>
+                );
+              })}
               {fullscreenMissileCommandState?.explosions?.map((explosion) => {
                 const radius = getMissileCommandExplosionRadius(explosion);
                 const explosionUi = getMissileCommandExplosionUi(explosion);

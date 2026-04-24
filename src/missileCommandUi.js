@@ -162,6 +162,7 @@ export function getMissileCommandStructureUi(structure, { selectedLaunchBaseId =
   const className = [
     "fullscreen-camera-missile-structure",
     structure?.type ?? "",
+    structure?.type === "base" ? "shape-triangle" : "shape-block",
     alive ? "alive" : "destroyed rubble",
     selectedLaunchBase ? "selected-launch-base" : "",
   ]
@@ -197,7 +198,14 @@ export function getMissileCommandThreatUi(threat) {
     progress: Number(progress.toFixed(3)),
     urgency,
     trailClassName: `fullscreen-camera-missile-trail hostile ${urgency}`,
-    headClassName: `fullscreen-camera-missile-head hostile ${urgency}`,
+    headClassName: `fullscreen-camera-missile-head hostile shape-diamond ${urgency}`,
+  };
+}
+
+export function getMissileCommandInterceptorUi() {
+  return {
+    trailClassName: "fullscreen-camera-missile-trail interceptor",
+    headClassName: "fullscreen-camera-missile-head interceptor shape-circle",
   };
 }
 
