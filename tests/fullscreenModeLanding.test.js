@@ -27,6 +27,7 @@ test("createFullscreenModeLandingLayout includes every mode and keeps box propor
   const ticTacToeLayout = createTicTacToeLayout(width, height);
 
   assert.equal(layout.boxes.length, FULLSCREEN_CAMERA_LANDING_OPTIONS.length);
+  assert.ok(layout.boxes.some((box) => box.id === "fingerprint-worlds"));
   assert.ok(layout.boxWidth > 0);
   assert.ok(layout.boxHeight > 0);
   assert.ok(

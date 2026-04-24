@@ -115,6 +115,12 @@ import {
   createSkyPatrolGame,
   stepSkyPatrolGame,
 } from "./skyPatrolGame.js";
+import { WfcWorldRenderer } from "./wfc/WfcWorldRenderer.jsx";
+import {
+  WFC_WORLD_MODE_ID,
+  createWfcWorldGame,
+  stepWfcWorldGame,
+} from "./wfc/wfcWorldGame.js";
 import {
   areSkyPatrolHudStatesEqual,
   createSkyPatrolCanvasRenderer,
@@ -1489,6 +1495,7 @@ export default function App() {
   const [fullscreenFingerPongState, setFullscreenFingerPongState] = useState(null);
   const [fullscreenFruitNinjaState, setFullscreenFruitNinjaState] = useState(null);
   const [fullscreenSkyPatrolHud, setFullscreenSkyPatrolHud] = useState(null);
+  const [fullscreenWfcWorldState, setFullscreenWfcWorldState] = useState(null);
   const [fullscreenInvadersState, setFullscreenInvadersState] = useState(null);
   const [fullscreenFlappyState, setFullscreenFlappyState] = useState(null);
   const [fullscreenMissileCommandState, setFullscreenMissileCommandState] = useState(null);
@@ -1610,6 +1617,9 @@ export default function App() {
   const fullscreenSkyPatrolStateRef = useRef(null);
   const fullscreenSkyPatrolRendererRef = useRef(null);
   const fullscreenSkyPatrolSpriteImageRef = useRef(null);
+  const fullscreenWfcWorldStateRef = useRef(null);
+  const fullscreenWfcWorldViewportRef = useRef(null);
+  const fullscreenWfcWorldLastTickRef = useRef(0);
   const fullscreenInvadersStateRef = useRef(null);
   const fullscreenBreakoutViewportRef = useRef(null);
   const fullscreenFingerPongViewportRef = useRef(null);
@@ -1757,6 +1767,10 @@ export default function App() {
     isFullscreenCameraPhase &&
     fullscreenGridMode === "sky-patrol" &&
     Boolean(fullscreenSkyPatrolHud);
+  const isFullscreenWfcWorldMode =
+    isFullscreenCameraPhase &&
+    fullscreenGridMode === WFC_WORLD_MODE_ID &&
+    Boolean(fullscreenWfcWorldState);
   const isFullscreenInvadersMode =
     isFullscreenCameraPhase && fullscreenGridMode === "invaders" && Boolean(fullscreenInvadersState);
   const isFullscreenFlappyMode =
@@ -2484,6 +2498,7 @@ export default function App() {
       setFullscreenBreakoutCoopState(null);
       setFullscreenFingerPongState(null);
       setFullscreenFruitNinjaState(null);
+      setFullscreenWfcWorldState(null);
       setFullscreenInvadersState(null);
       setFullscreenFlappyState(null);
       setFullscreenMissileCommandState(null);
@@ -2569,6 +2584,14 @@ export default function App() {
 
   useEffect(() => {
     fullscreenSkyPatrolViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
+
+  useEffect(() => {
+    fullscreenWfcWorldStateRef.current = fullscreenWfcWorldState;
+  }, [fullscreenWfcWorldState]);
+
+  useEffect(() => {
+    fullscreenWfcWorldViewportRef.current = fullscreenCameraViewport;
   }, [fullscreenCameraViewport]);
 
   useEffect(() => {
@@ -2858,6 +2881,30 @@ export default function App() {
     );
     fullscreenSkyPatrolLastTickRef.current = 0;
     publishFullscreenSkyPatrolState(nextGame);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== WFC_WORLD_MODE_ID ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenWfcWorldLastTickRef.current = 0;
+      if (fullscreenWfcWorldStateRef.current) {
+        fullscreenWfcWorldStateRef.current = null;
+        setFullscreenWfcWorldState(null);
+      }
+      return undefined;
+    }
+
+    const nextGame = createWfcWorldGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenWfcWorldLastTickRef.current = 0;
+    fullscreenWfcWorldStateRef.current = nextGame;
+    setFullscreenWfcWorldState(nextGame);
     return undefined;
   }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
@@ -7800,6 +7847,44 @@ export default function App() {
     publishFullscreenSkyPatrolState(nextState);
   }
 
+  function updateFullscreenWfcWorldSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== WFC_WORLD_MODE_ID ||
+      !fullscreenWfcWorldStateRef.current
+    ) {
+      fullscreenWfcWorldLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenWfcWorldViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenWfcWorldLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenWfcWorldLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenWfcWorldLastTickRef.current = timestamp;
+
+    const pointerActive =
+      handDetectedRef.current &&
+      Number.isFinite(cursorRef.current?.x) &&
+      Number.isFinite(cursorRef.current?.y);
+    const nextState = stepWfcWorldGame(
+      fullscreenWfcWorldStateRef.current,
+      deltaSeconds,
+      {
+        pointerActive,
+        pointerX: pointerActive ? cursorRef.current.x - viewportMetrics.left : 0,
+        pointerY: pointerActive ? cursorRef.current.y - viewportMetrics.top : 0,
+        pinchActive: handDetectedRef.current && pinchStateRef.current,
+      },
+    );
+    fullscreenWfcWorldStateRef.current = nextState;
+    setFullscreenWfcWorldState(nextState);
+  }
+
   function updateFullscreenInvadersSimulation(timestamp) {
     if (
       phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
@@ -7936,6 +8021,7 @@ export default function App() {
       updateFullscreenBreakoutCoopSimulation,
       updateFullscreenFingerPongSimulation,
       updateFullscreenSkyPatrolSimulation,
+      updateFullscreenWfcWorldSimulation,
       updateFullscreenInvadersSimulation,
       updateFullscreenFlappySimulation,
       updateFullscreenMissileCommandSimulation,
@@ -10630,6 +10716,11 @@ export default function App() {
                 </div>
               ) : null}
             </div>
+          ) : fullscreenGridMode === WFC_WORLD_MODE_ID ? (
+            <WfcWorldRenderer
+              game={fullscreenWfcWorldState}
+              style={fullscreenCameraViewport?.style ?? undefined}
+            />
           ) : fullscreenGridMode === "invaders" ? (
             <div
               className="fullscreen-camera-invaders"
@@ -11118,6 +11209,8 @@ export default function App() {
                     ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
                     : fullscreenGridMode === "sky-patrol"
                     ? "Index fingertip steers a fighter across a vertically scrolling 16-bit coastline. Pinch fires twin cannons, air fighters weave in from above, ground emplacements ride the terrain below, and pinching after a loss relaunches the sortie."
+                    : fullscreenGridMode === WFC_WORLD_MODE_ID
+                    ? "Fingerprint Worlds lets you seed a fantasy map with pinched terrain rules, then Wave Function Collapse fills the rest while obeying the adjacency constraints."
                     : fullscreenGridMode === "invaders"
                     ? "Index fingertip steers the ship with the existing fullscreen smoothing. Pinch fires on a short cooldown, enemies descend in arcade sweeps, and pinch restarts the wave after a loss."
                     : fullscreenGridMode === "missile-command"

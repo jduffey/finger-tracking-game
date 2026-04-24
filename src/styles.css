@@ -1524,6 +1524,197 @@ body {
   transition: width 140ms linear;
 }
 
+.fullscreen-camera-wfc-world {
+  background:
+    radial-gradient(circle at 34% 28%, rgba(115, 177, 123, 0.26), transparent 32%),
+    linear-gradient(135deg, rgba(20, 42, 55, 0.76), rgba(18, 25, 35, 0.9));
+  color: #f5f8ff;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.fullscreen-camera-wfc-title,
+.fullscreen-camera-wfc-status {
+  background: rgba(10, 17, 27, 0.74);
+  border: 1px solid rgba(223, 234, 248, 0.18);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  left: 24px;
+  padding: 10px 14px;
+  position: absolute;
+  z-index: 5;
+}
+
+.fullscreen-camera-wfc-title {
+  align-items: baseline;
+  top: 18px;
+}
+
+.fullscreen-camera-wfc-title strong {
+  color: #fff2a8;
+  font-size: clamp(1rem, 2vw, 1.35rem);
+}
+
+.fullscreen-camera-wfc-title span,
+.fullscreen-camera-wfc-status span,
+.fullscreen-camera-wfc-status strong {
+  color: rgba(235, 244, 255, 0.86);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.fullscreen-camera-wfc-status {
+  align-items: center;
+  bottom: 18px;
+  max-width: min(64vw, 680px);
+}
+
+.fullscreen-camera-wfc-status strong {
+  color: #9be9ff;
+  white-space: nowrap;
+}
+
+.fullscreen-camera-wfc-cell {
+  align-items: center;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--wfc-tile-color) 84%, #ffffff 16%), var(--wfc-tile-color)),
+    rgba(236, 242, 250, 0.1);
+  border: 1px solid rgba(10, 16, 24, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  color: var(--wfc-tile-text);
+  display: flex;
+  height: var(--wfc-cell-size);
+  justify-content: center;
+  left: var(--wfc-cell-left);
+  position: absolute;
+  top: var(--wfc-cell-top);
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+  width: var(--wfc-cell-size);
+  z-index: 3;
+}
+
+.fullscreen-camera-wfc-cell.unresolved {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(226, 240, 255, 0.12) 0,
+      rgba(226, 240, 255, 0.12) 7px,
+      rgba(226, 240, 255, 0.04) 7px,
+      rgba(226, 240, 255, 0.04) 14px
+    ),
+    rgba(10, 17, 27, 0.58);
+  color: rgba(235, 244, 255, 0.5);
+}
+
+.fullscreen-camera-wfc-cell.hovered {
+  box-shadow:
+    inset 0 0 0 2px #fff2a8,
+    0 0 18px rgba(255, 242, 168, 0.3);
+  transform: translateY(-1px);
+  z-index: 4;
+}
+
+.fullscreen-camera-wfc-cell.changed {
+  animation: wfc-cell-pop 180ms ease-out;
+}
+
+.fullscreen-camera-wfc-cell.conflict {
+  box-shadow:
+    inset 0 0 0 2px #ff7171,
+    0 0 18px rgba(255, 82, 82, 0.36);
+}
+
+.fullscreen-camera-wfc-cell-mark {
+  font-size: clamp(0.62rem, 1.05vw, 0.92rem);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.fullscreen-camera-wfc-cell-lock {
+  border-color: transparent transparent #fff2a8 transparent;
+  border-style: solid;
+  border-width: 0 0 9px 9px;
+  bottom: 3px;
+  height: 0;
+  position: absolute;
+  right: 3px;
+  width: 0;
+}
+
+.fullscreen-camera-wfc-palette-tile,
+.fullscreen-camera-wfc-control {
+  align-items: center;
+  border-radius: 8px;
+  display: flex;
+  position: absolute;
+  z-index: 5;
+}
+
+.fullscreen-camera-wfc-palette-tile {
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--wfc-tile-color) 82%, #ffffff 18%), var(--wfc-tile-color));
+  border: 1px solid rgba(10, 16, 24, 0.48);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  color: var(--wfc-tile-text);
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+  padding: 6px;
+}
+
+.fullscreen-camera-wfc-palette-tile.selected {
+  box-shadow:
+    inset 0 0 0 3px #fff2a8,
+    0 0 18px rgba(255, 242, 168, 0.28);
+}
+
+.fullscreen-camera-wfc-palette-tile span {
+  font-size: 1.05rem;
+  font-weight: 950;
+}
+
+.fullscreen-camera-wfc-palette-tile strong {
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.fullscreen-camera-wfc-control {
+  background: rgba(10, 17, 27, 0.76);
+  border: 1px solid rgba(223, 234, 248, 0.22);
+  color: #f5f8ff;
+  font-size: 0.86rem;
+  font-weight: 900;
+  justify-content: center;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-wfc-control.generate {
+  border-color: rgba(255, 242, 168, 0.48);
+  color: #fff2a8;
+}
+
+.fullscreen-camera-wfc-world.conflict .fullscreen-camera-wfc-title,
+.fullscreen-camera-wfc-world.conflict .fullscreen-camera-wfc-status {
+  border-color: rgba(255, 113, 113, 0.58);
+  box-shadow: 0 0 18px rgba(255, 84, 84, 0.16);
+}
+
+@keyframes wfc-cell-pop {
+  0% {
+    transform: scale(0.88);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 .fullscreen-camera-sky-patrol {
   background:
     linear-gradient(180deg, rgba(139, 197, 255, 0.92), rgba(65, 128, 191, 0.7) 18%, rgba(20, 38, 56, 0.28) 44%, transparent 56%),

@@ -21,6 +21,7 @@ export const FULLSCREEN_CAMERA_MODE_OPTIONS = [
   { id: "tic-tac-toe", label: "Tic Tac Toe", category: "Game" },
   { id: "fruit-ninja", label: "Slice Air", category: "Game" },
   { id: "sky-patrol", label: "Sky Patrol", category: "Game" },
+  { id: "fingerprint-worlds", label: "Fingerprint Worlds", category: "Game" },
   { id: "invaders", label: "Invaders", category: "Game" },
   { id: "flappy", label: "Flappy", category: "Game" },
   { id: "missile-command", label: "Missile Command", category: "Game" },
@@ -118,7 +119,7 @@ export function createFullscreenModeLandingLayout(width, height) {
   const columnGap = baseColumnGap * scale;
   const rowGap = baseRowGap * scale;
   const totalHeight = rows * boxHeight + (rows - 1) * rowGap;
-  const startY = contentTop + (contentHeight - totalHeight) / 2;
+  const startY = Math.max(contentTop, contentTop + (contentHeight - totalHeight) / 2);
   const boxes = FULLSCREEN_CAMERA_LANDING_OPTIONS.map((option, index) => {
     const row = Math.floor(index / columns);
     const indexInRow = index % columns;
