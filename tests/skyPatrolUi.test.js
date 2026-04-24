@@ -11,6 +11,7 @@ import {
   getSkyPatrolLifeIcons,
   getSkyPatrolRadarBlips,
   getSkyPatrolDepthCue,
+  getSkyPatrolProjectileUi,
   getSkyPatrolTargetHealthPips,
   getSkyPatrolThreatUi,
 } from "../src/skyPatrolUi.js";
@@ -156,4 +157,10 @@ test("getSkyPatrolDepthCue scales shadows by screen depth", () => {
   assert.ok(lowCue.shadowScale > highCue.shadowScale);
   assert.ok(lowCue.shadowOpacity > highCue.shadowOpacity);
   assert.ok(lowCue.offsetY > highCue.offsetY);
+});
+
+test("getSkyPatrolProjectileUi gives each projectile source a readable silhouette", () => {
+  assert.equal(getSkyPatrolProjectileUi({ kind: "player" }).shape, "player-bolt");
+  assert.equal(getSkyPatrolProjectileUi({ kind: "fighter" }).shape, "fighter-round");
+  assert.equal(getSkyPatrolProjectileUi({ kind: "turret" }).shape, "turret-shell");
 });

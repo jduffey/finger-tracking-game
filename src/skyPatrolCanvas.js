@@ -8,6 +8,7 @@ import {
   getSkyPatrolGroundSiteUi,
   getSkyPatrolIncomingIndicators,
   SKY_PATROL_LEGEND_FADE_MS,
+  getSkyPatrolProjectileUi,
   getSkyPatrolRadarBlips,
   getSkyPatrolTargetHealthPips,
   getSkyPatrolThreatUi,
@@ -466,13 +467,64 @@ function drawHealthPips(ctx, entity, y) {
 }
 
 function drawProjectile(ctx, shot) {
+  const projectileUi = getSkyPatrolProjectileUi(shot);
   const { left, top, width, height } = getEntityBounds(shot);
-  const fill = shot.kind === "player" ? "#ffd178" : "#9be9ff";
-  const outline = shot.kind === "player" ? "#58261c" : "#123646";
-  ctx.fillStyle = outline;
+
+  if (projectileUi.shape === "fighter-round") {
+    fillPixelPath(
+      ctx,
+      [
+        { x: left + width * 0.5, y: top },
+        { x: left + width, y: top + height * 0.5 },
+        { x: left + width * 0.5, y: top + height },
+        { x: left, y: top + height * 0.5 },
+      ],
+      projectileUi.fill,
+      projectileUi.outline,
+    );
+    ctx.fillStyle = projectileUi.core;
+    ctx.fillRect(
+      left + roundPixel(width * 0.34),
+      top + roundPixel(height * 0.34),
+      Math.max(2, roundPixel(width * 0.32)),
+      Math.max(2, roundPixel(height * 0.32)),
+    );
+    return;
+  }
+
+  if (projectileUi.shape === "turret-shell") {
+    ctx.fillStyle = projectileUi.outline;
+    ctx.fillRect(left, top, width, height);
+    ctx.fillStyle = projectileUi.fill;
+    ctx.fillRect(left + 1, top + 1, Math.max(1, width - 2), Math.max(1, height - 2));
+    ctx.fillStyle = projectileUi.core;
+    ctx.fillRect(
+      left + roundPixel(width * 0.3),
+      top + roundPixel(height * 0.18),
+      Math.max(2, roundPixel(width * 0.4)),
+      Math.max(2, roundPixel(height * 0.26)),
+    );
+    ctx.fillStyle = "rgba(155, 233, 255, 0.28)";
+    ctx.fillRect(
+      left + roundPixel(width * 0.2),
+      top - Math.max(2, roundPixel(height * 0.28)),
+      Math.max(2, roundPixel(width * 0.6)),
+      Math.max(2, roundPixel(height * 0.26)),
+    );
+    return;
+  }
+
+  ctx.fillStyle = projectileUi.outline;
   ctx.fillRect(left, top, width, height);
-  ctx.fillStyle = fill;
+  ctx.fillStyle = projectileUi.fill;
   ctx.fillRect(left + 1, top + 1, Math.max(1, width - 2), Math.max(1, height - 2));
+  ctx.fillStyle = projectileUi.core;
+  ctx.fillRect(
+    left + roundPixel(width * 0.34),
+    top + 1,
+    Math.max(2, roundPixel(width * 0.32)),
+    Math.max(2, height - 2),
+  );
 }
 
 function drawExplosion(ctx, explosion, tileSize) {

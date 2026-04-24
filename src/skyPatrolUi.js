@@ -247,3 +247,28 @@ export function getSkyPatrolDepthCue(entity = {}, layout = {}) {
     offsetY: Math.round(entityHeight * (0.28 + depth * 0.34)),
   };
 }
+
+export function getSkyPatrolProjectileUi(shot = {}) {
+  if (shot.kind === "player") {
+    return {
+      shape: "player-bolt",
+      fill: "#fff2a8",
+      core: "#fffef0",
+      outline: "#58261c",
+    };
+  }
+  if (shot.kind === "turret") {
+    return {
+      shape: "turret-shell",
+      fill: "#9be9ff",
+      core: "#e4fbff",
+      outline: "#123646",
+    };
+  }
+  return {
+    shape: "fighter-round",
+    fill: "#70d6ff",
+    core: "#d6f7ff",
+    outline: "#123646",
+  };
+}
