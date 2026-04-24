@@ -12,7 +12,7 @@ const SKY_PATROL_ELEMENT_SCALE = 1;
 const SKY_PATROL_PLAYER_SCALE = 1.5;
 const SKY_PATROL_PLAYER_SHOT_SCALE = 1.5;
 export const SKY_PATROL_PLAYER_FIRE_COOLDOWN_MS = 130;
-const SKY_PATROL_ENEMY_SPAWN_COOLDOWN_MS = 680;
+const SKY_PATROL_ENEMY_SPAWN_COOLDOWN_MS = 1360;
 const SKY_PATROL_GROUND_SPAWN_COOLDOWN_MS = 1320;
 const SKY_PATROL_PLAYER_INVULNERABLE_MS = 980;
 const SKY_PATROL_RESTART_COOLDOWN_MS = 700;
@@ -461,7 +461,7 @@ function createEmptyState(layout) {
     scoreBursts: [],
     damageFlashMs: 0,
     fireCooldownMs: 0,
-    enemySpawnCooldownMs: 320,
+    enemySpawnCooldownMs: 640,
     groundSpawnCooldownMs: 540,
     restartCooldownMs: 0,
     nextFighterId: 1,

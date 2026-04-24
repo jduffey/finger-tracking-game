@@ -272,6 +272,23 @@ test("stepSkyPatrolGame scrolls the map, steers the ship, and fires twin shots w
   assert.equal(second.playerShots.length, 2);
 });
 
+test("stepSkyPatrolGame schedules enemy plane waves at the reduced density", () => {
+  const game = createSkyPatrolGame(960, 720, constantRng(0.5));
+  const next = stepSkyPatrolGame(
+    {
+      ...game,
+      enemySpawnCooldownMs: 0,
+      groundSpawnCooldownMs: Number.POSITIVE_INFINITY,
+    },
+    0.016,
+    {},
+    constantRng(0.5),
+  );
+
+  assert.equal(next.airEnemies.length, 1);
+  assert.ok(next.enemySpawnCooldownMs > 1200);
+});
+
 test("stepSkyPatrolGame awards score when a fighter is destroyed", () => {
   const layout = createSkyPatrolLayout(960, 720);
   const state = {
