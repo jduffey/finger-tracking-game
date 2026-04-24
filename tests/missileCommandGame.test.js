@@ -104,6 +104,9 @@ test("stepMissileCommandGame awards score when an explosion catches a threat", (
   assert.equal(next.threats.length, 0);
   assert.equal(next.score, MISSILE_COMMAND_THREAT_SCORE);
   assert.equal(next.threatsStopped, 1);
+  assert.equal(next.scoreBursts.length, 1);
+  assert.equal(next.scoreBursts[0].value, MISSILE_COMMAND_THREAT_SCORE);
+  assert.equal(next.scoreBursts[0].x, 320);
 });
 
 test("stepMissileCommandGame ends the round when the last structure is destroyed", () => {

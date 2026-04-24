@@ -10647,6 +10647,22 @@ export default function App() {
                   />
                 );
               })}
+              {fullscreenMissileCommandState?.scoreBursts?.map((burst) => {
+                const progress = Math.min(1, burst.ageMs / Math.max(1, burst.durationMs));
+                return (
+                  <div
+                    key={burst.id}
+                    className="fullscreen-camera-missile-score-popup"
+                    style={{
+                      left: `${burst.x}px`,
+                      top: `${burst.y - progress * 34}px`,
+                      opacity: 1 - progress,
+                    }}
+                  >
+                    +{burst.value}
+                  </div>
+                );
+              })}
               {fullscreenMissileCrosshairUi.point ? (
                 <div
                   className={fullscreenMissileCrosshairUi.className}

@@ -2145,6 +2145,17 @@ body {
   position: absolute;
 }
 
+.fullscreen-camera-missile-score-popup {
+  color: #fff8c9;
+  font-size: clamp(0.9rem, 2vw, 1.45rem);
+  font-weight: 900;
+  position: absolute;
+  text-shadow:
+    0 0 12px rgba(255, 226, 112, 0.72),
+    0 4px 12px rgba(0, 0, 0, 0.42);
+  transform: translate(-50%, -50%);
+}
+
 .fullscreen-camera-missile-crosshair {
   border: 2px solid rgba(255, 248, 201, 0.96);
   border-radius: 50%;

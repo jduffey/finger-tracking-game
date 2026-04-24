@@ -1,5 +1,6 @@
 export const MISSILE_COMMAND_COUNTDOWN_MS = 2_000;
 export const MISSILE_COMMAND_THREAT_SCORE = 125;
+export const MISSILE_COMMAND_SCORE_BURST_MS = 760;
 
 const MISSILE_COMMAND_MAX_STEP_SECONDS = 0.05;
 const MISSILE_COMMAND_SPAWN_DELAY_START_MS = 1_400;
@@ -95,6 +96,26 @@ function createExplosion(x, y, maxRadius, durationMs, color, id) {
     maxRadius,
     color,
   };
+}
+
+function createScoreBurst(x, y, value, id) {
+  return {
+    id: `score-burst-${id}`,
+    x,
+    y,
+    value,
+    ageMs: 0,
+    durationMs: MISSILE_COMMAND_SCORE_BURST_MS,
+  };
+}
+
+function ageScoreBursts(scoreBursts, dtMs) {
+  return (Array.isArray(scoreBursts) ? scoreBursts : [])
+    .map((burst) => ({
+      ...burst,
+      ageMs: burst.ageMs + dtMs,
+    }))
+    .filter((burst) => burst.ageMs < burst.durationMs);
 }
 
 export function getMissileCommandExplosionRadius(explosion) {
@@ -216,6 +237,7 @@ export function createMissileCommandGame(width, height) {
     threats: [],
     interceptors: [],
     explosions: [],
+    scoreBursts: [],
     score: 0,
     threatsStopped: 0,
     status: "countdown",
@@ -226,6 +248,7 @@ export function createMissileCommandGame(width, height) {
     nextThreatId: 1,
     nextInterceptorId: 1,
     nextExplosionId: 1,
+    nextScoreBurstId: 1,
     message: "Pinch to fire",
   };
 }
@@ -241,6 +264,7 @@ export function stepMissileCommandGame(state, dtSeconds, rng = Math.random) {
     ...state,
     elapsedMs: state.elapsedMs + dtMs,
     cooldownMs: Math.max(0, state.cooldownMs - dtMs),
+    scoreBursts: ageScoreBursts(state.scoreBursts, dtMs),
   };
 
   if (nextState.status === "countdown") {
@@ -361,6 +385,7 @@ export function stepMissileCommandGame(state, dtSeconds, rng = Math.random) {
 
   let score = nextState.score;
   let threatsStopped = nextState.threatsStopped;
+  let nextScoreBursts = nextState.scoreBursts;
   const survivingThreats = [];
   for (const threat of nextThreats) {
     const hitExplosion = nextExplosions.find(
@@ -371,6 +396,19 @@ export function stepMissileCommandGame(state, dtSeconds, rng = Math.random) {
     if (hitExplosion) {
       score += MISSILE_COMMAND_THREAT_SCORE;
       threatsStopped += 1;
+      nextScoreBursts = [
+        ...nextScoreBursts,
+        createScoreBurst(
+          threat.x,
+          threat.y,
+          MISSILE_COMMAND_THREAT_SCORE,
+          nextState.nextScoreBurstId,
+        ),
+      ];
+      nextState = {
+        ...nextState,
+        nextScoreBurstId: nextState.nextScoreBurstId + 1,
+      };
       continue;
     }
     survivingThreats.push(threat);
@@ -384,6 +422,7 @@ export function stepMissileCommandGame(state, dtSeconds, rng = Math.random) {
     threats: survivingThreats,
     interceptors: nextInterceptors,
     explosions: nextExplosions,
+    scoreBursts: nextScoreBursts,
     score,
     threatsStopped,
     spawnTimerMs,
