@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createMissileCommandGame } from "../src/missileCommandGame.js";
-import { getMissileCommandLaunchPreview } from "../src/missileCommandUi.js";
+import {
+  getMissileCommandCooldownUi,
+  getMissileCommandLaunchPreview,
+} from "../src/missileCommandUi.js";
 
 function createPlayingMissileCommandGame() {
   return {
@@ -33,4 +36,20 @@ test("getMissileCommandLaunchPreview hides when no base can fire", () => {
   };
 
   assert.equal(getMissileCommandLaunchPreview(game, { x: 760, y: 220 }), null);
+});
+
+test("getMissileCommandCooldownUi exposes reload progress for the crosshair", () => {
+  const cooling = {
+    ...createPlayingMissileCommandGame(),
+    cooldownMs: 90,
+  };
+
+  assert.deepEqual(getMissileCommandCooldownUi(cooling), {
+    isCoolingDown: true,
+    reloadProgress: 0.5,
+  });
+  assert.deepEqual(getMissileCommandCooldownUi({ ...cooling, cooldownMs: 0 }), {
+    isCoolingDown: false,
+    reloadProgress: 1,
+  });
 });

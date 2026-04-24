@@ -2055,6 +2055,21 @@ body {
   width: 34px;
 }
 
+.fullscreen-camera-missile-crosshair.cooling {
+  border-color: rgba(255, 201, 111, 0.82);
+}
+
+.fullscreen-camera-missile-cooldown-ring {
+  background: conic-gradient(
+    rgba(255, 248, 201, 0.92) calc(var(--missile-cooldown-progress, 1) * 1turn),
+    rgba(255, 248, 201, 0.12) 0
+  );
+  border-radius: 50%;
+  inset: -9px;
+  mask: radial-gradient(circle, transparent 58%, #000 60%);
+  position: absolute;
+}
+
 .fullscreen-camera-missile-crosshair::before,
 .fullscreen-camera-missile-crosshair::after {
   background: rgba(255, 248, 201, 0.96);

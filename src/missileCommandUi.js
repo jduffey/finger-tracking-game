@@ -1,3 +1,5 @@
+import { MISSILE_COMMAND_INTERCEPT_COOLDOWN_MS } from "./missileCommandGame.js";
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -47,5 +49,22 @@ export function getMissileCommandLaunchPreview(state, aimPoint) {
     targetY,
     distance: Math.hypot(dx, dy),
     angleRad: Math.atan2(dy, dx),
+  };
+}
+
+export function getMissileCommandCooldownUi(state) {
+  const cooldownMs = clamp(
+    Number.isFinite(state?.cooldownMs) ? state.cooldownMs : 0,
+    0,
+    MISSILE_COMMAND_INTERCEPT_COOLDOWN_MS,
+  );
+  const reloadProgress =
+    MISSILE_COMMAND_INTERCEPT_COOLDOWN_MS <= 0
+      ? 1
+      : 1 - cooldownMs / MISSILE_COMMAND_INTERCEPT_COOLDOWN_MS;
+
+  return {
+    isCoolingDown: cooldownMs > 0,
+    reloadProgress: Number(reloadProgress.toFixed(3)),
   };
 }

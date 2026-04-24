@@ -89,7 +89,10 @@ import {
   launchMissileCommandInterceptor,
   stepMissileCommandGame,
 } from "./missileCommandGame.js";
-import { getMissileCommandLaunchPreview } from "./missileCommandUi.js";
+import {
+  getMissileCommandCooldownUi,
+  getMissileCommandLaunchPreview,
+} from "./missileCommandUi.js";
 import {
   SPACE_INVADERS_ENEMY_SCORE,
   createSpaceInvadersGame,
@@ -2082,6 +2085,10 @@ export default function App() {
   const fullscreenMissileLaunchPreview = useMemo(
     () => getMissileCommandLaunchPreview(fullscreenMissileCommandState, fullscreenMissileAimPoint),
     [fullscreenMissileAimPoint, fullscreenMissileCommandState],
+  );
+  const fullscreenMissileCooldownUi = useMemo(
+    () => getMissileCommandCooldownUi(fullscreenMissileCommandState),
+    [fullscreenMissileCommandState],
   );
 
   const fullscreenHexGridMetrics = useMemo(() => {
@@ -10585,12 +10592,17 @@ export default function App() {
               })}
               {fullscreenMissileAimPoint ? (
                 <div
-                  className="fullscreen-camera-missile-crosshair"
+                  className={`fullscreen-camera-missile-crosshair ${
+                    fullscreenMissileCooldownUi.isCoolingDown ? "cooling" : ""
+                  }`}
                   style={{
                     left: `${fullscreenMissileAimPoint.x}px`,
                     top: `${fullscreenMissileAimPoint.y}px`,
+                    "--missile-cooldown-progress": fullscreenMissileCooldownUi.reloadProgress,
                   }}
-                />
+                >
+                  <span className="fullscreen-camera-missile-cooldown-ring" />
+                </div>
               ) : null}
               <div className="fullscreen-camera-missile-scoreboard">
                 <span>Score {fullscreenMissileCommandState?.score ?? 0}</span>
