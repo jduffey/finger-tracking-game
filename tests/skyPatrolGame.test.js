@@ -213,6 +213,7 @@ test("stepSkyPatrolGame enters game over on a hit and restarts on pinch", () => 
   const gameOver = stepSkyPatrolGame(state, 0.016, {}, constantRng(0.5));
   assert.equal(gameOver.status, "gameover");
   assert.equal(gameOver.lives, 0);
+  assert.ok(gameOver.damageFlashMs > 0);
 
   const restarted = stepSkyPatrolGame(
     {

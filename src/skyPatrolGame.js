@@ -16,6 +16,7 @@ const SKY_PATROL_PLAYER_INVULNERABLE_MS = 980;
 const SKY_PATROL_RESTART_COOLDOWN_MS = 700;
 const SKY_PATROL_EXPLOSION_TTL_MS = 460;
 const SKY_PATROL_SCORE_BURST_TTL_MS = 760;
+const SKY_PATROL_DAMAGE_FLASH_MS = 320;
 const SKY_PATROL_SCROLL_TILES_BUFFER = 2;
 const SKY_PATROL_SECONDARY_ISLAND_THRESHOLD = 0.72;
 const SKY_PATROL_RUNWAY_PERIOD_ROWS = 140;
@@ -372,6 +373,7 @@ function createEmptyState(layout) {
     enemyShots: [],
     explosions: [],
     scoreBursts: [],
+    damageFlashMs: 0,
     fireCooldownMs: 0,
     enemySpawnCooldownMs: 320,
     groundSpawnCooldownMs: 540,
@@ -474,6 +476,7 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
     ship,
     explosions: advanceExplosions(state.explosions, dtMs),
     scoreBursts: advanceScoreBursts(state.scoreBursts, dtMs),
+    damageFlashMs: Math.max(0, (state.damageFlashMs ?? 0) - dtMs),
     fireCooldownMs: Math.max(0, state.fireCooldownMs - dtMs),
     enemySpawnCooldownMs: Math.max(0, state.enemySpawnCooldownMs - dtMs),
     groundSpawnCooldownMs: Math.max(0, state.groundSpawnCooldownMs - dtMs),
@@ -515,6 +518,7 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
   let nextScoreBurstId = nextStateBase.nextScoreBurstId;
   const explosions = [...nextStateBase.explosions];
   const scoreBursts = [...nextStateBase.scoreBursts];
+  let damageFlashMs = nextStateBase.damageFlashMs;
   let playerShots = nextStateBase.playerShots.map((shot) => ({ ...shot }));
   let enemyShots = nextStateBase.enemyShots.map((shot) => ({ ...shot }));
   let airEnemies = nextStateBase.airEnemies.map((enemy) => ({ ...enemy }));
@@ -760,6 +764,7 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
     }
 
     lives -= 1;
+    damageFlashMs = SKY_PATROL_DAMAGE_FLASH_MS;
     explosions.push(createExplosion(`fx-${nextFxId}`, hitX, hitY, lives <= 0 ? "crash" : "player"));
     nextFxId += 1;
     ship = {
@@ -822,6 +827,7 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
     groundTargets,
     explosions,
     scoreBursts,
+    damageFlashMs,
     fireCooldownMs,
     enemySpawnCooldownMs,
     groundSpawnCooldownMs,
