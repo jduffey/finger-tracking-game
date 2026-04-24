@@ -1885,6 +1885,24 @@ body {
   font-weight: 900;
 }
 
+.fullscreen-camera-sky-patrol-life-icons {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.fullscreen-camera-sky-patrol-life-icon {
+  background: #fff2a8;
+  clip-path: polygon(50% 0, 70% 28%, 100% 48%, 64% 62%, 58% 100%, 42% 100%, 36% 62%, 0 48%, 30% 28%);
+  display: inline-block;
+  height: 14px;
+  width: 14px;
+}
+
+.fullscreen-camera-sky-patrol-life-icon.lost {
+  background: rgba(226, 239, 255, 0.24);
+}
+
 .fullscreen-camera-sky-patrol-legend {
   bottom: 18px;
   font-size: 0.82rem;

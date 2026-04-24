@@ -96,3 +96,8 @@ export function getSkyPatrolTargetHealthPips(entity = {}) {
 
   return Array.from({ length: maxHp }, (_, index) => (index < hp ? "filled" : "empty"));
 }
+
+export function getSkyPatrolLifeIcons(lives = 0, maxLives = 3) {
+  const safeLives = clamp(Number.isFinite(lives) ? lives : 0, 0, maxLives);
+  return Array.from({ length: maxLives }, (_, index) => (index < safeLives ? "active" : "lost"));
+}

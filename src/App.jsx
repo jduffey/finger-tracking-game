@@ -125,6 +125,7 @@ import {
 import {
   getSkyPatrolFireCooldownUi,
   getSkyPatrolHudItems,
+  getSkyPatrolLifeIcons,
 } from "./skyPatrolUi.js";
 import {
   TIC_TAC_TOE_AI_MARK,
@@ -2141,6 +2142,10 @@ export default function App() {
   const fullscreenSkyPatrolFireCooldownUi = useMemo(
     () => getSkyPatrolFireCooldownUi(fullscreenSkyPatrolHud),
     [fullscreenSkyPatrolHud],
+  );
+  const fullscreenSkyPatrolLifeIcons = useMemo(
+    () => getSkyPatrolLifeIcons(fullscreenSkyPatrolHud?.lives ?? 0, SKY_PATROL_STARTING_LIVES),
+    [fullscreenSkyPatrolHud?.lives],
   );
 
   const fullscreenHexGridMetrics = useMemo(() => {
@@ -10407,7 +10412,18 @@ export default function App() {
                       />
                     ) : null}
                     <span className="fullscreen-camera-sky-patrol-hud-label">{item.label}</span>
-                    <span className="fullscreen-camera-sky-patrol-hud-value">{item.value}</span>
+                    {item.id === "lives" ? (
+                      <span className="fullscreen-camera-sky-patrol-life-icons">
+                        {fullscreenSkyPatrolLifeIcons.map((iconState, index) => (
+                          <span
+                            key={`sky-patrol-life-${index}`}
+                            className={`fullscreen-camera-sky-patrol-life-icon ${iconState}`}
+                          />
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="fullscreen-camera-sky-patrol-hud-value">{item.value}</span>
+                    )}
                   </span>
                 ))}
               </div>

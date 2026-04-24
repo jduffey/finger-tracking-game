@@ -5,6 +5,7 @@ import {
   getSkyPatrolFireCooldownUi,
   getSkyPatrolHudItems,
   getSkyPatrolIncomingIndicators,
+  getSkyPatrolLifeIcons,
   getSkyPatrolTargetHealthPips,
   getSkyPatrolThreatUi,
 } from "../src/skyPatrolUi.js";
@@ -74,4 +75,8 @@ test("getSkyPatrolTargetHealthPips exposes remaining hit points", () => {
     "filled",
     "empty",
   ]);
+});
+
+test("getSkyPatrolLifeIcons turns lives into squadron icons", () => {
+  assert.deepEqual(getSkyPatrolLifeIcons(2, 3), ["active", "active", "lost"]);
 });
