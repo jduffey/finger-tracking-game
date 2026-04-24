@@ -122,6 +122,7 @@ import {
   createSkyPatrolCanvasRenderer,
   getSkyPatrolHudState,
 } from "./skyPatrolCanvas.js";
+import { getSkyPatrolHudItems } from "./skyPatrolUi.js";
 import {
   TIC_TAC_TOE_AI_MARK,
   TIC_TAC_TOE_AI_PIECE_LIMIT,
@@ -2129,6 +2130,10 @@ export default function App() {
   const fullscreenMissileGameOverUi = useMemo(
     () => getMissileCommandGameOverUi(fullscreenMissileCommandState, "Restart Defense"),
     [fullscreenMissileCommandState],
+  );
+  const fullscreenSkyPatrolHudItems = useMemo(
+    () => getSkyPatrolHudItems(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
   );
 
   const fullscreenHexGridMetrics = useMemo(() => {
@@ -10373,11 +10378,12 @@ export default function App() {
                 className="fullscreen-camera-sky-patrol-canvas"
               />
               <div className="fullscreen-camera-sky-patrol-scoreboard">
-                <span>Score {fullscreenSkyPatrolHud?.score ?? 0}</span>
-                <span>Lives {fullscreenSkyPatrolHud?.lives ?? SKY_PATROL_STARTING_LIVES}</span>
-                <span>
-                  Targets {(fullscreenSkyPatrolHud?.activeTargetCount ?? 0).toString()}
-                </span>
+                {fullscreenSkyPatrolHudItems.map((item) => (
+                  <span key={item.id} className={`fullscreen-camera-sky-patrol-hud-chip ${item.id}`}>
+                    <span className="fullscreen-camera-sky-patrol-hud-label">{item.label}</span>
+                    <span className="fullscreen-camera-sky-patrol-hud-value">{item.value}</span>
+                  </span>
+                ))}
               </div>
               <div className="fullscreen-camera-sky-patrol-legend">
                 <span>Fighter +{SKY_PATROL_FIGHTER_SCORE}</span>

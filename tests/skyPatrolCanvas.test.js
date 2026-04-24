@@ -91,6 +91,9 @@ test("getSkyPatrolHudState summarizes the visible Sky Patrol HUD values", () => 
     score: 480,
     lives: 2,
     activeTargetCount: 3,
+    airTargetCount: 1,
+    groundTargetCount: 2,
+    fireReady: true,
     status: "gameover",
     message: "Squadron down. Pinch to relaunch.",
   });

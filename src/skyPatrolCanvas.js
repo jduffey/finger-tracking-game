@@ -421,6 +421,9 @@ export function getSkyPatrolHudState(state) {
     score: state.score ?? 0,
     lives: state.lives ?? SKY_PATROL_STARTING_LIVES,
     activeTargetCount: (state.airEnemies?.length ?? 0) + (state.groundTargets?.length ?? 0),
+    airTargetCount: state.airEnemies?.length ?? 0,
+    groundTargetCount: state.groundTargets?.length ?? 0,
+    fireReady: (state.fireCooldownMs ?? 0) <= 0,
     status: state.status ?? "playing",
     message: state.message ?? "",
   };
@@ -437,6 +440,9 @@ export function areSkyPatrolHudStatesEqual(a, b) {
     a.score === b.score &&
     a.lives === b.lives &&
     a.activeTargetCount === b.activeTargetCount &&
+    a.airTargetCount === b.airTargetCount &&
+    a.groundTargetCount === b.groundTargetCount &&
+    a.fireReady === b.fireReady &&
     a.status === b.status &&
     a.message === b.message
   );
