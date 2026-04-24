@@ -8,6 +8,7 @@ import {
   getMissileCommandLaunchPreview,
   getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
+  getMissileCommandThreatUi,
 } from "../src/missileCommandUi.js";
 
 function createPlayingMissileCommandGame() {
@@ -117,4 +118,18 @@ test("getMissileCommandCrosshairUi names the current fire-control state", () => 
     ).state,
     "no-bases",
   );
+});
+
+test("getMissileCommandThreatUi escalates urgency as threats near impact", () => {
+  const baseThreat = {
+    startX: 100,
+    startY: 0,
+    targetX: 100,
+    targetY: 600,
+    x: 100,
+  };
+
+  assert.equal(getMissileCommandThreatUi({ ...baseThreat, y: 180 }).urgency, "distant");
+  assert.equal(getMissileCommandThreatUi({ ...baseThreat, y: 420 }).urgency, "urgent");
+  assert.equal(getMissileCommandThreatUi({ ...baseThreat, y: 540 }).urgency, "critical");
 });

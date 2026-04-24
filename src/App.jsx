@@ -95,6 +95,7 @@ import {
   getMissileCommandLaunchPreview,
   getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
+  getMissileCommandThreatUi,
 } from "./missileCommandUi.js";
 import {
   SPACE_INVADERS_ENEMY_SCORE,
@@ -10567,29 +10568,32 @@ export default function App() {
                   }}
                 />
               ) : null}
-              {fullscreenMissileCommandState?.threats?.map((threat) => (
-                <div key={threat.id}>
-                  <div
-                    className="fullscreen-camera-missile-trail hostile"
-                    style={{
-                      left: `${threat.startX}px`,
-                      top: `${threat.startY}px`,
-                      width: `${Math.hypot(threat.x - threat.startX, threat.y - threat.startY)}px`,
-                      transform: `rotate(${Math.atan2(
-                        threat.y - threat.startY,
-                        threat.x - threat.startX,
-                      )}rad)`,
-                    }}
-                  />
-                  <div
-                    className="fullscreen-camera-missile-head hostile"
-                    style={{
-                      left: `${threat.x}px`,
-                      top: `${threat.y}px`,
-                    }}
-                  />
-                </div>
-              ))}
+              {fullscreenMissileCommandState?.threats?.map((threat) => {
+                const threatUi = getMissileCommandThreatUi(threat);
+                return (
+                  <div key={threat.id}>
+                    <div
+                      className={threatUi.trailClassName}
+                      style={{
+                        left: `${threat.startX}px`,
+                        top: `${threat.startY}px`,
+                        width: `${Math.hypot(threat.x - threat.startX, threat.y - threat.startY)}px`,
+                        transform: `rotate(${Math.atan2(
+                          threat.y - threat.startY,
+                          threat.x - threat.startX,
+                        )}rad)`,
+                      }}
+                    />
+                    <div
+                      className={threatUi.headClassName}
+                      style={{
+                        left: `${threat.x}px`,
+                        top: `${threat.y}px`,
+                      }}
+                    />
+                  </div>
+                );
+              })}
               {fullscreenMissileCommandState?.interceptors?.map((interceptor) => (
                 <div key={interceptor.id}>
                   <div

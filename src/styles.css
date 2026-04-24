@@ -2088,6 +2088,18 @@ body {
   box-shadow: 0 0 14px rgba(255, 110, 84, 0.54);
 }
 
+.fullscreen-camera-missile-trail.hostile.urgent {
+  background: linear-gradient(90deg, rgba(255, 169, 80, 0.18), rgba(255, 70, 46, 0.98));
+  box-shadow: 0 0 18px rgba(255, 84, 52, 0.72);
+  height: 3px;
+}
+
+.fullscreen-camera-missile-trail.hostile.critical {
+  background: linear-gradient(90deg, rgba(255, 74, 52, 0.2), rgba(255, 30, 30, 1));
+  box-shadow: 0 0 24px rgba(255, 42, 42, 0.86);
+  height: 4px;
+}
+
 .fullscreen-camera-missile-trail.interceptor {
   background: linear-gradient(90deg, rgba(197, 236, 255, 0.22), rgba(153, 233, 255, 0.96));
   box-shadow: 0 0 14px rgba(125, 235, 255, 0.46);
@@ -2104,6 +2116,20 @@ body {
 .fullscreen-camera-missile-head.hostile {
   background: #ff7e61;
   box-shadow: 0 0 18px rgba(255, 126, 97, 0.9);
+}
+
+.fullscreen-camera-missile-head.hostile.urgent {
+  background: #ff4d3f;
+  box-shadow: 0 0 22px rgba(255, 77, 63, 0.96);
+  height: 14px;
+  width: 14px;
+}
+
+.fullscreen-camera-missile-head.hostile.critical {
+  background: #ff1f30;
+  box-shadow: 0 0 28px rgba(255, 31, 48, 1);
+  height: 16px;
+  width: 16px;
 }
 
 .fullscreen-camera-missile-head.interceptor {

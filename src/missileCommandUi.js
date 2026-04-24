@@ -173,6 +173,26 @@ export function getMissileCommandStructureUi(structure, { selectedLaunchBaseId =
           { id: "left", className: "fragment-left" },
           { id: "center", className: "fragment-center" },
           { id: "right", className: "fragment-right" },
-        ],
+    ],
+  };
+}
+
+export function getMissileCommandThreatUi(threat) {
+  const totalDistance = Math.max(
+    1,
+    Math.hypot((threat?.targetX ?? 0) - (threat?.startX ?? 0), (threat?.targetY ?? 0) - (threat?.startY ?? 0)),
+  );
+  const traveledDistance = Math.hypot(
+    (threat?.x ?? 0) - (threat?.startX ?? 0),
+    (threat?.y ?? 0) - (threat?.startY ?? 0),
+  );
+  const progress = clamp(traveledDistance / totalDistance, 0, 1);
+  const urgency = progress >= 0.82 ? "critical" : progress >= 0.58 ? "urgent" : "distant";
+
+  return {
+    progress: Number(progress.toFixed(3)),
+    urgency,
+    trailClassName: `fullscreen-camera-missile-trail hostile ${urgency}`,
+    headClassName: `fullscreen-camera-missile-head hostile ${urgency}`,
   };
 }
