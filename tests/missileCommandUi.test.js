@@ -10,6 +10,7 @@ import {
   getMissileCommandGameOverUi,
   getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
+  getMissileCommandSceneClassName,
   getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
   getMissileCommandThreatUi,
@@ -206,4 +207,11 @@ test("getMissileCommandGameOverUi summarizes final stats and restart affordance"
     { label: "Intercepts", value: 3 },
   ]);
   assert.equal(ui.restartText, "Hold Restart Defense");
+});
+
+test("getMissileCommandSceneClassName applies the retro defense identity", () => {
+  assert.equal(
+    getMissileCommandSceneClassName(),
+    "fullscreen-camera-missile-command retro-defense",
+  );
 });

@@ -97,6 +97,7 @@ import {
   getMissileCommandGameOverUi,
   getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
+  getMissileCommandSceneClassName,
   getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
   getMissileCommandThreatUi,
@@ -10525,7 +10526,7 @@ export default function App() {
             </div>
           ) : fullscreenGridMode === "missile-command" ? (
             <div
-              className="fullscreen-camera-missile-command"
+              className={getMissileCommandSceneClassName()}
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               <div className="fullscreen-camera-missile-skyline" />

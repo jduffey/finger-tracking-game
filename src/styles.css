@@ -1935,16 +1935,36 @@ body {
 }
 
 .fullscreen-camera-missile-command {
+  background:
+    radial-gradient(circle at 24% 18%, rgba(73, 213, 184, 0.1), transparent 28%),
+    linear-gradient(180deg, rgba(4, 10, 24, 0.1), rgba(2, 8, 17, 0.44));
   overflow: hidden;
   pointer-events: none;
   position: absolute;
   z-index: 2;
 }
 
+.fullscreen-camera-missile-command.retro-defense::before {
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.045) 0,
+      rgba(255, 255, 255, 0.045) 1px,
+      transparent 1px,
+      transparent 5px
+    ),
+    radial-gradient(circle at 78% 24%, transparent 0 18%, rgba(95, 255, 208, 0.08) 18.4%, transparent 19.2% 100%);
+  content: "";
+  inset: 0;
+  opacity: 0.68;
+  pointer-events: none;
+  position: absolute;
+}
+
 .fullscreen-camera-missile-skyline {
   background:
-    radial-gradient(circle at 50% 20%, rgba(120, 192, 255, 0.2), transparent 28%),
-    linear-gradient(180deg, rgba(4, 14, 28, 0.1), rgba(4, 14, 28, 0.58));
+    radial-gradient(circle at 50% 20%, rgba(112, 255, 211, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(4, 14, 28, 0.1), rgba(4, 14, 28, 0.66));
   inset: 0;
   position: absolute;
 }

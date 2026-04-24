@@ -1,5 +1,9 @@
 import { MISSILE_COMMAND_INTERCEPT_COOLDOWN_MS } from "./missileCommandGame.js";
 
+export function getMissileCommandSceneClassName() {
+  return "fullscreen-camera-missile-command retro-defense";
+}
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
