@@ -122,7 +122,10 @@ import {
   createSkyPatrolCanvasRenderer,
   getSkyPatrolHudState,
 } from "./skyPatrolCanvas.js";
-import { getSkyPatrolHudItems } from "./skyPatrolUi.js";
+import {
+  getSkyPatrolFireCooldownUi,
+  getSkyPatrolHudItems,
+} from "./skyPatrolUi.js";
 import {
   TIC_TAC_TOE_AI_MARK,
   TIC_TAC_TOE_AI_PIECE_LIMIT,
@@ -2133,6 +2136,10 @@ export default function App() {
   );
   const fullscreenSkyPatrolHudItems = useMemo(
     () => getSkyPatrolHudItems(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
+  );
+  const fullscreenSkyPatrolFireCooldownUi = useMemo(
+    () => getSkyPatrolFireCooldownUi(fullscreenSkyPatrolHud),
     [fullscreenSkyPatrolHud],
   );
 
@@ -10380,6 +10387,16 @@ export default function App() {
               <div className="fullscreen-camera-sky-patrol-scoreboard">
                 {fullscreenSkyPatrolHudItems.map((item) => (
                   <span key={item.id} className={`fullscreen-camera-sky-patrol-hud-chip ${item.id}`}>
+                    {item.id === "fire" ? (
+                      <span
+                        className={`fullscreen-camera-sky-patrol-fire-ring ${
+                          fullscreenSkyPatrolFireCooldownUi.ready ? "ready" : "reloading"
+                        }`}
+                        style={{
+                          "--sky-patrol-fire-progress": fullscreenSkyPatrolFireCooldownUi.progress,
+                        }}
+                      />
+                    ) : null}
                     <span className="fullscreen-camera-sky-patrol-hud-label">{item.label}</span>
                     <span className="fullscreen-camera-sky-patrol-hud-value">{item.value}</span>
                   </span>

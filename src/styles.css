@@ -1828,6 +1828,25 @@ body {
   padding: 4px 8px;
 }
 
+.fullscreen-camera-sky-patrol-hud-chip.fire {
+  align-items: center;
+}
+
+.fullscreen-camera-sky-patrol-fire-ring {
+  background: conic-gradient(
+    rgba(255, 248, 201, 0.92) calc(var(--sky-patrol-fire-progress, 1) * 1turn),
+    rgba(255, 248, 201, 0.14) 0
+  );
+  border-radius: 50%;
+  height: 16px;
+  mask: radial-gradient(circle, transparent 48%, #000 52%);
+  width: 16px;
+}
+
+.fullscreen-camera-sky-patrol-fire-ring.ready {
+  filter: drop-shadow(0 0 8px rgba(255, 248, 201, 0.42));
+}
+
 .fullscreen-camera-sky-patrol-hud-label {
   color: rgba(226, 239, 255, 0.72);
   font-size: 0.68rem;

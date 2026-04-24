@@ -93,6 +93,7 @@ test("getSkyPatrolHudState summarizes the visible Sky Patrol HUD values", () => 
     activeTargetCount: 3,
     airTargetCount: 1,
     groundTargetCount: 2,
+    fireCooldownMs: 0,
     fireReady: true,
     status: "gameover",
     message: "Squadron down. Pinch to relaunch.",

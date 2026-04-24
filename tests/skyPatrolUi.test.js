@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { getSkyPatrolHudItems } from "../src/skyPatrolUi.js";
+import { getSkyPatrolFireCooldownUi, getSkyPatrolHudItems } from "../src/skyPatrolUi.js";
 
 test("getSkyPatrolHudItems builds tactical HUD chips", () => {
   const items = getSkyPatrolHudItems({
@@ -20,4 +20,15 @@ test("getSkyPatrolHudItems builds tactical HUD chips", () => {
     items.map((item) => item.value),
     [480, 2, 1, 2, "Ready"],
   );
+});
+
+test("getSkyPatrolFireCooldownUi exposes fire reload progress", () => {
+  assert.deepEqual(getSkyPatrolFireCooldownUi({ fireCooldownMs: 65 }), {
+    ready: false,
+    progress: 0.5,
+  });
+  assert.deepEqual(getSkyPatrolFireCooldownUi({ fireCooldownMs: 0 }), {
+    ready: true,
+    progress: 1,
+  });
 });

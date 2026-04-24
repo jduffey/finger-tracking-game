@@ -1,3 +1,9 @@
+import { SKY_PATROL_PLAYER_FIRE_COOLDOWN_MS } from "./skyPatrolGame.js";
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
 export function getSkyPatrolHudItems(hud = {}) {
   return [
     {
@@ -26,4 +32,17 @@ export function getSkyPatrolHudItems(hud = {}) {
       value: hud.fireReady ? "Ready" : "Reload",
     },
   ];
+}
+
+export function getSkyPatrolFireCooldownUi(hud = {}) {
+  const cooldownMs = clamp(
+    Number.isFinite(hud.fireCooldownMs) ? hud.fireCooldownMs : 0,
+    0,
+    SKY_PATROL_PLAYER_FIRE_COOLDOWN_MS,
+  );
+
+  return {
+    ready: cooldownMs <= 0,
+    progress: Number((1 - cooldownMs / SKY_PATROL_PLAYER_FIRE_COOLDOWN_MS).toFixed(3)),
+  };
 }
