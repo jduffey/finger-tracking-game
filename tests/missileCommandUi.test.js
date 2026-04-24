@@ -5,6 +5,7 @@ import { createMissileCommandGame } from "../src/missileCommandGame.js";
 import {
   getMissileCommandCooldownUi,
   getMissileCommandLaunchPreview,
+  getMissileCommandTargetWarnings,
 } from "../src/missileCommandUi.js";
 
 function createPlayingMissileCommandGame() {
@@ -52,4 +53,30 @@ test("getMissileCommandCooldownUi exposes reload progress for the crosshair", ()
     isCoolingDown: false,
     reloadProgress: 1,
   });
+});
+
+test("getMissileCommandTargetWarnings marks structures currently under attack", () => {
+  const game = createPlayingMissileCommandGame();
+  const target = game.structures[0];
+  const warnings = getMissileCommandTargetWarnings({
+    ...game,
+    threats: [
+      {
+        id: "threat-1",
+        startX: 480,
+        startY: 0,
+        x: target.x,
+        y: target.y - target.height * 2,
+        targetX: target.x,
+        targetY: target.y - target.height * 0.48,
+        targetStructureId: target.id,
+      },
+    ],
+  });
+
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0].structureId, target.id);
+  assert.equal(warnings[0].threatCount, 1);
+  assert.equal(warnings[0].x, target.x);
+  assert.equal(warnings[0].className.includes("target-warning"), true);
 });

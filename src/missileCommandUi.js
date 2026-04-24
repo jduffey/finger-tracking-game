@@ -68,3 +68,38 @@ export function getMissileCommandCooldownUi(state) {
     reloadProgress: Number(reloadProgress.toFixed(3)),
   };
 }
+
+export function getMissileCommandTargetWarnings(state) {
+  if (!state?.layout || !Array.isArray(state.structures) || !Array.isArray(state.threats)) {
+    return [];
+  }
+
+  const warningsByStructureId = new Map();
+  for (const threat of state.threats) {
+    if (!threat?.targetStructureId) {
+      continue;
+    }
+    const target = state.structures.find(
+      (structure) => structure.id === threat.targetStructureId && structure.alive,
+    );
+    if (!target) {
+      continue;
+    }
+
+    const existing = warningsByStructureId.get(target.id);
+    const threatCount = (existing?.threatCount ?? 0) + 1;
+    warningsByStructureId.set(target.id, {
+      structureId: target.id,
+      x: target.x,
+      y: target.y - target.height * 0.52,
+      width: target.width,
+      height: target.height,
+      threatCount,
+      className: `fullscreen-camera-missile-target-warning ${
+        threatCount > 1 ? "multiple" : "single"
+      }`,
+    });
+  }
+
+  return Array.from(warningsByStructureId.values());
+}

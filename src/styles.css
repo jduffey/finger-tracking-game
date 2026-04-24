@@ -1960,6 +1960,33 @@ body {
   width: 100%;
 }
 
+.fullscreen-camera-missile-target-warning {
+  border: 2px solid rgba(255, 96, 76, 0.82);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 8px rgba(255, 96, 76, 0.1),
+    0 0 24px rgba(255, 78, 56, 0.36);
+  display: grid;
+  place-items: center;
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-missile-target-warning.multiple {
+  border-color: rgba(255, 226, 117, 0.9);
+  box-shadow:
+    0 0 0 10px rgba(255, 178, 71, 0.13),
+    0 0 30px rgba(255, 178, 71, 0.42);
+}
+
+.fullscreen-camera-missile-target-warning-count {
+  color: #fff8df;
+  font-size: 0.86rem;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
 .fullscreen-camera-missile-structure {
   position: absolute;
   transform: translateX(0);

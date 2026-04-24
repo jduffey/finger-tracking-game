@@ -92,6 +92,7 @@ import {
 import {
   getMissileCommandCooldownUi,
   getMissileCommandLaunchPreview,
+  getMissileCommandTargetWarnings,
 } from "./missileCommandUi.js";
 import {
   SPACE_INVADERS_ENEMY_SCORE,
@@ -2088,6 +2089,10 @@ export default function App() {
   );
   const fullscreenMissileCooldownUi = useMemo(
     () => getMissileCommandCooldownUi(fullscreenMissileCommandState),
+    [fullscreenMissileCommandState],
+  );
+  const fullscreenMissileTargetWarnings = useMemo(
+    () => getMissileCommandTargetWarnings(fullscreenMissileCommandState),
     [fullscreenMissileCommandState],
   );
 
@@ -10495,6 +10500,24 @@ export default function App() {
                 className="fullscreen-camera-missile-ground"
                 style={{ top: `${fullscreenMissileCommandState?.layout.groundY ?? 0}px` }}
               />
+              {fullscreenMissileTargetWarnings.map((warning) => (
+                <div
+                  key={`missile-target-warning-${warning.structureId}`}
+                  className={warning.className}
+                  style={{
+                    left: `${warning.x}px`,
+                    top: `${warning.y}px`,
+                    width: `${warning.width * 1.62}px`,
+                    height: `${warning.height * 1.62}px`,
+                  }}
+                >
+                  {warning.threatCount > 1 ? (
+                    <span className="fullscreen-camera-missile-target-warning-count">
+                      {warning.threatCount}
+                    </span>
+                  ) : null}
+                </div>
+              ))}
               {fullscreenMissileCommandState?.structures?.map((structure) => (
                 <div
                   key={structure.id}
