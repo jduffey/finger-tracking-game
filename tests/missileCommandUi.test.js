@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { createMissileCommandGame } from "../src/missileCommandGame.js";
 import {
   getMissileCommandCooldownUi,
+  getMissileCommandCrosshairUi,
   getMissileCommandLaunchPreview,
   getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
@@ -93,4 +94,27 @@ test("getMissileCommandStructureUi exposes rubble affordances for destroyed stru
   assert.equal(ui.className.includes("rubble"), true);
   assert.equal(ui.fragments.length >= 3, true);
   assert.equal(ui.showSmoke, true);
+});
+
+test("getMissileCommandCrosshairUi names the current fire-control state", () => {
+  const ready = createPlayingMissileCommandGame();
+  assert.equal(getMissileCommandCrosshairUi(ready, { x: 200, y: 200 }, true).state, "ready");
+  assert.equal(
+    getMissileCommandCrosshairUi({ ...ready, cooldownMs: 90 }, { x: 200, y: 200 }, true).state,
+    "cooling",
+  );
+  assert.equal(getMissileCommandCrosshairUi(ready, null, false).state, "no-hand");
+  assert.equal(
+    getMissileCommandCrosshairUi(
+      {
+        ...ready,
+        structures: ready.structures.map((structure) =>
+          structure.type === "base" ? { ...structure, alive: false } : structure,
+        ),
+      },
+      { x: 200, y: 200 },
+      true,
+    ).state,
+    "no-bases",
+  );
 });

@@ -10,6 +10,16 @@ function getAliveBases(structures) {
   );
 }
 
+function getFallbackAimPoint(state) {
+  if (!state?.layout) {
+    return null;
+  }
+  return {
+    x: state.layout.width / 2,
+    y: Math.max(42, state.layout.groundY * 0.42),
+  };
+}
+
 export function getMissileCommandLaunchPreview(state, aimPoint) {
   if (
     !state?.layout ||
@@ -66,6 +76,44 @@ export function getMissileCommandCooldownUi(state) {
   return {
     isCoolingDown: cooldownMs > 0,
     reloadProgress: Number(reloadProgress.toFixed(3)),
+  };
+}
+
+export function getMissileCommandCrosshairUi(state, aimPoint, handDetected) {
+  if (!state?.layout) {
+    return {
+      state: "hidden",
+      className: "fullscreen-camera-missile-crosshair hidden",
+      point: null,
+      label: "",
+    };
+  }
+
+  const point =
+    aimPoint && Number.isFinite(aimPoint.x) && Number.isFinite(aimPoint.y)
+      ? aimPoint
+      : getFallbackAimPoint(state);
+  const hasBases = getAliveBases(state.structures).length > 0;
+  const cooldown = getMissileCommandCooldownUi(state);
+  const stateName = !handDetected || !aimPoint
+    ? "no-hand"
+    : !hasBases
+    ? "no-bases"
+    : cooldown.isCoolingDown
+    ? "cooling"
+    : "ready";
+  const labelByState = {
+    ready: "Ready",
+    cooling: "Reloading",
+    "no-hand": "No hand",
+    "no-bases": "No bases",
+  };
+
+  return {
+    state: stateName,
+    className: `fullscreen-camera-missile-crosshair ${stateName}`,
+    point,
+    label: labelByState[stateName] ?? "",
   };
 }
 

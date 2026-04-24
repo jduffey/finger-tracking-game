@@ -2129,8 +2129,24 @@ body {
   width: 34px;
 }
 
+.fullscreen-camera-missile-crosshair.ready {
+  border-color: rgba(180, 255, 218, 0.95);
+  box-shadow: 0 0 16px rgba(92, 255, 196, 0.48);
+}
+
 .fullscreen-camera-missile-crosshair.cooling {
   border-color: rgba(255, 201, 111, 0.82);
+}
+
+.fullscreen-camera-missile-crosshair.no-hand,
+.fullscreen-camera-missile-crosshair.no-bases {
+  border-color: rgba(214, 225, 239, 0.42);
+  border-style: dashed;
+  box-shadow: 0 0 14px rgba(214, 225, 239, 0.2);
+}
+
+.fullscreen-camera-missile-crosshair.no-bases {
+  border-color: rgba(255, 112, 98, 0.58);
 }
 
 .fullscreen-camera-missile-cooldown-ring {
@@ -2144,6 +2160,11 @@ body {
   position: absolute;
 }
 
+.fullscreen-camera-missile-crosshair.no-hand .fullscreen-camera-missile-cooldown-ring,
+.fullscreen-camera-missile-crosshair.no-bases .fullscreen-camera-missile-cooldown-ring {
+  display: none;
+}
+
 .fullscreen-camera-missile-crosshair::before,
 .fullscreen-camera-missile-crosshair::after {
   background: rgba(255, 248, 201, 0.96);
@@ -2152,6 +2173,20 @@ body {
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-missile-crosshair-label {
+  color: #f4f7fb;
+  font-size: 0.58rem;
+  font-weight: 900;
+  left: 50%;
+  letter-spacing: 0;
+  line-height: 1;
+  position: absolute;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  top: calc(100% + 8px);
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .fullscreen-camera-missile-crosshair::before {

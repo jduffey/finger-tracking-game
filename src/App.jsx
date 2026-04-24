@@ -91,6 +91,7 @@ import {
 } from "./missileCommandGame.js";
 import {
   getMissileCommandCooldownUi,
+  getMissileCommandCrosshairUi,
   getMissileCommandLaunchPreview,
   getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
@@ -2091,6 +2092,15 @@ export default function App() {
   const fullscreenMissileCooldownUi = useMemo(
     () => getMissileCommandCooldownUi(fullscreenMissileCommandState),
     [fullscreenMissileCommandState],
+  );
+  const fullscreenMissileCrosshairUi = useMemo(
+    () =>
+      getMissileCommandCrosshairUi(
+        fullscreenMissileCommandState,
+        fullscreenMissileAimPoint,
+        handDetected,
+      ),
+    [fullscreenMissileAimPoint, fullscreenMissileCommandState, handDetected],
   );
   const fullscreenMissileTargetWarnings = useMemo(
     () => getMissileCommandTargetWarnings(fullscreenMissileCommandState),
@@ -10623,18 +10633,19 @@ export default function App() {
                   />
                 );
               })}
-              {fullscreenMissileAimPoint ? (
+              {fullscreenMissileCrosshairUi.point ? (
                 <div
-                  className={`fullscreen-camera-missile-crosshair ${
-                    fullscreenMissileCooldownUi.isCoolingDown ? "cooling" : ""
-                  }`}
+                  className={fullscreenMissileCrosshairUi.className}
                   style={{
-                    left: `${fullscreenMissileAimPoint.x}px`,
-                    top: `${fullscreenMissileAimPoint.y}px`,
+                    left: `${fullscreenMissileCrosshairUi.point.x}px`,
+                    top: `${fullscreenMissileCrosshairUi.point.y}px`,
                     "--missile-cooldown-progress": fullscreenMissileCooldownUi.reloadProgress,
                   }}
                 >
                   <span className="fullscreen-camera-missile-cooldown-ring" />
+                  <span className="fullscreen-camera-missile-crosshair-label">
+                    {fullscreenMissileCrosshairUi.label}
+                  </span>
                 </div>
               ) : null}
               <div className="fullscreen-camera-missile-scoreboard">
