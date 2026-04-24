@@ -63,6 +63,24 @@ test("createFullscreenModeLandingLayout keeps the full menu inside representativ
   }
 });
 
+test("createFullscreenModeLandingLayout reserves space for the fullscreen HUD", () => {
+  for (const [width, height] of [
+    [1280, 720],
+    [960, 720],
+    [390, 844],
+    [320, 440],
+  ]) {
+    const layout = createFullscreenModeLandingLayout(width, height);
+    const minTop = Math.min(...layout.boxes.map((box) => box.top));
+    const maxBottom = Math.max(...layout.boxes.map((box) => box.top + box.height));
+
+    assert.ok(layout.contentTop >= 60, `${width}x${height} should reserve the top HUD`);
+    assert.ok(layout.height - layout.contentBottom >= 18, `${width}x${height} should preserve bottom padding`);
+    assert.ok(minTop >= layout.contentTop, `${width}x${height} should start below the top HUD`);
+    assert.ok(maxBottom <= layout.contentBottom, `${width}x${height} should stay inside the safe content area`);
+  }
+});
+
 test("hasVerifiedFullscreenMenuHand only accepts hands with all five fingertips", () => {
   assert.equal(
     hasVerifiedFullscreenMenuHand({

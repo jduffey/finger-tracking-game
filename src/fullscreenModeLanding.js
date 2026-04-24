@@ -37,6 +37,7 @@ export const FULLSCREEN_CAMERA_LANDING_OPTIONS = [
 
 const MAX_COLUMNS = 5;
 const FULLSCREEN_MENU_REQUIRED_FINGER_NAMES = ["thumb", "index", "middle", "ring", "pinky"];
+const FULLSCREEN_LANDING_TOP_HUD_SAFE_RATIO = 0.1;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -75,9 +76,19 @@ export function createFullscreenModeLandingLayout(width, height) {
   const baseColumnGap = clamp(baseBoxWidth * 0.11, 12, 26);
   const baseRowGap = clamp(baseBoxHeight * 0.1, 12, 24);
   const edgePadding = clamp(Math.min(ticTacToeLayout.width, ticTacToeLayout.height) * 0.04, 18, 42);
+  const contentTop = Math.max(
+    edgePadding,
+    clamp(
+      ticTacToeLayout.height * FULLSCREEN_LANDING_TOP_HUD_SAFE_RATIO,
+      64,
+      92,
+    ),
+  );
+  const contentBottom = ticTacToeLayout.height - edgePadding;
+  const contentHeight = Math.max(1, contentBottom - contentTop);
   const maxColumns = Math.min(MAX_COLUMNS, FULLSCREEN_CAMERA_LANDING_OPTIONS.length);
   const availableWidth = Math.max(1, ticTacToeLayout.width - edgePadding * 2);
-  const availableHeight = Math.max(1, ticTacToeLayout.height - edgePadding * 2);
+  const availableHeight = contentHeight;
 
   let bestColumns = 1;
   let bestRows = FULLSCREEN_CAMERA_LANDING_OPTIONS.length;
@@ -107,7 +118,7 @@ export function createFullscreenModeLandingLayout(width, height) {
   const columnGap = baseColumnGap * scale;
   const rowGap = baseRowGap * scale;
   const totalHeight = rows * boxHeight + (rows - 1) * rowGap;
-  const startY = (ticTacToeLayout.height - totalHeight) / 2;
+  const startY = contentTop + (contentHeight - totalHeight) / 2;
   const boxes = FULLSCREEN_CAMERA_LANDING_OPTIONS.map((option, index) => {
     const row = Math.floor(index / columns);
     const indexInRow = index % columns;
@@ -137,6 +148,8 @@ export function createFullscreenModeLandingLayout(width, height) {
     columns,
     rows,
     scale,
+    contentTop,
+    contentBottom,
     boxes,
   };
 }
