@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   getFullscreenTrackedHandLimit,
   getFullscreenTrackedFingerNames,
+  shouldShowFullscreenNeonHandOutline,
   shouldShowFullscreenHandSkeleton,
   shouldShowFullscreenInvadersBanner,
 } from "../src/fullscreenGameUi.js";
@@ -28,6 +29,12 @@ test("getFullscreenTrackedHandLimit locks tic tac toe to one hand", () => {
 test("shouldShowFullscreenHandSkeleton reuses the Minority Report hand overlay for tic tac toe", () => {
   assert.equal(shouldShowFullscreenHandSkeleton("tic-tac-toe"), true);
   assert.equal(shouldShowFullscreenHandSkeleton("brick-dodger"), false);
+});
+
+test("shouldShowFullscreenNeonHandOutline reserves neon hand tracing for Sky Patrol", () => {
+  assert.equal(shouldShowFullscreenNeonHandOutline("sky-patrol"), true);
+  assert.equal(shouldShowFullscreenNeonHandOutline("tic-tac-toe"), false);
+  assert.equal(shouldShowFullscreenNeonHandOutline("brick-dodger"), false);
 });
 
 test("shouldShowFullscreenInvadersBanner hides the banner while the round is active", () => {

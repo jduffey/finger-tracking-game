@@ -60,6 +60,7 @@ import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.j
 import {
   getFullscreenTrackedHandLimit,
   getFullscreenTrackedFingerNames,
+  shouldShowFullscreenNeonHandOutline,
   shouldShowFullscreenHandSkeleton,
   shouldShowFullscreenInvadersBanner,
 } from "./fullscreenGameUi.js";
@@ -6887,6 +6888,77 @@ export default function App() {
     }
   }
 
+  function drawNeonActiveHandOutline(hands) {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+    const activeHand = Array.isArray(hands) ? hands[0] ?? null : null;
+    const landmarks = Array.isArray(activeHand?.landmarks) ? activeHand.landmarks : [];
+    if (landmarks.length === 0) {
+      return;
+    }
+    const renderMetrics = computeCameraRenderMetrics();
+
+    const drawConnection = (startIndex, endIndex) => {
+      const projectedStart = projectCameraPointToCanvas(landmarks[startIndex], renderMetrics);
+      const projectedEnd = projectCameraPointToCanvas(landmarks[endIndex], renderMetrics);
+      if (!projectedStart || !projectedEnd) {
+        return;
+      }
+      ctx.beginPath();
+      ctx.moveTo(projectedStart.x, projectedStart.y);
+      ctx.lineTo(projectedEnd.x, projectedEnd.y);
+      ctx.stroke();
+    };
+
+    const drawHandConnections = () => {
+      for (const [startIndex, endIndex] of HAND_ROOT_CONNECTIONS) {
+        drawConnection(startIndex, endIndex);
+      }
+      for (const chain of HAND_FINGER_CHAINS) {
+        for (let index = 1; index < chain.length; index += 1) {
+          drawConnection(chain[index - 1], chain[index]);
+        }
+      }
+    };
+
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.shadowColor = "rgba(80, 255, 230, 0.95)";
+    ctx.shadowBlur = 20;
+    ctx.strokeStyle = "rgba(64, 255, 225, 0.72)";
+    ctx.lineWidth = 8;
+    drawHandConnections();
+
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = "rgba(222, 255, 250, 0.96)";
+    ctx.lineWidth = 2.4;
+    drawHandConnections();
+
+    for (const tipIndex of HAND_FINGERTIP_INDEXES) {
+      const projectedTip = projectCameraPointToCanvas(landmarks[tipIndex], renderMetrics);
+      if (!projectedTip) {
+        continue;
+      }
+      ctx.fillStyle = "rgba(219, 255, 248, 0.98)";
+      ctx.beginPath();
+      ctx.arc(projectedTip.x, projectedTip.y, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(64, 255, 225, 0.94)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(projectedTip.x, projectedTip.y, 10, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawPoseOverlay(pose, hands = []) {
     const canvas = overlayCanvasRef.current;
     if (!canvas) {
@@ -7200,6 +7272,14 @@ export default function App() {
     const indexPoints = getFullscreenIndexOverlayPoints(hands);
     const tipPoints = getFullscreenTipOverlayPoints(hands);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (shouldShowFullscreenNeonHandOutline(fullscreenGridModeRef.current)) {
+      drawNeonActiveHandOutline(hands);
+      return {
+        indexPoints,
+        tipPoints,
+      };
+    }
 
     if (
       fullscreenGridModeRef.current === "hand-bounce" ||
