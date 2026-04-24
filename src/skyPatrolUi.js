@@ -12,7 +12,12 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function objectOrEmpty(value) {
+  return value && typeof value === "object" ? value : {};
+}
+
 export function getSkyPatrolHudItems(hud = {}) {
+  hud = objectOrEmpty(hud);
   return [
     {
       id: "score",
@@ -43,6 +48,7 @@ export function getSkyPatrolHudItems(hud = {}) {
 }
 
 export function getSkyPatrolFireCooldownUi(hud = {}) {
+  hud = objectOrEmpty(hud);
   const cooldownMs = clamp(
     Number.isFinite(hud.fireCooldownMs) ? hud.fireCooldownMs : 0,
     0,
@@ -56,6 +62,7 @@ export function getSkyPatrolFireCooldownUi(hud = {}) {
 }
 
 export function getSkyPatrolIncomingIndicators(state = {}) {
+  state = objectOrEmpty(state);
   const layout = state.layout ?? {};
   const width = Number.isFinite(layout.width) ? layout.width : 0;
   const topThreshold = Math.max(36, (layout.height ?? 0) * 0.08);
@@ -75,6 +82,7 @@ export function getSkyPatrolIncomingIndicators(state = {}) {
 }
 
 export function getSkyPatrolThreatUi(entity = {}) {
+  entity = objectOrEmpty(entity);
   if (entity.kind === "fighter") {
     return {
       role: "air",
@@ -94,6 +102,7 @@ export function getSkyPatrolThreatUi(entity = {}) {
 }
 
 export function getSkyPatrolTargetHealthPips(entity = {}) {
+  entity = objectOrEmpty(entity);
   const maxHp =
     Number.isFinite(entity.maxHp) && entity.maxHp > 0
       ? entity.maxHp
@@ -111,6 +120,7 @@ export function getSkyPatrolLifeIcons(lives = 0, maxLives = 3) {
 }
 
 export function getSkyPatrolGameOverUi(hud = {}) {
+  hud = objectOrEmpty(hud);
   if (hud.status !== "gameover") {
     return {
       visible: false,
@@ -132,6 +142,7 @@ export function getSkyPatrolGameOverUi(hud = {}) {
 }
 
 export function getSkyPatrolLegendUi(hud = {}) {
+  hud = objectOrEmpty(hud);
   const elapsedMs = Number.isFinite(hud.elapsedMs) ? hud.elapsedMs : 0;
   const faded =
     typeof hud.legendFaded === "boolean"
@@ -172,6 +183,7 @@ export function getSkyPatrolLegendUi(hud = {}) {
 }
 
 export function getSkyPatrolRadarBlips(state = {}) {
+  state = objectOrEmpty(state);
   const layout = state.layout ?? {};
   const width = Number.isFinite(layout.width) && layout.width > 0 ? layout.width : 1;
   const height = Number.isFinite(layout.height) && layout.height > 0 ? layout.height : 1;
@@ -210,6 +222,7 @@ export function getSkyPatrolRadarBlips(state = {}) {
 }
 
 export function getSkyPatrolGroundSiteUi(target = {}) {
+  target = objectOrEmpty(target);
   if (target.siteTerrain === "runway") {
     return {
       marker: "runway-pad",
@@ -229,6 +242,8 @@ export function getSkyPatrolGroundSiteUi(target = {}) {
 }
 
 export function getSkyPatrolDepthCue(entity = {}, layout = {}) {
+  entity = objectOrEmpty(entity);
+  layout = objectOrEmpty(layout);
   const height = Number.isFinite(layout.height) && layout.height > 0 ? layout.height : 1;
   const depth = clamp((entity.y ?? 0) / height, 0, 1);
   const entityHeight = Number.isFinite(entity.height) ? entity.height : 36;
@@ -250,6 +265,7 @@ export function getSkyPatrolDepthCue(entity = {}, layout = {}) {
 }
 
 export function getSkyPatrolProjectileUi(shot = {}) {
+  shot = objectOrEmpty(shot);
   if (shot.kind === "player") {
     return {
       shape: "player-bolt",
@@ -275,6 +291,7 @@ export function getSkyPatrolProjectileUi(shot = {}) {
 }
 
 export function getSkyPatrolStartPromptUi(hud = {}) {
+  hud = objectOrEmpty(hud);
   const elapsedMs = Number.isFinite(hud.elapsedMs) ? hud.elapsedMs : 0;
   const visible =
     hud.status === "playing" &&

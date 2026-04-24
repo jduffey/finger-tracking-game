@@ -36,6 +36,20 @@ test("getSkyPatrolHudItems builds tactical HUD chips", () => {
   );
 });
 
+test("Sky Patrol UI helpers tolerate a missing HUD before the mode starts", () => {
+  assert.deepEqual(
+    getSkyPatrolHudItems(null).map((item) => item.value),
+    [0, 0, 0, 0, "Reload"],
+  );
+  assert.deepEqual(getSkyPatrolFireCooldownUi(null), {
+    ready: true,
+    progress: 1,
+  });
+  assert.equal(getSkyPatrolGameOverUi(null).visible, false);
+  assert.equal(getSkyPatrolLegendUi(null).visible, true);
+  assert.equal(getSkyPatrolStartPromptUi(null).visible, false);
+});
+
 test("getSkyPatrolFireCooldownUi exposes fire reload progress", () => {
   assert.deepEqual(getSkyPatrolFireCooldownUi({ fireCooldownMs: 65 }), {
     ready: false,
