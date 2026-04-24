@@ -4,6 +4,7 @@ import {
   getSkyPatrolTerrainScrollMetrics,
 } from "./skyPatrolGame.js";
 import {
+  getSkyPatrolDepthCue,
   getSkyPatrolGroundSiteUi,
   getSkyPatrolIncomingIndicators,
   SKY_PATROL_LEGEND_FADE_MS,
@@ -373,6 +374,28 @@ function drawGroundTarget(ctx, target) {
   drawHealthPips(ctx, target, top - 6);
 }
 
+function drawEntityShadow(ctx, entity, layout) {
+  const cue = getSkyPatrolDepthCue(entity, layout);
+  const shadowWidth = Math.max(8, roundPixel((entity.width ?? 24) * cue.shadowScale));
+  const shadowHeight = Math.max(4, roundPixel((entity.height ?? 24) * 0.16 * cue.shadowScale));
+  const centerX = entity.x ?? 0;
+  const centerY = (entity.y ?? 0) + cue.offsetY;
+
+  ctx.save();
+  ctx.globalAlpha = cue.shadowOpacity;
+  fillPixelPath(
+    ctx,
+    [
+      { x: centerX - shadowWidth / 2, y: centerY },
+      { x: centerX, y: centerY - shadowHeight / 2 },
+      { x: centerX + shadowWidth / 2, y: centerY },
+      { x: centerX, y: centerY + shadowHeight / 2 },
+    ],
+    "rgba(8, 15, 24, 0.72)",
+  );
+  ctx.restore();
+}
+
 function drawGroundTargetSite(ctx, target) {
   const siteUi = getSkyPatrolGroundSiteUi(target);
   const { top, width, height } = getEntityBounds(target);
@@ -512,9 +535,11 @@ function drawSkyPatrolFrame(renderer, state) {
   drawTerrain(ctx, renderer, state);
 
   for (const target of state.groundTargets ?? []) {
+    drawEntityShadow(ctx, target, state.layout);
     drawGroundTarget(ctx, target);
   }
   for (const enemy of state.airEnemies ?? []) {
+    drawEntityShadow(ctx, enemy, state.layout);
     drawEnemyShip(ctx, enemy);
   }
   for (const shot of state.playerShots ?? []) {
@@ -524,6 +549,7 @@ function drawSkyPatrolFrame(renderer, state) {
     drawProjectile(ctx, shot);
   }
   if (state.ship) {
+    drawEntityShadow(ctx, state.ship, state.layout);
     ctx.save();
     if (state.ship.invulnerableMs > 0) {
       ctx.globalAlpha = 0.58;

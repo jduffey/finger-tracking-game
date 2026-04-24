@@ -226,3 +226,24 @@ export function getSkyPatrolGroundSiteUi(target = {}) {
     accent: "camo",
   };
 }
+
+export function getSkyPatrolDepthCue(entity = {}, layout = {}) {
+  const height = Number.isFinite(layout.height) && layout.height > 0 ? layout.height : 1;
+  const depth = clamp((entity.y ?? 0) / height, 0, 1);
+  const entityHeight = Number.isFinite(entity.height) ? entity.height : 36;
+  const isGround = entity.kind === "turret" || entity.kind === "depot";
+
+  if (isGround) {
+    return {
+      shadowScale: 1.08,
+      shadowOpacity: 0.22,
+      offsetY: Math.round(entityHeight * 0.22),
+    };
+  }
+
+  return {
+    shadowScale: Number((0.62 + depth * 0.5).toFixed(2)),
+    shadowOpacity: Number((0.1 + depth * 0.24).toFixed(2)),
+    offsetY: Math.round(entityHeight * (0.28 + depth * 0.34)),
+  };
+}

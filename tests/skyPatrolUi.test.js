@@ -10,6 +10,7 @@ import {
   getSkyPatrolLegendUi,
   getSkyPatrolLifeIcons,
   getSkyPatrolRadarBlips,
+  getSkyPatrolDepthCue,
   getSkyPatrolTargetHealthPips,
   getSkyPatrolThreatUi,
 } from "../src/skyPatrolUi.js";
@@ -146,4 +147,13 @@ test("getSkyPatrolGroundSiteUi marks the terrain supporting each ground target",
     marker: "field-pad",
     accent: "camo",
   });
+});
+
+test("getSkyPatrolDepthCue scales shadows by screen depth", () => {
+  const highCue = getSkyPatrolDepthCue({ kind: "fighter", y: 96, height: 52 }, { height: 720 });
+  const lowCue = getSkyPatrolDepthCue({ kind: "fighter", y: 612, height: 52 }, { height: 720 });
+
+  assert.ok(lowCue.shadowScale > highCue.shadowScale);
+  assert.ok(lowCue.shadowOpacity > highCue.shadowOpacity);
+  assert.ok(lowCue.offsetY > highCue.offsetY);
 });
