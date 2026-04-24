@@ -7,6 +7,7 @@ import {
   SKY_PATROL_STARTING_LIVES,
   createSkyPatrolGame,
   createSkyPatrolLayout,
+  getSkyPatrolTerrainRows,
   getSkyPatrolVisibleTerrainRows,
   stepSkyPatrolGame,
 } from "../src/skyPatrolGame.js";
@@ -40,6 +41,19 @@ function isSkyPatrolWaterOrBeachTerrain(terrain) {
   return terrain === "deep-water" || terrain === "shallow-water" || terrain === "beach";
 }
 
+function getEightWayNeighbors(tilesByRow, rowIndex, column) {
+  const neighbors = [];
+  for (let rowOffset = -1; rowOffset <= 1; rowOffset += 1) {
+    for (let columnOffset = -1; columnOffset <= 1; columnOffset += 1) {
+      if (rowOffset === 0 && columnOffset === 0) {
+        continue;
+      }
+      neighbors.push(tilesByRow[rowIndex + rowOffset]?.[column + columnOffset]);
+    }
+  }
+  return neighbors;
+}
+
 test("getSkyPatrolVisibleTerrainRows yields water, land, and runway terrain bands", () => {
   const layout = createSkyPatrolLayout(960, 720);
   const terrains = new Set();
@@ -63,7 +77,7 @@ test("Sky Patrol water is shallow only when adjacent to land", () => {
   const tilesByRow = rows.map((row) => expandTerrainSegments(row, layout.columns));
 
   let shallowWaterTiles = 0;
-  for (let rowIndex = 0; rowIndex < tilesByRow.length; rowIndex += 1) {
+  for (let rowIndex = 1; rowIndex < tilesByRow.length - 1; rowIndex += 1) {
     for (let column = 0; column < layout.columns; column += 1) {
       if (tilesByRow[rowIndex][column] !== "shallow-water") {
         continue;
@@ -86,6 +100,29 @@ test("Sky Patrol water is shallow only when adjacent to land", () => {
   assert.ok(shallowWaterTiles > 0);
 });
 
+test("Sky Patrol beach tiles are adjacent to other beach tiles", () => {
+  const layout = createSkyPatrolLayout(960, 720);
+  const rows = getSkyPatrolTerrainRows(layout, 0, 220);
+  const tilesByRow = rows.map((row) => expandTerrainSegments(row, layout.columns));
+
+  let beachTiles = 0;
+  for (let rowIndex = 1; rowIndex < tilesByRow.length - 1; rowIndex += 1) {
+    for (let column = 0; column < layout.columns; column += 1) {
+      if (tilesByRow[rowIndex][column] !== "beach") {
+        continue;
+      }
+
+      beachTiles += 1;
+      assert.ok(
+        getEightWayNeighbors(tilesByRow, rowIndex, column).includes("beach"),
+        `expected beach at row ${rowIndex}, column ${column} to touch another beach tile`,
+      );
+    }
+  }
+
+  assert.ok(beachTiles > 0);
+});
+
 test("Sky Patrol grass only varies when adjacent to water or beach", () => {
   const layout = createSkyPatrolLayout(960, 720);
   const rows = getSkyPatrolVisibleTerrainRows(layout, layout.tileSize * 60);
@@ -96,7 +133,7 @@ test("Sky Patrol grass only varies when adjacent to water or beach", () => {
   assert.ok(terrains.has("coastal-grass"));
   assert.equal(terrains.has("forest"), false);
 
-  for (let rowIndex = 0; rowIndex < tilesByRow.length; rowIndex += 1) {
+  for (let rowIndex = 1; rowIndex < tilesByRow.length - 1; rowIndex += 1) {
     for (let column = 0; column < layout.columns; column += 1) {
       const terrain = tilesByRow[rowIndex][column];
       const neighbors = [
@@ -180,11 +217,27 @@ test("createSkyPatrolGame starts with a centered ship and full lives", () => {
   assert.equal(game.airEnemies.length, 0);
 });
 
+test("createSkyPatrolLayout scales the player ship up without resizing enemies", () => {
+  const layout = createSkyPatrolLayout(960, 720);
+
+  assert.ok(Math.abs(layout.playerWidth - 79.2) < 0.001);
+  assert.ok(Math.abs(layout.playerHeight - 97.2) < 0.001);
+  assert.ok(Math.abs(layout.enemyWidth - 46.464) < 0.001);
+  assert.ok(Math.abs(layout.enemyHeight - 54.432) < 0.001);
+});
+
 test("createSkyPatrolLayout makes enemy shots large enough to read", () => {
   const layout = createSkyPatrolLayout(960, 720);
 
   assert.ok(layout.enemyShotWidth >= 11);
   assert.ok(layout.enemyShotHeight >= 26);
+});
+
+test("createSkyPatrolLayout scales player shots up for readability", () => {
+  const layout = createSkyPatrolLayout(960, 720);
+
+  assert.ok(Math.abs(layout.playerShotWidth - 11.7504) < 0.001);
+  assert.ok(Math.abs(layout.playerShotHeight - 33) < 0.001);
 });
 
 test("stepSkyPatrolGame scrolls the map, steers the ship, and fires twin shots with a cooldown", () => {

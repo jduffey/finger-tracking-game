@@ -9,6 +9,8 @@ export const SKY_PATROL_DEPOT_SCORE = 340;
 
 const SKY_PATROL_MAX_STEP_SECONDS = 0.05;
 const SKY_PATROL_ELEMENT_SCALE = 1;
+const SKY_PATROL_PLAYER_SCALE = 1.5;
+const SKY_PATROL_PLAYER_SHOT_SCALE = 1.5;
 export const SKY_PATROL_PLAYER_FIRE_COOLDOWN_MS = 130;
 const SKY_PATROL_ENEMY_SPAWN_COOLDOWN_MS = 680;
 const SKY_PATROL_GROUND_SPAWN_COOLDOWN_MS = 1320;
@@ -272,6 +274,39 @@ function expandTerrainRow(row, columns) {
   return tiles;
 }
 
+function getTerrainNeighbors8(tilesByRow, rowIndex, column) {
+  const neighbors = [];
+  for (let rowOffset = -1; rowOffset <= 1; rowOffset += 1) {
+    for (let columnOffset = -1; columnOffset <= 1; columnOffset += 1) {
+      if (rowOffset === 0 && columnOffset === 0) {
+        continue;
+      }
+      neighbors.push(tilesByRow[rowIndex + rowOffset]?.[column + columnOffset]);
+    }
+  }
+  return neighbors;
+}
+
+function applySkyPatrolBeachAdjacency(rows, columns) {
+  const tilesByRow = rows.map((row) => expandTerrainRow(row, columns));
+  return rows.map((row, rowIndex) => {
+    const tiles = tilesByRow[rowIndex].map((terrain, column) => {
+      if (terrain !== "beach") {
+        return terrain;
+      }
+
+      return getTerrainNeighbors8(tilesByRow, rowIndex, column).includes("beach")
+        ? terrain
+        : "grass";
+    });
+
+    return {
+      ...row,
+      segments: createTerrainSegments(tiles),
+    };
+  });
+}
+
 function applySkyPatrolCoastalTerrain(rows, columns) {
   const tilesByRow = rows.map((row) => expandTerrainRow(row, columns));
   return rows.map((row, rowIndex) => {
@@ -307,10 +342,14 @@ export function getSkyPatrolTerrainRows(layout, startWorldRow, rowCount) {
   const safeStartWorldRow = Number.isFinite(startWorldRow) ? Math.floor(startWorldRow) : 0;
   const safeRowCount = Math.max(0, Number.isFinite(rowCount) ? Math.ceil(rowCount) : 0);
 
-  const rows = Array.from({ length: safeRowCount }, (_, index) =>
-    createSkyPatrolTerrainRow(layout, safeStartWorldRow + index),
+  const terrainMarginRows = safeRowCount > 0 ? 1 : 0;
+  const rows = Array.from({ length: safeRowCount + terrainMarginRows * 2 }, (_, index) =>
+    createSkyPatrolTerrainRow(layout, safeStartWorldRow - terrainMarginRows + index),
   );
-  return applySkyPatrolCoastalTerrain(rows, layout.columns);
+  return applySkyPatrolCoastalTerrain(
+    applySkyPatrolBeachAdjacency(rows, layout.columns),
+    layout.columns,
+  ).slice(terrainMarginRows, terrainMarginRows + safeRowCount);
 }
 
 export function getSkyPatrolTerrainScrollMetrics(layout, scrollOffset) {
@@ -438,16 +477,18 @@ export function createSkyPatrolLayout(width, height) {
   const safeHeight = Math.max(320, Number.isFinite(height) ? height : 320);
   const minDimension = Math.min(safeWidth, safeHeight);
   const tileSize = clamp(minDimension * 0.032, 18, 26);
-  const playerWidth = clamp(safeWidth * 0.055, 46, 74) * SKY_PATROL_ELEMENT_SCALE;
-  const playerHeight = clamp(safeHeight * 0.09, 54, 86) * SKY_PATROL_ELEMENT_SCALE;
-  const enemyWidth = clamp(playerWidth * 0.88, 40, 68);
-  const enemyHeight = clamp(playerHeight * 0.84, 46, 78);
+  const basePlayerWidth = clamp(safeWidth * 0.055, 46, 74) * SKY_PATROL_ELEMENT_SCALE;
+  const basePlayerHeight = clamp(safeHeight * 0.09, 54, 86) * SKY_PATROL_ELEMENT_SCALE;
+  const playerWidth = basePlayerWidth * SKY_PATROL_PLAYER_SCALE;
+  const playerHeight = basePlayerHeight * SKY_PATROL_PLAYER_SCALE;
+  const enemyWidth = clamp(basePlayerWidth * 0.88, 40, 68);
+  const enemyHeight = clamp(basePlayerHeight * 0.84, 46, 78);
   const turretWidth = clamp(tileSize * 1.55, 24, 36);
   const turretHeight = clamp(tileSize * 1.32, 22, 34);
   const depotWidth = clamp(tileSize * 2.45, 38, 58);
   const depotHeight = clamp(tileSize * 1.65, 24, 42);
-  const playerShotWidth = clamp(tileSize * 0.34, 5, 9);
-  const playerShotHeight = clamp(tileSize * 0.96, 14, 22);
+  const playerShotWidth = clamp(tileSize * 0.34, 5, 9) * SKY_PATROL_PLAYER_SHOT_SCALE;
+  const playerShotHeight = clamp(tileSize * 0.96, 14, 22) * SKY_PATROL_PLAYER_SHOT_SCALE;
   const enemyShotWidth = clamp(tileSize * 0.58, 11, 15);
   const enemyShotHeight = clamp(tileSize * 1.18, 26, 32);
 

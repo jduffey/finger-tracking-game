@@ -474,6 +474,12 @@ function drawProjectile(ctx, shot) {
   const projectileUi = getSkyPatrolProjectileUi(shot);
   const { left, top, width, height } = getEntityBounds(shot);
 
+  ctx.save();
+  ctx.shadowColor = projectileUi.glow;
+  ctx.shadowBlur = Math.max(10, roundPixel(Math.max(width, height) * 0.58));
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+
   if (projectileUi.shape === "fighter-round") {
     fillPixelPath(
       ctx,
@@ -493,6 +499,7 @@ function drawProjectile(ctx, shot) {
       Math.max(2, roundPixel(width * 0.32)),
       Math.max(2, roundPixel(height * 0.32)),
     );
+    ctx.restore();
     return;
   }
 
@@ -515,6 +522,7 @@ function drawProjectile(ctx, shot) {
       Math.max(2, roundPixel(width * 0.6)),
       Math.max(2, roundPixel(height * 0.26)),
     );
+    ctx.restore();
     return;
   }
 
@@ -529,6 +537,7 @@ function drawProjectile(ctx, shot) {
     Math.max(2, roundPixel(width * 0.32)),
     Math.max(2, height - 2),
   );
+  ctx.restore();
 }
 
 function drawExplosion(ctx, explosion, tileSize) {

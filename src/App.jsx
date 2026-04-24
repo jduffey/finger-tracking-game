@@ -6930,14 +6930,14 @@ export default function App() {
     ctx.save();
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.shadowColor = "rgba(80, 255, 230, 0.95)";
+    ctx.shadowColor = "rgba(80, 255, 230, 0.24)";
     ctx.shadowBlur = 20;
-    ctx.strokeStyle = "rgba(64, 255, 225, 0.72)";
+    ctx.strokeStyle = "rgba(64, 255, 225, 0.18)";
     ctx.lineWidth = 8;
     drawHandConnections();
 
     ctx.shadowBlur = 8;
-    ctx.strokeStyle = "rgba(222, 255, 250, 0.96)";
+    ctx.strokeStyle = "rgba(222, 255, 250, 0.24)";
     ctx.lineWidth = 2.4;
     drawHandConnections();
 
@@ -6946,11 +6946,11 @@ export default function App() {
       if (!projectedTip) {
         continue;
       }
-      ctx.fillStyle = "rgba(219, 255, 248, 0.98)";
+      ctx.fillStyle = "rgba(219, 255, 248, 0.25)";
       ctx.beginPath();
       ctx.arc(projectedTip.x, projectedTip.y, 5.5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "rgba(64, 255, 225, 0.94)";
+      ctx.strokeStyle = "rgba(64, 255, 225, 0.24)";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(projectedTip.x, projectedTip.y, 10, 0, Math.PI * 2);

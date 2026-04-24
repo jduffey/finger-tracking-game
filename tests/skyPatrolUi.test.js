@@ -180,6 +180,14 @@ test("getSkyPatrolProjectileUi gives each projectile source a readable silhouett
   assert.equal(getSkyPatrolProjectileUi({ kind: "turret" }).shape, "turret-shell");
 });
 
+test("getSkyPatrolProjectileUi gives every projectile a neon glow color", () => {
+  for (const kind of ["player", "fighter", "turret"]) {
+    const projectileUi = getSkyPatrolProjectileUi({ kind });
+
+    assert.match(projectileUi.glow, /^rgba\(/);
+  }
+});
+
 test("getSkyPatrolStartPromptUi shows a short launch prompt only while play begins", () => {
   const openingPrompt = getSkyPatrolStartPromptUi({ status: "playing", elapsedMs: 900 });
   const latePrompt = getSkyPatrolStartPromptUi({ status: "playing", elapsedMs: 5200 });
