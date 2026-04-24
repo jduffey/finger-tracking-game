@@ -1877,6 +1877,87 @@ body {
   filter: drop-shadow(0 0 8px rgba(255, 248, 201, 0.42));
 }
 
+.fullscreen-camera-sky-patrol-gun-meter {
+  align-items: center;
+  background: rgba(9, 17, 27, 0.72);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 14px;
+  color: #f4f7fb;
+  display: grid;
+  gap: 7px;
+  justify-items: center;
+  padding: 10px 9px;
+  pointer-events: none;
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 58px;
+  z-index: 4;
+}
+
+.fullscreen-camera-sky-patrol-gun-meter.cooldown {
+  border-color: rgba(255, 113, 113, 0.58);
+  box-shadow: 0 0 18px rgba(255, 84, 84, 0.16);
+}
+
+.fullscreen-camera-sky-patrol-gun-meter-label,
+.fullscreen-camera-sky-patrol-gun-meter-state,
+.fullscreen-camera-sky-patrol-gun-meter-timer {
+  line-height: 1;
+  text-align: center;
+}
+
+.fullscreen-camera-sky-patrol-gun-meter-label {
+  color: rgba(226, 239, 255, 0.72);
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-sky-patrol-gun-meter-track {
+  background: rgba(226, 240, 255, 0.12);
+  border: 1px solid rgba(226, 240, 255, 0.22);
+  border-radius: 999px;
+  height: 344px;
+  overflow: hidden;
+  position: relative;
+  width: 16px;
+}
+
+.fullscreen-camera-sky-patrol-gun-meter-fill {
+  background: linear-gradient(180deg, #fffef0 0%, #fff2a8 42%, #ff9f5c 100%);
+  border-radius: inherit;
+  bottom: 0;
+  box-shadow: 0 0 12px rgba(255, 242, 168, 0.5);
+  height: calc(var(--sky-patrol-gun-fill, 1) * 100%);
+  left: 0;
+  position: absolute;
+  width: 100%;
+}
+
+.fullscreen-camera-sky-patrol-gun-meter.cooldown .fullscreen-camera-sky-patrol-gun-meter-fill {
+  background: linear-gradient(180deg, #ffd0d0 0%, #ff7171 100%);
+  box-shadow: 0 0 14px rgba(255, 92, 92, 0.58);
+}
+
+.fullscreen-camera-sky-patrol-gun-meter.recharging .fullscreen-camera-sky-patrol-gun-meter-fill {
+  background: linear-gradient(180deg, #e4fbff 0%, #70d6ff 100%);
+  box-shadow: 0 0 14px rgba(112, 214, 255, 0.5);
+}
+
+.fullscreen-camera-sky-patrol-gun-meter-state {
+  color: rgba(235, 244, 255, 0.9);
+  font-size: 0.58rem;
+  font-weight: 800;
+}
+
+.fullscreen-camera-sky-patrol-gun-meter-timer {
+  color: #ffd0d0;
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
 .fullscreen-camera-sky-patrol-hud-label {
   color: rgba(226, 239, 255, 0.72);
   font-size: 0.68rem;
@@ -5205,6 +5286,15 @@ button:disabled {
 
   .fullscreen-camera-sky-patrol-banner.start-prompt {
     top: 108px;
+  }
+
+  .fullscreen-camera-sky-patrol-gun-meter {
+    right: 12px;
+    width: 50px;
+  }
+
+  .fullscreen-camera-sky-patrol-gun-meter-track {
+    height: 272px;
   }
 
   .fullscreen-camera-hand-bounce-banner {

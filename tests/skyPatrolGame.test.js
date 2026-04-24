@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import {
   SKY_PATROL_DEPOT_SCORE,
   SKY_PATROL_FIGHTER_SCORE,
+  SKY_PATROL_GUN_COOLDOWN_MS,
+  SKY_PATROL_GUN_DRAIN_MS,
   SKY_PATROL_STARTING_LIVES,
   createSkyPatrolGame,
   createSkyPatrolLayout,
@@ -14,6 +16,17 @@ import {
 
 function constantRng(value) {
   return () => value;
+}
+
+function stepSkyPatrolFor(state, seconds, input = {}, rng = constantRng(0.5)) {
+  let nextState = state;
+  let remainingSeconds = seconds;
+  while (remainingSeconds > 0) {
+    const dt = Math.min(0.05, remainingSeconds);
+    nextState = stepSkyPatrolGame(nextState, dt, input, rng);
+    remainingSeconds = Number((remainingSeconds - dt).toFixed(6));
+  }
+  return nextState;
 }
 
 function expandTerrainSegments(row, columns) {
@@ -287,6 +300,47 @@ test("stepSkyPatrolGame schedules enemy plane waves at the reduced density", () 
 
   assert.equal(next.airEnemies.length, 1);
   assert.ok(next.enemySpawnCooldownMs > 1200);
+});
+
+test("stepSkyPatrolGame drains guns into cooldown before gradually recharging", () => {
+  const game = {
+    ...createSkyPatrolGame(960, 720, constantRng(0.5)),
+    enemySpawnCooldownMs: Number.POSITIVE_INFINITY,
+    groundSpawnCooldownMs: Number.POSITIVE_INFINITY,
+  };
+
+  const overheated = stepSkyPatrolFor(
+    game,
+    SKY_PATROL_GUN_DRAIN_MS / 1000,
+    { fireRequested: true },
+    constantRng(0.5),
+  );
+
+  assert.equal(overheated.gunStatus, "cooldown");
+  assert.equal(overheated.gunCharge, 0);
+  assert.equal(overheated.gunCooldownMs, SKY_PATROL_GUN_COOLDOWN_MS);
+
+  const cooling = stepSkyPatrolFor(overheated, 1, {}, constantRng(0.5));
+
+  assert.equal(cooling.gunStatus, "cooldown");
+  assert.equal(cooling.gunCharge, 0);
+  assert.equal(cooling.gunCooldownMs, SKY_PATROL_GUN_COOLDOWN_MS - 1000);
+
+  const recharging = stepSkyPatrolFor(cooling, 1, {}, constantRng(0.5));
+
+  assert.equal(recharging.gunStatus, "recharging");
+  assert.equal(recharging.gunCharge, 0);
+  assert.equal(recharging.gunCooldownMs, 0);
+
+  const halfRecovered = stepSkyPatrolFor(recharging, SKY_PATROL_GUN_DRAIN_MS / 2000, {}, constantRng(0.5));
+
+  assert.equal(halfRecovered.gunStatus, "recharging");
+  assert.ok(Math.abs(halfRecovered.gunCharge - 0.5) < 0.001);
+
+  const ready = stepSkyPatrolFor(halfRecovered, SKY_PATROL_GUN_DRAIN_MS / 2000, {}, constantRng(0.5));
+
+  assert.equal(ready.gunStatus, "ready");
+  assert.equal(ready.gunCharge, 1);
 });
 
 test("stepSkyPatrolGame awards score when a fighter is destroyed", () => {

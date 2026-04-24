@@ -129,6 +129,7 @@ import {
 import {
   getSkyPatrolFireCooldownUi,
   getSkyPatrolGameOverUi,
+  getSkyPatrolGunCooldownUi,
   getSkyPatrolHudItems,
   getSkyPatrolLegendUi,
   getSkyPatrolLifeIcons,
@@ -2149,6 +2150,10 @@ export default function App() {
   );
   const fullscreenSkyPatrolFireCooldownUi = useMemo(
     () => getSkyPatrolFireCooldownUi(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
+  );
+  const fullscreenSkyPatrolGunCooldownUi = useMemo(
+    () => getSkyPatrolGunCooldownUi(fullscreenSkyPatrolHud),
     [fullscreenSkyPatrolHud],
   );
   const fullscreenSkyPatrolLifeIcons = useMemo(
@@ -10545,6 +10550,25 @@ export default function App() {
                     )}
                   </span>
                 ))}
+              </div>
+              <div
+                className={`fullscreen-camera-sky-patrol-gun-meter ${fullscreenSkyPatrolGunCooldownUi.state}`}
+                style={{
+                  "--sky-patrol-gun-fill": fullscreenSkyPatrolGunCooldownUi.fill,
+                }}
+              >
+                <span className="fullscreen-camera-sky-patrol-gun-meter-label">Guns</span>
+                <span className="fullscreen-camera-sky-patrol-gun-meter-track">
+                  <span className="fullscreen-camera-sky-patrol-gun-meter-fill" />
+                </span>
+                <span className="fullscreen-camera-sky-patrol-gun-meter-state">
+                  {fullscreenSkyPatrolGunCooldownUi.stateLabel}
+                </span>
+                {fullscreenSkyPatrolGunCooldownUi.cooldownLabel ? (
+                  <span className="fullscreen-camera-sky-patrol-gun-meter-timer">
+                    {fullscreenSkyPatrolGunCooldownUi.cooldownLabel}
+                  </span>
+                ) : null}
               </div>
               {fullscreenSkyPatrolHud?.radarBlips?.length ? (
                 <div className="fullscreen-camera-sky-patrol-radar" aria-hidden="true">

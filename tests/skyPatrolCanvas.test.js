@@ -102,6 +102,9 @@ test("getSkyPatrolHudState summarizes the visible Sky Patrol HUD values", () => 
     groundTargetCount: 2,
     fireCooldownMs: 0,
     fireReady: true,
+    gunCharge: 1,
+    gunCooldownMs: 0,
+    gunStatus: "ready",
     incomingIndicators: [],
     legendFaded: false,
     radarBlips: [
@@ -158,6 +161,13 @@ test("areSkyPatrolHudStatesEqual only changes when the rendered HUD changes", ()
     areSkyPatrolHudStatesEqual(hud, {
       ...hud,
       startPromptVisible: true,
+    }),
+    false,
+  );
+  assert.equal(
+    areSkyPatrolHudStatesEqual(hud, {
+      ...hud,
+      gunCharge: 0.5,
     }),
     false,
   );

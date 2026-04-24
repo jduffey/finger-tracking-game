@@ -6,6 +6,8 @@ export const SKY_PATROL_STARTING_LIVES = 3;
 export const SKY_PATROL_FIGHTER_SCORE = 160;
 export const SKY_PATROL_TURRET_SCORE = 220;
 export const SKY_PATROL_DEPOT_SCORE = 340;
+export const SKY_PATROL_GUN_DRAIN_MS = 3000;
+export const SKY_PATROL_GUN_COOLDOWN_MS = 2000;
 
 const SKY_PATROL_MAX_STEP_SECONDS = 0.05;
 const SKY_PATROL_ELEMENT_SCALE = 1;
@@ -461,6 +463,9 @@ function createEmptyState(layout) {
     scoreBursts: [],
     damageFlashMs: 0,
     fireCooldownMs: 0,
+    gunCharge: 1,
+    gunCooldownMs: 0,
+    gunStatus: "ready",
     enemySpawnCooldownMs: 640,
     groundSpawnCooldownMs: 540,
     restartCooldownMs: 0,
@@ -552,6 +557,33 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
     Number.isFinite(input.pointerX) &&
     Number.isFinite(input.pointerY);
   const fireRequested = Boolean(input.fireRequested);
+  let gunCharge = clamp(Number.isFinite(state.gunCharge) ? state.gunCharge : 1, 0, 1);
+  let gunCooldownMs = Math.max(0, Number.isFinite(state.gunCooldownMs) ? state.gunCooldownMs : 0);
+  let gunStatus =
+    state.gunStatus === "cooldown" || state.gunStatus === "recharging" ? state.gunStatus : "ready";
+
+  if (gunStatus === "cooldown") {
+    gunCooldownMs = Math.max(0, gunCooldownMs - dtMs);
+    if (gunCooldownMs <= 0) {
+      gunStatus = "recharging";
+      gunCharge = 0;
+    }
+  } else if (gunStatus === "recharging") {
+    gunCharge = Math.min(1, gunCharge + dtMs / SKY_PATROL_GUN_DRAIN_MS);
+    if (gunCharge >= 1) {
+      gunCharge = 1;
+      gunStatus = "ready";
+    }
+  } else if (fireRequested && gunCharge > 0) {
+    gunCharge = Math.max(0, gunCharge - dtMs / SKY_PATROL_GUN_DRAIN_MS);
+    if (gunCharge <= 0) {
+      gunCharge = 0;
+      gunCooldownMs = SKY_PATROL_GUN_COOLDOWN_MS;
+      gunStatus = "cooldown";
+    }
+  } else if (gunCharge < 1) {
+    gunCharge = Math.min(1, gunCharge + dtMs / SKY_PATROL_GUN_DRAIN_MS);
+  }
 
   let ship = {
     ...state.ship,
@@ -566,6 +598,9 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
     scoreBursts: advanceScoreBursts(state.scoreBursts, dtMs),
     damageFlashMs: Math.max(0, (state.damageFlashMs ?? 0) - dtMs),
     fireCooldownMs: Math.max(0, state.fireCooldownMs - dtMs),
+    gunCharge,
+    gunCooldownMs,
+    gunStatus,
     enemySpawnCooldownMs: Math.max(0, state.enemySpawnCooldownMs - dtMs),
     groundSpawnCooldownMs: Math.max(0, state.groundSpawnCooldownMs - dtMs),
     restartCooldownMs: Math.max(0, state.restartCooldownMs - dtMs),
@@ -620,7 +655,7 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
   let airEnemies = nextStateBase.airEnemies.map((enemy) => ({ ...enemy }));
   let groundTargets = nextStateBase.groundTargets.map((target) => ({ ...target }));
 
-  if (fireRequested && fireCooldownMs <= 0) {
+  if (fireRequested && fireCooldownMs <= 0 && gunStatus === "ready" && gunCharge > 0) {
     const wingOffset = ship.width * 0.18;
     playerShots.push(
       createProjectile(
@@ -928,6 +963,9 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
     scoreBursts,
     damageFlashMs,
     fireCooldownMs,
+    gunCharge,
+    gunCooldownMs,
+    gunStatus,
     enemySpawnCooldownMs,
     groundSpawnCooldownMs,
     restartCooldownMs,

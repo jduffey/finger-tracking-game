@@ -18,6 +18,7 @@ function objectOrEmpty(value) {
 
 export function getSkyPatrolHudItems(hud = {}) {
   hud = objectOrEmpty(hud);
+  const gunStatus = hud.gunStatus ?? "ready";
   return [
     {
       id: "score",
@@ -42,13 +43,29 @@ export function getSkyPatrolHudItems(hud = {}) {
     {
       id: "fire",
       label: "Fire",
-      value: hud.fireReady ? "Ready" : "Reload",
+      value:
+        gunStatus === "cooldown"
+          ? "Cooldown"
+          : gunStatus === "recharging"
+          ? "Charging"
+          : hud.fireReady
+          ? "Ready"
+          : "Reload",
     },
   ];
 }
 
 export function getSkyPatrolFireCooldownUi(hud = {}) {
   hud = objectOrEmpty(hud);
+  const gunStatus = hud.gunStatus ?? "ready";
+  if (gunStatus === "cooldown" || gunStatus === "recharging") {
+    const gunCharge = clamp(Number.isFinite(hud.gunCharge) ? hud.gunCharge : 0, 0, 1);
+    return {
+      ready: false,
+      progress: Number(gunCharge.toFixed(3)),
+    };
+  }
+
   const cooldownMs = clamp(
     Number.isFinite(hud.fireCooldownMs) ? hud.fireCooldownMs : 0,
     0,
@@ -58,6 +75,23 @@ export function getSkyPatrolFireCooldownUi(hud = {}) {
   return {
     ready: cooldownMs <= 0,
     progress: Number((1 - cooldownMs / SKY_PATROL_PLAYER_FIRE_COOLDOWN_MS).toFixed(3)),
+  };
+}
+
+export function getSkyPatrolGunCooldownUi(hud = {}) {
+  hud = objectOrEmpty(hud);
+  const state =
+    hud.gunStatus === "cooldown" || hud.gunStatus === "recharging" ? hud.gunStatus : "ready";
+  const fill = Number(clamp(Number.isFinite(hud.gunCharge) ? hud.gunCharge : 1, 0, 1).toFixed(3));
+  const cooldownMs = Math.max(0, Number.isFinite(hud.gunCooldownMs) ? hud.gunCooldownMs : 0);
+
+  return {
+    fill,
+    state,
+    stateLabel:
+      state === "cooldown" ? "Cooling" : state === "recharging" ? "Recharging" : "Guns ready",
+    cooldownLabel: state === "cooldown" ? `${(Math.ceil(cooldownMs / 100) / 10).toFixed(1)}s` : "",
+    cooling: state === "cooldown",
   };
 }
 

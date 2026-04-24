@@ -796,7 +796,13 @@ export function getSkyPatrolHudState(state) {
     airTargetCount: state.airEnemies?.length ?? 0,
     groundTargetCount: state.groundTargets?.length ?? 0,
     fireCooldownMs: state.fireCooldownMs ?? 0,
-    fireReady: (state.fireCooldownMs ?? 0) <= 0,
+    fireReady:
+      (state.fireCooldownMs ?? 0) <= 0 &&
+      (state.gunStatus ?? "ready") === "ready" &&
+      (state.gunCharge ?? 1) > 0,
+    gunCharge: state.gunCharge ?? 1,
+    gunCooldownMs: state.gunCooldownMs ?? 0,
+    gunStatus: state.gunStatus ?? "ready",
     incomingIndicators: getSkyPatrolIncomingIndicators(state),
     legendFaded: (state.elapsedMs ?? 0) >= SKY_PATROL_LEGEND_FADE_MS,
     radarBlips: getSkyPatrolRadarBlips(state),
@@ -824,6 +830,9 @@ export function areSkyPatrolHudStatesEqual(a, b) {
     a.groundTargetCount === b.groundTargetCount &&
     a.fireCooldownMs === b.fireCooldownMs &&
     a.fireReady === b.fireReady &&
+    a.gunCharge === b.gunCharge &&
+    a.gunCooldownMs === b.gunCooldownMs &&
+    a.gunStatus === b.gunStatus &&
     JSON.stringify(a.incomingIndicators ?? []) === JSON.stringify(b.incomingIndicators ?? []) &&
     a.legendFaded === b.legendFaded &&
     JSON.stringify(a.radarBlips ?? []) === JSON.stringify(b.radarBlips ?? []) &&

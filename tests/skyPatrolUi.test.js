@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   getSkyPatrolFireCooldownUi,
   getSkyPatrolGameOverUi,
+  getSkyPatrolGunCooldownUi,
   getSkyPatrolGroundSiteUi,
   getSkyPatrolHudItems,
   getSkyPatrolIncomingIndicators,
@@ -58,6 +59,30 @@ test("getSkyPatrolFireCooldownUi exposes fire reload progress", () => {
   assert.deepEqual(getSkyPatrolFireCooldownUi({ fireCooldownMs: 0 }), {
     ready: true,
     progress: 1,
+  });
+});
+
+test("getSkyPatrolGunCooldownUi describes the vertical gun charge bar", () => {
+  assert.deepEqual(getSkyPatrolGunCooldownUi({ gunStatus: "ready", gunCharge: 0.62 }), {
+    fill: 0.62,
+    state: "ready",
+    stateLabel: "Guns ready",
+    cooldownLabel: "",
+    cooling: false,
+  });
+  assert.deepEqual(getSkyPatrolGunCooldownUi({ gunStatus: "cooldown", gunCharge: 0, gunCooldownMs: 1450 }), {
+    fill: 0,
+    state: "cooldown",
+    stateLabel: "Cooling",
+    cooldownLabel: "1.5s",
+    cooling: true,
+  });
+  assert.deepEqual(getSkyPatrolGunCooldownUi({ gunStatus: "recharging", gunCharge: 0.5 }), {
+    fill: 0.5,
+    state: "recharging",
+    stateLabel: "Recharging",
+    cooldownLabel: "",
+    cooling: false,
   });
 });
 
