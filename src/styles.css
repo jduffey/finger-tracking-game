@@ -2012,8 +2012,55 @@ body {
 }
 
 .fullscreen-camera-missile-structure.destroyed {
-  filter: grayscale(1);
-  opacity: 0.34;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  filter: none;
+  opacity: 0.9;
+}
+
+.fullscreen-camera-missile-structure.destroyed.rubble {
+  clip-path: none;
+}
+
+.fullscreen-camera-missile-rubble-fragment {
+  background:
+    linear-gradient(180deg, rgba(130, 139, 144, 0.96), rgba(43, 51, 55, 0.96));
+  border: 2px solid rgba(7, 13, 16, 0.8);
+  bottom: 0;
+  position: absolute;
+}
+
+.fullscreen-camera-missile-rubble-fragment.fragment-left {
+  height: 46%;
+  left: 4%;
+  transform: rotate(-7deg);
+  width: 33%;
+}
+
+.fullscreen-camera-missile-rubble-fragment.fragment-center {
+  height: 62%;
+  left: 34%;
+  transform: rotate(3deg);
+  width: 29%;
+}
+
+.fullscreen-camera-missile-rubble-fragment.fragment-right {
+  height: 38%;
+  right: 4%;
+  transform: rotate(8deg);
+  width: 30%;
+}
+
+.fullscreen-camera-missile-structure-smoke {
+  background: radial-gradient(circle, rgba(184, 200, 202, 0.28), transparent 68%);
+  border-radius: 50%;
+  height: 86%;
+  left: 50%;
+  position: absolute;
+  top: -64%;
+  transform: translateX(-50%);
+  width: 86%;
 }
 
 .fullscreen-camera-missile-structure.selected-launch-base {

@@ -103,3 +103,28 @@ export function getMissileCommandTargetWarnings(state) {
 
   return Array.from(warningsByStructureId.values());
 }
+
+export function getMissileCommandStructureUi(structure, { selectedLaunchBaseId = null } = {}) {
+  const alive = Boolean(structure?.alive);
+  const selectedLaunchBase = alive && structure?.id === selectedLaunchBaseId;
+  const className = [
+    "fullscreen-camera-missile-structure",
+    structure?.type ?? "",
+    alive ? "alive" : "destroyed rubble",
+    selectedLaunchBase ? "selected-launch-base" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return {
+    className,
+    showSmoke: !alive,
+    fragments: alive
+      ? []
+      : [
+          { id: "left", className: "fragment-left" },
+          { id: "center", className: "fragment-center" },
+          { id: "right", className: "fragment-right" },
+        ],
+  };
+}

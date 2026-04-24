@@ -92,6 +92,7 @@ import {
 import {
   getMissileCommandCooldownUi,
   getMissileCommandLaunchPreview,
+  getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
 } from "./missileCommandUi.js";
 import {
@@ -10518,24 +10519,33 @@ export default function App() {
                   ) : null}
                 </div>
               ))}
-              {fullscreenMissileCommandState?.structures?.map((structure) => (
-                <div
-                  key={structure.id}
-                  className={`fullscreen-camera-missile-structure ${structure.type} ${
-                    structure.alive ? "alive" : "destroyed"
-                  } ${
-                    fullscreenMissileLaunchPreview?.originStructureId === structure.id
-                      ? "selected-launch-base"
-                      : ""
-                  }`}
-                  style={{
-                    left: `${structure.x - structure.width / 2}px`,
-                    top: `${structure.y - structure.height}px`,
-                    width: `${structure.width}px`,
-                    height: `${structure.height}px`,
-                  }}
-                />
-              ))}
+              {fullscreenMissileCommandState?.structures?.map((structure) => {
+                const structureUi = getMissileCommandStructureUi(structure, {
+                  selectedLaunchBaseId: fullscreenMissileLaunchPreview?.originStructureId,
+                });
+                return (
+                  <div
+                    key={structure.id}
+                    className={structureUi.className}
+                    style={{
+                      left: `${structure.x - structure.width / 2}px`,
+                      top: `${structure.y - structure.height}px`,
+                      width: `${structure.width}px`,
+                      height: `${structure.height}px`,
+                    }}
+                  >
+                    {structureUi.showSmoke ? (
+                      <span className="fullscreen-camera-missile-structure-smoke" />
+                    ) : null}
+                    {structureUi.fragments.map((fragment) => (
+                      <span
+                        key={fragment.id}
+                        className={`fullscreen-camera-missile-rubble-fragment ${fragment.className}`}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
               {fullscreenMissileLaunchPreview ? (
                 <div
                   className="fullscreen-camera-missile-launch-preview"

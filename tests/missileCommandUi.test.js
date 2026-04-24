@@ -5,6 +5,7 @@ import { createMissileCommandGame } from "../src/missileCommandGame.js";
 import {
   getMissileCommandCooldownUi,
   getMissileCommandLaunchPreview,
+  getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
 } from "../src/missileCommandUi.js";
 
@@ -79,4 +80,17 @@ test("getMissileCommandTargetWarnings marks structures currently under attack", 
   assert.equal(warnings[0].threatCount, 1);
   assert.equal(warnings[0].x, target.x);
   assert.equal(warnings[0].className.includes("target-warning"), true);
+});
+
+test("getMissileCommandStructureUi exposes rubble affordances for destroyed structures", () => {
+  const game = createPlayingMissileCommandGame();
+  const destroyed = { ...game.structures[0], alive: false };
+  const ui = getMissileCommandStructureUi(destroyed, {
+    selectedLaunchBaseId: destroyed.id,
+  });
+
+  assert.equal(ui.className.includes("destroyed"), true);
+  assert.equal(ui.className.includes("rubble"), true);
+  assert.equal(ui.fragments.length >= 3, true);
+  assert.equal(ui.showSmoke, true);
 });
