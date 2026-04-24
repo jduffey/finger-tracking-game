@@ -19,28 +19,34 @@ const SKY_PATROL_TERRAIN_CACHE_EXTRA_ROWS = 4;
 
 const TERRAIN_PALETTE = {
   "deep-water": {
-    base: "#0b486a",
-    shadow: "#08314c",
-    accent: "#14698a",
-    highlight: "#6fc9df",
+    base: "#0b5d8f",
+    shadow: "#0b5d8f",
+    accent: "#0b5d8f",
+    highlight: "#0b5d8f",
   },
   "shallow-water": {
-    base: "#157a90",
-    shadow: "#0d5466",
-    accent: "#25a9bf",
-    highlight: "#9beaf1",
+    base: "#2b9bc0",
+    shadow: "#2b9bc0",
+    accent: "#2b9bc0",
+    highlight: "#2b9bc0",
   },
   beach: {
     base: "#deb56f",
-    shadow: "#b88945",
-    accent: "#efcf90",
-    highlight: "#fff0c5",
+    shadow: "#deb56f",
+    accent: "#deb56f",
+    highlight: "#deb56f",
   },
   grass: {
     base: "#4b8a4d",
-    shadow: "#2f6034",
-    accent: "#6aac5f",
-    highlight: "#d7ffbe",
+    shadow: "#4b8a4d",
+    accent: "#4b8a4d",
+    highlight: "#4b8a4d",
+  },
+  "coastal-grass": {
+    base: "#69a95b",
+    shadow: "#69a95b",
+    accent: "#69a95b",
+    highlight: "#69a95b",
   },
   forest: {
     base: "#295530",
@@ -127,7 +133,6 @@ function fillPixelPath(ctx, points, fill, stroke = null) {
 function drawTexturedTerrainSegment(ctx, terrain, x, y, width, height, tileSize) {
   const palette = TERRAIN_PALETTE[terrain] ?? TERRAIN_PALETTE.grass;
   const stripeWidth = Math.max(3, roundPixel(tileSize * 0.38));
-  const accentWidth = Math.max(2, roundPixel(tileSize * 0.16));
   const patchSize = Math.max(2, roundPixel(tileSize * 0.18));
 
   ctx.fillStyle = palette.shadow;
@@ -135,15 +140,13 @@ function drawTexturedTerrainSegment(ctx, terrain, x, y, width, height, tileSize)
   ctx.fillStyle = palette.base;
   ctx.fillRect(x, y, width, height);
 
-  if (terrain === "deep-water" || terrain === "shallow-water") {
-    for (let offsetX = 0; offsetX < width; offsetX += stripeWidth * 2) {
-      ctx.fillStyle = palette.accent;
-      ctx.fillRect(x + offsetX, y, stripeWidth, height);
-      ctx.fillStyle = palette.highlight;
-      ctx.fillRect(x + offsetX, y, Math.max(1, accentWidth), 1);
-    }
-    ctx.fillStyle = "rgba(255, 255, 255, 0.12)";
-    ctx.fillRect(x, y, width, 1);
+  if (
+    terrain === "deep-water" ||
+    terrain === "shallow-water" ||
+    terrain === "beach" ||
+    terrain === "grass" ||
+    terrain === "coastal-grass"
+  ) {
     return;
   }
 

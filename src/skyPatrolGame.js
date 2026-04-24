@@ -169,13 +169,25 @@ function createAirEnemy(layout, nextId, rng = Math.random) {
 }
 
 function isLandTerrain(terrain) {
-  return terrain === "grass" || terrain === "forest" || terrain === "runway" || terrain === "road";
+  return (
+    terrain === "grass" ||
+    terrain === "coastal-grass" ||
+    terrain === "forest" ||
+    terrain === "runway" ||
+    terrain === "road"
+  );
+}
+
+function isShoreTerrain(terrain) {
+  return terrain === "beach" || isLandTerrain(terrain);
+}
+
+function isWaterOrBeachTerrain(terrain) {
+  return terrain === "deep-water" || terrain === "shallow-water" || terrain === "beach";
 }
 
 function createSkyPatrolTerrainRow(layout, worldRow) {
-  const tiles = Array.from({ length: layout.columns }, (_, column) =>
-    hashNoise(worldRow, column + 0.2) > 0.85 ? "shallow-water" : "deep-water",
-  );
+  const tiles = Array.from({ length: layout.columns }, () => "deep-water");
   const primaryCenter =
     layout.columns *
     (0.52 + Math.sin(worldRow * 0.052) * 0.15 + Math.sin(worldRow * 0.018 + 1.6) * 0.06);
@@ -210,19 +222,9 @@ function createSkyPatrolTerrainRow(layout, worldRow) {
       if (coastDepth < 0.5) {
         tiles[column] = "beach";
       } else if (coastDepth < 1.45) {
-        tiles[column] = hashNoise(worldRow + 13, column + 7) > 0.48 ? "grass" : "forest";
+        tiles[column] = "grass";
       } else {
-        tiles[column] = hashNoise(worldRow + 29, column + 17) > 0.68 ? "forest" : "grass";
-      }
-    }
-  }
-
-  for (let column = 1; column < layout.columns - 1; column += 1) {
-    if (tiles[column] === "deep-water") {
-      const leftTerrain = tiles[column - 1];
-      const rightTerrain = tiles[column + 1];
-      if (isLandTerrain(leftTerrain) || isLandTerrain(rightTerrain) || leftTerrain === "beach" || rightTerrain === "beach") {
-        tiles[column] = "shallow-water";
+        tiles[column] = "grass";
       }
     }
   }
@@ -260,6 +262,43 @@ function createSkyPatrolTerrainRow(layout, worldRow) {
   };
 }
 
+function expandTerrainRow(row, columns) {
+  const tiles = Array.from({ length: columns }, () => "deep-water");
+  for (const segment of row.segments) {
+    for (let offset = 0; offset < segment.length; offset += 1) {
+      tiles[segment.startColumn + offset] = segment.terrain;
+    }
+  }
+  return tiles;
+}
+
+function applySkyPatrolCoastalTerrain(rows, columns) {
+  const tilesByRow = rows.map((row) => expandTerrainRow(row, columns));
+  return rows.map((row, rowIndex) => {
+    const tiles = tilesByRow[rowIndex].map((terrain, column) => {
+      const neighbors = [
+        tilesByRow[rowIndex][column - 1],
+        tilesByRow[rowIndex][column + 1],
+        tilesByRow[rowIndex - 1]?.[column],
+        tilesByRow[rowIndex + 1]?.[column],
+      ];
+
+      if (terrain === "deep-water" && neighbors.some(isShoreTerrain)) {
+        return "shallow-water";
+      }
+      if (terrain === "grass" && neighbors.some(isWaterOrBeachTerrain)) {
+        return "coastal-grass";
+      }
+      return terrain;
+    });
+
+    return {
+      ...row,
+      segments: createTerrainSegments(tiles),
+    };
+  });
+}
+
 export function getSkyPatrolTerrainRows(layout, startWorldRow, rowCount) {
   if (!layout) {
     return [];
@@ -268,9 +307,10 @@ export function getSkyPatrolTerrainRows(layout, startWorldRow, rowCount) {
   const safeStartWorldRow = Number.isFinite(startWorldRow) ? Math.floor(startWorldRow) : 0;
   const safeRowCount = Math.max(0, Number.isFinite(rowCount) ? Math.ceil(rowCount) : 0);
 
-  return Array.from({ length: safeRowCount }, (_, index) =>
+  const rows = Array.from({ length: safeRowCount }, (_, index) =>
     createSkyPatrolTerrainRow(layout, safeStartWorldRow + index),
   );
+  return applySkyPatrolCoastalTerrain(rows, layout.columns);
 }
 
 export function getSkyPatrolTerrainScrollMetrics(layout, scrollOffset) {
@@ -319,7 +359,10 @@ function createGroundTarget(layout, scrollOffset, nextId, rng = Math.random) {
   const { startWorldRow } = getSkyPatrolTerrainScrollMetrics(layout, scrollOffset);
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const spawnWorldRow = startWorldRow - 1 - attempt;
-    const terrainRow = createSkyPatrolTerrainRow(layout, spawnWorldRow);
+    const terrainRow =
+      getSkyPatrolTerrainRows(layout, spawnWorldRow - 1, 3).find(
+        (row) => row.worldRow === spawnWorldRow,
+      ) ?? createSkyPatrolTerrainRow(layout, spawnWorldRow);
     const viableSegments = terrainRow.segments.filter(
       (segment) => isLandTerrain(segment.terrain) && segment.length >= 2,
     );
@@ -405,8 +448,8 @@ export function createSkyPatrolLayout(width, height) {
   const depotHeight = clamp(tileSize * 1.65, 24, 42);
   const playerShotWidth = clamp(tileSize * 0.34, 5, 9);
   const playerShotHeight = clamp(tileSize * 0.96, 14, 22);
-  const enemyShotWidth = clamp(tileSize * 0.3, 5, 8);
-  const enemyShotHeight = clamp(tileSize * 0.82, 12, 20);
+  const enemyShotWidth = clamp(tileSize * 0.58, 11, 15);
+  const enemyShotHeight = clamp(tileSize * 1.18, 26, 32);
 
   return {
     width: safeWidth,

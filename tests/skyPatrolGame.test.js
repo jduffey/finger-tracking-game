@@ -15,6 +15,31 @@ function constantRng(value) {
   return () => value;
 }
 
+function expandTerrainSegments(row, columns) {
+  const tiles = Array.from({ length: columns }, () => null);
+  for (const segment of row.segments) {
+    for (let offset = 0; offset < segment.length; offset += 1) {
+      tiles[segment.startColumn + offset] = segment.terrain;
+    }
+  }
+  return tiles;
+}
+
+function isSkyPatrolLandOrShoreTerrain(terrain) {
+  return (
+    terrain === "grass" ||
+    terrain === "coastal-grass" ||
+    terrain === "forest" ||
+    terrain === "runway" ||
+    terrain === "road" ||
+    terrain === "beach"
+  );
+}
+
+function isSkyPatrolWaterOrBeachTerrain(terrain) {
+  return terrain === "deep-water" || terrain === "shallow-water" || terrain === "beach";
+}
+
 test("getSkyPatrolVisibleTerrainRows yields water, land, and runway terrain bands", () => {
   const layout = createSkyPatrolLayout(960, 720);
   const terrains = new Set();
@@ -30,6 +55,74 @@ test("getSkyPatrolVisibleTerrainRows yields water, land, and runway terrain band
   assert.ok(terrains.has("deep-water"));
   assert.ok(terrains.has("grass") || terrains.has("forest"));
   assert.ok(terrains.has("runway"));
+});
+
+test("Sky Patrol water is shallow only when adjacent to land", () => {
+  const layout = createSkyPatrolLayout(960, 720);
+  const rows = getSkyPatrolVisibleTerrainRows(layout, layout.tileSize * 60);
+  const tilesByRow = rows.map((row) => expandTerrainSegments(row, layout.columns));
+
+  let shallowWaterTiles = 0;
+  for (let rowIndex = 0; rowIndex < tilesByRow.length; rowIndex += 1) {
+    for (let column = 0; column < layout.columns; column += 1) {
+      if (tilesByRow[rowIndex][column] !== "shallow-water") {
+        continue;
+      }
+
+      shallowWaterTiles += 1;
+      const neighbors = [
+        tilesByRow[rowIndex][column - 1],
+        tilesByRow[rowIndex][column + 1],
+        tilesByRow[rowIndex - 1]?.[column],
+        tilesByRow[rowIndex + 1]?.[column],
+      ];
+      assert.ok(
+        neighbors.some(isSkyPatrolLandOrShoreTerrain),
+        `expected shallow water at row ${rowIndex}, column ${column} to touch land`,
+      );
+    }
+  }
+
+  assert.ok(shallowWaterTiles > 0);
+});
+
+test("Sky Patrol grass only varies when adjacent to water or beach", () => {
+  const layout = createSkyPatrolLayout(960, 720);
+  const rows = getSkyPatrolVisibleTerrainRows(layout, layout.tileSize * 60);
+  const tilesByRow = rows.map((row) => expandTerrainSegments(row, layout.columns));
+  const terrains = new Set(tilesByRow.flat());
+
+  assert.ok(terrains.has("grass"));
+  assert.ok(terrains.has("coastal-grass"));
+  assert.equal(terrains.has("forest"), false);
+
+  for (let rowIndex = 0; rowIndex < tilesByRow.length; rowIndex += 1) {
+    for (let column = 0; column < layout.columns; column += 1) {
+      const terrain = tilesByRow[rowIndex][column];
+      const neighbors = [
+        tilesByRow[rowIndex][column - 1],
+        tilesByRow[rowIndex][column + 1],
+        tilesByRow[rowIndex - 1]?.[column],
+        tilesByRow[rowIndex + 1]?.[column],
+      ];
+      const touchesWaterOrBeach = neighbors.some(isSkyPatrolWaterOrBeachTerrain);
+
+      if (terrain === "coastal-grass") {
+        assert.equal(
+          touchesWaterOrBeach,
+          true,
+          `expected coastal grass at row ${rowIndex}, column ${column} to touch water or beach`,
+        );
+      }
+      if (terrain === "grass") {
+        assert.equal(
+          touchesWaterOrBeach,
+          false,
+          `expected interior grass at row ${rowIndex}, column ${column} not to touch water or beach`,
+        );
+      }
+    }
+  }
 });
 
 test("getSkyPatrolVisibleTerrainRows keeps built ground features relatively sparse", () => {
@@ -85,6 +178,13 @@ test("createSkyPatrolGame starts with a centered ship and full lives", () => {
   assert.equal(game.lives, SKY_PATROL_STARTING_LIVES);
   assert.equal(game.ship.x, game.layout.width / 2);
   assert.equal(game.airEnemies.length, 0);
+});
+
+test("createSkyPatrolLayout makes enemy shots large enough to read", () => {
+  const layout = createSkyPatrolLayout(960, 720);
+
+  assert.ok(layout.enemyShotWidth >= 11);
+  assert.ok(layout.enemyShotHeight >= 26);
 });
 
 test("stepSkyPatrolGame scrolls the map, steers the ship, and fires twin shots with a cooldown", () => {
@@ -233,6 +333,34 @@ test("stepSkyPatrolGame enters game over on a hit and restarts on pinch", () => 
   assert.equal(restarted.status, "playing");
   assert.equal(restarted.lives, SKY_PATROL_STARTING_LIVES);
   assert.equal(restarted.score, 0);
+});
+
+test("stepSkyPatrolGame uses the larger enemy shot bounds for player collisions", () => {
+  const layout = createSkyPatrolLayout(960, 720);
+  const base = createSkyPatrolGame(960, 720, constantRng(0.5));
+  const barelyOverlappingShotX = base.ship.x + base.ship.width / 2 + layout.enemyShotWidth / 2 - 1;
+  const state = {
+    ...base,
+    enemySpawnCooldownMs: Number.POSITIVE_INFINITY,
+    groundSpawnCooldownMs: Number.POSITIVE_INFINITY,
+    enemyShots: [
+      {
+        id: "enemy-shot-1",
+        kind: "fighter",
+        x: barelyOverlappingShotX,
+        y: base.ship.y,
+        width: layout.enemyShotWidth,
+        height: layout.enemyShotHeight,
+        vx: 0,
+        vy: 0,
+      },
+    ],
+  };
+
+  const next = stepSkyPatrolGame(state, 0, {}, constantRng(0.5));
+
+  assert.equal(next.lives, SKY_PATROL_STARTING_LIVES - 1);
+  assert.equal(next.enemyShots.length, 0);
 });
 
 test("stepSkyPatrolGame awards depot score when a ground target is destroyed", () => {
