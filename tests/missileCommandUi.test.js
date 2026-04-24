@@ -5,6 +5,7 @@ import { createMissileCommandGame } from "../src/missileCommandGame.js";
 import {
   getMissileCommandCooldownUi,
   getMissileCommandCrosshairUi,
+  getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
   getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
@@ -132,4 +133,14 @@ test("getMissileCommandThreatUi escalates urgency as threats near impact", () =>
   assert.equal(getMissileCommandThreatUi({ ...baseThreat, y: 180 }).urgency, "distant");
   assert.equal(getMissileCommandThreatUi({ ...baseThreat, y: 420 }).urgency, "urgent");
   assert.equal(getMissileCommandThreatUi({ ...baseThreat, y: 540 }).urgency, "critical");
+});
+
+test("getMissileCommandLegendItems keeps the legend compact", () => {
+  const items = getMissileCommandLegendItems(125);
+
+  assert.deepEqual(
+    items.map((item) => item.id),
+    ["threat-score", "pinch-fire"],
+  );
+  assert.equal(items.every((item) => item.label.length <= 8), true);
 });

@@ -92,6 +92,7 @@ import {
 import {
   getMissileCommandCooldownUi,
   getMissileCommandCrosshairUi,
+  getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
   getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
@@ -2106,6 +2107,10 @@ export default function App() {
   const fullscreenMissileTargetWarnings = useMemo(
     () => getMissileCommandTargetWarnings(fullscreenMissileCommandState),
     [fullscreenMissileCommandState],
+  );
+  const fullscreenMissileLegendItems = useMemo(
+    () => getMissileCommandLegendItems(MISSILE_COMMAND_THREAT_SCORE),
+    [],
   );
 
   const fullscreenHexGridMetrics = useMemo(() => {
@@ -10660,9 +10665,13 @@ export default function App() {
                   {fullscreenMissileCommandState?.structures?.filter((structure) => structure.alive).length ?? 0}
                 </span>
               </div>
-              <div className="fullscreen-camera-missile-legend">
-                <span>Threat +{MISSILE_COMMAND_THREAT_SCORE}</span>
-                <span>Pinch fires an interceptor</span>
+              <div className="fullscreen-camera-missile-legend compact">
+                {fullscreenMissileLegendItems.map((item) => (
+                  <span key={item.id} className="fullscreen-camera-missile-legend-chip">
+                    <span className="fullscreen-camera-missile-legend-icon">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </span>
+                ))}
               </div>
               {isFullscreenMissileCommandMode &&
               fullscreenMissileCommandState.status === "countdown" &&

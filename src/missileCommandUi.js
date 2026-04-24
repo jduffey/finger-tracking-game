@@ -196,3 +196,18 @@ export function getMissileCommandThreatUi(threat) {
     headClassName: `fullscreen-camera-missile-head hostile ${urgency}`,
   };
 }
+
+export function getMissileCommandLegendItems(threatScore) {
+  return [
+    {
+      id: "threat-score",
+      icon: "+",
+      label: `+${Number.isFinite(threatScore) ? threatScore : 0}`,
+    },
+    {
+      id: "pinch-fire",
+      icon: "P",
+      label: "Fire",
+    },
+  ];
+}

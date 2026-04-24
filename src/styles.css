@@ -2250,6 +2250,35 @@ body {
   font-size: 0.82rem;
 }
 
+.fullscreen-camera-missile-legend.compact {
+  gap: 8px;
+  padding: 7px;
+}
+
+.fullscreen-camera-missile-legend-chip {
+  align-items: center;
+  background: rgba(226, 240, 255, 0.08);
+  border: 1px solid rgba(226, 240, 255, 0.16);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 6px;
+  padding: 5px 8px;
+}
+
+.fullscreen-camera-missile-legend-icon {
+  align-items: center;
+  background: rgba(255, 248, 201, 0.18);
+  border-radius: 50%;
+  color: #fff8d8;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 900;
+  height: 18px;
+  justify-content: center;
+  line-height: 1;
+  width: 18px;
+}
+
 .fullscreen-camera-missile-banner {
   color: #fffdf7;
   font-size: clamp(3.4rem, 12vw, 6rem);
