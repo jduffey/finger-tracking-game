@@ -185,6 +185,7 @@ test("getSkyPatrolProjectileUi gives every projectile a neon glow color", () => 
     const projectileUi = getSkyPatrolProjectileUi({ kind });
 
     assert.match(projectileUi.glow, /^rgba\(/);
+    assert.equal(typeof projectileUi.sprite, "string");
   }
 });
 

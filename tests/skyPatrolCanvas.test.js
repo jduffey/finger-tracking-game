@@ -21,8 +21,10 @@ function createMockContext() {
     restore() {},
     save() {},
     stroke() {},
-    drawImage(image, x, y) {
-      this.drawImageCalls.push({ image, x, y });
+    translate() {},
+    rotate() {},
+    drawImage(...args) {
+      this.drawImageCalls.push({ args, image: args[0], x: args[1], y: args[2] });
     },
   };
 }
@@ -182,5 +184,34 @@ test("createSkyPatrolCanvasRenderer keeps terrain rows continuous when the cache
   assert.ok(
     Math.abs(afterWrapY - beforeWrapY) < 2,
     `expected cached terrain to move continuously, saw ${beforeWrapY} -> ${afterWrapY}`,
+  );
+});
+
+test("createSkyPatrolCanvasRenderer can draw extracted sprite atlas assets", () => {
+  const layout = createSkyPatrolLayout(960, 720);
+  const { context, renderer } = createMockRenderer();
+  const spriteImage = { complete: true, naturalWidth: 1024 };
+
+  renderer.setSpriteImage(spriteImage);
+  renderer.draw({
+    layout,
+    scrollOffset: 0,
+    ship: {
+      x: layout.width / 2,
+      y: layout.height * 0.78,
+      width: layout.playerWidth,
+      height: layout.playerHeight,
+      bank: 0,
+    },
+    airEnemies: [],
+    groundTargets: [],
+    playerShots: [],
+    enemyShots: [],
+    explosions: [],
+  });
+
+  assert.ok(
+    context.drawImageCalls.some((call) => call.image === spriteImage && call.args.length === 9),
+    "expected the sprite atlas to be drawn with a source rectangle",
   );
 });

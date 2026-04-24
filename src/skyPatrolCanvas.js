@@ -14,8 +14,14 @@ import {
   getSkyPatrolTargetHealthPips,
   getSkyPatrolThreatUi,
 } from "./skyPatrolUi.js";
+import {
+  SKY_PATROL_ENEMY_SPRITE_KEYS,
+  SKY_PATROL_EXPLOSION_SPRITE_KEYS,
+  SKY_PATROL_SPRITES,
+} from "./skyPatrolSpriteAtlas.js";
 
 const SKY_PATROL_TERRAIN_CACHE_EXTRA_ROWS = 4;
+const SKY_PATROL_CLOUD_SPRITE_KEYS = ["cloudLarge", "cloudSmall", "smokeMedium"];
 
 const TERRAIN_PALETTE = {
   "deep-water": {
@@ -74,6 +80,82 @@ function clamp(value, min, max) {
 
 function roundPixel(value) {
   return Math.round(value);
+}
+
+function positiveModulo(value, divisor) {
+  if (!Number.isFinite(value) || !Number.isFinite(divisor) || divisor === 0) {
+    return 0;
+  }
+  return ((value % divisor) + divisor) % divisor;
+}
+
+function hashSpriteSeed(value) {
+  const numericValue = typeof value === "number" ? value : String(value ?? "").split("").reduce(
+    (sum, char) => sum + char.charCodeAt(0),
+    0,
+  );
+  const noise = Math.sin(numericValue * 127.1) * 43758.5453123;
+  return noise - Math.floor(noise);
+}
+
+function hasSpriteImage(renderer) {
+  return Boolean(
+    renderer?.spriteImage &&
+      renderer.spriteImage.complete &&
+      renderer.spriteImage.naturalWidth !== 0,
+  );
+}
+
+function drawAtlasSprite(ctx, renderer, spriteKey, centerX, centerY, targetWidth, targetHeight, options = {}) {
+  const sprite = SKY_PATROL_SPRITES[spriteKey];
+  if (!sprite || !hasSpriteImage(renderer)) {
+    return false;
+  }
+
+  let drawWidth = Math.max(1, targetWidth);
+  let drawHeight = Math.max(1, targetHeight);
+  const spriteAspect = sprite.w / Math.max(1, sprite.h);
+  const targetAspect = drawWidth / Math.max(1, drawHeight);
+
+  if (options.fit !== "stretch") {
+    if (targetAspect > spriteAspect) {
+      drawWidth = drawHeight * spriteAspect;
+    } else {
+      drawHeight = drawWidth / spriteAspect;
+    }
+  }
+
+  ctx.save();
+  const baseAlpha = Number.isFinite(ctx.globalAlpha) ? ctx.globalAlpha : 1;
+  ctx.globalAlpha = baseAlpha * (options.alpha ?? 1);
+  ctx.translate(roundPixel(centerX), roundPixel(centerY));
+  if (options.rotation) {
+    ctx.rotate(options.rotation);
+  }
+  if (options.shadowColor) {
+    ctx.shadowColor = options.shadowColor;
+    ctx.shadowBlur = options.shadowBlur ?? 12;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  }
+  ctx.drawImage(
+    renderer.spriteImage,
+    sprite.x,
+    sprite.y,
+    sprite.w,
+    sprite.h,
+    roundPixel(-drawWidth / 2),
+    roundPixel(-drawHeight / 2),
+    roundPixel(drawWidth),
+    roundPixel(drawHeight),
+  );
+  ctx.restore();
+  return true;
+}
+
+function getEnemySpriteKey(enemy) {
+  const variantIndex = Math.floor(hashSpriteSeed(enemy?.id ?? enemy?.x ?? 0) * SKY_PATROL_ENEMY_SPRITE_KEYS.length);
+  return SKY_PATROL_ENEMY_SPRITE_KEYS[variantIndex] ?? SKY_PATROL_ENEMY_SPRITE_KEYS[0];
 }
 
 function getCanvasDocument(canvas) {
@@ -261,11 +343,21 @@ function drawTerrain(ctx, renderer, state) {
   ctx.drawImage(renderer.terrainCanvas, 0, drawY);
 }
 
-function drawPlayerShip(ctx, ship) {
+function drawPlayerShip(ctx, ship, renderer) {
   const { left, top, width, height } = getEntityBounds(ship);
   const wingSpan = roundPixel(width * 0.34);
   const bodyWidth = Math.max(6, roundPixel(width * 0.26));
   const outline = "#151922";
+  const spriteKey =
+    (ship.bank ?? 0) < -0.22
+      ? "playerBankLeft"
+      : (ship.bank ?? 0) > 0.22
+        ? "playerBankRight"
+        : "playerCenter";
+
+  if (drawAtlasSprite(ctx, renderer, spriteKey, ship.x, ship.y, width * 1.14, height * 1.08)) {
+    return;
+  }
 
   fillPixelPath(
     ctx,
@@ -292,9 +384,15 @@ function drawPlayerShip(ctx, ship) {
   ctx.fillRect(left + width - wingSpan, top + roundPixel(height * 0.44), wingSpan, Math.max(4, roundPixel(height * 0.12)));
 }
 
-function drawEnemyShip(ctx, enemy) {
+function drawEnemyShip(ctx, enemy, renderer) {
   const threatUi = getSkyPatrolThreatUi(enemy);
   const { left, top, width, height } = getEntityBounds(enemy);
+  const spriteKey = getEnemySpriteKey(enemy);
+  const spriteScale = spriteKey === "enemyBomber" || spriteKey === "enemyInterceptor" ? 1.28 : 1.16;
+  if (drawAtlasSprite(ctx, renderer, spriteKey, enemy.x, enemy.y, width * spriteScale, height * spriteScale)) {
+    return;
+  }
+
   if (threatUi.shape === "air-chevron") {
     ctx.fillStyle = "rgba(255, 231, 176, 0.2)";
     fillPixelPath(
@@ -470,9 +568,28 @@ function drawHealthPips(ctx, entity, y) {
   }
 }
 
-function drawProjectile(ctx, shot) {
+function drawProjectile(ctx, shot, renderer) {
   const projectileUi = getSkyPatrolProjectileUi(shot);
   const { left, top, width, height } = getEntityBounds(shot);
+
+  const spriteScale = shot.kind === "player" ? 1.32 : 1.42;
+  if (
+    drawAtlasSprite(
+      ctx,
+      renderer,
+      projectileUi.sprite,
+      shot.x,
+      shot.y,
+      width * spriteScale,
+      height * spriteScale,
+      {
+        shadowColor: projectileUi.glow,
+        shadowBlur: Math.max(10, roundPixel(Math.max(width, height) * 0.8)),
+      },
+    )
+  ) {
+    return;
+  }
 
   ctx.save();
   ctx.shadowColor = projectileUi.glow;
@@ -540,9 +657,24 @@ function drawProjectile(ctx, shot) {
   ctx.restore();
 }
 
-function drawExplosion(ctx, explosion, tileSize) {
+function drawExplosion(ctx, explosion, tileSize, renderer) {
   const progress = clamp(explosion.ageMs / Math.max(1, explosion.ttlMs), 0, 1);
   const size = tileSize * (1.1 + progress * 2.1);
+  const spriteKey = SKY_PATROL_EXPLOSION_SPRITE_KEYS[
+    Math.min(
+      SKY_PATROL_EXPLOSION_SPRITE_KEYS.length - 1,
+      Math.floor(progress * SKY_PATROL_EXPLOSION_SPRITE_KEYS.length),
+    )
+  ];
+  const spriteSize = size * (explosion.kind === "crash" ? 1.56 : 1.22);
+  if (
+    drawAtlasSprite(ctx, renderer, spriteKey, explosion.x, explosion.y, spriteSize, spriteSize, {
+      alpha: Math.max(0.28, 1 - progress * 0.18),
+    })
+  ) {
+    return;
+  }
+
   const block = Math.max(2, roundPixel(tileSize * 0.18));
   const left = roundPixel(explosion.x - size / 2);
   const top = roundPixel(explosion.y - size / 2);
@@ -561,6 +693,26 @@ function drawExplosion(ctx, explosion, tileSize) {
   ctx.fillStyle = colors[0];
   ctx.fillRect(centerX - block * 2, centerY - block, block * 4, block * 2);
   ctx.fillRect(centerX - block, centerY - block * 2, block * 2, block * 4);
+}
+
+function drawCloudLayer(ctx, renderer, state) {
+  if (!hasSpriteImage(renderer)) {
+    return;
+  }
+  const { layout, scrollOffset = 0 } = state;
+  const cloudCount = 5;
+  const travelHeight = layout.height + layout.tileSize * 10;
+  for (let index = 0; index < cloudCount; index += 1) {
+    const cycle = Math.floor((scrollOffset * 0.18 + index * travelHeight * 0.22) / travelHeight);
+    const seed = index * 37 + cycle * 19;
+    const spriteKey = SKY_PATROL_CLOUD_SPRITE_KEYS[index % SKY_PATROL_CLOUD_SPRITE_KEYS.length];
+    const x = layout.width * (0.1 + hashSpriteSeed(seed + 3) * 0.8);
+    const y = positiveModulo(index * travelHeight * 0.23 - scrollOffset * 0.18, travelHeight) - layout.tileSize * 5;
+    const size = layout.tileSize * (2.3 + hashSpriteSeed(seed + 11) * 2.2);
+    drawAtlasSprite(ctx, renderer, spriteKey, x, y, size * 1.5, size, {
+      alpha: 0.28,
+    });
+  }
 }
 
 function drawScoreBurst(ctx, burst, tileSize) {
@@ -598,6 +750,7 @@ function drawSkyPatrolFrame(renderer, state) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
   drawTerrain(ctx, renderer, state);
+  drawCloudLayer(ctx, renderer, state);
 
   for (const target of state.groundTargets ?? []) {
     drawEntityShadow(ctx, target, state.layout);
@@ -605,13 +758,13 @@ function drawSkyPatrolFrame(renderer, state) {
   }
   for (const enemy of state.airEnemies ?? []) {
     drawEntityShadow(ctx, enemy, state.layout);
-    drawEnemyShip(ctx, enemy);
+    drawEnemyShip(ctx, enemy, renderer);
   }
   for (const shot of state.playerShots ?? []) {
-    drawProjectile(ctx, shot);
+    drawProjectile(ctx, shot, renderer);
   }
   for (const shot of state.enemyShots ?? []) {
-    drawProjectile(ctx, shot);
+    drawProjectile(ctx, shot, renderer);
   }
   if (state.ship) {
     drawEntityShadow(ctx, state.ship, state.layout);
@@ -619,11 +772,11 @@ function drawSkyPatrolFrame(renderer, state) {
     if (state.ship.invulnerableMs > 0) {
       ctx.globalAlpha = 0.58;
     }
-    drawPlayerShip(ctx, state.ship);
+    drawPlayerShip(ctx, state.ship, renderer);
     ctx.restore();
   }
   for (const explosion of state.explosions ?? []) {
-    drawExplosion(ctx, explosion, state.layout.tileSize);
+    drawExplosion(ctx, explosion, state.layout.tileSize, renderer);
   }
   for (const burst of state.scoreBursts ?? []) {
     drawScoreBurst(ctx, burst, state.layout.tileSize);
@@ -680,7 +833,7 @@ export function areSkyPatrolHudStatesEqual(a, b) {
   );
 }
 
-export function createSkyPatrolCanvasRenderer(canvas) {
+export function createSkyPatrolCanvasRenderer(canvas, options = {}) {
   const ctx = canvas?.getContext?.("2d") ?? null;
   const terrainCanvas = createAuxiliaryCanvas(canvas);
   const terrainCtx = terrainCanvas?.getContext?.("2d") ?? null;
@@ -688,6 +841,7 @@ export function createSkyPatrolCanvasRenderer(canvas) {
   return {
     canvas,
     ctx,
+    spriteImage: options.spriteImage ?? null,
     terrainCanvas,
     terrainCtx,
     terrainCacheKey: "",
@@ -707,6 +861,9 @@ export function createSkyPatrolCanvasRenderer(canvas) {
         this.canvas.height = nextHeight;
         this.terrainCacheKey = "";
       }
+    },
+    setSpriteImage(spriteImage) {
+      this.spriteImage = spriteImage ?? null;
     },
     draw(state) {
       drawSkyPatrolFrame(this, state);

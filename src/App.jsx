@@ -120,6 +120,12 @@ import {
   createSkyPatrolCanvasRenderer,
   getSkyPatrolHudState,
 } from "./skyPatrolCanvas.js";
+import { SKY_PATROL_SPRITE_ATLAS_URL } from "./skyPatrolSpriteAtlas.js";
+import {
+  SKY_PATROL_ACTIVE_HAND_CONNECTIONS,
+  SKY_PATROL_ACTIVE_HAND_TIP_INDEXES,
+  getSkyPatrolActiveHandTipStyle,
+} from "./skyPatrolHandOverlay.js";
 import {
   getSkyPatrolFireCooldownUi,
   getSkyPatrolGameOverUi,
@@ -1602,6 +1608,7 @@ export default function App() {
   const fullscreenSkyPatrolHudRef = useRef(null);
   const fullscreenSkyPatrolStateRef = useRef(null);
   const fullscreenSkyPatrolRendererRef = useRef(null);
+  const fullscreenSkyPatrolSpriteImageRef = useRef(null);
   const fullscreenInvadersStateRef = useRef(null);
   const fullscreenBreakoutViewportRef = useRef(null);
   const fullscreenFingerPongViewportRef = useRef(null);
@@ -2803,6 +2810,27 @@ export default function App() {
     setFullscreenFruitNinjaState(nextGame);
     return undefined;
   }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (typeof Image === "undefined") {
+      return undefined;
+    }
+
+    const spriteImage = new Image();
+    spriteImage.onload = () => {
+      fullscreenSkyPatrolSpriteImageRef.current = spriteImage;
+      const renderer = fullscreenSkyPatrolRendererRef.current;
+      renderer?.setSpriteImage(spriteImage);
+      if (fullscreenSkyPatrolStateRef.current) {
+        renderer?.draw(fullscreenSkyPatrolStateRef.current);
+      }
+    };
+    spriteImage.src = SKY_PATROL_SPRITE_ATLAS_URL;
+
+    return () => {
+      spriteImage.onload = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (
@@ -6211,10 +6239,13 @@ export default function App() {
 
     let renderer = fullscreenSkyPatrolRendererRef.current;
     if (!renderer || renderer.canvas !== canvas) {
-      renderer = createSkyPatrolCanvasRenderer(canvas);
+      renderer = createSkyPatrolCanvasRenderer(canvas, {
+        spriteImage: fullscreenSkyPatrolSpriteImageRef.current,
+      });
       fullscreenSkyPatrolRendererRef.current = renderer;
     }
 
+    renderer.setSpriteImage(fullscreenSkyPatrolSpriteImageRef.current);
     renderer.resize(viewportMetrics.width, viewportMetrics.height);
     return renderer;
   }
@@ -6917,13 +6948,8 @@ export default function App() {
     };
 
     const drawHandConnections = () => {
-      for (const [startIndex, endIndex] of HAND_ROOT_CONNECTIONS) {
+      for (const [startIndex, endIndex] of SKY_PATROL_ACTIVE_HAND_CONNECTIONS) {
         drawConnection(startIndex, endIndex);
-      }
-      for (const chain of HAND_FINGER_CHAINS) {
-        for (let index = 1; index < chain.length; index += 1) {
-          drawConnection(chain[index - 1], chain[index]);
-        }
       }
     };
 
@@ -6941,16 +6967,17 @@ export default function App() {
     ctx.lineWidth = 2.4;
     drawHandConnections();
 
-    for (const tipIndex of HAND_FINGERTIP_INDEXES) {
+    const tipStyle = getSkyPatrolActiveHandTipStyle(pinchStateRef.current);
+    for (const tipIndex of SKY_PATROL_ACTIVE_HAND_TIP_INDEXES) {
       const projectedTip = projectCameraPointToCanvas(landmarks[tipIndex], renderMetrics);
       if (!projectedTip) {
         continue;
       }
-      ctx.fillStyle = "rgba(219, 255, 248, 0.25)";
+      ctx.fillStyle = tipStyle.fill;
       ctx.beginPath();
       ctx.arc(projectedTip.x, projectedTip.y, 5.5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "rgba(64, 255, 225, 0.24)";
+      ctx.strokeStyle = tipStyle.stroke;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(projectedTip.x, projectedTip.y, 10, 0, Math.PI * 2);

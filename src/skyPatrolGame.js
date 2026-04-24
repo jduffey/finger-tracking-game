@@ -138,6 +138,7 @@ function createPlayerShip(layout) {
     y: layout.height * 0.78,
     width: layout.playerWidth,
     height: layout.playerHeight,
+    bank: 0,
     invulnerableMs: 0,
   };
 }
@@ -581,10 +582,17 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
     const desiredX = clamp(input.pointerX, layout.playerMinX, layout.playerMaxX);
     const desiredY = clamp(input.pointerY, layout.playerMinY, layout.playerMaxY);
     const lerp = 1 - Math.exp(-layout.playerLerpPerSecond * safeDt);
+    const bank = clamp((desiredX - ship.x) / Math.max(1, layout.width * 0.08), -1, 1);
     ship = {
       ...ship,
       x: ship.x + (desiredX - ship.x) * lerp,
       y: ship.y + (desiredY - ship.y) * lerp,
+      bank,
+    };
+  } else if (ship.bank) {
+    ship = {
+      ...ship,
+      bank: Math.abs(ship.bank) < 0.02 ? 0 : ship.bank * Math.exp(-7 * safeDt),
     };
   }
 

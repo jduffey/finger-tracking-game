@@ -273,6 +273,7 @@ export function getSkyPatrolProjectileUi(shot = {}) {
       core: "#fffef0",
       outline: "#58261c",
       glow: "rgba(255, 245, 132, 0.78)",
+      sprite: "playerBolt",
     };
   }
   if (shot.kind === "turret") {
@@ -282,6 +283,7 @@ export function getSkyPatrolProjectileUi(shot = {}) {
       core: "#e4fbff",
       outline: "#123646",
       glow: "rgba(93, 228, 255, 0.76)",
+      sprite: "enemyBomb",
     };
   }
   return {
@@ -290,6 +292,7 @@ export function getSkyPatrolProjectileUi(shot = {}) {
     core: "#d6f7ff",
     outline: "#123646",
     glow: "rgba(112, 214, 255, 0.74)",
+    sprite: "purpleOrb",
   };
 }
 
