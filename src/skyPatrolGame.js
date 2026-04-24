@@ -364,6 +364,7 @@ function createEmptyState(layout) {
     scrollOffset: 0,
     elapsedMs: 0,
     score: 0,
+    targetsDestroyed: 0,
     lives: SKY_PATROL_STARTING_LIVES,
     status: "playing",
     message: "Pinch to fire twin cannons.",
@@ -503,6 +504,7 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
 
   let scrollOffset = nextStateBase.scrollOffset + layout.scrollSpeed * safeDt;
   let score = nextStateBase.score;
+  let targetsDestroyed = nextStateBase.targetsDestroyed ?? 0;
   let lives = nextStateBase.lives;
   let status = nextStateBase.status;
   let message = nextStateBase.message;
@@ -709,6 +711,7 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
         hit = true;
         if (enemy.hp <= 0) {
           score += SKY_PATROL_FIGHTER_SCORE;
+          targetsDestroyed += 1;
           scoreBursts.push(
             createScoreBurst(`score-burst-${nextScoreBurstId}`, enemy.x, enemy.y, SKY_PATROL_FIGHTER_SCORE),
           );
@@ -734,6 +737,7 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
           hit = true;
           if (target.hp <= 0) {
             score += target.score;
+            targetsDestroyed += 1;
             scoreBursts.push(
               createScoreBurst(`score-burst-${nextScoreBurstId}`, target.x, target.y, target.score),
             );
@@ -818,6 +822,7 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
     ship,
     scrollOffset,
     score,
+    targetsDestroyed,
     lives,
     status,
     message,

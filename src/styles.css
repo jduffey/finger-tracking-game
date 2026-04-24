@@ -1920,6 +1920,8 @@ body {
 }
 
 .fullscreen-camera-sky-patrol-banner.game-over {
+  display: grid;
+  gap: 8px;
   font-size: clamp(1.25rem, 3.4vw, 2.35rem);
   font-weight: 900;
   left: 50%;
@@ -1928,6 +1930,25 @@ body {
   text-shadow: 0 8px 22px rgba(0, 0, 0, 0.42);
   top: 50%;
   transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-sky-patrol-game-over-title {
+  line-height: 1.05;
+}
+
+.fullscreen-camera-sky-patrol-game-over-stats {
+  color: rgba(235, 244, 255, 0.88);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: clamp(0.86rem, 1.8vw, 1.08rem);
+  gap: 12px;
+  justify-content: center;
+}
+
+.fullscreen-camera-sky-patrol-game-over-restart {
+  color: #fff2a8;
+  font-size: clamp(0.78rem, 1.5vw, 1rem);
+  font-weight: 800;
 }
 
 .fullscreen-camera-invaders {

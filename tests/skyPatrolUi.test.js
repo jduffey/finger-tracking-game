@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   getSkyPatrolFireCooldownUi,
+  getSkyPatrolGameOverUi,
   getSkyPatrolHudItems,
   getSkyPatrolIncomingIndicators,
   getSkyPatrolLifeIcons,
@@ -79,4 +80,20 @@ test("getSkyPatrolTargetHealthPips exposes remaining hit points", () => {
 
 test("getSkyPatrolLifeIcons turns lives into squadron icons", () => {
   assert.deepEqual(getSkyPatrolLifeIcons(2, 3), ["active", "active", "lost"]);
+});
+
+test("getSkyPatrolGameOverUi summarizes the sortie and restart cue", () => {
+  const ui = getSkyPatrolGameOverUi({
+    status: "gameover",
+    score: 720,
+    targetsDestroyed: 4,
+  });
+
+  assert.equal(ui.visible, true);
+  assert.equal(ui.title, "Squadron down");
+  assert.deepEqual(ui.stats, [
+    { label: "Score", value: 720 },
+    { label: "Targets", value: 4 },
+  ]);
+  assert.equal(ui.restartText, "Hold Restart Sortie");
 });

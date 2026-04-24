@@ -124,6 +124,7 @@ import {
 } from "./skyPatrolCanvas.js";
 import {
   getSkyPatrolFireCooldownUi,
+  getSkyPatrolGameOverUi,
   getSkyPatrolHudItems,
   getSkyPatrolLifeIcons,
 } from "./skyPatrolUi.js";
@@ -2146,6 +2147,10 @@ export default function App() {
   const fullscreenSkyPatrolLifeIcons = useMemo(
     () => getSkyPatrolLifeIcons(fullscreenSkyPatrolHud?.lives ?? 0, SKY_PATROL_STARTING_LIVES),
     [fullscreenSkyPatrolHud?.lives],
+  );
+  const fullscreenSkyPatrolGameOverUi = useMemo(
+    () => getSkyPatrolGameOverUi(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
   );
 
   const fullscreenHexGridMetrics = useMemo(() => {
@@ -10433,13 +10438,27 @@ export default function App() {
                 <span>Depot +{SKY_PATROL_DEPOT_SCORE}</span>
                 <span>Pinch fires</span>
               </div>
-              <div
-                className={`fullscreen-camera-sky-patrol-banner ${
-                  fullscreenSkyPatrolHud?.status === "gameover" ? "game-over" : ""
-                }`}
-              >
-                {fullscreenSkyPatrolHud?.message}
-              </div>
+              {fullscreenSkyPatrolGameOverUi.visible ? (
+                <div className="fullscreen-camera-sky-patrol-banner game-over">
+                  <span className="fullscreen-camera-sky-patrol-game-over-title">
+                    {fullscreenSkyPatrolGameOverUi.title}
+                  </span>
+                  <span className="fullscreen-camera-sky-patrol-game-over-stats">
+                    {fullscreenSkyPatrolGameOverUi.stats.map((stat) => (
+                      <span key={stat.label}>
+                        {stat.label} {stat.value}
+                      </span>
+                    ))}
+                  </span>
+                  <span className="fullscreen-camera-sky-patrol-game-over-restart">
+                    {fullscreenSkyPatrolGameOverUi.restartText}
+                  </span>
+                </div>
+              ) : (
+                <div className="fullscreen-camera-sky-patrol-banner">
+                  {fullscreenSkyPatrolHud?.message}
+                </div>
+              )}
             </div>
           ) : fullscreenGridMode === "invaders" ? (
             <div

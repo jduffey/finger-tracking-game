@@ -163,6 +163,7 @@ test("stepSkyPatrolGame awards score when a fighter is destroyed", () => {
   const next = stepSkyPatrolGame(state, 0.016, {}, constantRng(0.5));
 
   assert.equal(next.score, SKY_PATROL_FIGHTER_SCORE);
+  assert.equal(next.targetsDestroyed, 1);
   assert.equal(next.airEnemies.length, 0);
   assert.ok(next.explosions.length > 0);
   assert.equal(next.scoreBursts.length, 1);
@@ -270,6 +271,7 @@ test("stepSkyPatrolGame awards depot score when a ground target is destroyed", (
   const next = stepSkyPatrolGame(state, 0.016, {}, constantRng(0.5));
 
   assert.equal(next.score, SKY_PATROL_DEPOT_SCORE);
+  assert.equal(next.targetsDestroyed, 1);
   assert.equal(next.groundTargets.length, 0);
   assert.equal(next.scoreBursts.length, 1);
   assert.equal(next.scoreBursts[0].value, SKY_PATROL_DEPOT_SCORE);

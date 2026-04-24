@@ -80,6 +80,7 @@ test("getSkyPatrolHudState summarizes the visible Sky Patrol HUD values", () => 
   const game = {
     ...createSkyPatrolGame(960, 720),
     score: 480,
+    targetsDestroyed: 0,
     lives: 2,
     status: "gameover",
     message: "Squadron down. Pinch to relaunch.",
@@ -89,6 +90,7 @@ test("getSkyPatrolHudState summarizes the visible Sky Patrol HUD values", () => 
 
   assert.deepEqual(getSkyPatrolHudState(game), {
     score: 480,
+    targetsDestroyed: 0,
     lives: 2,
     activeTargetCount: 3,
     airTargetCount: 1,

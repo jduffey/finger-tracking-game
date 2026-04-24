@@ -489,6 +489,7 @@ export function getSkyPatrolHudState(state) {
 
   return {
     score: state.score ?? 0,
+    targetsDestroyed: state.targetsDestroyed ?? 0,
     lives: state.lives ?? SKY_PATROL_STARTING_LIVES,
     activeTargetCount: (state.airEnemies?.length ?? 0) + (state.groundTargets?.length ?? 0),
     airTargetCount: state.airEnemies?.length ?? 0,
@@ -510,6 +511,7 @@ export function areSkyPatrolHudStatesEqual(a, b) {
   }
   return (
     a.score === b.score &&
+    a.targetsDestroyed === b.targetsDestroyed &&
     a.lives === b.lives &&
     a.activeTargetCount === b.activeTargetCount &&
     a.airTargetCount === b.airTargetCount &&

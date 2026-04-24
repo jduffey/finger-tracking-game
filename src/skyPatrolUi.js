@@ -101,3 +101,24 @@ export function getSkyPatrolLifeIcons(lives = 0, maxLives = 3) {
   const safeLives = clamp(Number.isFinite(lives) ? lives : 0, 0, maxLives);
   return Array.from({ length: maxLives }, (_, index) => (index < safeLives ? "active" : "lost"));
 }
+
+export function getSkyPatrolGameOverUi(hud = {}) {
+  if (hud.status !== "gameover") {
+    return {
+      visible: false,
+      title: "",
+      stats: [],
+      restartText: "",
+    };
+  }
+
+  return {
+    visible: true,
+    title: "Squadron down",
+    stats: [
+      { label: "Score", value: hud.score ?? 0 },
+      { label: "Targets", value: hud.targetsDestroyed ?? 0 },
+    ],
+    restartText: "Hold Restart Sortie",
+  };
+}
