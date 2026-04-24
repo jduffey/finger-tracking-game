@@ -141,6 +141,7 @@ function createAirEnemy(layout, nextId, rng = Math.random) {
     phase: randomBetween(0, Math.PI * 2, rng),
     lifeMs: 0,
     hp: 2,
+    maxHp: 2,
     shotCooldownMs: randomBetween(320, 920, rng),
   };
 }
@@ -325,6 +326,7 @@ function createGroundTarget(layout, scrollOffset, nextId, rng = Math.random) {
       width,
       height,
       hp: kind === "depot" ? 4 : 2,
+      maxHp: kind === "depot" ? 4 : 2,
       score: kind === "depot" ? SKY_PATROL_DEPOT_SCORE : SKY_PATROL_TURRET_SCORE,
       shotCooldownMs: kind === "turret" ? randomBetween(620, 1120, rng) : Number.POSITIVE_INFINITY,
     };

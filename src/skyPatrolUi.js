@@ -84,3 +84,15 @@ export function getSkyPatrolThreatUi(entity = {}) {
     shape: "ground-emplacement",
   };
 }
+
+export function getSkyPatrolTargetHealthPips(entity = {}) {
+  const maxHp =
+    Number.isFinite(entity.maxHp) && entity.maxHp > 0
+      ? entity.maxHp
+      : entity.kind === "depot"
+      ? 4
+      : 2;
+  const hp = clamp(Number.isFinite(entity.hp) ? entity.hp : maxHp, 0, maxHp);
+
+  return Array.from({ length: maxHp }, (_, index) => (index < hp ? "filled" : "empty"));
+}

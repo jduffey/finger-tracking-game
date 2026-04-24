@@ -5,6 +5,7 @@ import {
 } from "./skyPatrolGame.js";
 import {
   getSkyPatrolIncomingIndicators,
+  getSkyPatrolTargetHealthPips,
   getSkyPatrolThreatUi,
 } from "./skyPatrolUi.js";
 
@@ -321,6 +322,7 @@ function drawEnemyShip(ctx, enemy) {
   ctx.fillStyle = "#6d2022";
   ctx.fillRect(left + roundPixel(width * 0.18), top + roundPixel(height * 0.5), Math.max(4, roundPixel(width * 0.18)), Math.max(4, roundPixel(height * 0.12)));
   ctx.fillRect(left + roundPixel(width * 0.64), top + roundPixel(height * 0.5), Math.max(4, roundPixel(width * 0.18)), Math.max(4, roundPixel(height * 0.12)));
+  drawHealthPips(ctx, enemy, top - 6);
 }
 
 function drawGroundTarget(ctx, target) {
@@ -363,6 +365,23 @@ function drawGroundTarget(ctx, target) {
   if (threatUi.shape === "ground-emplacement") {
     ctx.fillStyle = "#d8e7b1";
     ctx.fillRect(left + roundPixel(width * 0.18), top + roundPixel(height * 0.64), Math.max(3, roundPixel(width * 0.64)), Math.max(3, roundPixel(height * 0.12)));
+  }
+  drawHealthPips(ctx, target, top - 6);
+}
+
+function drawHealthPips(ctx, entity, y) {
+  const pips = getSkyPatrolTargetHealthPips(entity);
+  if (pips.length <= 1) {
+    return;
+  }
+
+  const pipWidth = 5;
+  const pipGap = 2;
+  const totalWidth = pips.length * pipWidth + (pips.length - 1) * pipGap;
+  const startX = roundPixel(entity.x - totalWidth / 2);
+  for (let index = 0; index < pips.length; index += 1) {
+    ctx.fillStyle = pips[index] === "filled" ? "#fff2a8" : "rgba(12, 18, 26, 0.72)";
+    ctx.fillRect(startX + index * (pipWidth + pipGap), roundPixel(y), pipWidth, 3);
   }
 }
 

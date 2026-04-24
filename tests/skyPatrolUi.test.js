@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 
 import {
   getSkyPatrolFireCooldownUi,
-  getSkyPatrolThreatUi,
   getSkyPatrolHudItems,
   getSkyPatrolIncomingIndicators,
+  getSkyPatrolTargetHealthPips,
+  getSkyPatrolThreatUi,
 } from "../src/skyPatrolUi.js";
 
 test("getSkyPatrolHudItems builds tactical HUD chips", () => {
@@ -60,4 +61,17 @@ test("getSkyPatrolThreatUi distinguishes air and ground threat language", () => 
   assert.equal(getSkyPatrolThreatUi({ kind: "fighter" }).shape, "air-chevron");
   assert.equal(getSkyPatrolThreatUi({ kind: "turret" }).shape, "ground-emplacement");
   assert.equal(getSkyPatrolThreatUi({ kind: "depot" }).shape, "ground-depot");
+});
+
+test("getSkyPatrolTargetHealthPips exposes remaining hit points", () => {
+  assert.deepEqual(getSkyPatrolTargetHealthPips({ hp: 2, maxHp: 4 }), [
+    "filled",
+    "filled",
+    "empty",
+    "empty",
+  ]);
+  assert.deepEqual(getSkyPatrolTargetHealthPips({ kind: "fighter", hp: 1 }), [
+    "filled",
+    "empty",
+  ]);
 });
