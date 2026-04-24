@@ -1840,8 +1840,12 @@ body {
 .fullscreen-camera-sky-patrol-scoreboard {
   font-size: 0.95rem;
   font-weight: 700;
-  left: 18px;
+  justify-content: center;
+  left: 50%;
+  max-width: calc(100% - 36px);
+  right: auto;
   top: 18px;
+  transform: translateX(-50%);
 }
 
 .fullscreen-camera-sky-patrol-hud-chip {
@@ -2036,6 +2040,7 @@ body {
   display: grid;
   gap: 4px;
   padding: 12px 16px;
+  top: 92px;
 }
 
 .fullscreen-camera-sky-patrol-start-title {
@@ -5128,11 +5133,18 @@ button:disabled {
   .fullscreen-camera-breakout-scoreboard,
   .fullscreen-camera-brick-dodger-scoreboard,
   .fullscreen-camera-hand-bounce-scoreboard,
-  .fullscreen-camera-sky-patrol-scoreboard,
   .fullscreen-camera-invaders-scoreboard,
   .fullscreen-camera-flappy-scoreboard,
   .fullscreen-camera-missile-scoreboard {
     right: 12px;
+  }
+
+  .fullscreen-camera-sky-patrol-scoreboard {
+    justify-content: center;
+    left: 50%;
+    max-width: calc(100% - 24px);
+    right: auto;
+    transform: translateX(-50%);
   }
 
   .fullscreen-camera-tic-tac-toe-topbar {
@@ -5189,6 +5201,10 @@ button:disabled {
     max-width: calc(100% - 24px);
     right: auto;
     top: 12px;
+  }
+
+  .fullscreen-camera-sky-patrol-banner.start-prompt {
+    top: 108px;
   }
 
   .fullscreen-camera-hand-bounce-banner {
