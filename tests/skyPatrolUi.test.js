@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   getSkyPatrolFireCooldownUi,
   getSkyPatrolGameOverUi,
+  getSkyPatrolGroundSiteUi,
   getSkyPatrolHudItems,
   getSkyPatrolIncomingIndicators,
   getSkyPatrolLegendUi,
@@ -130,4 +131,19 @@ test("getSkyPatrolRadarBlips maps active threats into a mini radar strip", () =>
     { id: "fighter-1", role: "air", xPct: 25, yPct: 20 },
     { id: "turret-1", role: "ground", xPct: 75, yPct: 50 },
   ]);
+});
+
+test("getSkyPatrolGroundSiteUi marks the terrain supporting each ground target", () => {
+  assert.deepEqual(getSkyPatrolGroundSiteUi({ siteTerrain: "runway" }), {
+    marker: "runway-pad",
+    accent: "built",
+  });
+  assert.deepEqual(getSkyPatrolGroundSiteUi({ siteTerrain: "road" }), {
+    marker: "road-pad",
+    accent: "built",
+  });
+  assert.deepEqual(getSkyPatrolGroundSiteUi({ siteTerrain: "forest" }), {
+    marker: "field-pad",
+    accent: "camo",
+  });
 });

@@ -207,3 +207,22 @@ export function getSkyPatrolRadarBlips(state = {}) {
     yPct: Math.round(clamp(((entity.y ?? 0) / height) * 100, 0, 100)),
   }));
 }
+
+export function getSkyPatrolGroundSiteUi(target = {}) {
+  if (target.siteTerrain === "runway") {
+    return {
+      marker: "runway-pad",
+      accent: "built",
+    };
+  }
+  if (target.siteTerrain === "road") {
+    return {
+      marker: "road-pad",
+      accent: "built",
+    };
+  }
+  return {
+    marker: "field-pad",
+    accent: "camo",
+  };
+}

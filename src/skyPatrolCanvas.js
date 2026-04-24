@@ -4,6 +4,7 @@ import {
   getSkyPatrolTerrainScrollMetrics,
 } from "./skyPatrolGame.js";
 import {
+  getSkyPatrolGroundSiteUi,
   getSkyPatrolIncomingIndicators,
   SKY_PATROL_LEGEND_FADE_MS,
   getSkyPatrolRadarBlips,
@@ -330,6 +331,7 @@ function drawEnemyShip(ctx, enemy) {
 function drawGroundTarget(ctx, target) {
   const threatUi = getSkyPatrolThreatUi(target);
   const { left, top, width, height } = getEntityBounds(target);
+  drawGroundTargetSite(ctx, target);
   if (target.kind === "depot") {
     ctx.fillStyle = "#463626";
     ctx.fillRect(left, top + roundPixel(height * 0.18), width, height - roundPixel(height * 0.18));
@@ -369,6 +371,59 @@ function drawGroundTarget(ctx, target) {
     ctx.fillRect(left + roundPixel(width * 0.18), top + roundPixel(height * 0.64), Math.max(3, roundPixel(width * 0.64)), Math.max(3, roundPixel(height * 0.12)));
   }
   drawHealthPips(ctx, target, top - 6);
+}
+
+function drawGroundTargetSite(ctx, target) {
+  const siteUi = getSkyPatrolGroundSiteUi(target);
+  const { top, width, height } = getEntityBounds(target);
+  const padWidth = Math.max(width + 10, roundPixel(width * 1.44));
+  const padHeight = Math.max(8, roundPixel(height * 0.28));
+  const padLeft = roundPixel(target.x - padWidth / 2);
+  const padTop = roundPixel(top + height * 0.74);
+
+  if (siteUi.marker === "runway-pad") {
+    ctx.fillStyle = "rgba(31, 36, 48, 0.78)";
+    ctx.fillRect(padLeft, padTop, padWidth, padHeight);
+    ctx.fillStyle = "rgba(244, 241, 222, 0.78)";
+    for (let x = padLeft + 4; x < padLeft + padWidth - 4; x += 12) {
+      ctx.fillRect(
+        x,
+        padTop + roundPixel(padHeight * 0.46),
+        6,
+        Math.max(2, roundPixel(padHeight * 0.16)),
+      );
+    }
+    return;
+  }
+
+  if (siteUi.marker === "road-pad") {
+    ctx.fillStyle = "rgba(79, 63, 45, 0.78)";
+    ctx.fillRect(padLeft, padTop, padWidth, padHeight);
+    ctx.fillStyle = "rgba(241, 214, 110, 0.72)";
+    ctx.fillRect(
+      padLeft + 3,
+      padTop + roundPixel(padHeight * 0.42),
+      Math.max(4, padWidth - 6),
+      Math.max(2, roundPixel(padHeight * 0.18)),
+    );
+    return;
+  }
+
+  ctx.fillStyle = "rgba(30, 61, 36, 0.7)";
+  ctx.fillRect(padLeft, padTop, padWidth, padHeight);
+  ctx.fillStyle = "rgba(180, 219, 128, 0.38)";
+  ctx.fillRect(
+    padLeft + 3,
+    padTop + 2,
+    Math.max(5, roundPixel(padWidth * 0.28)),
+    Math.max(2, roundPixel(padHeight * 0.32)),
+  );
+  ctx.fillRect(
+    padLeft + roundPixel(padWidth * 0.62),
+    padTop + roundPixel(padHeight * 0.54),
+    Math.max(5, roundPixel(padWidth * 0.26)),
+    Math.max(2, roundPixel(padHeight * 0.28)),
+  );
 }
 
 function drawHealthPips(ctx, entity, y) {

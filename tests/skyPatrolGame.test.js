@@ -186,6 +186,8 @@ test("stepSkyPatrolGame can spawn ground targets over the scrolling terrain", ()
   );
 
   assert.ok(next.groundTargets.length >= 1);
+  assert.ok(next.groundTargets[0].siteTerrain);
+  assert.ok(next.groundTargets[0].siteSpan > 0);
   assert.ok(next.groundSpawnCooldownMs > 1000);
 });
 
