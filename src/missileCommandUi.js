@@ -251,3 +251,23 @@ export function getMissileCommandExplosionUi(explosion) {
     shockwaveScale: Number((0.72 + progress * 0.5).toFixed(3)),
   };
 }
+
+export function getMissileCommandCountdownUi(state) {
+  if (state?.status !== "countdown" || (state?.countdownMs ?? 0) <= 0) {
+    return {
+      visible: false,
+      title: "",
+      seconds: 0,
+      structureIds: [],
+    };
+  }
+
+  return {
+    visible: true,
+    title: "Defend",
+    seconds: Math.max(1, Math.ceil(state.countdownMs / 1000)),
+    structureIds: (Array.isArray(state.structures) ? state.structures : [])
+      .filter((structure) => structure.alive)
+      .map((structure) => structure.id),
+  };
+}

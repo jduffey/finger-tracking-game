@@ -5,6 +5,7 @@ import { createMissileCommandGame } from "../src/missileCommandGame.js";
 import {
   getMissileCommandCooldownUi,
   getMissileCommandCrosshairUi,
+  getMissileCommandCountdownUi,
   getMissileCommandExplosionUi,
   getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
@@ -175,4 +176,15 @@ test("getMissileCommandExplosionUi splits blasts into core and shockwave layers"
   assert.equal(ui.className.includes("interceptor"), true);
   assert.equal(ui.coreOpacity > 0, true);
   assert.equal(ui.shockwaveOpacity > 0, true);
+});
+
+test("getMissileCommandCountdownUi presents the opening as a defense prompt", () => {
+  const game = createMissileCommandGame(960, 720);
+  const ui = getMissileCommandCountdownUi(game);
+
+  assert.equal(ui.visible, true);
+  assert.equal(ui.title, "Defend");
+  assert.equal(ui.seconds, 2);
+  assert.equal(ui.structureIds.length, 5);
+  assert.equal(getMissileCommandCountdownUi({ ...game, status: "playing" }).visible, false);
 });

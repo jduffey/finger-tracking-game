@@ -2340,14 +2340,44 @@ body {
 
 .fullscreen-camera-missile-banner {
   color: #fffdf7;
+  display: grid;
   font-size: clamp(3.4rem, 12vw, 6rem);
   font-weight: 900;
+  gap: 6px;
   left: 50%;
   letter-spacing: 0.08em;
+  place-items: center;
   position: absolute;
   text-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
   top: 50%;
   transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-missile-banner.countdown {
+  letter-spacing: 0;
+}
+
+.fullscreen-camera-missile-banner-title {
+  font-size: clamp(1.2rem, 3vw, 2rem);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-missile-banner-count {
+  line-height: 0.92;
+}
+
+.fullscreen-camera-missile-banner-structures {
+  display: flex;
+  gap: 8px;
+}
+
+.fullscreen-camera-missile-banner-structures span {
+  background: rgba(255, 248, 201, 0.84);
+  border-radius: 999px;
+  box-shadow: 0 0 12px rgba(255, 248, 201, 0.48);
+  height: 8px;
+  width: 24px;
 }
 
 .fullscreen-camera-missile-banner.game-over {

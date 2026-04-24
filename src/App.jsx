@@ -92,6 +92,7 @@ import {
 import {
   getMissileCommandCooldownUi,
   getMissileCommandCrosshairUi,
+  getMissileCommandCountdownUi,
   getMissileCommandExplosionUi,
   getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
@@ -2116,6 +2117,10 @@ export default function App() {
   );
   const fullscreenMissileTacticalMetrics = useMemo(
     () => getMissileCommandTacticalMetrics(fullscreenMissileCommandState),
+    [fullscreenMissileCommandState],
+  );
+  const fullscreenMissileCountdownUi = useMemo(
+    () => getMissileCommandCountdownUi(fullscreenMissileCommandState),
     [fullscreenMissileCommandState],
   );
 
@@ -10714,10 +10719,19 @@ export default function App() {
                 ))}
               </div>
               {isFullscreenMissileCommandMode &&
-              fullscreenMissileCommandState.status === "countdown" &&
-              fullscreenMissileCommandState.countdownMs > 0 ? (
-                <div className="fullscreen-camera-missile-banner">
-                  {Math.max(1, Math.ceil(fullscreenMissileCommandState.countdownMs / 1000))}
+              fullscreenMissileCountdownUi.visible ? (
+                <div className="fullscreen-camera-missile-banner countdown">
+                  <span className="fullscreen-camera-missile-banner-title">
+                    {fullscreenMissileCountdownUi.title}
+                  </span>
+                  <span className="fullscreen-camera-missile-banner-count">
+                    {fullscreenMissileCountdownUi.seconds}
+                  </span>
+                  <span className="fullscreen-camera-missile-banner-structures">
+                    {fullscreenMissileCountdownUi.structureIds.map((structureId) => (
+                      <span key={structureId} />
+                    ))}
+                  </span>
                 </div>
               ) : null}
               {isFullscreenMissileCommandMode &&
