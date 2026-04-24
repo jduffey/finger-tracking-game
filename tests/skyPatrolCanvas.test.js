@@ -84,8 +84,11 @@ test("getSkyPatrolHudState summarizes the visible Sky Patrol HUD values", () => 
     lives: 2,
     status: "gameover",
     message: "Squadron down. Pinch to relaunch.",
-    airEnemies: [{ id: "fighter-1" }],
-    groundTargets: [{ id: "turret-1" }, { id: "depot-1" }],
+    airEnemies: [{ id: "fighter-1", x: 240, y: 144 }],
+    groundTargets: [
+      { id: "turret-1", x: 720, y: 360 },
+      { id: "depot-1", x: 480, y: 216 },
+    ],
   };
 
   assert.deepEqual(getSkyPatrolHudState(game), {
@@ -99,6 +102,12 @@ test("getSkyPatrolHudState summarizes the visible Sky Patrol HUD values", () => 
     fireReady: true,
     incomingIndicators: [],
     legendFaded: false,
+    radarBlips: [
+      { id: "ship", role: "player", xPct: 50, yPct: 78 },
+      { id: "fighter-1", role: "air", xPct: 25, yPct: 20 },
+      { id: "turret-1", role: "ground", xPct: 75, yPct: 50 },
+      { id: "depot-1", role: "ground", xPct: 50, yPct: 30 },
+    ],
     status: "gameover",
     message: "Squadron down. Pinch to relaunch.",
   });
@@ -133,6 +142,13 @@ test("areSkyPatrolHudStatesEqual only changes when the rendered HUD changes", ()
       ...hud,
       legendFaded: true,
     }),
+    false,
+  );
+  assert.equal(
+    areSkyPatrolHudStatesEqual(
+      { ...hud, radarBlips: [{ id: "ship", xPct: 50, yPct: 78 }] },
+      { ...hud, radarBlips: [{ id: "ship", xPct: 51, yPct: 78 }] },
+    ),
     false,
   );
 });

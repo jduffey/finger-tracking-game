@@ -8,6 +8,7 @@ import {
   getSkyPatrolIncomingIndicators,
   getSkyPatrolLegendUi,
   getSkyPatrolLifeIcons,
+  getSkyPatrolRadarBlips,
   getSkyPatrolTargetHealthPips,
   getSkyPatrolThreatUi,
 } from "../src/skyPatrolUi.js";
@@ -114,4 +115,19 @@ test("getSkyPatrolLegendUi compresses and fades the training legend after launch
 
   assert.equal(lateLegend.visible, true);
   assert.equal(lateLegend.faded, true);
+});
+
+test("getSkyPatrolRadarBlips maps active threats into a mini radar strip", () => {
+  const blips = getSkyPatrolRadarBlips({
+    layout: { width: 960, height: 720 },
+    ship: { x: 480, y: 648, width: 64, height: 48 },
+    airEnemies: [{ id: "fighter-1", kind: "fighter", x: 240, y: 144, width: 48, height: 52 }],
+    groundTargets: [{ id: "turret-1", kind: "turret", x: 720, y: 360, width: 32, height: 32 }],
+  });
+
+  assert.deepEqual(blips, [
+    { id: "ship", role: "player", xPct: 50, yPct: 90 },
+    { id: "fighter-1", role: "air", xPct: 25, yPct: 20 },
+    { id: "turret-1", role: "ground", xPct: 75, yPct: 50 },
+  ]);
 });

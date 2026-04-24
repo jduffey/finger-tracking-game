@@ -1885,6 +1885,68 @@ body {
   font-weight: 900;
 }
 
+.fullscreen-camera-sky-patrol-radar {
+  background:
+    linear-gradient(90deg, rgba(226, 240, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(226, 240, 255, 0.12) 1px, transparent 1px),
+    rgba(9, 17, 27, 0.64);
+  background-size: 33.333% 50%;
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 8px;
+  height: 58px;
+  left: 18px;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  top: 72px;
+  width: 178px;
+  z-index: 4;
+}
+
+.fullscreen-camera-sky-patrol-radar::before {
+  background: linear-gradient(90deg, transparent, rgba(112, 214, 255, 0.42), transparent);
+  content: "";
+  height: 100%;
+  left: 50%;
+  opacity: 0.42;
+  position: absolute;
+  top: 0;
+  width: 1px;
+}
+
+.fullscreen-camera-sky-patrol-radar-sweep {
+  background: linear-gradient(90deg, transparent, rgba(255, 242, 168, 0.18), transparent);
+  height: 100%;
+  left: 48%;
+  position: absolute;
+  top: 0;
+  width: 24%;
+}
+
+.fullscreen-camera-sky-patrol-radar-blip {
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+  height: 7px;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 7px;
+}
+
+.fullscreen-camera-sky-patrol-radar-blip.player {
+  color: #fff2a8;
+  height: 9px;
+  width: 9px;
+}
+
+.fullscreen-camera-sky-patrol-radar-blip.air {
+  color: #70d6ff;
+}
+
+.fullscreen-camera-sky-patrol-radar-blip.ground {
+  border-radius: 2px;
+  color: #ffcf7a;
+}
+
 .fullscreen-camera-sky-patrol-life-icons {
   align-items: center;
   display: inline-flex;
@@ -5062,6 +5124,13 @@ button:disabled {
   .fullscreen-camera-tic-tac-toe-scoreboard {
     gap: 8px;
     font-size: 0.9rem;
+  }
+
+  .fullscreen-camera-sky-patrol-radar {
+    height: 48px;
+    left: 12px;
+    top: 66px;
+    width: 148px;
   }
 
   .fullscreen-camera-tic-tac-toe-status {

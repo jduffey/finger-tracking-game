@@ -10434,6 +10434,21 @@ export default function App() {
                   </span>
                 ))}
               </div>
+              {fullscreenSkyPatrolHud?.radarBlips?.length ? (
+                <div className="fullscreen-camera-sky-patrol-radar" aria-hidden="true">
+                  <span className="fullscreen-camera-sky-patrol-radar-sweep" />
+                  {fullscreenSkyPatrolHud.radarBlips.map((blip) => (
+                    <span
+                      key={blip.id}
+                      className={`fullscreen-camera-sky-patrol-radar-blip ${blip.role}`}
+                      style={{
+                        left: `${blip.xPct}%`,
+                        top: `${blip.yPct}%`,
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : null}
               {fullscreenSkyPatrolLegendUi.visible ? (
                 <div
                   className={`fullscreen-camera-sky-patrol-legend ${

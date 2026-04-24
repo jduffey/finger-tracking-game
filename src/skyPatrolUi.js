@@ -169,3 +169,41 @@ export function getSkyPatrolLegendUi(hud = {}) {
     ],
   };
 }
+
+export function getSkyPatrolRadarBlips(state = {}) {
+  const layout = state.layout ?? {};
+  const width = Number.isFinite(layout.width) && layout.width > 0 ? layout.width : 1;
+  const height = Number.isFinite(layout.height) && layout.height > 0 ? layout.height : 1;
+  const blipSources = [];
+
+  if (state.ship) {
+    blipSources.push({
+      id: "ship",
+      role: "player",
+      entity: state.ship,
+    });
+  }
+
+  for (const enemy of Array.isArray(state.airEnemies) ? state.airEnemies : []) {
+    blipSources.push({
+      id: enemy.id,
+      role: "air",
+      entity: enemy,
+    });
+  }
+
+  for (const target of Array.isArray(state.groundTargets) ? state.groundTargets : []) {
+    blipSources.push({
+      id: target.id,
+      role: "ground",
+      entity: target,
+    });
+  }
+
+  return blipSources.map(({ id, role, entity }) => ({
+    id,
+    role,
+    xPct: Math.round(clamp(((entity.x ?? 0) / width) * 100, 0, 100)),
+    yPct: Math.round(clamp(((entity.y ?? 0) / height) * 100, 0, 100)),
+  }));
+}
