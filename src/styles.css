@@ -1989,6 +1989,20 @@ body {
   opacity: 0.34;
 }
 
+.fullscreen-camera-missile-structure.selected-launch-base {
+  box-shadow:
+    0 0 0 4px rgba(255, 248, 201, 0.22),
+    0 0 24px rgba(255, 236, 141, 0.62),
+    0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+.fullscreen-camera-missile-launch-preview {
+  background: linear-gradient(90deg, rgba(255, 248, 201, 0.58), rgba(255, 248, 201, 0.06));
+  height: 2px;
+  position: absolute;
+  transform-origin: left center;
+}
+
 .fullscreen-camera-missile-trail {
   height: 2px;
   position: absolute;

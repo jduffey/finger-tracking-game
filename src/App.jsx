@@ -89,6 +89,7 @@ import {
   launchMissileCommandInterceptor,
   stepMissileCommandGame,
 } from "./missileCommandGame.js";
+import { getMissileCommandLaunchPreview } from "./missileCommandUi.js";
 import {
   SPACE_INVADERS_ENEMY_SCORE,
   createSpaceInvadersGame,
@@ -2078,6 +2079,10 @@ export default function App() {
       y: clampValue(cursor.y - fullscreenCameraViewport.top, 0, fullscreenCameraViewport.height),
     };
   }, [cursor.x, cursor.y, fullscreenCameraViewport, handDetected, isFullscreenMissileCommandMode]);
+  const fullscreenMissileLaunchPreview = useMemo(
+    () => getMissileCommandLaunchPreview(fullscreenMissileCommandState, fullscreenMissileAimPoint),
+    [fullscreenMissileAimPoint, fullscreenMissileCommandState],
+  );
 
   const fullscreenHexGridMetrics = useMemo(() => {
     if (!fullscreenCameraViewport) {
@@ -10488,6 +10493,10 @@ export default function App() {
                   key={structure.id}
                   className={`fullscreen-camera-missile-structure ${structure.type} ${
                     structure.alive ? "alive" : "destroyed"
+                  } ${
+                    fullscreenMissileLaunchPreview?.originStructureId === structure.id
+                      ? "selected-launch-base"
+                      : ""
                   }`}
                   style={{
                     left: `${structure.x - structure.width / 2}px`,
@@ -10497,6 +10506,17 @@ export default function App() {
                   }}
                 />
               ))}
+              {fullscreenMissileLaunchPreview ? (
+                <div
+                  className="fullscreen-camera-missile-launch-preview"
+                  style={{
+                    left: `${fullscreenMissileLaunchPreview.originX}px`,
+                    top: `${fullscreenMissileLaunchPreview.originY}px`,
+                    width: `${fullscreenMissileLaunchPreview.distance}px`,
+                    transform: `rotate(${fullscreenMissileLaunchPreview.angleRad}rad)`,
+                  }}
+                />
+              ) : null}
               {fullscreenMissileCommandState?.threats?.map((threat) => (
                 <div key={threat.id}>
                   <div
