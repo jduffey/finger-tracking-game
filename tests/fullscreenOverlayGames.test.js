@@ -13,6 +13,9 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
     updateFullscreenExitControlSimulation(nextTimestamp) {
       calls.push(["exit", nextTimestamp]);
     },
+    updateFullscreenRestartControlSimulation(nextTimestamp) {
+      calls.push(["restart", nextTimestamp]);
+    },
     updateFullscreenHandBounceSimulation(nextTimestamp) {
       calls.push(["hand-bounce", nextTimestamp]);
     },
@@ -48,6 +51,7 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
   assert.deepEqual(calls, [
     ["landing", timestamp],
     ["exit", timestamp],
+    ["restart", timestamp],
     ["hand-bounce", timestamp],
     ["brick-dodger", timestamp],
     ["breakout", timestamp],

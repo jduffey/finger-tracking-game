@@ -3,6 +3,7 @@ export function runFullscreenOverlayGameUpdates(
   {
     updateFullscreenModeLandingSimulation,
     updateFullscreenExitControlSimulation,
+    updateFullscreenRestartControlSimulation,
     updateFullscreenHandBounceSimulation,
     updateFullscreenBrickDodgerSimulation,
     updateFullscreenBreakoutSimulation,
@@ -21,6 +22,10 @@ export function runFullscreenOverlayGameUpdates(
 
   if (typeof updateFullscreenExitControlSimulation === "function") {
     updateFullscreenExitControlSimulation(timestamp);
+  }
+
+  if (typeof updateFullscreenRestartControlSimulation === "function") {
+    updateFullscreenRestartControlSimulation(timestamp);
   }
 
   if (typeof updateFullscreenHandBounceSimulation === "function") {

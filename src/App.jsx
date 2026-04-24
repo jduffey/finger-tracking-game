@@ -75,6 +75,11 @@ import {
   createFullscreenExitControlState,
   stepFullscreenExitControl,
 } from "./fullscreenExitControl.js";
+import {
+  createFullscreenRestartControlState,
+  stepFullscreenRestartControl,
+} from "./fullscreenRestartControl.js";
+import { getFullscreenRestartControlLabel } from "./fullscreenRestartModes.js";
 import { runFullscreenOverlayGameUpdates } from "./fullscreenOverlayGames.js";
 import {
   MISSILE_COMMAND_COUNTDOWN_MS,
@@ -1444,6 +1449,7 @@ export default function App() {
   const [fullscreenGridMode, setFullscreenGridMode] = useState(FULLSCREEN_LANDING_MODE);
   const [fullscreenModeLandingState, setFullscreenModeLandingState] = useState(null);
   const [fullscreenExitControlState, setFullscreenExitControlState] = useState(null);
+  const [fullscreenRestartControlState, setFullscreenRestartControlState] = useState(null);
   const [fullscreenRingTrail, setFullscreenRingTrail] = useState([]);
   const [fullscreenRingTrailNow, setFullscreenRingTrailNow] = useState(() => performance.now());
   const [fullscreenPulseBursts, setFullscreenPulseBursts] = useState([]);
@@ -1557,6 +1563,9 @@ export default function App() {
   const fullscreenExitControlStateRef = useRef(null);
   const fullscreenExitControlViewportRef = useRef(null);
   const fullscreenExitControlLastTickRef = useRef(0);
+  const fullscreenRestartControlStateRef = useRef(null);
+  const fullscreenRestartControlViewportRef = useRef(null);
+  const fullscreenRestartControlLastTickRef = useRef(0);
   const fullscreenHandsRef = useRef([]);
   const fullscreenPrimaryHandIdRef = useRef(null);
   const fullscreenHandBounceStateRef = useRef(null);
@@ -1731,6 +1740,14 @@ export default function App() {
     isFullscreenCameraPhase &&
     fullscreenGridMode === "tic-tac-toe" &&
     Boolean(fullscreenTicTacToeState);
+  const fullscreenRestartControlLabel = getFullscreenRestartControlLabel(fullscreenGridMode, {
+    handBounce: fullscreenHandBounceState,
+    brickDodger: fullscreenBrickDodgerState,
+    fingerPong: fullscreenFingerPongState,
+    fruitNinja: fullscreenFruitNinjaState,
+    skyPatrol: fullscreenSkyPatrolHud,
+    missileCommand: fullscreenMissileCommandState,
+  });
   const fullscreenTicTacToeLayout = fullscreenTicTacToeState?.layout ?? null;
   const fullscreenTicTacToeHasActiveBoard =
     fullscreenTicTacToeState?.board?.some(Boolean) ?? false;
@@ -1794,6 +1811,12 @@ export default function App() {
     Math.max(
       0,
       FULLSCREEN_MODE_LANDING_HOLD_MS - (fullscreenExitControlState?.holdMs ?? 0),
+    ) / 1000
+  ).toFixed(2);
+  const fullscreenRestartControlCountdown = (
+    Math.max(
+      0,
+      FULLSCREEN_MODE_LANDING_HOLD_MS - (fullscreenRestartControlState?.holdMs ?? 0),
     ) / 1000
   ).toFixed(2);
   const isSandboxPhase = phase === PHASES.SANDBOX;
@@ -2358,6 +2381,7 @@ export default function App() {
       setFullscreenTipPoints([]);
       setFullscreenModeLandingState(null);
       setFullscreenExitControlState(null);
+      setFullscreenRestartControlState(null);
       setFullscreenRingTrail([]);
       setFullscreenPulseBursts([]);
       setFullscreenHandBounceState(null);
@@ -2386,11 +2410,19 @@ export default function App() {
   }, [fullscreenExitControlState]);
 
   useEffect(() => {
+    fullscreenRestartControlStateRef.current = fullscreenRestartControlState;
+  }, [fullscreenRestartControlState]);
+
+  useEffect(() => {
     fullscreenModeLandingViewportRef.current = fullscreenCameraViewport;
   }, [fullscreenCameraViewport]);
 
   useEffect(() => {
     fullscreenExitControlViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
+
+  useEffect(() => {
+    fullscreenRestartControlViewportRef.current = fullscreenCameraViewport;
   }, [fullscreenCameraViewport]);
 
   useEffect(() => {
@@ -2539,6 +2571,30 @@ export default function App() {
     setFullscreenExitControlState(nextExitControlState);
     return undefined;
   }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      !fullscreenRestartControlLabel ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenRestartControlLastTickRef.current = 0;
+      if (fullscreenRestartControlStateRef.current) {
+        fullscreenRestartControlStateRef.current = null;
+        setFullscreenRestartControlState(null);
+      }
+      return undefined;
+    }
+
+    const nextRestartControlState = createFullscreenRestartControlState(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenRestartControlLastTickRef.current = 0;
+    fullscreenRestartControlStateRef.current = nextRestartControlState;
+    setFullscreenRestartControlState(nextRestartControlState);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenRestartControlLabel, phase]);
 
   useEffect(() => {
     if (
@@ -6019,6 +6075,51 @@ export default function App() {
     publishFullscreenSkyPatrolState(nextGame);
   }
 
+  function getFullscreenRestartControlStatesFromRefs() {
+    return {
+      handBounce: fullscreenHandBounceStateRef.current,
+      brickDodger: fullscreenBrickDodgerStateRef.current,
+      fingerPong: fullscreenFingerPongStateRef.current,
+      fruitNinja: fullscreenFruitNinjaStateRef.current,
+      skyPatrol: fullscreenSkyPatrolHudRef.current,
+      missileCommand: fullscreenMissileCommandStateRef.current,
+    };
+  }
+
+  function runFullscreenRestartControlActionFromRefs() {
+    const mode = fullscreenGridModeRef.current;
+    const label = getFullscreenRestartControlLabel(
+      mode,
+      getFullscreenRestartControlStatesFromRefs(),
+    );
+    if (!label) {
+      return false;
+    }
+
+    switch (mode) {
+      case "hand-bounce":
+        restartFullscreenHandBounceGame();
+        return true;
+      case "brick-dodger":
+        restartFullscreenBrickDodgerGame();
+        return true;
+      case "finger-pong":
+        restartFullscreenFingerPongGame();
+        return true;
+      case "fruit-ninja":
+        restartFullscreenFruitNinjaGame();
+        return true;
+      case "sky-patrol":
+        restartFullscreenSkyPatrolGame();
+        return true;
+      case "missile-command":
+        restartFullscreenMissileCommandGame();
+        return true;
+      default:
+        return false;
+    }
+  }
+
   function syncFullscreenSkyPatrolRenderer() {
     const canvas = fullscreenSkyPatrolCanvasRef.current;
     const viewportMetrics = fullscreenSkyPatrolViewportRef.current;
@@ -7165,6 +7266,58 @@ export default function App() {
     }
   }
 
+  function updateFullscreenRestartControlSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      !getFullscreenRestartControlLabel(
+        fullscreenGridModeRef.current,
+        getFullscreenRestartControlStatesFromRefs(),
+      ) ||
+      !fullscreenRestartControlStateRef.current
+    ) {
+      fullscreenRestartControlLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenRestartControlViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenRestartControlLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenRestartControlLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenRestartControlLastTickRef.current = timestamp;
+    const primaryHand = Array.isArray(fullscreenHandsRef.current)
+      ? fullscreenHandsRef.current[0] ?? null
+      : null;
+    const handVerified = hasVerifiedFullscreenMenuHand(primaryHand);
+    const pointerActive =
+      handDetectedRef.current &&
+      handVerified &&
+      Number.isFinite(cursorRef.current?.x) &&
+      Number.isFinite(cursorRef.current?.y);
+
+    const nextState = stepFullscreenRestartControl(
+      fullscreenRestartControlStateRef.current,
+      deltaSeconds,
+      {
+        handVerified,
+        pointerActive,
+        pointerX: pointerActive ? cursorRef.current.x - viewportMetrics.left : 0,
+        pointerY: pointerActive ? cursorRef.current.y - viewportMetrics.top : 0,
+      },
+    );
+    fullscreenRestartControlStateRef.current = nextState;
+    setFullscreenRestartControlState(nextState);
+
+    if (nextState.shouldRestart && runFullscreenRestartControlActionFromRefs()) {
+      fullscreenRestartControlLastTickRef.current = timestamp;
+      fullscreenRestartControlStateRef.current = null;
+      setFullscreenRestartControlState(null);
+    }
+  }
+
   function updateFullscreenHandBounceSimulation(timestamp) {
     if (
       phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
@@ -7583,6 +7736,7 @@ export default function App() {
     runFullscreenOverlayGameUpdates(timestamp, {
       updateFullscreenModeLandingSimulation,
       updateFullscreenExitControlSimulation,
+      updateFullscreenRestartControlSimulation,
       updateFullscreenHandBounceSimulation,
       updateFullscreenBrickDodgerSimulation,
       updateFullscreenBreakoutSimulation,
@@ -10467,6 +10621,41 @@ export default function App() {
               ))}
             </div>
           )}
+
+          {fullscreenRestartControlLabel && fullscreenRestartControlState?.layout ? (
+            <div
+              className={`fullscreen-camera-restart-box ${
+                fullscreenRestartControlState.handVerified ? "" : "disabled"
+              } ${fullscreenRestartControlState.holdActive ? "active" : ""}`}
+              style={{
+                left: `${
+                  (fullscreenCameraViewport?.left ?? 0) + fullscreenRestartControlState.layout.left
+                }px`,
+                top: `${
+                  (fullscreenCameraViewport?.top ?? 0) + fullscreenRestartControlState.layout.top
+                }px`,
+                width: `${fullscreenRestartControlState.layout.boxWidth}px`,
+                height: `${fullscreenRestartControlState.layout.boxHeight}px`,
+              }}
+            >
+              <span className="fullscreen-camera-restart-title">
+                {fullscreenRestartControlLabel}
+              </span>
+              <span className="fullscreen-camera-restart-countdown">
+                {fullscreenRestartControlState.handVerified &&
+                fullscreenRestartControlState.holdActive
+                  ? fullscreenRestartControlCountdown
+                  : (FULLSCREEN_MODE_LANDING_HOLD_MS / 1000).toFixed(2)}
+              </span>
+              <span className="fullscreen-camera-restart-hint">
+                {!fullscreenRestartControlState.handVerified
+                  ? "Show 5 tips"
+                  : fullscreenRestartControlState.holdActive
+                  ? "Keep holding"
+                  : "Hold to restart"}
+              </span>
+            </div>
+          ) : null}
 
           {!isFullscreenModeLanding && fullscreenExitControlState?.layout ? (
             <div
