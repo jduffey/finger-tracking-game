@@ -10,6 +10,7 @@ import {
   getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
   getMissileCommandThreatUi,
+  getMissileCommandTacticalMetrics,
 } from "../src/missileCommandUi.js";
 
 function createPlayingMissileCommandGame() {
@@ -143,4 +144,21 @@ test("getMissileCommandLegendItems keeps the legend compact", () => {
     ["threat-score", "pinch-fire"],
   );
   assert.equal(items.every((item) => item.label.length <= 8), true);
+});
+
+test("getMissileCommandTacticalMetrics exposes incoming, base, city, and pressure counts", () => {
+  const game = createPlayingMissileCommandGame();
+  const metrics = getMissileCommandTacticalMetrics({
+    ...game,
+    threats: [{ id: "threat-1" }, { id: "threat-2" }, { id: "threat-3" }],
+  });
+
+  assert.equal(metrics.incoming, 3);
+  assert.equal(metrics.bases, 2);
+  assert.equal(metrics.cities, 3);
+  assert.equal(metrics.pressure, "elevated");
+  assert.deepEqual(
+    metrics.items.map((item) => item.id),
+    ["score", "intercepts", "incoming", "bases", "cities", "pressure"],
+  );
 });

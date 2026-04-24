@@ -97,6 +97,7 @@ import {
   getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
   getMissileCommandThreatUi,
+  getMissileCommandTacticalMetrics,
 } from "./missileCommandUi.js";
 import {
   SPACE_INVADERS_ENEMY_SCORE,
@@ -2111,6 +2112,10 @@ export default function App() {
   const fullscreenMissileLegendItems = useMemo(
     () => getMissileCommandLegendItems(MISSILE_COMMAND_THREAT_SCORE),
     [],
+  );
+  const fullscreenMissileTacticalMetrics = useMemo(
+    () => getMissileCommandTacticalMetrics(fullscreenMissileCommandState),
+    [fullscreenMissileCommandState],
   );
 
   const fullscreenHexGridMetrics = useMemo(() => {
@@ -10658,12 +10663,17 @@ export default function App() {
                 </div>
               ) : null}
               <div className="fullscreen-camera-missile-scoreboard">
-                <span>Score {fullscreenMissileCommandState?.score ?? 0}</span>
-                <span>Intercepts {fullscreenMissileCommandState?.threatsStopped ?? 0}</span>
-                <span>
-                  Structures{" "}
-                  {fullscreenMissileCommandState?.structures?.filter((structure) => structure.alive).length ?? 0}
-                </span>
+                {fullscreenMissileTacticalMetrics.items.map((item) => (
+                  <span
+                    key={item.id}
+                    className={`fullscreen-camera-missile-score-item ${
+                      item.id === "pressure" ? `pressure-${item.value}` : ""
+                    }`}
+                  >
+                    <span className="fullscreen-camera-missile-score-label">{item.label}</span>
+                    <span className="fullscreen-camera-missile-score-value">{item.value}</span>
+                  </span>
+                ))}
               </div>
               <div className="fullscreen-camera-missile-legend compact">
                 {fullscreenMissileLegendItems.map((item) => (

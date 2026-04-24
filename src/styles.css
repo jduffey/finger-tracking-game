@@ -2245,6 +2245,32 @@ body {
   top: 18px;
 }
 
+.fullscreen-camera-missile-score-item {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.fullscreen-camera-missile-score-label {
+  color: rgba(226, 239, 255, 0.72);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-missile-score-value {
+  color: #f8fbff;
+  font-weight: 900;
+}
+
+.fullscreen-camera-missile-score-item.pressure-elevated .fullscreen-camera-missile-score-value {
+  color: #ffd878;
+}
+
+.fullscreen-camera-missile-score-item.pressure-high .fullscreen-camera-missile-score-value {
+  color: #ff7a65;
+}
+
 .fullscreen-camera-missile-legend {
   bottom: 18px;
   font-size: 0.82rem;

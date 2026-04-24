@@ -211,3 +211,30 @@ export function getMissileCommandLegendItems(threatScore) {
     },
   ];
 }
+
+export function getMissileCommandTacticalMetrics(state) {
+  const structures = Array.isArray(state?.structures) ? state.structures : [];
+  const bases = structures.filter((structure) => structure.alive && structure.type === "base").length;
+  const cities = structures.filter((structure) => structure.alive && structure.type === "city").length;
+  const incoming = Array.isArray(state?.threats) ? state.threats.length : 0;
+  const pressure = incoming >= 5 ? "high" : incoming >= 3 ? "elevated" : "steady";
+  const score = state?.score ?? 0;
+  const intercepts = state?.threatsStopped ?? 0;
+
+  return {
+    score,
+    intercepts,
+    incoming,
+    bases,
+    cities,
+    pressure,
+    items: [
+      { id: "score", label: "Score", value: score },
+      { id: "intercepts", label: "Hits", value: intercepts },
+      { id: "incoming", label: "In", value: incoming },
+      { id: "bases", label: "Bases", value: bases },
+      { id: "cities", label: "Cities", value: cities },
+      { id: "pressure", label: "Pressure", value: pressure },
+    ],
+  };
+}
