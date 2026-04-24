@@ -5,6 +5,7 @@ import {
 } from "./skyPatrolGame.js";
 import {
   getSkyPatrolIncomingIndicators,
+  SKY_PATROL_LEGEND_FADE_MS,
   getSkyPatrolTargetHealthPips,
   getSkyPatrolThreatUi,
 } from "./skyPatrolUi.js";
@@ -497,6 +498,7 @@ export function getSkyPatrolHudState(state) {
     fireCooldownMs: state.fireCooldownMs ?? 0,
     fireReady: (state.fireCooldownMs ?? 0) <= 0,
     incomingIndicators: getSkyPatrolIncomingIndicators(state),
+    legendFaded: (state.elapsedMs ?? 0) >= SKY_PATROL_LEGEND_FADE_MS,
     status: state.status ?? "playing",
     message: state.message ?? "",
   };
@@ -519,6 +521,7 @@ export function areSkyPatrolHudStatesEqual(a, b) {
     a.fireCooldownMs === b.fireCooldownMs &&
     a.fireReady === b.fireReady &&
     JSON.stringify(a.incomingIndicators ?? []) === JSON.stringify(b.incomingIndicators ?? []) &&
+    a.legendFaded === b.legendFaded &&
     a.status === b.status &&
     a.message === b.message
   );

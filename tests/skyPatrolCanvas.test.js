@@ -98,6 +98,7 @@ test("getSkyPatrolHudState summarizes the visible Sky Patrol HUD values", () => 
     fireCooldownMs: 0,
     fireReady: true,
     incomingIndicators: [],
+    legendFaded: false,
     status: "gameover",
     message: "Squadron down. Pinch to relaunch.",
   });
@@ -124,6 +125,13 @@ test("areSkyPatrolHudStatesEqual only changes when the rendered HUD changes", ()
     areSkyPatrolHudStatesEqual(hud, {
       ...hud,
       message: "Direct hit. Regroup and re-engage.",
+    }),
+    false,
+  );
+  assert.equal(
+    areSkyPatrolHudStatesEqual(hud, {
+      ...hud,
+      legendFaded: true,
     }),
     false,
   );

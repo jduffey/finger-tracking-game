@@ -1,4 +1,11 @@
-import { SKY_PATROL_PLAYER_FIRE_COOLDOWN_MS } from "./skyPatrolGame.js";
+import {
+  SKY_PATROL_DEPOT_SCORE,
+  SKY_PATROL_FIGHTER_SCORE,
+  SKY_PATROL_PLAYER_FIRE_COOLDOWN_MS,
+  SKY_PATROL_TURRET_SCORE,
+} from "./skyPatrolGame.js";
+
+export const SKY_PATROL_LEGEND_FADE_MS = 6500;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -120,5 +127,45 @@ export function getSkyPatrolGameOverUi(hud = {}) {
       { label: "Targets", value: hud.targetsDestroyed ?? 0 },
     ],
     restartText: "Hold Restart Sortie",
+  };
+}
+
+export function getSkyPatrolLegendUi(hud = {}) {
+  const elapsedMs = Number.isFinite(hud.elapsedMs) ? hud.elapsedMs : 0;
+  const faded =
+    typeof hud.legendFaded === "boolean"
+      ? hud.legendFaded
+      : elapsedMs >= SKY_PATROL_LEGEND_FADE_MS;
+
+  return {
+    visible: hud.status !== "gameover",
+    compact: true,
+    faded,
+    items: [
+      {
+        id: "fighter",
+        label: "Fighter",
+        value: `+${SKY_PATROL_FIGHTER_SCORE}`,
+        role: "air",
+      },
+      {
+        id: "turret",
+        label: "Turret",
+        value: `+${SKY_PATROL_TURRET_SCORE}`,
+        role: "ground",
+      },
+      {
+        id: "depot",
+        label: "Depot",
+        value: `+${SKY_PATROL_DEPOT_SCORE}`,
+        role: "ground",
+      },
+      {
+        id: "fire",
+        label: "Pinch",
+        value: "Fire",
+        role: "control",
+      },
+    ],
   };
 }

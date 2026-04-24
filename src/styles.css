@@ -1909,6 +1909,56 @@ body {
   left: 18px;
 }
 
+.fullscreen-camera-sky-patrol-legend.compact {
+  align-items: center;
+  gap: 8px;
+  max-width: min(68vw, 560px);
+  padding: 8px 10px;
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+
+.fullscreen-camera-sky-patrol-legend.compact.faded {
+  opacity: 0.38;
+  transform: translateY(5px);
+}
+
+.fullscreen-camera-sky-patrol-legend-chip {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.fullscreen-camera-sky-patrol-legend-chip strong {
+  color: #fff2a8;
+  font-size: 0.78rem;
+}
+
+.fullscreen-camera-sky-patrol-legend-symbol {
+  border: 1px solid rgba(12, 18, 26, 0.84);
+  display: inline-block;
+  height: 10px;
+  width: 10px;
+}
+
+.fullscreen-camera-sky-patrol-legend-chip.air .fullscreen-camera-sky-patrol-legend-symbol {
+  background: #70d6ff;
+  clip-path: polygon(50% 0, 100% 100%, 50% 74%, 0 100%);
+}
+
+.fullscreen-camera-sky-patrol-legend-chip.ground .fullscreen-camera-sky-patrol-legend-symbol {
+  background: #ffcf7a;
+  border-radius: 2px;
+}
+
+.fullscreen-camera-sky-patrol-legend-chip.control .fullscreen-camera-sky-patrol-legend-symbol {
+  background: #fff2a8;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(255, 242, 168, 0.42);
+}
+
 .fullscreen-camera-sky-patrol-banner {
   font-size: 0.88rem;
   font-weight: 700;

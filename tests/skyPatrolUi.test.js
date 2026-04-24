@@ -6,6 +6,7 @@ import {
   getSkyPatrolGameOverUi,
   getSkyPatrolHudItems,
   getSkyPatrolIncomingIndicators,
+  getSkyPatrolLegendUi,
   getSkyPatrolLifeIcons,
   getSkyPatrolTargetHealthPips,
   getSkyPatrolThreatUi,
@@ -96,4 +97,21 @@ test("getSkyPatrolGameOverUi summarizes the sortie and restart cue", () => {
     { label: "Targets", value: 4 },
   ]);
   assert.equal(ui.restartText, "Hold Restart Sortie");
+});
+
+test("getSkyPatrolLegendUi compresses and fades the training legend after launch", () => {
+  const openingLegend = getSkyPatrolLegendUi({ status: "playing", elapsedMs: 1200 });
+
+  assert.equal(openingLegend.visible, true);
+  assert.equal(openingLegend.compact, true);
+  assert.equal(openingLegend.faded, false);
+  assert.deepEqual(
+    openingLegend.items.map((item) => item.id),
+    ["fighter", "turret", "depot", "fire"],
+  );
+
+  const lateLegend = getSkyPatrolLegendUi({ status: "playing", elapsedMs: 7600 });
+
+  assert.equal(lateLegend.visible, true);
+  assert.equal(lateLegend.faded, true);
 });

@@ -110,10 +110,7 @@ import {
   stepSpaceInvadersGame,
 } from "./spaceInvadersGame.js";
 import {
-  SKY_PATROL_DEPOT_SCORE,
-  SKY_PATROL_FIGHTER_SCORE,
   SKY_PATROL_STARTING_LIVES,
-  SKY_PATROL_TURRET_SCORE,
   createSkyPatrolGame,
   stepSkyPatrolGame,
 } from "./skyPatrolGame.js";
@@ -126,6 +123,7 @@ import {
   getSkyPatrolFireCooldownUi,
   getSkyPatrolGameOverUi,
   getSkyPatrolHudItems,
+  getSkyPatrolLegendUi,
   getSkyPatrolLifeIcons,
 } from "./skyPatrolUi.js";
 import {
@@ -2150,6 +2148,10 @@ export default function App() {
   );
   const fullscreenSkyPatrolGameOverUi = useMemo(
     () => getSkyPatrolGameOverUi(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
+  );
+  const fullscreenSkyPatrolLegendUi = useMemo(
+    () => getSkyPatrolLegendUi(fullscreenSkyPatrolHud),
     [fullscreenSkyPatrolHud],
   );
 
@@ -10432,12 +10434,24 @@ export default function App() {
                   </span>
                 ))}
               </div>
-              <div className="fullscreen-camera-sky-patrol-legend">
-                <span>Fighter +{SKY_PATROL_FIGHTER_SCORE}</span>
-                <span>Turret +{SKY_PATROL_TURRET_SCORE}</span>
-                <span>Depot +{SKY_PATROL_DEPOT_SCORE}</span>
-                <span>Pinch fires</span>
-              </div>
+              {fullscreenSkyPatrolLegendUi.visible ? (
+                <div
+                  className={`fullscreen-camera-sky-patrol-legend ${
+                    fullscreenSkyPatrolLegendUi.compact ? "compact" : ""
+                  } ${fullscreenSkyPatrolLegendUi.faded ? "faded" : ""}`}
+                >
+                  {fullscreenSkyPatrolLegendUi.items.map((item) => (
+                    <span
+                      key={item.id}
+                      className={`fullscreen-camera-sky-patrol-legend-chip ${item.role}`}
+                    >
+                      <span className="fullscreen-camera-sky-patrol-legend-symbol" />
+                      <span>{item.label}</span>
+                      <strong>{item.value}</strong>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               {fullscreenSkyPatrolGameOverUi.visible ? (
                 <div className="fullscreen-camera-sky-patrol-banner game-over">
                   <span className="fullscreen-camera-sky-patrol-game-over-title">
