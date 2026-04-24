@@ -268,6 +268,27 @@ export function getMissileCommandCountdownUi(state) {
     seconds: Math.max(1, Math.ceil(state.countdownMs / 1000)),
     structureIds: (Array.isArray(state.structures) ? state.structures : [])
       .filter((structure) => structure.alive)
-      .map((structure) => structure.id),
+    .map((structure) => structure.id),
+  };
+}
+
+export function getMissileCommandGameOverUi(state, restartLabel = "Restart Defense") {
+  if (state?.status !== "game_over") {
+    return {
+      visible: false,
+      title: "",
+      stats: [],
+      restartText: "",
+    };
+  }
+
+  return {
+    visible: true,
+    title: "Defense lost",
+    stats: [
+      { label: "Score", value: state.score ?? 0 },
+      { label: "Intercepts", value: state.threatsStopped ?? 0 },
+    ],
+    restartText: `Hold ${restartLabel}`,
   };
 }

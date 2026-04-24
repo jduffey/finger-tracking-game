@@ -2384,9 +2384,30 @@ body {
   background: rgba(9, 17, 27, 0.76);
   border: 1px solid rgba(202, 220, 239, 0.22);
   border-radius: 20px;
-  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-size: clamp(1.45rem, 4vw, 2.5rem);
   letter-spacing: 0.04em;
   padding: 18px 24px;
+}
+
+.fullscreen-camera-missile-game-over-title {
+  font-weight: 900;
+}
+
+.fullscreen-camera-missile-game-over-stats {
+  color: rgba(235, 244, 255, 0.86);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: clamp(0.86rem, 1.8vw, 1.08rem);
+  gap: 10px;
+  justify-content: center;
+  letter-spacing: 0;
+}
+
+.fullscreen-camera-missile-game-over-restart {
+  color: #fff8c9;
+  font-size: clamp(0.8rem, 1.6vw, 1rem);
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 .fullscreen-camera-fruit-target,

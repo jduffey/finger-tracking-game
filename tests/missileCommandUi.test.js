@@ -7,6 +7,7 @@ import {
   getMissileCommandCrosshairUi,
   getMissileCommandCountdownUi,
   getMissileCommandExplosionUi,
+  getMissileCommandGameOverUi,
   getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
   getMissileCommandStructureUi,
@@ -187,4 +188,22 @@ test("getMissileCommandCountdownUi presents the opening as a defense prompt", ()
   assert.equal(ui.seconds, 2);
   assert.equal(ui.structureIds.length, 5);
   assert.equal(getMissileCommandCountdownUi({ ...game, status: "playing" }).visible, false);
+});
+
+test("getMissileCommandGameOverUi summarizes final stats and restart affordance", () => {
+  const game = {
+    ...createPlayingMissileCommandGame(),
+    status: "game_over",
+    score: 375,
+    threatsStopped: 3,
+  };
+  const ui = getMissileCommandGameOverUi(game, "Restart Defense");
+
+  assert.equal(ui.visible, true);
+  assert.equal(ui.title, "Defense lost");
+  assert.deepEqual(ui.stats, [
+    { label: "Score", value: 375 },
+    { label: "Intercepts", value: 3 },
+  ]);
+  assert.equal(ui.restartText, "Hold Restart Defense");
 });

@@ -94,6 +94,7 @@ import {
   getMissileCommandCrosshairUi,
   getMissileCommandCountdownUi,
   getMissileCommandExplosionUi,
+  getMissileCommandGameOverUi,
   getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
   getMissileCommandStructureUi,
@@ -2121,6 +2122,10 @@ export default function App() {
   );
   const fullscreenMissileCountdownUi = useMemo(
     () => getMissileCommandCountdownUi(fullscreenMissileCommandState),
+    [fullscreenMissileCommandState],
+  );
+  const fullscreenMissileGameOverUi = useMemo(
+    () => getMissileCommandGameOverUi(fullscreenMissileCommandState, "Restart Defense"),
     [fullscreenMissileCommandState],
   );
 
@@ -10734,9 +10739,22 @@ export default function App() {
                   </span>
                 </div>
               ) : null}
-              {isFullscreenMissileCommandMode &&
-              fullscreenMissileCommandState.status === "game_over" ? (
-                <div className="fullscreen-camera-missile-banner game-over">Defense lost</div>
+              {isFullscreenMissileCommandMode && fullscreenMissileGameOverUi.visible ? (
+                <div className="fullscreen-camera-missile-banner game-over">
+                  <span className="fullscreen-camera-missile-game-over-title">
+                    {fullscreenMissileGameOverUi.title}
+                  </span>
+                  <span className="fullscreen-camera-missile-game-over-stats">
+                    {fullscreenMissileGameOverUi.stats.map((stat) => (
+                      <span key={stat.label}>
+                        {stat.label} {stat.value}
+                      </span>
+                    ))}
+                  </span>
+                  <span className="fullscreen-camera-missile-game-over-restart">
+                    {fullscreenMissileGameOverUi.restartText}
+                  </span>
+                </div>
               ) : null}
             </div>
           ) : (
