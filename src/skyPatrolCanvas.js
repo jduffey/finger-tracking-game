@@ -3,7 +3,10 @@ import {
   getSkyPatrolTerrainRows,
   getSkyPatrolTerrainScrollMetrics,
 } from "./skyPatrolGame.js";
-import { getSkyPatrolIncomingIndicators } from "./skyPatrolUi.js";
+import {
+  getSkyPatrolIncomingIndicators,
+  getSkyPatrolThreatUi,
+} from "./skyPatrolUi.js";
 
 const SKY_PATROL_TERRAIN_CACHE_EXTRA_ROWS = 4;
 
@@ -280,7 +283,23 @@ function drawPlayerShip(ctx, ship) {
 }
 
 function drawEnemyShip(ctx, enemy) {
+  const threatUi = getSkyPatrolThreatUi(enemy);
   const { left, top, width, height } = getEntityBounds(enemy);
+  if (threatUi.shape === "air-chevron") {
+    ctx.fillStyle = "rgba(255, 231, 176, 0.2)";
+    fillPixelPath(
+      ctx,
+      [
+        { x: left + width * 0.5, y: top + height * 0.18 },
+        { x: left + width * 0.9, y: top + height * 0.58 },
+        { x: left + width * 0.62, y: top + height * 0.5 },
+        { x: left + width * 0.5, y: top + height * 0.92 },
+        { x: left + width * 0.38, y: top + height * 0.5 },
+        { x: left + width * 0.1, y: top + height * 0.58 },
+      ],
+      "rgba(255, 226, 150, 0.2)",
+    );
+  }
   fillPixelPath(
     ctx,
     [
@@ -305,6 +324,7 @@ function drawEnemyShip(ctx, enemy) {
 }
 
 function drawGroundTarget(ctx, target) {
+  const threatUi = getSkyPatrolThreatUi(target);
   const { left, top, width, height } = getEntityBounds(target);
   if (target.kind === "depot") {
     ctx.fillStyle = "#463626";
@@ -324,6 +344,11 @@ function drawGroundTarget(ctx, target) {
     );
     ctx.fillStyle = "#60452f";
     ctx.fillRect(left + roundPixel(width * 0.38), top + roundPixel(height * 0.42), Math.max(4, roundPixel(width * 0.24)), Math.max(4, roundPixel(height * 0.42)));
+    if (threatUi.shape === "ground-depot") {
+      ctx.fillStyle = "#f1d66e";
+      ctx.fillRect(left + roundPixel(width * 0.14), top + roundPixel(height * 0.3), Math.max(3, roundPixel(width * 0.14)), Math.max(3, roundPixel(height * 0.16)));
+      ctx.fillRect(left + roundPixel(width * 0.72), top + roundPixel(height * 0.3), Math.max(3, roundPixel(width * 0.14)), Math.max(3, roundPixel(height * 0.16)));
+    }
     return;
   }
 
@@ -335,6 +360,10 @@ function drawGroundTarget(ctx, target) {
   ctx.fillRect(left + roundPixel(width * 0.38), top, Math.max(4, roundPixel(width * 0.24)), Math.max(4, roundPixel(height * 0.24)));
   ctx.fillStyle = "#1d231d";
   ctx.fillRect(left + roundPixel(width * 0.44), top - Math.max(2, roundPixel(height * 0.14)), Math.max(2, roundPixel(width * 0.12)), Math.max(4, roundPixel(height * 0.34)));
+  if (threatUi.shape === "ground-emplacement") {
+    ctx.fillStyle = "#d8e7b1";
+    ctx.fillRect(left + roundPixel(width * 0.18), top + roundPixel(height * 0.64), Math.max(3, roundPixel(width * 0.64)), Math.max(3, roundPixel(height * 0.12)));
+  }
 }
 
 function drawProjectile(ctx, shot) {

@@ -65,3 +65,22 @@ export function getSkyPatrolIncomingIndicators(state = {}) {
       x: Math.round(clamp(entity.x ?? 0, 18, Math.max(18, width - 18))),
     }));
 }
+
+export function getSkyPatrolThreatUi(entity = {}) {
+  if (entity.kind === "fighter") {
+    return {
+      role: "air",
+      shape: "air-chevron",
+    };
+  }
+  if (entity.kind === "depot") {
+    return {
+      role: "ground",
+      shape: "ground-depot",
+    };
+  }
+  return {
+    role: "ground",
+    shape: "ground-emplacement",
+  };
+}

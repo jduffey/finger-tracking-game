@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   getSkyPatrolFireCooldownUi,
+  getSkyPatrolThreatUi,
   getSkyPatrolHudItems,
   getSkyPatrolIncomingIndicators,
 } from "../src/skyPatrolUi.js";
@@ -53,4 +54,10 @@ test("getSkyPatrolIncomingIndicators points to threats entering from offscreen",
   );
   assert.equal(indicators[0].edge, "top");
   assert.equal(indicators[0].x, 320);
+});
+
+test("getSkyPatrolThreatUi distinguishes air and ground threat language", () => {
+  assert.equal(getSkyPatrolThreatUi({ kind: "fighter" }).shape, "air-chevron");
+  assert.equal(getSkyPatrolThreatUi({ kind: "turret" }).shape, "ground-emplacement");
+  assert.equal(getSkyPatrolThreatUi({ kind: "depot" }).shape, "ground-depot");
 });
