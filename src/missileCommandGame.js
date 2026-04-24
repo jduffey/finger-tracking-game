@@ -20,11 +20,18 @@ function createIdFactory(start = 1) {
 export function createMissileCommandLayout(width, height) {
   const safeWidth = Math.max(360, Number.isFinite(width) ? width : 360);
   const safeHeight = Math.max(240, Number.isFinite(height) ? height : 240);
-  const groundY = safeHeight - clamp(safeHeight * 0.13, 64, 118);
+  const hudTopInset = clamp(safeHeight * 0.12, 58, 96);
+  const hudBottomInset = clamp(safeHeight * 0.1, 48, 88);
+  const groundBandHeight = clamp(safeHeight * 0.13, 64, 118);
+  const groundY = safeHeight - Math.max(groundBandHeight, hudBottomInset);
 
   return {
     width: safeWidth,
     height: safeHeight,
+    hudTopInset,
+    hudBottomInset,
+    playTopY: hudTopInset,
+    playBottomY: groundY,
     groundY,
     interceptorSpeed: Math.max(420, safeHeight * 0.82),
     threatBaseSpeed: Math.max(80, safeHeight * 0.16),
@@ -144,7 +151,7 @@ function createThreat(layout, structures, elapsedMs, threatId, rng = Math.random
   const target = aliveStructures[targetIndex];
   const margin = clamp(layout.width * 0.08, 28, 72);
   const startX = margin + rng() * Math.max(1, layout.width - margin * 2);
-  const startY = -clamp(layout.height * 0.1, 20, 54);
+  const startY = layout.playTopY ?? clamp(layout.height * 0.12, 58, 96);
   const targetX = target.x;
   const targetY = target.y - target.height * 0.48;
   const dx = targetX - startX;
