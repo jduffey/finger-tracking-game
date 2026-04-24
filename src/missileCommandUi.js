@@ -238,3 +238,16 @@ export function getMissileCommandTacticalMetrics(state) {
     ],
   };
 }
+
+export function getMissileCommandExplosionUi(explosion) {
+  const durationMs = Math.max(1, explosion?.durationMs ?? 1);
+  const progress = clamp((explosion?.ageMs ?? 0) / durationMs, 0, 1);
+  const kind = explosion?.kind ?? "interceptor";
+
+  return {
+    className: `fullscreen-camera-missile-explosion ${kind}`,
+    coreOpacity: Number((1 - progress * 0.75).toFixed(3)),
+    shockwaveOpacity: Number(Math.max(0, 1 - progress).toFixed(3)),
+    shockwaveScale: Number((0.72 + progress * 0.5).toFixed(3)),
+  };
+}

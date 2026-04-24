@@ -86,9 +86,10 @@ function getThreatSpeed(layout, elapsedMs = 0) {
   return layout.threatBaseSpeed + layout.threatSpeedBonus * progress;
 }
 
-function createExplosion(x, y, maxRadius, durationMs, color, id) {
+function createExplosion(x, y, maxRadius, durationMs, color, id, kind) {
   return {
     id: `explosion-${id}`,
+    kind,
     x,
     y,
     ageMs: 0,
@@ -305,6 +306,7 @@ export function stepMissileCommandGame(state, dtSeconds, rng = Math.random) {
             520,
             "rgba(255, 117, 61, 0.78)",
             nextState.nextExplosionId,
+            "impact",
           ),
         ],
         nextExplosionId: nextState.nextExplosionId + 1,
@@ -358,6 +360,7 @@ export function stepMissileCommandGame(state, dtSeconds, rng = Math.random) {
             960,
             "rgba(255, 233, 122, 0.82)",
             nextState.nextExplosionId,
+            "interceptor",
           ),
         ],
         nextExplosionId: nextState.nextExplosionId + 1,

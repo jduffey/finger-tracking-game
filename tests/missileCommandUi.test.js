@@ -5,6 +5,7 @@ import { createMissileCommandGame } from "../src/missileCommandGame.js";
 import {
   getMissileCommandCooldownUi,
   getMissileCommandCrosshairUi,
+  getMissileCommandExplosionUi,
   getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
   getMissileCommandStructureUi,
@@ -161,4 +162,17 @@ test("getMissileCommandTacticalMetrics exposes incoming, base, city, and pressur
     metrics.items.map((item) => item.id),
     ["score", "intercepts", "incoming", "bases", "cities", "pressure"],
   );
+});
+
+test("getMissileCommandExplosionUi splits blasts into core and shockwave layers", () => {
+  const ui = getMissileCommandExplosionUi({
+    kind: "interceptor",
+    ageMs: 320,
+    durationMs: 960,
+    color: "rgba(255, 233, 122, 0.82)",
+  });
+
+  assert.equal(ui.className.includes("interceptor"), true);
+  assert.equal(ui.coreOpacity > 0, true);
+  assert.equal(ui.shockwaveOpacity > 0, true);
 });

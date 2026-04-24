@@ -92,6 +92,7 @@ import {
 import {
   getMissileCommandCooldownUi,
   getMissileCommandCrosshairUi,
+  getMissileCommandExplosionUi,
   getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
   getMissileCommandStructureUi,
@@ -10632,10 +10633,11 @@ export default function App() {
               ))}
               {fullscreenMissileCommandState?.explosions?.map((explosion) => {
                 const radius = getMissileCommandExplosionRadius(explosion);
+                const explosionUi = getMissileCommandExplosionUi(explosion);
                 return (
                   <div
                     key={explosion.id}
-                    className="fullscreen-camera-missile-explosion"
+                    className={explosionUi.className}
                     style={{
                       left: `${explosion.x - radius}px`,
                       top: `${explosion.y - radius}px`,
@@ -10644,7 +10646,19 @@ export default function App() {
                       borderColor: explosion.color,
                       boxShadow: `0 0 ${Math.max(18, radius * 0.7)}px ${explosion.color}`,
                     }}
-                  />
+                  >
+                    <span
+                      className="fullscreen-camera-missile-explosion-core"
+                      style={{ opacity: explosionUi.coreOpacity }}
+                    />
+                    <span
+                      className="fullscreen-camera-missile-explosion-shockwave"
+                      style={{
+                        opacity: explosionUi.shockwaveOpacity,
+                        transform: `scale(${explosionUi.shockwaveScale})`,
+                      }}
+                    />
+                  </div>
                 );
               })}
               {fullscreenMissileCommandState?.scoreBursts?.map((burst) => {
