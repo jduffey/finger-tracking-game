@@ -165,6 +165,9 @@ test("stepSkyPatrolGame awards score when a fighter is destroyed", () => {
   assert.equal(next.score, SKY_PATROL_FIGHTER_SCORE);
   assert.equal(next.airEnemies.length, 0);
   assert.ok(next.explosions.length > 0);
+  assert.equal(next.scoreBursts.length, 1);
+  assert.equal(next.scoreBursts[0].value, SKY_PATROL_FIGHTER_SCORE);
+  assert.equal(next.scoreBursts[0].x, 320);
 });
 
 test("stepSkyPatrolGame can spawn ground targets over the scrolling terrain", () => {
@@ -267,4 +270,6 @@ test("stepSkyPatrolGame awards depot score when a ground target is destroyed", (
 
   assert.equal(next.score, SKY_PATROL_DEPOT_SCORE);
   assert.equal(next.groundTargets.length, 0);
+  assert.equal(next.scoreBursts.length, 1);
+  assert.equal(next.scoreBursts[0].value, SKY_PATROL_DEPOT_SCORE);
 });

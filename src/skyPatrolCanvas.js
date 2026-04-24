@@ -418,6 +418,19 @@ function drawExplosion(ctx, explosion, tileSize) {
   ctx.fillRect(centerX - block, centerY - block * 2, block * 2, block * 4);
 }
 
+function drawScoreBurst(ctx, burst, tileSize) {
+  const progress = clamp(burst.ageMs / Math.max(1, burst.ttlMs), 0, 1);
+  const y = burst.y - progress * tileSize * 1.6;
+  ctx.save();
+  ctx.globalAlpha = 1 - progress;
+  ctx.fillStyle = "#fff2a8";
+  ctx.font = `${Math.max(10, roundPixel(tileSize * 0.72))}px monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(`+${burst.value}`, roundPixel(burst.x), roundPixel(y));
+  ctx.restore();
+}
+
 function drawSkyPatrolFrame(renderer, state) {
   const ctx = renderer.ctx;
   const canvas = renderer.canvas;
@@ -458,6 +471,9 @@ function drawSkyPatrolFrame(renderer, state) {
   }
   for (const explosion of state.explosions ?? []) {
     drawExplosion(ctx, explosion, state.layout.tileSize);
+  }
+  for (const burst of state.scoreBursts ?? []) {
+    drawScoreBurst(ctx, burst, state.layout.tileSize);
   }
 }
 

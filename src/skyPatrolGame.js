@@ -15,6 +15,7 @@ const SKY_PATROL_GROUND_SPAWN_COOLDOWN_MS = 1320;
 const SKY_PATROL_PLAYER_INVULNERABLE_MS = 980;
 const SKY_PATROL_RESTART_COOLDOWN_MS = 700;
 const SKY_PATROL_EXPLOSION_TTL_MS = 460;
+const SKY_PATROL_SCORE_BURST_TTL_MS = 760;
 const SKY_PATROL_SCROLL_TILES_BUFFER = 2;
 const SKY_PATROL_SECONDARY_ISLAND_THRESHOLD = 0.72;
 const SKY_PATROL_RUNWAY_PERIOD_ROWS = 140;
@@ -106,6 +107,26 @@ function advanceExplosions(explosions, dtMs) {
       ageMs: explosion.ageMs + dtMs,
     }))
     .filter((explosion) => explosion.ageMs < explosion.ttlMs);
+}
+
+function createScoreBurst(id, x, y, value) {
+  return {
+    id,
+    x,
+    y,
+    value,
+    ageMs: 0,
+    ttlMs: SKY_PATROL_SCORE_BURST_TTL_MS,
+  };
+}
+
+function advanceScoreBursts(scoreBursts, dtMs) {
+  return (Array.isArray(scoreBursts) ? scoreBursts : [])
+    .map((burst) => ({
+      ...burst,
+      ageMs: burst.ageMs + dtMs,
+    }))
+    .filter((burst) => burst.ageMs < burst.ttlMs);
 }
 
 function createPlayerShip(layout) {
@@ -350,6 +371,7 @@ function createEmptyState(layout) {
     playerShots: [],
     enemyShots: [],
     explosions: [],
+    scoreBursts: [],
     fireCooldownMs: 0,
     enemySpawnCooldownMs: 320,
     groundSpawnCooldownMs: 540,
@@ -359,6 +381,7 @@ function createEmptyState(layout) {
     nextPlayerShotId: 1,
     nextEnemyShotId: 1,
     nextFxId: 1,
+    nextScoreBurstId: 1,
   };
 }
 
@@ -450,6 +473,7 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
     elapsedMs: state.elapsedMs + dtMs,
     ship,
     explosions: advanceExplosions(state.explosions, dtMs),
+    scoreBursts: advanceScoreBursts(state.scoreBursts, dtMs),
     fireCooldownMs: Math.max(0, state.fireCooldownMs - dtMs),
     enemySpawnCooldownMs: Math.max(0, state.enemySpawnCooldownMs - dtMs),
     groundSpawnCooldownMs: Math.max(0, state.groundSpawnCooldownMs - dtMs),
@@ -488,7 +512,9 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
   let nextPlayerShotId = nextStateBase.nextPlayerShotId;
   let nextEnemyShotId = nextStateBase.nextEnemyShotId;
   let nextFxId = nextStateBase.nextFxId;
+  let nextScoreBurstId = nextStateBase.nextScoreBurstId;
   const explosions = [...nextStateBase.explosions];
+  const scoreBursts = [...nextStateBase.scoreBursts];
   let playerShots = nextStateBase.playerShots.map((shot) => ({ ...shot }));
   let enemyShots = nextStateBase.enemyShots.map((shot) => ({ ...shot }));
   let airEnemies = nextStateBase.airEnemies.map((enemy) => ({ ...enemy }));
@@ -679,6 +705,10 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
         hit = true;
         if (enemy.hp <= 0) {
           score += SKY_PATROL_FIGHTER_SCORE;
+          scoreBursts.push(
+            createScoreBurst(`score-burst-${nextScoreBurstId}`, enemy.x, enemy.y, SKY_PATROL_FIGHTER_SCORE),
+          );
+          nextScoreBurstId += 1;
           message = "Fighter down.";
           explosions.push(createExplosion(`fx-${nextFxId}`, enemy.x, enemy.y, "air"));
           nextFxId += 1;
@@ -700,6 +730,10 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
           hit = true;
           if (target.hp <= 0) {
             score += target.score;
+            scoreBursts.push(
+              createScoreBurst(`score-burst-${nextScoreBurstId}`, target.x, target.y, target.score),
+            );
+            nextScoreBurstId += 1;
             message = target.kind === "depot" ? "Depot demolished." : "Turret eliminated.";
             explosions.push(createExplosion(`fx-${nextFxId}`, target.x, target.y, "ground"));
             nextFxId += 1;
@@ -787,6 +821,7 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
     airEnemies,
     groundTargets,
     explosions,
+    scoreBursts,
     fireCooldownMs,
     enemySpawnCooldownMs,
     groundSpawnCooldownMs,
@@ -796,5 +831,6 @@ export function stepSkyPatrolGame(state, dtSeconds, input = {}, rng = Math.rando
     nextPlayerShotId,
     nextEnemyShotId,
     nextFxId,
+    nextScoreBurstId,
   };
 }
