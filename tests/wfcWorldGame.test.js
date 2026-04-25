@@ -24,11 +24,11 @@ function cellCenter(game, col, row) {
   return getWfcWorldCellCenter(game.layout, col, row);
 }
 
-test("createWfcWorldGame creates a 20 by 12 finger-controlled world layout", () => {
+test("createWfcWorldGame creates a 25 by 15 finger-controlled world layout", () => {
   const game = createWfcWorldGame(1280, 720);
 
-  assert.equal(game.layout.cols, 20);
-  assert.equal(game.layout.rows, 12);
+  assert.equal(game.layout.cols, 25);
+  assert.equal(game.layout.rows, 15);
   assert.equal(game.selectedTileId, "grass");
   assert.equal(game.phase, "seeding");
   assert.ok(game.layout.grid.cellSize > 0);
