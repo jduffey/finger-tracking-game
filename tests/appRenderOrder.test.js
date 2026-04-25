@@ -14,3 +14,17 @@ test("App computes the fullscreen camera viewport before Tic Tac Toe cursor geom
     "Tic Tac Toe cursor point must not read fullscreenCameraViewport before the hook initializes it",
   );
 });
+
+test("fullscreen camera HUD keeps detection status at bottom left without the mode title chip", () => {
+  const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+
+  assert.equal(source.includes('<span className="fullscreen-camera-chip">{cameraPanelTitle}</span>'), false);
+
+  const bottomRowIndex = source.indexOf('className="fullscreen-camera-hud-bottom"');
+  const statusIndex = source.indexOf('className={`tracking-indicator fullscreen-camera-status');
+  const actionsIndex = source.indexOf('className="fullscreen-camera-meta fullscreen-camera-actions"');
+
+  assert.ok(bottomRowIndex >= 0);
+  assert.ok(statusIndex > bottomRowIndex);
+  assert.ok(actionsIndex > statusIndex);
+});

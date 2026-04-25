@@ -11268,42 +11268,41 @@ export default function App() {
           ) : null}
 
           <div className="fullscreen-camera-hud">
-            <div className="fullscreen-camera-meta">
-              <span className="fullscreen-camera-chip">{cameraPanelTitle}</span>
-              <span className={`tracking-indicator ${handDetected ? "ok" : "warn"}`}>
+            <div className="fullscreen-camera-hud-bottom">
+              <span className={`tracking-indicator fullscreen-camera-status ${handDetected ? "ok" : "warn"}`}>
                 {handDetected ? "Hand detected" : "Hand not detected"} | FPS: {fps.toFixed(1)}
               </span>
-            </div>
-            <div className="fullscreen-camera-meta fullscreen-camera-actions">
-              {!isFullscreenModeLanding ? (
-                <span className="fullscreen-camera-note">
-                  {fullscreenGridMode === "breakout-coop"
-                    ? `Breakout Co-op keeps index-finger steering on the paddle, uses support-hand pinch for a ${Math.round(BREAKOUT_COOP_SHIELD_DURATION_MS / 1000)} second shield pulse, and prism bricks split the ball while the shield recharges over about ${Math.round(BREAKOUT_COOP_SHIELD_COOLDOWN_MS / 1000)} seconds.`
-                    : fullscreenGridMode === "hand-bounce"
-                    ? "Hand Bounce turns your tracked palm into a bounce surface. The ball uses gravity-driven motion, rebounds off the side walls, and you only need to keep your hand under it."
-                    : fullscreenGridMode === "brick-dodger"
-                    ? "Brick Dodger uses the existing smoothed index-fingertip X position only. Drift across the full webcam overlay to dodge falling hazards, chase adjacent bonus pickups, and stretch the run as the descent speed ramps up."
-                    : fullscreenGridMode === "breakout"
-                    ? `Index fingertip steers the paddle left and right. Bricks use the Rings palette, the launch countdown is ${BREAKOUT_COUNTDOWN_MS / 1000} seconds, and each capsule adds one extra ball.`
-                    : fullscreenGridMode === "finger-pong"
-                    ? `Finger Pong keeps the full webcam visible behind a one-player rally. Your bottom paddle follows smoothed horizontal fingertip motion, the opening countdown is ${FINGER_PONG_COUNTDOWN_MS / 1000} seconds, and off-center contacts steer the return angle while rallies gently speed up.`
-                    : fullscreenGridMode === "tic-tac-toe"
-                    ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lets you pinch-drag X pieces from the left rail, adds a right-side reset box that clears the board after a 1.00 second index-fingertip hold, and gives O a random opening before switching to optimal play."
-                    : fullscreenGridMode === "fruit-ninja"
-                    ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
-                    : fullscreenGridMode === "sky-patrol"
-                    ? "Index fingertip steers a fighter across a vertically scrolling 16-bit coastline. Pinch fires twin cannons, air fighters weave in from above, ground emplacements ride the terrain below, and pinching after a loss relaunches the sortie."
-                    : fullscreenGridMode === WFC_WORLD_MODE_ID
-                    ? "Fingerprint Worlds lets you seed a fantasy map with pinched terrain rules, then Wave Function Collapse fills the rest while obeying the adjacency constraints."
-                    : fullscreenGridMode === "invaders"
-                    ? "Index fingertip steers the ship with the existing fullscreen smoothing. Pinch fires on a short cooldown, enemies descend in arcade sweeps, and pinch restarts the wave after a loss."
-                    : fullscreenGridMode === "missile-command"
-                    ? `Index fingertip aims. Pinch launches interceptors from the nearest surviving base, blasts stop threats in an area, and the pace ramps over time after the ${MISSILE_COMMAND_COUNTDOWN_MS / 1000}-second opening countdown.`
-                    : fullscreenGridMode === "flappy"
-                    ? "Flappy overlay uses pinch rising edges only. Each distinct pinch flaps once, holding a pinch does not retrigger, and pinching after a crash restarts the round."
-                    : "Camera fits the window without cropping. Press `Esc` to close."}
-                </span>
-              ) : null}
+              <div className="fullscreen-camera-meta fullscreen-camera-actions">
+                {!isFullscreenModeLanding ? (
+                  <span className="fullscreen-camera-note">
+                    {fullscreenGridMode === "breakout-coop"
+                      ? `Breakout Co-op keeps index-finger steering on the paddle, uses support-hand pinch for a ${Math.round(BREAKOUT_COOP_SHIELD_DURATION_MS / 1000)} second shield pulse, and prism bricks split the ball while the shield recharges over about ${Math.round(BREAKOUT_COOP_SHIELD_COOLDOWN_MS / 1000)} seconds.`
+                      : fullscreenGridMode === "hand-bounce"
+                      ? "Hand Bounce turns your tracked palm into a bounce surface. The ball uses gravity-driven motion, rebounds off the side walls, and you only need to keep your hand under it."
+                      : fullscreenGridMode === "brick-dodger"
+                      ? "Brick Dodger uses the existing smoothed index-fingertip X position only. Drift across the full webcam overlay to dodge falling hazards, chase adjacent bonus pickups, and stretch the run as the descent speed ramps up."
+                      : fullscreenGridMode === "breakout"
+                      ? `Index fingertip steers the paddle left and right. Bricks use the Rings palette, the launch countdown is ${BREAKOUT_COUNTDOWN_MS / 1000} seconds, and each capsule adds one extra ball.`
+                      : fullscreenGridMode === "finger-pong"
+                      ? `Finger Pong keeps the full webcam visible behind a one-player rally. Your bottom paddle follows smoothed horizontal fingertip motion, the opening countdown is ${FINGER_PONG_COUNTDOWN_MS / 1000} seconds, and off-center contacts steer the return angle while rallies gently speed up.`
+                      : fullscreenGridMode === "tic-tac-toe"
+                      ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lets you pinch-drag X pieces from the left rail, adds a right-side reset box that clears the board after a 1.00 second index-fingertip hold, and gives O a random opening before switching to optimal play."
+                      : fullscreenGridMode === "fruit-ninja"
+                      ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
+                      : fullscreenGridMode === "sky-patrol"
+                      ? "Index fingertip steers a fighter across a vertically scrolling 16-bit coastline. Pinch fires twin cannons, air fighters weave in from above, ground emplacements ride the terrain below, and pinching after a loss relaunches the sortie."
+                      : fullscreenGridMode === WFC_WORLD_MODE_ID
+                      ? "Fingerprint Worlds lets you seed a fantasy map with pinched terrain rules, then Wave Function Collapse fills the rest while obeying the adjacency constraints."
+                      : fullscreenGridMode === "invaders"
+                      ? "Index fingertip steers the ship with the existing fullscreen smoothing. Pinch fires on a short cooldown, enemies descend in arcade sweeps, and pinch restarts the wave after a loss."
+                      : fullscreenGridMode === "missile-command"
+                      ? `Index fingertip aims. Pinch launches interceptors from the nearest surviving base, blasts stop threats in an area, and the pace ramps over time after the ${MISSILE_COMMAND_COUNTDOWN_MS / 1000}-second opening countdown.`
+                      : fullscreenGridMode === "flappy"
+                      ? "Flappy overlay uses pinch rising edges only. Each distinct pinch flaps once, holding a pinch does not retrigger, and pinching after a crash restarts the round."
+                      : "Camera fits the window without cropping. Press `Esc` to close."}
+                  </span>
+                ) : null}
+              </div>
             </div>
             {(cameraError || modelError) && (
               <div className="fullscreen-camera-errors">

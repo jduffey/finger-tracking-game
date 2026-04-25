@@ -3452,11 +3452,19 @@ body {
   flex-direction: column;
   gap: 10px;
   inset: 0;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 18px;
   pointer-events: none;
   position: absolute;
   z-index: 6;
+}
+
+.fullscreen-camera-hud-bottom {
+  align-items: flex-end;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  width: 100%;
 }
 
 .fullscreen-camera-meta {
@@ -3471,14 +3479,8 @@ body {
   flex-direction: column;
 }
 
-.fullscreen-camera-chip {
-  background: rgba(7, 13, 21, 0.76);
-  border: 1px solid rgba(168, 190, 215, 0.22);
-  border-radius: 999px;
-  color: #f1f7ff;
-  font-size: 0.92rem;
-  font-weight: 700;
-  padding: 8px 12px;
+.fullscreen-camera-status {
+  flex: 0 0 auto;
 }
 
 .fullscreen-camera-note {
@@ -5371,6 +5373,11 @@ button:disabled {
 
   .fullscreen-camera-actions {
     align-items: stretch;
+  }
+
+  .fullscreen-camera-hud-bottom {
+    align-items: stretch;
+    flex-direction: column-reverse;
   }
 
   .fullscreen-camera-note {
