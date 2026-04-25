@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { createFullscreenExitControlLayout } from "../src/fullscreenExitControl.js";
 import {
   clearWfcWorld,
   createWfcWorldGame,
@@ -22,10 +23,10 @@ function cellCenter(game, col, row) {
   return getWfcWorldCellCenter(game.layout, col, row);
 }
 
-test("createWfcWorldGame creates a 16 by 12 finger-controlled world layout", () => {
+test("createWfcWorldGame creates a 20 by 12 finger-controlled world layout", () => {
   const game = createWfcWorldGame(1280, 720);
 
-  assert.equal(game.layout.cols, 16);
+  assert.equal(game.layout.cols, 20);
   assert.equal(game.layout.rows, 12);
   assert.equal(game.selectedTileId, "grass");
   assert.equal(game.phase, "seeding");
@@ -35,7 +36,16 @@ test("createWfcWorldGame creates a 16 by 12 finger-controlled world layout", () 
   assert.equal(game.layout.palette.length, 8);
   assert.ok(game.layout.palette.every((tile) => tile.width === tile.height));
   assert.deepEqual(game.layout.controls.map((control) => control.id), ["generate", "reroll", "clear"]);
-  assert.ok(game.layout.controls.every((control) => control.height >= 58));
+  assert.ok(game.layout.controls.every((control) => control.height >= 88));
+  assert.ok(game.layout.controls.every((control) => control.top + control.height <= game.layout.height));
+});
+
+test("createWfcWorldGame lets terrain cells render underneath the exit box", () => {
+  const game = createWfcWorldGame(1280, 720);
+  const exitLayout = createFullscreenExitControlLayout(1280, 720);
+
+  assert.ok(game.layout.grid.left < exitLayout.left);
+  assert.ok(game.layout.grid.left + game.layout.grid.width > exitLayout.left + exitLayout.boxWidth * 0.5);
 });
 
 test("mapPointerToWfcCell maps index fingertip coordinates into grid cells", () => {

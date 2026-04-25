@@ -8,7 +8,7 @@ import {
 } from "./wfcSolver.js";
 
 export const WFC_WORLD_MODE_ID = "fingerprint-worlds";
-export const WFC_WORLD_COLS = 16;
+export const WFC_WORLD_COLS = 20;
 export const WFC_WORLD_ROWS = 12;
 export const WFC_WORLD_COLLAPSE_STEP_MS = 18;
 const WFC_WORLD_CONFLICT_MS = 900;
@@ -96,7 +96,7 @@ export function createWfcWorldLayout(width, height) {
   const gap = clamp(safeWidth * 0.018, 14, 28);
   const topInset = clamp(safeHeight * 0.085, 54, 78);
   const bottomInset = clamp(safeHeight * 0.05, 24, 46);
-  const availableGridWidth = Math.max(1, safeWidth - edge * 2 - panelWidth - gap);
+  const availableGridWidth = Math.max(1, safeWidth - edge * 2);
   const availableGridHeight = Math.max(1, safeHeight - topInset - bottomInset);
   const cellHeight = Math.floor(
     Math.min(
@@ -110,7 +110,7 @@ export function createWfcWorldLayout(width, height) {
   const gridHeight = cellHeight + rowStep * (WFC_WORLD_ROWS - 1);
   const gridLeft = edge + Math.max(0, (availableGridWidth - gridWidth) / 2);
   const gridTop = topInset + Math.max(0, (availableGridHeight - gridHeight) / 2);
-  const panelLeft = Math.min(safeWidth - panelWidth - edge, gridLeft + gridWidth + gap);
+  const panelLeft = safeWidth - panelWidth - edge;
   const tileGap = 8;
   const paletteColumns = 3;
   const paletteTileWidth = (panelWidth - tileGap * (paletteColumns - 1)) / paletteColumns;
@@ -129,7 +129,8 @@ export function createWfcWorldLayout(width, height) {
   });
   const controlTop =
     paletteTop + Math.ceil(FINGERPRINT_WORLD_TILES.length / paletteColumns) * (paletteTileHeight + tileGap) + 14;
-  const controlHeight = clamp(paletteTileHeight * 0.95, 58, 78);
+  const availableControlHeight = (safeHeight - bottomInset - controlTop - 20) / 3;
+  const controlHeight = clamp(paletteTileHeight * 1.18, 72, Math.min(96, availableControlHeight));
   const controls = ["generate", "reroll", "clear"].map((id, index) => ({
     id,
     label: id === "generate" ? "Generate" : id === "reroll" ? "Reroll" : "Clear",
