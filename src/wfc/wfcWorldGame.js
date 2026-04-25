@@ -29,6 +29,10 @@ function isPointInRect(rect, x, y) {
   );
 }
 
+function isSameWfcWorldCell(a, b) {
+  return a?.col === b?.col && a?.row === b?.row;
+}
+
 function createConstrainedWfc(cols, rows, constraints) {
   let wfc = createWfcState({ cols, rows });
   for (const constraint of constraints) {
@@ -56,10 +60,10 @@ export function createWfcWorldLayout(width, height) {
   const gridLeft = edge + Math.max(0, (availableGridWidth - gridWidth) / 2);
   const gridTop = topInset + Math.max(0, (availableGridHeight - gridHeight) / 2);
   const panelLeft = Math.min(safeWidth - panelWidth - edge, gridLeft + gridWidth + gap);
-  const tileGap = 10;
-  const paletteColumns = 2;
-  const paletteTileWidth = (panelWidth - tileGap) / paletteColumns;
-  const paletteTileHeight = clamp(paletteTileWidth * 0.72, 50, 74);
+  const tileGap = 8;
+  const paletteColumns = 3;
+  const paletteTileWidth = (panelWidth - tileGap * (paletteColumns - 1)) / paletteColumns;
+  const paletteTileHeight = paletteTileWidth;
   const paletteTop = topInset;
   const palette = FINGERPRINT_WORLD_TILES.map((tile, index) => {
     const col = index % paletteColumns;
@@ -74,7 +78,7 @@ export function createWfcWorldLayout(width, height) {
   });
   const controlTop =
     paletteTop + Math.ceil(FINGERPRINT_WORLD_TILES.length / paletteColumns) * (paletteTileHeight + tileGap) + 14;
-  const controlHeight = clamp(paletteTileHeight * 0.72, 44, 58);
+  const controlHeight = clamp(paletteTileHeight * 0.95, 58, 78);
   const controls = ["generate", "reroll", "clear"].map((id, index) => ({
     id,
     label: id === "generate" ? "Generate" : id === "reroll" ? "Reroll" : "Clear",
@@ -132,6 +136,8 @@ export function createWfcWorldGame(width, height) {
     phase: "seeding",
     selectedTileId: "grass",
     hoverCell: null,
+    paintDragActive: false,
+    lastPaintedCell: null,
     constraints: [],
     previousPinchActive: false,
     collapseAccumulatorMs: 0,
@@ -208,6 +214,8 @@ export function clearWfcWorld(game) {
     wfc: createWfcState({ cols: game.layout.cols, rows: game.layout.rows }),
     phase: "seeding",
     hoverCell: null,
+    paintDragActive: false,
+    lastPaintedCell: null,
     constraints: [],
     collapseAccumulatorMs: 0,
     conflictMs: 0,
@@ -292,6 +300,8 @@ export function stepWfcWorldGame(game, dtSeconds, input = {}, rng = Math.random)
   let nextGame = {
     ...game,
     hoverCell,
+    paintDragActive: pinchActive ? Boolean(game.paintDragActive) : false,
+    lastPaintedCell: pinchActive ? game.lastPaintedCell ?? null : null,
     previousPinchActive: pinchActive,
     conflictMs: Math.max(0, (game.conflictMs ?? 0) - dtMs),
   };
@@ -311,12 +321,39 @@ export function stepWfcWorldGame(game, dtSeconds, input = {}, rng = Math.random)
     const paletteTile = getWfcWorldPaletteTileAtPoint(nextGame.layout, pointerX, pointerY);
     const control = getWfcWorldControlAtPoint(nextGame.layout, pointerX, pointerY);
     if (paletteTile) {
-      nextGame = selectWfcWorldTile(nextGame, paletteTile.id);
+      nextGame = {
+        ...selectWfcWorldTile(nextGame, paletteTile.id),
+        paintDragActive: false,
+        lastPaintedCell: null,
+      };
     } else if (control) {
-      nextGame = runWfcWorldControl(nextGame, control.id, rng);
+      nextGame = {
+        ...runWfcWorldControl(nextGame, control.id, rng),
+        paintDragActive: false,
+        lastPaintedCell: null,
+      };
     } else if (hoverCell && nextGame.phase !== "collapsing") {
-      nextGame = placeWfcWorldConstraint(nextGame, hoverCell, nextGame.selectedTileId);
+      const paintedGame = placeWfcWorldConstraint(nextGame, hoverCell, nextGame.selectedTileId);
+      nextGame = {
+        ...paintedGame,
+        paintDragActive: paintedGame.phase !== "conflict",
+        lastPaintedCell: hoverCell,
+      };
     }
+  } else if (
+    pinchActive &&
+    pointerActive &&
+    nextGame.paintDragActive &&
+    hoverCell &&
+    !isSameWfcWorldCell(hoverCell, nextGame.lastPaintedCell) &&
+    nextGame.phase !== "collapsing"
+  ) {
+    const paintedGame = placeWfcWorldConstraint(nextGame, hoverCell, nextGame.selectedTileId);
+    nextGame = {
+      ...paintedGame,
+      paintDragActive: paintedGame.phase !== "conflict",
+      lastPaintedCell: hoverCell,
+    };
   }
 
   return runAnimatedCollapse(nextGame, dtMs, rng);

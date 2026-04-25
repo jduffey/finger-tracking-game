@@ -34,7 +34,9 @@ test("createWfcWorldGame creates a 16 by 12 finger-controlled world layout", () 
   assert.equal(game.phase, "seeding");
   assert.ok(game.layout.grid.cellSize > 0);
   assert.equal(game.layout.palette.length, 8);
+  assert.ok(game.layout.palette.every((tile) => tile.width === tile.height));
   assert.deepEqual(game.layout.controls.map((control) => control.id), ["generate", "reroll", "clear"]);
+  assert.ok(game.layout.controls.every((control) => control.height >= 58));
 });
 
 test("mapPointerToWfcCell maps index fingertip coordinates into grid cells", () => {
@@ -64,6 +66,67 @@ test("stepWfcWorldGame pinches once to place a tile constraint", () => {
   assert.deepEqual(placed.hoverCell, { col: 2, row: 5 });
   assert.deepEqual(placed.constraints, [{ col: 2, row: 5, tileId: "grass" }]);
   assert.deepEqual(held.constraints, placed.constraints);
+});
+
+test("stepWfcWorldGame drag paints newly hovered cells while pinch is held", () => {
+  const game = createWfcWorldGame(1280, 720);
+  const firstCell = cellCenter(game, 2, 5);
+  const secondCell = cellCenter(game, 3, 5);
+  const thirdCell = cellCenter(game, 4, 5);
+
+  const firstPainted = stepWfcWorldGame(
+    game,
+    1 / 60,
+    { pointerActive: true, pointerX: firstCell.x, pointerY: firstCell.y, pinchActive: true },
+    constantRng(0.5),
+  );
+  const secondPainted = stepWfcWorldGame(
+    firstPainted,
+    1 / 60,
+    { pointerActive: true, pointerX: secondCell.x, pointerY: secondCell.y, pinchActive: true },
+    constantRng(0.5),
+  );
+  const heldOverSecond = stepWfcWorldGame(
+    secondPainted,
+    1 / 60,
+    { pointerActive: true, pointerX: secondCell.x, pointerY: secondCell.y, pinchActive: true },
+    constantRng(0.5),
+  );
+  const thirdPainted = stepWfcWorldGame(
+    heldOverSecond,
+    1 / 60,
+    { pointerActive: true, pointerX: thirdCell.x, pointerY: thirdCell.y, pinchActive: true },
+    constantRng(0.5),
+  );
+
+  assert.deepEqual(thirdPainted.constraints, [
+    { col: 2, row: 5, tileId: "grass" },
+    { col: 3, row: 5, tileId: "grass" },
+    { col: 4, row: 5, tileId: "grass" },
+  ]);
+  assert.deepEqual(heldOverSecond.constraints, secondPainted.constraints);
+});
+
+test("stepWfcWorldGame does not start grid painting from a held palette pinch", () => {
+  const game = createWfcWorldGame(1280, 720);
+  const waterTile = game.layout.palette.find((tile) => tile.id === "water");
+  const center = cellCenter(game, 2, 5);
+
+  const selected = stepWfcWorldGame(
+    game,
+    1 / 60,
+    { pointerActive: true, pointerX: waterTile.left + 4, pointerY: waterTile.top + 4, pinchActive: true },
+    constantRng(0.5),
+  );
+  const movedToGridStillPinching = stepWfcWorldGame(
+    selected,
+    1 / 60,
+    { pointerActive: true, pointerX: center.x, pointerY: center.y, pinchActive: true },
+    constantRng(0.5),
+  );
+
+  assert.equal(selected.selectedTileId, "water");
+  assert.deepEqual(movedToGridStillPinching.constraints, []);
 });
 
 test("stepWfcWorldGame can select palette tiles and reject conflicting rules kindly", () => {
