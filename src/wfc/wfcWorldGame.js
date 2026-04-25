@@ -8,9 +8,9 @@ import {
 } from "./wfcSolver.js";
 
 export const WFC_WORLD_MODE_ID = "fingerprint-worlds";
-export const WFC_WORLD_COLS = 31;
-export const WFC_WORLD_ROWS = 19;
-export const WFC_WORLD_COLLAPSE_STEP_MS = 8;
+export const WFC_WORLD_COLS = 39;
+export const WFC_WORLD_ROWS = 24;
+export const WFC_WORLD_COLLAPSE_STEP_MS = 5;
 const WFC_WORLD_CONFLICT_MS = 900;
 const WFC_HEX_WIDTH_RATIO = Math.sqrt(3) / 2;
 const WFC_HEX_ROW_STEP_RATIO = 0.75;
