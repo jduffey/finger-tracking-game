@@ -3254,7 +3254,8 @@ body {
   justify-content: center;
   overflow: hidden;
   padding: 10px 8px;
-  pointer-events: none;
+  cursor: pointer;
+  pointer-events: auto;
   position: absolute;
   text-align: center;
 }

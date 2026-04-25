@@ -70,6 +70,7 @@ import {
   FULLSCREEN_MODE_LANDING_HOLD_MS,
   createFullscreenModeLandingState,
   hasVerifiedFullscreenMenuHand,
+  selectFullscreenModeLandingMode,
   stepFullscreenModeLanding,
 } from "./fullscreenModeLanding.js";
 import {
@@ -7485,6 +7486,23 @@ export default function App() {
     }
   }
 
+  function handleFullscreenModeLandingBoxClick(event, modeId) {
+    event.preventDefault();
+    event.stopPropagation();
+    const nextState = selectFullscreenModeLandingMode(fullscreenModeLandingStateRef.current, modeId);
+    fullscreenModeLandingStateRef.current = nextState;
+    setFullscreenModeLandingState(nextState);
+
+    if (nextState.selectedModeId === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID) {
+      returnFromFullscreenCameraScreen();
+      return;
+    }
+
+    if (nextState.selectedModeId && nextState.selectedModeId !== fullscreenGridModeRef.current) {
+      setFullscreenGridMode(nextState.selectedModeId);
+    }
+  }
+
   function updateFullscreenExitControlSimulation(timestamp) {
     if (
       phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
@@ -9753,9 +9771,13 @@ export default function App() {
               {fullscreenModeLandingState?.layout?.boxes?.map((box) => (
                 <div
                   key={box.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open ${box.label}`}
                   className={`fullscreen-camera-mode-landing-box ${box.category.toLowerCase()} ${
                     fullscreenModeLandingState?.holdModeId === box.id ? "active" : ""
                   }`}
+                  onClick={(event) => handleFullscreenModeLandingBoxClick(event, box.id)}
                   style={{
                     left: `${box.left}px`,
                     top: `${box.top}px`,

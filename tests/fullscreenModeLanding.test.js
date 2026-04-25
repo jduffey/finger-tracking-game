@@ -10,6 +10,7 @@ import {
   createFullscreenModeLandingLayout,
   createFullscreenModeLandingState,
   hasVerifiedFullscreenMenuHand,
+  selectFullscreenModeLandingMode,
   stepFullscreenModeLanding,
 } from "../src/fullscreenModeLanding.js";
 
@@ -208,4 +209,14 @@ test("stepFullscreenModeLanding selects the back to input test tile after a veri
   }
 
   assert.equal(selectedState.selectedModeId, FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID);
+});
+
+test("selectFullscreenModeLandingMode lets mouse clicks choose a fullscreen mode without a verified hand", () => {
+  const base = createFullscreenModeLandingState(1280, 720);
+  const selected = selectFullscreenModeLandingMode(base, "fingerprint-worlds");
+  const ignored = selectFullscreenModeLandingMode(base, "not-a-mode");
+
+  assert.equal(selected.handVerified, false);
+  assert.equal(selected.selectedModeId, "fingerprint-worlds");
+  assert.equal(ignored.selectedModeId, null);
 });

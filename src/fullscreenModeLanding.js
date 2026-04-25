@@ -166,6 +166,15 @@ export function createFullscreenModeLandingState(width, height) {
   };
 }
 
+export function selectFullscreenModeLandingMode(state, modeId) {
+  const safeState = state ?? createFullscreenModeLandingState(1280, 720);
+  const selectedBox = safeState.layout?.boxes?.find((box) => box.id === modeId) ?? null;
+  return {
+    ...safeState,
+    selectedModeId: selectedBox?.id ?? null,
+  };
+}
+
 export function stepFullscreenModeLanding(state, dtSeconds, input) {
   const safeState = state ?? createFullscreenModeLandingState(1280, 720);
   const handVerified = Boolean(input?.handVerified);
