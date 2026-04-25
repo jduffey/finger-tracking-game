@@ -129,11 +129,12 @@ export function createWfcWorldLayout(width, height) {
   });
   const controlTop =
     paletteTop + Math.ceil(FINGERPRINT_WORLD_TILES.length / paletteColumns) * (paletteTileHeight + tileGap) + 14;
-  const availableControlHeight = (safeHeight - bottomInset - controlTop - 20) / 3;
+  const controlIds = ["generate", "clear"];
+  const availableControlHeight = (safeHeight - bottomInset - controlTop - 20) / controlIds.length;
   const controlHeight = clamp(paletteTileHeight * 1.18, 72, Math.min(96, availableControlHeight));
-  const controls = ["generate", "reroll", "clear"].map((id, index) => ({
+  const controls = controlIds.map((id, index) => ({
     id,
-    label: id === "generate" ? "Generate" : id === "reroll" ? "Reroll" : "Clear",
+    label: id === "generate" ? "Generate" : "Clear",
     left: panelLeft,
     top: controlTop + index * (controlHeight + 10),
     width: panelWidth,
@@ -354,7 +355,7 @@ function runAnimatedCollapse(game, dtMs, rng) {
       wfc,
       phase: "complete",
       collapseAccumulatorMs: 0,
-      message: "World complete. Pinch Reroll to watch new choices.",
+      message: "World complete. Pinch Generate to watch new choices.",
     };
   }
   if (wfc.status === "contradiction") {
@@ -364,7 +365,7 @@ function runAnimatedCollapse(game, dtMs, rng) {
       phase: "conflict",
       conflictMs: WFC_WORLD_CONFLICT_MS,
       collapseAccumulatorMs: 0,
-      message: "The generator found a conflict. Move one rule or reroll.",
+      message: "The generator found a conflict. Move one rule or generate again.",
     };
   }
 
@@ -379,14 +380,6 @@ function runWfcWorldControl(game, controlId, rng) {
   switch (controlId) {
     case "generate":
       return startWfcWorldCollapse(game);
-    case "reroll":
-      return {
-        ...startWfcWorldCollapse({
-          ...game,
-          wfc: createConstrainedWfc(game.layout.cols, game.layout.rows, game.constraints),
-        }),
-        message: "Rerolling the world around your rules.",
-      };
     case "clear":
       return clearWfcWorld(game);
     default:

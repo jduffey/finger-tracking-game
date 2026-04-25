@@ -37,7 +37,7 @@ test("createWfcWorldGame creates a 39 by 24 finger-controlled world layout", () 
   assert.ok(game.layout.grid.top < 36);
   assert.equal(game.layout.palette.length, 6);
   assert.ok(game.layout.palette.every((tile) => tile.width === tile.height));
-  assert.deepEqual(game.layout.controls.map((control) => control.id), ["generate", "reroll", "clear"]);
+  assert.deepEqual(game.layout.controls.map((control) => control.id), ["generate", "clear"]);
   assert.ok(game.layout.controls.every((control) => control.height >= 88));
   assert.ok(game.layout.controls.every((control) => control.top + control.height <= game.layout.height));
 });
