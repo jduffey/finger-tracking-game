@@ -5,6 +5,7 @@ import { createFullscreenExitControlLayout } from "../src/fullscreenExitControl.
 import {
   clearWfcWorld,
   createWfcWorldGame,
+  createWfcWorldStepInput,
   getWfcWorldCellCenter,
   getWfcWorldControlAtPoint,
   mapPointerToWfcCell,
@@ -65,6 +66,41 @@ test("mapPointerToWfcCell maps index fingertip coordinates into grid cells", () 
       firstCell.y - game.layout.grid.cellHeight / 2 + 1,
     ),
     null,
+  );
+});
+
+test("createWfcWorldStepInput maps active mouse input to pinch-style actions without hover", () => {
+  const viewport = { left: 40, top: 60, width: 1280, height: 720 };
+
+  assert.deepEqual(
+    createWfcWorldStepInput({
+      viewport,
+      handDetected: false,
+      cursor: null,
+      pinchActive: false,
+      mouseInput: { pointerActive: true, pointerX: 120, pointerY: 140, pinchActive: true, pinchStarted: true },
+    }),
+    { pointerActive: true, pointerX: 120, pointerY: 140, pinchActive: true, pinchStarted: true },
+  );
+  assert.deepEqual(
+    createWfcWorldStepInput({
+      viewport,
+      handDetected: true,
+      cursor: { x: 400, y: 300 },
+      pinchActive: true,
+      mouseInput: { pointerActive: true, pointerX: 120, pointerY: 140, pinchActive: false, pinchStarted: false },
+    }),
+    { pointerActive: true, pointerX: 360, pointerY: 240, pinchActive: true },
+  );
+  assert.deepEqual(
+    createWfcWorldStepInput({
+      viewport,
+      handDetected: false,
+      cursor: null,
+      pinchActive: false,
+      mouseInput: { pointerActive: true, pointerX: 120, pointerY: 140, pinchActive: false, pinchStarted: false },
+    }),
+    { pointerActive: false, pointerX: 0, pointerY: 0, pinchActive: false },
   );
 });
 

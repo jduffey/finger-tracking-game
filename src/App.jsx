@@ -119,6 +119,7 @@ import { WfcWorldRenderer } from "./wfc/WfcWorldRenderer.jsx";
 import {
   WFC_WORLD_MODE_ID,
   createWfcWorldGame,
+  createWfcWorldStepInput,
   stepWfcWorldGame,
 } from "./wfc/wfcWorldGame.js";
 import {
@@ -1620,6 +1621,13 @@ export default function App() {
   const fullscreenWfcWorldStateRef = useRef(null);
   const fullscreenWfcWorldViewportRef = useRef(null);
   const fullscreenWfcWorldLastTickRef = useRef(0);
+  const fullscreenWfcWorldMouseInputRef = useRef({
+    pointerActive: false,
+    pointerX: 0,
+    pointerY: 0,
+    pinchActive: false,
+    pinchStarted: false,
+  });
   const fullscreenInvadersStateRef = useRef(null);
   const fullscreenBreakoutViewportRef = useRef(null);
   const fullscreenFingerPongViewportRef = useRef(null);
@@ -2891,6 +2899,13 @@ export default function App() {
       !fullscreenCameraViewport
     ) {
       fullscreenWfcWorldLastTickRef.current = 0;
+      fullscreenWfcWorldMouseInputRef.current = {
+        pointerActive: false,
+        pointerX: 0,
+        pointerY: 0,
+        pinchActive: false,
+        pinchStarted: false,
+      };
       if (fullscreenWfcWorldStateRef.current) {
         fullscreenWfcWorldStateRef.current = null;
         setFullscreenWfcWorldState(null);
@@ -2903,6 +2918,13 @@ export default function App() {
       fullscreenCameraViewport.height,
     );
     fullscreenWfcWorldLastTickRef.current = 0;
+    fullscreenWfcWorldMouseInputRef.current = {
+      pointerActive: false,
+      pointerX: 0,
+      pointerY: 0,
+      pinchActive: false,
+      pinchStarted: false,
+    };
     fullscreenWfcWorldStateRef.current = nextGame;
     setFullscreenWfcWorldState(nextGame);
     return undefined;
@@ -7847,6 +7869,59 @@ export default function App() {
     publishFullscreenSkyPatrolState(nextState);
   }
 
+  function getFullscreenWfcWorldMousePoint(event) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
+  }
+
+  function handleFullscreenWfcWorldMouseDown(event) {
+    if (event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    const point = getFullscreenWfcWorldMousePoint(event);
+    fullscreenWfcWorldMouseInputRef.current = {
+      pointerActive: true,
+      pointerX: point.x,
+      pointerY: point.y,
+      pinchActive: true,
+      pinchStarted: true,
+    };
+  }
+
+  function handleFullscreenWfcWorldMouseMove(event) {
+    const currentMouseInput = fullscreenWfcWorldMouseInputRef.current;
+    if (!currentMouseInput.pinchActive) {
+      return;
+    }
+    const point = getFullscreenWfcWorldMousePoint(event);
+    fullscreenWfcWorldMouseInputRef.current = {
+      ...currentMouseInput,
+      pointerActive: true,
+      pointerX: point.x,
+      pointerY: point.y,
+      pinchActive: true,
+    };
+  }
+
+  function stopFullscreenWfcWorldMouseInput(event) {
+    const currentMouseInput = fullscreenWfcWorldMouseInputRef.current;
+    if (!currentMouseInput.pinchActive && !currentMouseInput.pinchStarted) {
+      return;
+    }
+    const point = getFullscreenWfcWorldMousePoint(event);
+    fullscreenWfcWorldMouseInputRef.current = {
+      pointerActive: Boolean(currentMouseInput.pinchStarted),
+      pointerX: point.x,
+      pointerY: point.y,
+      pinchActive: false,
+      pinchStarted: Boolean(currentMouseInput.pinchStarted),
+    };
+  }
+
   function updateFullscreenWfcWorldSimulation(timestamp) {
     if (
       phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
@@ -7867,20 +7942,25 @@ export default function App() {
     const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
     fullscreenWfcWorldLastTickRef.current = timestamp;
 
-    const pointerActive =
-      handDetectedRef.current &&
-      Number.isFinite(cursorRef.current?.x) &&
-      Number.isFinite(cursorRef.current?.y);
+    const mouseInput = fullscreenWfcWorldMouseInputRef.current;
     const nextState = stepWfcWorldGame(
       fullscreenWfcWorldStateRef.current,
       deltaSeconds,
-      {
-        pointerActive,
-        pointerX: pointerActive ? cursorRef.current.x - viewportMetrics.left : 0,
-        pointerY: pointerActive ? cursorRef.current.y - viewportMetrics.top : 0,
-        pinchActive: handDetectedRef.current && pinchStateRef.current,
-      },
+      createWfcWorldStepInput({
+        viewport: viewportMetrics,
+        handDetected: handDetectedRef.current,
+        cursor: cursorRef.current,
+        pinchActive: pinchStateRef.current,
+        mouseInput,
+      }),
     );
+    if (mouseInput.pinchStarted) {
+      fullscreenWfcWorldMouseInputRef.current = {
+        ...mouseInput,
+        pointerActive: Boolean(mouseInput.pinchActive),
+        pinchStarted: false,
+      };
+    }
     fullscreenWfcWorldStateRef.current = nextState;
     setFullscreenWfcWorldState(nextState);
   }
@@ -10720,6 +10800,10 @@ export default function App() {
             <WfcWorldRenderer
               game={fullscreenWfcWorldState}
               style={fullscreenCameraViewport?.style ?? undefined}
+              onMouseDown={handleFullscreenWfcWorldMouseDown}
+              onMouseMove={handleFullscreenWfcWorldMouseMove}
+              onMouseUp={stopFullscreenWfcWorldMouseInput}
+              onMouseLeave={stopFullscreenWfcWorldMouseInput}
             />
           ) : fullscreenGridMode === "invaders" ? (
             <div

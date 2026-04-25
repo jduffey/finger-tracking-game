@@ -25,7 +25,14 @@ function getPhaseLabel(phase) {
   }
 }
 
-export function WfcWorldRenderer({ game, style }) {
+export function WfcWorldRenderer({
+  game,
+  style,
+  onMouseDown,
+  onMouseMove,
+  onMouseUp,
+  onMouseLeave,
+}) {
   if (!game?.layout) {
     return null;
   }
@@ -83,7 +90,14 @@ export function WfcWorldRenderer({ game, style }) {
   }
 
   return (
-    <div className={`fullscreen-camera-wfc-world ${game.phase}`} style={style}>
+    <div
+      className={`fullscreen-camera-wfc-world ${game.phase}`}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseLeave}
+      style={style}
+    >
       <div className="fullscreen-camera-wfc-title">
         <strong>Fingerprint Worlds</strong>
         <span>{getPhaseLabel(game.phase)}</span>

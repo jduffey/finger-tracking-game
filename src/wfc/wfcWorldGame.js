@@ -195,6 +195,42 @@ export function mapPointerToWfcCell(layout, pointerX, pointerY) {
   return null;
 }
 
+export function createWfcWorldStepInput({
+  viewport,
+  handDetected = false,
+  cursor = null,
+  pinchActive = false,
+  mouseInput = null,
+} = {}) {
+  const mousePointerActive =
+    Boolean(mouseInput?.pointerActive) &&
+    Number.isFinite(mouseInput?.pointerX) &&
+    Number.isFinite(mouseInput?.pointerY);
+  const mouseActionActive = mousePointerActive && (mouseInput.pinchActive || mouseInput.pinchStarted);
+  if (mouseActionActive) {
+    return {
+      pointerActive: true,
+      pointerX: mouseInput.pointerX,
+      pointerY: mouseInput.pointerY,
+      pinchActive: Boolean(mouseInput.pinchActive),
+      ...(mouseInput.pinchStarted ? { pinchStarted: true } : {}),
+    };
+  }
+
+  const handPointerActive =
+    Boolean(handDetected) &&
+    Number.isFinite(cursor?.x) &&
+    Number.isFinite(cursor?.y) &&
+    Number.isFinite(viewport?.left) &&
+    Number.isFinite(viewport?.top);
+  return {
+    pointerActive: handPointerActive,
+    pointerX: handPointerActive ? cursor.x - viewport.left : 0,
+    pointerY: handPointerActive ? cursor.y - viewport.top : 0,
+    pinchActive: handPointerActive && Boolean(pinchActive),
+  };
+}
+
 export function getWfcWorldControlAtPoint(layout, pointerX, pointerY) {
   return layout?.controls?.find((control) => isPointInRect(control, pointerX, pointerY)) ?? null;
 }
