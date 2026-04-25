@@ -35,6 +35,10 @@ test("setWfcConstraint locks a cell and propagates allowed neighbors", () => {
     getWfcCellDomain(state, 2, 1).toSorted(),
     ["bridge", "sand", "water"],
   );
+  assert.deepEqual(
+    getWfcCellDomain(state, 2, 2).toSorted(),
+    ["bridge", "sand", "water"],
+  );
 });
 
 test("setWfcConstraint reports contradictions without throwing", () => {

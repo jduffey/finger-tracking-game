@@ -12,6 +12,8 @@ export const WFC_WORLD_COLS = 16;
 export const WFC_WORLD_ROWS = 12;
 export const WFC_WORLD_COLLAPSE_STEP_MS = 18;
 const WFC_WORLD_CONFLICT_MS = 900;
+const WFC_HEX_WIDTH_RATIO = Math.sqrt(3) / 2;
+const WFC_HEX_ROW_STEP_RATIO = 0.75;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -31,6 +33,48 @@ function isPointInRect(rect, x, y) {
 
 function isSameWfcWorldCell(a, b) {
   return a?.col === b?.col && a?.row === b?.row;
+}
+
+function getWfcWorldHexVertices(centerX, centerY, width, height) {
+  return [
+    { x: centerX, y: centerY - height / 2 },
+    { x: centerX + width / 2, y: centerY - height / 4 },
+    { x: centerX + width / 2, y: centerY + height / 4 },
+    { x: centerX, y: centerY + height / 2 },
+    { x: centerX - width / 2, y: centerY + height / 4 },
+    { x: centerX - width / 2, y: centerY - height / 4 },
+  ];
+}
+
+function isPointOnLineSegment(point, a, b) {
+  const crossProduct = (point.y - a.y) * (b.x - a.x) - (point.x - a.x) * (b.y - a.y);
+  if (Math.abs(crossProduct) > 0.0001) {
+    return false;
+  }
+  const dotProduct = (point.x - a.x) * (b.x - a.x) + (point.y - a.y) * (b.y - a.y);
+  if (dotProduct < 0) {
+    return false;
+  }
+  const squaredLength = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+  return dotProduct <= squaredLength;
+}
+
+function isPointInPolygon(point, vertices) {
+  let inside = false;
+  for (let index = 0, previousIndex = vertices.length - 1; index < vertices.length; previousIndex = index, index += 1) {
+    const current = vertices[index];
+    const previous = vertices[previousIndex];
+    if (isPointOnLineSegment(point, previous, current)) {
+      return true;
+    }
+    const intersects =
+      current.y > point.y !== previous.y > point.y &&
+      point.x < ((previous.x - current.x) * (point.y - current.y)) / (previous.y - current.y) + current.x;
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
 
 function createConstrainedWfc(cols, rows, constraints) {
@@ -54,9 +98,16 @@ export function createWfcWorldLayout(width, height) {
   const bottomInset = clamp(safeHeight * 0.05, 24, 46);
   const availableGridWidth = Math.max(1, safeWidth - edge * 2 - panelWidth - gap);
   const availableGridHeight = Math.max(1, safeHeight - topInset - bottomInset);
-  const cellSize = Math.floor(Math.min(availableGridWidth / WFC_WORLD_COLS, availableGridHeight / WFC_WORLD_ROWS));
-  const gridWidth = cellSize * WFC_WORLD_COLS;
-  const gridHeight = cellSize * WFC_WORLD_ROWS;
+  const cellHeight = Math.floor(
+    Math.min(
+      availableGridWidth / ((WFC_WORLD_COLS + 0.5) * WFC_HEX_WIDTH_RATIO),
+      availableGridHeight / (1 + (WFC_WORLD_ROWS - 1) * WFC_HEX_ROW_STEP_RATIO),
+    ),
+  );
+  const cellWidth = cellHeight * WFC_HEX_WIDTH_RATIO;
+  const rowStep = cellHeight * WFC_HEX_ROW_STEP_RATIO;
+  const gridWidth = cellWidth * (WFC_WORLD_COLS + 0.5);
+  const gridHeight = cellHeight + rowStep * (WFC_WORLD_ROWS - 1);
   const gridLeft = edge + Math.max(0, (availableGridWidth - gridWidth) / 2);
   const gridTop = topInset + Math.max(0, (availableGridHeight - gridHeight) / 2);
   const panelLeft = Math.min(safeWidth - panelWidth - edge, gridLeft + gridWidth + gap);
@@ -98,7 +149,11 @@ export function createWfcWorldLayout(width, height) {
       top: gridTop,
       width: gridWidth,
       height: gridHeight,
-      cellSize,
+      cellSize: cellHeight,
+      cellWidth,
+      cellHeight,
+      rowStep,
+      cellShape: "hex",
     },
     palette,
     controls,
@@ -110,14 +165,33 @@ export function createWfcWorldLayout(width, height) {
   };
 }
 
+export function getWfcWorldCellCenter(layout, col, row) {
+  const cellWidth = layout?.grid?.cellWidth ?? layout?.grid?.cellSize ?? 0;
+  const cellHeight = layout?.grid?.cellHeight ?? layout?.grid?.cellSize ?? 0;
+  const rowStep = layout?.grid?.rowStep ?? cellHeight;
+  return {
+    x: layout.grid.left + cellWidth * (col + 0.5) + (row % 2 === 1 ? cellWidth / 2 : 0),
+    y: layout.grid.top + rowStep * row + cellHeight / 2,
+  };
+}
+
 export function mapPointerToWfcCell(layout, pointerX, pointerY) {
   if (!layout || !isPointInRect(layout.grid, pointerX, pointerY)) {
     return null;
   }
-  return {
-    col: clamp(Math.floor((pointerX - layout.grid.left) / layout.grid.cellSize), 0, layout.cols - 1),
-    row: clamp(Math.floor((pointerY - layout.grid.top) / layout.grid.cellSize), 0, layout.rows - 1),
-  };
+  const point = { x: pointerX, y: pointerY };
+  const cellWidth = layout.grid.cellWidth ?? layout.grid.cellSize;
+  const cellHeight = layout.grid.cellHeight ?? layout.grid.cellSize;
+  for (let row = 0; row < layout.rows; row += 1) {
+    for (let col = 0; col < layout.cols; col += 1) {
+      const center = getWfcWorldCellCenter(layout, col, row);
+      const vertices = getWfcWorldHexVertices(center.x, center.y, cellWidth, cellHeight);
+      if (isPointInPolygon(point, vertices)) {
+        return { col, row };
+      }
+    }
+  }
+  return null;
 }
 
 export function getWfcWorldControlAtPoint(layout, pointerX, pointerY) {

@@ -1,4 +1,5 @@
 import { getWfcGrid } from "./wfcSolver.js";
+import { getWfcWorldCellCenter } from "./wfcWorldGame.js";
 import { FINGERPRINT_WORLD_TILES } from "./wfcTiles.js";
 
 const TILE_BY_ID = Object.fromEntries(FINGERPRINT_WORLD_TILES.map((tile) => [tile.id, tile]));
@@ -46,6 +47,7 @@ export function WfcWorldRenderer({ game, style }) {
       const tile = TILE_BY_ID[tileId] ?? null;
       const key = getCellKey(col, row);
       const constrainedTileId = constraintKeys.get(key);
+      const center = getWfcWorldCellCenter(game.layout, col, row);
 
       cells.push(
         <span
@@ -62,9 +64,10 @@ export function WfcWorldRenderer({ game, style }) {
             .filter(Boolean)
             .join(" ")}
           style={{
-            "--wfc-cell-left": `${game.layout.grid.left + col * game.layout.grid.cellSize}px`,
-            "--wfc-cell-top": `${game.layout.grid.top + row * game.layout.grid.cellSize}px`,
-            "--wfc-cell-size": `${game.layout.grid.cellSize}px`,
+            "--wfc-cell-left": `${center.x - game.layout.grid.cellWidth / 2}px`,
+            "--wfc-cell-top": `${center.y - game.layout.grid.cellHeight / 2}px`,
+            "--wfc-cell-width": `${game.layout.grid.cellWidth}px`,
+            "--wfc-cell-height": `${game.layout.grid.cellHeight}px`,
             "--wfc-tile-color": tile?.color ?? "rgba(233, 240, 248, 0.2)",
             "--wfc-tile-accent": tile?.accent ?? "rgba(233, 240, 248, 0.36)",
             "--wfc-tile-text": tile?.textColor ?? "#f5f8ff",

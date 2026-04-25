@@ -1,8 +1,8 @@
 import {
   FINGERPRINT_WORLD_ADJACENCY,
   FINGERPRINT_WORLD_TILES,
-  WFC_DIRECTION_DELTAS,
   WFC_DIRECTIONS,
+  getWfcDirectionDelta,
 } from "./wfcTiles.js";
 
 function clampIndex(value, max) {
@@ -87,7 +87,7 @@ function propagateDomains(sourceState, queue) {
     }
 
     for (const direction of WFC_DIRECTIONS) {
-      const delta = WFC_DIRECTION_DELTAS[direction];
+      const delta = getWfcDirectionDelta(direction, row);
       const nextCol = col + delta.dc;
       const nextRow = row + delta.dr;
       if (!isInBounds(state, nextCol, nextRow)) {
@@ -259,13 +259,12 @@ export function isWfcGridValid(grid, adjacency = FINGERPRINT_WORLD_ADJACENCY) {
       if (!tileId) {
         return false;
       }
-      const east = cells[col + 1];
-      const south = grid[row + 1]?.[col];
-      if (east && !adjacency[tileId]?.e?.includes(east)) {
-        return false;
-      }
-      if (south && !adjacency[tileId]?.s?.includes(south)) {
-        return false;
+      for (const direction of WFC_DIRECTIONS) {
+        const delta = getWfcDirectionDelta(direction, row);
+        const neighbor = grid[row + delta.dr]?.[col + delta.dc];
+        if (neighbor && !adjacency[tileId]?.[direction]?.includes(neighbor)) {
+          return false;
+        }
       }
     }
   }

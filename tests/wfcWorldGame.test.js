@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   clearWfcWorld,
   createWfcWorldGame,
+  getWfcWorldCellCenter,
   getWfcWorldControlAtPoint,
   mapPointerToWfcCell,
   selectWfcWorldTile,
@@ -18,11 +19,7 @@ function constantRng(value) {
 }
 
 function cellCenter(game, col, row) {
-  const { grid } = game.layout;
-  return {
-    x: grid.left + grid.cellSize * (col + 0.5),
-    y: grid.top + grid.cellSize * (row + 0.5),
-  };
+  return getWfcWorldCellCenter(game.layout, col, row);
 }
 
 test("createWfcWorldGame creates a 16 by 12 finger-controlled world layout", () => {
@@ -33,6 +30,8 @@ test("createWfcWorldGame creates a 16 by 12 finger-controlled world layout", () 
   assert.equal(game.selectedTileId, "grass");
   assert.equal(game.phase, "seeding");
   assert.ok(game.layout.grid.cellSize > 0);
+  assert.equal(game.layout.grid.cellShape, "hex");
+  assert.ok(game.layout.grid.cellWidth < game.layout.grid.cellHeight);
   assert.equal(game.layout.palette.length, 8);
   assert.ok(game.layout.palette.every((tile) => tile.width === tile.height));
   assert.deepEqual(game.layout.controls.map((control) => control.id), ["generate", "reroll", "clear"]);
@@ -42,9 +41,21 @@ test("createWfcWorldGame creates a 16 by 12 finger-controlled world layout", () 
 test("mapPointerToWfcCell maps index fingertip coordinates into grid cells", () => {
   const game = createWfcWorldGame(1280, 720);
   const center = cellCenter(game, 3, 4);
+  const oddRowCenter = cellCenter(game, 3, 5);
+  const firstCell = cellCenter(game, 0, 0);
 
   assert.deepEqual(mapPointerToWfcCell(game.layout, center.x, center.y), { col: 3, row: 4 });
+  assert.deepEqual(mapPointerToWfcCell(game.layout, oddRowCenter.x, oddRowCenter.y), { col: 3, row: 5 });
+  assert.ok(oddRowCenter.x > center.x);
   assert.equal(mapPointerToWfcCell(game.layout, game.layout.grid.left - 4, center.y), null);
+  assert.equal(
+    mapPointerToWfcCell(
+      game.layout,
+      firstCell.x - game.layout.grid.cellWidth / 2 + 1,
+      firstCell.y - game.layout.grid.cellHeight / 2 + 1,
+    ),
+    null,
+  );
 });
 
 test("stepWfcWorldGame pinches once to place a tile constraint", () => {
