@@ -34,7 +34,7 @@ test("createWfcWorldGame creates a 20 by 12 finger-controlled world layout", () 
   assert.ok(game.layout.grid.cellSize > 0);
   assert.equal(game.layout.grid.cellShape, "hex");
   assert.ok(game.layout.grid.cellWidth < game.layout.grid.cellHeight);
-  assert.equal(game.layout.palette.length, 8);
+  assert.equal(game.layout.palette.length, 6);
   assert.ok(game.layout.palette.every((tile) => tile.width === tile.height));
   assert.deepEqual(game.layout.controls.map((control) => control.id), ["generate", "reroll", "clear"]);
   assert.ok(game.layout.controls.every((control) => control.height >= 88));
@@ -264,10 +264,10 @@ test("clear and control hit testing support booth-friendly fallback buttons", ()
   const game = createWfcWorldGame(1280, 720);
   const generate = game.layout.controls.find((control) => control.id === "generate");
   const selectedControl = getWfcWorldControlAtPoint(game.layout, generate.left + 2, generate.top + 2);
-  const cleared = clearWfcWorld(startWfcWorldCollapse(selectWfcWorldTile(game, "road")));
+  const cleared = clearWfcWorld(startWfcWorldCollapse(selectWfcWorldTile(game, "forest")));
 
   assert.equal(selectedControl.id, "generate");
   assert.equal(cleared.phase, "seeding");
-  assert.equal(cleared.selectedTileId, "road");
+  assert.equal(cleared.selectedTileId, "forest");
   assert.deepEqual(cleared.constraints, []);
 });

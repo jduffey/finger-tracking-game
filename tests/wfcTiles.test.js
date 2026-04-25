@@ -11,7 +11,7 @@ import {
 test("Fingerprint Worlds tiles expose a compact fantasy map palette", () => {
   assert.deepEqual(
     FINGERPRINT_WORLD_TILES.map((tile) => tile.id),
-    ["grass", "water", "sand", "forest", "mountain", "road", "castle", "bridge"],
+    ["grass", "water", "forest", "mountain", "castle", "bridge"],
   );
   for (const tile of FINGERPRINT_WORLD_TILES) {
     assert.equal(typeof tile.label, "string");
@@ -36,5 +36,11 @@ test("Fingerprint Worlds adjacency rules are reciprocal in every direction", () 
         );
       }
     }
+  }
+});
+
+test("Fingerprint Worlds bridges can only touch grass and water", () => {
+  for (const direction of WFC_DIRECTIONS) {
+    assert.deepEqual(FINGERPRINT_WORLD_ADJACENCY.bridge[direction], ["grass", "water"]);
   }
 });

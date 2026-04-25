@@ -68,15 +68,6 @@ export const FINGERPRINT_WORLD_TILES = [
     textColor: "#eff8ff",
   },
   {
-    id: "sand",
-    label: "Sand",
-    icon: "S",
-    weight: 3,
-    color: "#e5c66f",
-    accent: "#b88338",
-    textColor: "#37230d",
-  },
-  {
     id: "forest",
     label: "Forest",
     icon: "F",
@@ -93,15 +84,6 @@ export const FINGERPRINT_WORLD_TILES = [
     color: "#8e99a5",
     accent: "#4e5965",
     textColor: "#f6f8fb",
-  },
-  {
-    id: "road",
-    label: "Road",
-    icon: "R",
-    weight: 3,
-    color: "#9a7048",
-    accent: "#f0cf76",
-    textColor: "#fff4cf",
   },
   {
     id: "castle",
@@ -124,14 +106,12 @@ export const FINGERPRINT_WORLD_TILES = [
 ];
 
 const SAME_ON_ALL_SIDES = {
-  grass: ["grass", "sand", "forest", "mountain", "road", "castle"],
-  water: ["water", "sand", "bridge"],
-  sand: ["water", "sand", "grass", "road", "bridge"],
+  grass: ["grass", "water", "forest", "mountain", "castle", "bridge"],
+  water: ["grass", "water", "bridge"],
   forest: ["grass", "forest", "mountain"],
   mountain: ["grass", "forest", "mountain"],
-  road: ["grass", "sand", "road", "castle", "bridge"],
-  castle: ["grass", "road"],
-  bridge: ["water", "sand", "road"],
+  castle: ["grass"],
+  bridge: ["grass", "water"],
 };
 
 export const FINGERPRINT_WORLD_ADJACENCY = Object.fromEntries(
