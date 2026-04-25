@@ -12,19 +12,6 @@ function isSameCell(a, b) {
   return a?.col === b?.col && a?.row === b?.row;
 }
 
-function getPhaseLabel(phase) {
-  switch (phase) {
-    case "collapsing":
-      return "Collapsing";
-    case "complete":
-      return "World complete";
-    case "conflict":
-      return "Rule conflict";
-    default:
-      return "Seed rules";
-  }
-}
-
 export function WfcWorldRenderer({
   game,
   style,
@@ -98,10 +85,6 @@ export function WfcWorldRenderer({
       onMouseLeave={onMouseLeave}
       style={style}
     >
-      <div className="fullscreen-camera-wfc-title">
-        <strong>Fingerprint Worlds</strong>
-        <span>{getPhaseLabel(game.phase)}</span>
-      </div>
       <div className="fullscreen-camera-wfc-grid" aria-hidden="true">
         {cells}
       </div>

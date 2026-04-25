@@ -1535,7 +1535,6 @@ body {
   z-index: 2;
 }
 
-.fullscreen-camera-wfc-title,
 .fullscreen-camera-wfc-status {
   background: rgba(10, 17, 27, 0.74);
   border: 1px solid rgba(223, 234, 248, 0.18);
@@ -1548,17 +1547,6 @@ body {
   z-index: 5;
 }
 
-.fullscreen-camera-wfc-title {
-  align-items: baseline;
-  top: 18px;
-}
-
-.fullscreen-camera-wfc-title strong {
-  color: #fff2a8;
-  font-size: clamp(1rem, 2vw, 1.35rem);
-}
-
-.fullscreen-camera-wfc-title span,
 .fullscreen-camera-wfc-status span,
 .fullscreen-camera-wfc-status strong {
   color: rgba(235, 244, 255, 0.86);
@@ -1701,7 +1689,6 @@ body {
   color: #fff2a8;
 }
 
-.fullscreen-camera-wfc-world.conflict .fullscreen-camera-wfc-title,
 .fullscreen-camera-wfc-world.conflict .fullscreen-camera-wfc-status {
   border-color: rgba(255, 113, 113, 0.58);
   box-shadow: 0 0 18px rgba(255, 84, 84, 0.16);

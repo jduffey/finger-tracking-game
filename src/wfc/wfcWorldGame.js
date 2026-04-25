@@ -94,7 +94,7 @@ export function createWfcWorldLayout(width, height) {
   const edge = clamp(Math.min(safeWidth, safeHeight) * 0.035, 16, 34);
   const panelWidth = clamp(safeWidth * 0.22, 174, 250);
   const gap = clamp(safeWidth * 0.018, 14, 28);
-  const topInset = clamp(safeHeight * 0.085, 54, 78);
+  const topInset = edge;
   const bottomInset = clamp(safeHeight * 0.05, 24, 46);
   const availableGridWidth = Math.max(1, safeWidth - edge * 2);
   const availableGridHeight = Math.max(1, safeHeight - topInset - bottomInset);
@@ -109,7 +109,7 @@ export function createWfcWorldLayout(width, height) {
   const gridWidth = cellWidth * (WFC_WORLD_COLS + 0.5);
   const gridHeight = cellHeight + rowStep * (WFC_WORLD_ROWS - 1);
   const gridLeft = edge + Math.max(0, (availableGridWidth - gridWidth) / 2);
-  const gridTop = topInset + Math.max(0, (availableGridHeight - gridHeight) / 2);
+  const gridTop = topInset;
   const panelLeft = safeWidth - panelWidth - edge;
   const tileGap = 8;
   const paletteColumns = 3;

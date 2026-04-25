@@ -34,6 +34,7 @@ test("createWfcWorldGame creates a 25 by 15 finger-controlled world layout", () 
   assert.ok(game.layout.grid.cellSize > 0);
   assert.equal(game.layout.grid.cellShape, "hex");
   assert.ok(game.layout.grid.cellWidth < game.layout.grid.cellHeight);
+  assert.ok(game.layout.grid.top < 36);
   assert.equal(game.layout.palette.length, 6);
   assert.ok(game.layout.palette.every((tile) => tile.width === tile.height));
   assert.deepEqual(game.layout.controls.map((control) => control.id), ["generate", "reroll", "clear"]);
