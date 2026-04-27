@@ -50,6 +50,7 @@ test("createFullscreenModeLandingLayout keeps the full menu inside representativ
     [1280, 720],
     [768, 1024],
     [390, 844],
+    [640, 360],
   ]) {
     const layout = createFullscreenModeLandingLayout(width, height);
     const minLeft = Math.min(...layout.boxes.map((box) => box.left));
@@ -57,6 +58,8 @@ test("createFullscreenModeLandingLayout keeps the full menu inside representativ
     const maxRight = Math.max(...layout.boxes.map((box) => box.left + box.width));
     const maxBottom = Math.max(...layout.boxes.map((box) => box.top + box.height));
 
+    assert.equal(layout.width, width, `${width}x${height} should use the visible viewport width`);
+    assert.equal(layout.height, height, `${width}x${height} should use the visible viewport height`);
     assert.ok(minLeft >= 0, `${width}x${height} should not overflow left`);
     assert.ok(minTop >= 0, `${width}x${height} should not overflow top`);
     assert.ok(maxRight <= layout.width, `${width}x${height} should not overflow right`);

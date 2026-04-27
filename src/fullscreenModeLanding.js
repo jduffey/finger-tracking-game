@@ -72,23 +72,25 @@ export function hasVerifiedFullscreenMenuHand(hand) {
 
 export function createFullscreenModeLandingLayout(width, height) {
   const ticTacToeLayout = createTicTacToeLayout(width, height);
+  const layoutWidth = Math.max(1, Number.isFinite(width) ? width : ticTacToeLayout.width);
+  const layoutHeight = Math.max(1, Number.isFinite(height) ? height : ticTacToeLayout.height);
   const baseBoxWidth = ticTacToeLayout.resetBoxWidth;
   const baseBoxHeight = ticTacToeLayout.resetBoxHeight;
   const baseColumnGap = clamp(baseBoxWidth * 0.11, 12, 26);
   const baseRowGap = clamp(baseBoxHeight * 0.1, 12, 24);
-  const edgePadding = clamp(Math.min(ticTacToeLayout.width, ticTacToeLayout.height) * 0.04, 18, 42);
+  const edgePadding = clamp(Math.min(layoutWidth, layoutHeight) * 0.04, 18, 42);
   const contentTop = Math.max(
     edgePadding,
     clamp(
-      ticTacToeLayout.height * FULLSCREEN_LANDING_TOP_HUD_SAFE_RATIO,
+      layoutHeight * FULLSCREEN_LANDING_TOP_HUD_SAFE_RATIO,
       64,
       92,
     ),
   );
-  const contentBottom = ticTacToeLayout.height - edgePadding;
+  const contentBottom = layoutHeight - edgePadding;
   const contentHeight = Math.max(1, contentBottom - contentTop);
   const maxColumns = Math.min(MAX_COLUMNS, FULLSCREEN_CAMERA_LANDING_OPTIONS.length);
-  const availableWidth = Math.max(1, ticTacToeLayout.width - edgePadding * 2);
+  const availableWidth = Math.max(1, layoutWidth - edgePadding * 2);
   const availableHeight = contentHeight;
 
   let bestColumns = 1;
@@ -128,7 +130,7 @@ export function createFullscreenModeLandingLayout(width, height) {
         ? FULLSCREEN_CAMERA_LANDING_OPTIONS.length - row * columns || columns
         : columns;
     const rowWidth = rowItemCount * boxWidth + Math.max(0, rowItemCount - 1) * columnGap;
-    const rowStartX = (ticTacToeLayout.width - rowWidth) / 2;
+    const rowStartX = (layoutWidth - rowWidth) / 2;
 
     return {
       ...option,
@@ -140,8 +142,8 @@ export function createFullscreenModeLandingLayout(width, height) {
   });
 
   return {
-    width: ticTacToeLayout.width,
-    height: ticTacToeLayout.height,
+    width: layoutWidth,
+    height: layoutHeight,
     boxWidth,
     boxHeight,
     columnGap,
