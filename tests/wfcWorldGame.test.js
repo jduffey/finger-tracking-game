@@ -37,6 +37,23 @@ test("createWfcWorldGame creates a 16 by 12 finger-controlled world layout", () 
   assert.deepEqual(game.layout.controls.map((control) => control.id), ["generate", "reroll", "clear"]);
 });
 
+test("createWfcWorldGame keeps palette and controls inside short fullscreen viewports", () => {
+  for (const [width, height] of [
+    [640, 360],
+    [568, 320],
+  ]) {
+    const game = createWfcWorldGame(width, height);
+    const interactiveRects = [...game.layout.palette, ...game.layout.controls];
+
+    for (const rect of interactiveRects) {
+      assert.ok(rect.left >= 0, `${rect.id} should not overflow left at ${width}x${height}`);
+      assert.ok(rect.top >= 0, `${rect.id} should not overflow top at ${width}x${height}`);
+      assert.ok(rect.left + rect.width <= game.layout.width, `${rect.id} should not overflow right at ${width}x${height}`);
+      assert.ok(rect.top + rect.height <= game.layout.height, `${rect.id} should not overflow bottom at ${width}x${height}`);
+    }
+  }
+});
+
 test("mapPointerToWfcCell maps index fingertip coordinates into grid cells", () => {
   const game = createWfcWorldGame(1280, 720);
   const center = cellCenter(game, 3, 4);

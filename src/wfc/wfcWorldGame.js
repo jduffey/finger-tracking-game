@@ -56,11 +56,35 @@ export function createWfcWorldLayout(width, height) {
   const gridLeft = edge + Math.max(0, (availableGridWidth - gridWidth) / 2);
   const gridTop = topInset + Math.max(0, (availableGridHeight - gridHeight) / 2);
   const panelLeft = Math.min(safeWidth - panelWidth - edge, gridLeft + gridWidth + gap);
-  const tileGap = 10;
-  const paletteColumns = 2;
-  const paletteTileWidth = (panelWidth - tileGap) / paletteColumns;
-  const paletteTileHeight = clamp(paletteTileWidth * 0.72, 50, 74);
+  const compactPanel = safeHeight <= 520;
+  const tileGap = compactPanel ? 6 : 10;
+  const paletteColumns = compactPanel ? 4 : 2;
+  const paletteRows = Math.ceil(FINGERPRINT_WORLD_TILES.length / paletteColumns);
+  const controlGap = compactPanel ? 6 : 10;
+  const controlCount = 3;
+  const panelBottom = safeHeight - bottomInset;
+  const paletteTileWidth =
+    (panelWidth - tileGap * Math.max(0, paletteColumns - 1)) / paletteColumns;
   const paletteTop = topInset;
+  const controlHeight = clamp(
+    safeHeight * (compactPanel ? 0.095 : 0.08),
+    compactPanel ? 32 : 44,
+    compactPanel ? 42 : 58,
+  );
+  const availablePaletteHeight =
+    panelBottom -
+    paletteTop -
+    14 -
+    controlCount * controlHeight -
+    Math.max(0, controlCount - 1) * controlGap;
+  const paletteTileHeight = clamp(
+    Math.min(
+      paletteTileWidth * 0.72,
+      (availablePaletteHeight - Math.max(0, paletteRows - 1) * tileGap) / paletteRows,
+    ),
+    compactPanel ? 28 : 50,
+    compactPanel ? 52 : 74,
+  );
   const palette = FINGERPRINT_WORLD_TILES.map((tile, index) => {
     const col = index % paletteColumns;
     const row = Math.floor(index / paletteColumns);
@@ -73,13 +97,15 @@ export function createWfcWorldLayout(width, height) {
     };
   });
   const controlTop =
-    paletteTop + Math.ceil(FINGERPRINT_WORLD_TILES.length / paletteColumns) * (paletteTileHeight + tileGap) + 14;
-  const controlHeight = clamp(paletteTileHeight * 0.72, 44, 58);
+    paletteTop +
+    paletteRows * paletteTileHeight +
+    Math.max(0, paletteRows - 1) * tileGap +
+    14;
   const controls = ["generate", "reroll", "clear"].map((id, index) => ({
     id,
     label: id === "generate" ? "Generate" : id === "reroll" ? "Reroll" : "Clear",
     left: panelLeft,
-    top: controlTop + index * (controlHeight + 10),
+    top: controlTop + index * (controlHeight + controlGap),
     width: panelWidth,
     height: controlHeight,
   }));
