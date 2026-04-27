@@ -73,6 +73,7 @@ import {
   stepFullscreenModeLanding,
 } from "./fullscreenModeLanding.js";
 import {
+  areFullscreenExitControlStatesEqual,
   createFullscreenExitControlState,
   stepFullscreenExitControl,
 } from "./fullscreenExitControl.js";
@@ -7492,14 +7493,17 @@ export default function App() {
       Number.isFinite(cursorRef.current?.x) &&
       Number.isFinite(cursorRef.current?.y);
 
-    const nextState = stepFullscreenExitControl(fullscreenExitControlStateRef.current, deltaSeconds, {
+    const previousState = fullscreenExitControlStateRef.current;
+    const nextState = stepFullscreenExitControl(previousState, deltaSeconds, {
       handVerified,
       pointerActive,
       pointerX: pointerActive ? cursorRef.current.x - viewportMetrics.left : 0,
       pointerY: pointerActive ? cursorRef.current.y - viewportMetrics.top : 0,
     });
     fullscreenExitControlStateRef.current = nextState;
-    setFullscreenExitControlState(nextState);
+    if (!areFullscreenExitControlStatesEqual(previousState, nextState)) {
+      setFullscreenExitControlState(nextState);
+    }
 
     if (nextState.shouldExit) {
       returnToFullscreenCameraMenu("exit_box_hold");

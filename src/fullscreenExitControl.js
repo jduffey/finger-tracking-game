@@ -18,6 +18,24 @@ function isPointerInExitBox(layout, pointer) {
   );
 }
 
+function areFullscreenExitControlLayoutsEqual(previous, next) {
+  if (previous === next) {
+    return true;
+  }
+  if (!previous || !next) {
+    return false;
+  }
+
+  return (
+    previous.width === next.width &&
+    previous.height === next.height &&
+    previous.left === next.left &&
+    previous.top === next.top &&
+    previous.boxWidth === next.boxWidth &&
+    previous.boxHeight === next.boxHeight
+  );
+}
+
 export function createFullscreenExitControlLayout(width, height) {
   const ticTacToeLayout = createTicTacToeLayout(width, height);
   const exitWidth = clamp(ticTacToeLayout.resetBoxWidth * 0.82, 110, 176);
@@ -41,6 +59,23 @@ export function createFullscreenExitControlState(width, height) {
     holdMs: 0,
     shouldExit: false,
   };
+}
+
+export function areFullscreenExitControlStatesEqual(previous, next) {
+  if (previous === next) {
+    return true;
+  }
+  if (!previous || !next) {
+    return false;
+  }
+
+  return (
+    areFullscreenExitControlLayoutsEqual(previous.layout, next.layout) &&
+    previous.handVerified === next.handVerified &&
+    previous.holdActive === next.holdActive &&
+    previous.holdMs === next.holdMs &&
+    previous.shouldExit === next.shouldExit
+  );
 }
 
 export function stepFullscreenExitControl(state, dtSeconds, input) {

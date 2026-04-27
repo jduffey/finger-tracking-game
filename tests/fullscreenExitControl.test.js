@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { FULLSCREEN_MODE_LANDING_HOLD_MS } from "../src/fullscreenModeLanding.js";
 import {
+  areFullscreenExitControlStatesEqual,
   createFullscreenExitControlLayout,
   createFullscreenExitControlState,
   stepFullscreenExitControl,
@@ -111,4 +112,25 @@ test("stepFullscreenExitControl does not count points that are outside the visib
   assert.equal(next.holdActive, false);
   assert.equal(next.holdMs, 0);
   assert.equal(next.shouldExit, false);
+});
+
+test("areFullscreenExitControlStatesEqual ignores fresh object identity when visible state is unchanged", () => {
+  const base = createFullscreenExitControlState(1280, 720);
+  const unchanged = stepFullscreenExitControl(base, 1 / 60, {
+    handVerified: false,
+    pointerActive: false,
+    pointerX: 0,
+    pointerY: 0,
+  });
+  const pointer = getBoxCenter(base.layout);
+  const active = stepFullscreenExitControl(base, 1 / 60, {
+    handVerified: true,
+    pointerActive: true,
+    pointerX: pointer.x,
+    pointerY: pointer.y,
+  });
+
+  assert.notEqual(unchanged, base);
+  assert.equal(areFullscreenExitControlStatesEqual(base, unchanged), true);
+  assert.equal(areFullscreenExitControlStatesEqual(base, active), false);
 });
