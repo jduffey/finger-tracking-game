@@ -69,7 +69,7 @@ import {
   FULLSCREEN_LANDING_MODE,
   FULLSCREEN_MODE_LANDING_HOLD_MS,
   createFullscreenModeLandingState,
-  getVerifiedFullscreenMenuHand,
+  getVerifiedFullscreenMenuHandPointerInput,
   hasVerifiedFullscreenMenuHand,
   selectFullscreenModeLandingMode,
   stepFullscreenModeLanding,
@@ -7440,6 +7440,15 @@ export default function App() {
     };
   }
 
+  function getVerifiedFullscreenHoldControlInput(viewportMetrics) {
+    const renderMetrics = computeCameraRenderMetrics("contain");
+    return getVerifiedFullscreenMenuHandPointerInput(
+      fullscreenHandsRef.current,
+      viewportMetrics,
+      (point) => projectCameraPointToCanvas(point, renderMetrics),
+    );
+  }
+
   function updateFullscreenModeLandingSimulation(timestamp) {
     if (
       phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
@@ -7459,19 +7468,13 @@ export default function App() {
     const previousTimestamp = fullscreenModeLandingLastTickRef.current || timestamp;
     const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
     fullscreenModeLandingLastTickRef.current = timestamp;
-    const verifiedHand = getVerifiedFullscreenMenuHand(fullscreenHandsRef.current);
-    const handVerified = Boolean(verifiedHand);
-
-    const pointerActive =
-      handDetectedRef.current &&
-      handVerified &&
-      Number.isFinite(cursorRef.current?.x) &&
-      Number.isFinite(cursorRef.current?.y);
+    const holdInput = getVerifiedFullscreenHoldControlInput(viewportMetrics);
+    const pointerActive = handDetectedRef.current && holdInput.pointerActive;
     const nextState = stepFullscreenModeLanding(fullscreenModeLandingStateRef.current, deltaSeconds, {
-      handVerified,
+      handVerified: holdInput.handVerified,
       pointerActive,
-      pointerX: pointerActive ? cursorRef.current.x - viewportMetrics.left : 0,
-      pointerY: pointerActive ? cursorRef.current.y - viewportMetrics.top : 0,
+      pointerX: pointerActive ? holdInput.pointerX : 0,
+      pointerY: pointerActive ? holdInput.pointerY : 0,
     });
     fullscreenModeLandingStateRef.current = nextState;
     setFullscreenModeLandingState(nextState);
@@ -7522,20 +7525,15 @@ export default function App() {
     const previousTimestamp = fullscreenExitControlLastTickRef.current || timestamp;
     const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
     fullscreenExitControlLastTickRef.current = timestamp;
-    const verifiedHand = getVerifiedFullscreenMenuHand(fullscreenHandsRef.current);
-    const handVerified = Boolean(verifiedHand);
-    const pointerActive =
-      handDetectedRef.current &&
-      handVerified &&
-      Number.isFinite(cursorRef.current?.x) &&
-      Number.isFinite(cursorRef.current?.y);
+    const holdInput = getVerifiedFullscreenHoldControlInput(viewportMetrics);
+    const pointerActive = handDetectedRef.current && holdInput.pointerActive;
 
     const previousState = fullscreenExitControlStateRef.current;
     const nextState = stepFullscreenExitControl(previousState, deltaSeconds, {
-      handVerified,
+      handVerified: holdInput.handVerified,
       pointerActive,
-      pointerX: pointerActive ? cursorRef.current.x - viewportMetrics.left : 0,
-      pointerY: pointerActive ? cursorRef.current.y - viewportMetrics.top : 0,
+      pointerX: pointerActive ? holdInput.pointerX : 0,
+      pointerY: pointerActive ? holdInput.pointerY : 0,
     });
     fullscreenExitControlStateRef.current = nextState;
     if (!areFullscreenExitControlStatesEqual(previousState, nextState)) {
@@ -7569,22 +7567,17 @@ export default function App() {
     const previousTimestamp = fullscreenRestartControlLastTickRef.current || timestamp;
     const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
     fullscreenRestartControlLastTickRef.current = timestamp;
-    const verifiedHand = getVerifiedFullscreenMenuHand(fullscreenHandsRef.current);
-    const handVerified = Boolean(verifiedHand);
-    const pointerActive =
-      handDetectedRef.current &&
-      handVerified &&
-      Number.isFinite(cursorRef.current?.x) &&
-      Number.isFinite(cursorRef.current?.y);
+    const holdInput = getVerifiedFullscreenHoldControlInput(viewportMetrics);
+    const pointerActive = handDetectedRef.current && holdInput.pointerActive;
 
     const nextState = stepFullscreenRestartControl(
       fullscreenRestartControlStateRef.current,
       deltaSeconds,
       {
-        handVerified,
+        handVerified: holdInput.handVerified,
         pointerActive,
-        pointerX: pointerActive ? cursorRef.current.x - viewportMetrics.left : 0,
-        pointerY: pointerActive ? cursorRef.current.y - viewportMetrics.top : 0,
+        pointerX: pointerActive ? holdInput.pointerX : 0,
+        pointerY: pointerActive ? holdInput.pointerY : 0,
       },
     );
     fullscreenRestartControlStateRef.current = nextState;

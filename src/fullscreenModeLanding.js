@@ -75,6 +75,49 @@ export function getVerifiedFullscreenMenuHand(hands) {
   return candidates.find((hand) => hasVerifiedFullscreenMenuHand(hand)) ?? null;
 }
 
+export function getVerifiedFullscreenMenuHandPointerInput(hands, viewport, projectPoint) {
+  const verifiedHand = getVerifiedFullscreenMenuHand(hands);
+  if (!verifiedHand) {
+    return {
+      handVerified: false,
+      pointerActive: false,
+      pointerX: 0,
+      pointerY: 0,
+    };
+  }
+
+  const indexTip = verifiedHand.fingerTips?.index ?? verifiedHand.indexTip ?? null;
+  const projectedPoint =
+    typeof projectPoint === "function" && indexTip
+      ? projectPoint(indexTip)
+      : null;
+  const hasProjectedPoint =
+    Number.isFinite(projectedPoint?.x) && Number.isFinite(projectedPoint?.y);
+  const hasNormalizedPoint =
+    Number.isFinite(indexTip?.u) &&
+    Number.isFinite(indexTip?.v) &&
+    Number.isFinite(viewport?.width) &&
+    Number.isFinite(viewport?.height);
+  const pointerX = hasProjectedPoint
+    ? projectedPoint.x - (Number.isFinite(viewport?.left) ? viewport.left : 0)
+    : hasNormalizedPoint
+      ? indexTip.u * viewport.width
+      : 0;
+  const pointerY = hasProjectedPoint
+    ? projectedPoint.y - (Number.isFinite(viewport?.top) ? viewport.top : 0)
+    : hasNormalizedPoint
+      ? indexTip.v * viewport.height
+      : 0;
+  const pointerActive = hasProjectedPoint || hasNormalizedPoint;
+
+  return {
+    handVerified: true,
+    pointerActive,
+    pointerX: pointerActive ? pointerX : 0,
+    pointerY: pointerActive ? pointerY : 0,
+  };
+}
+
 export function createFullscreenModeLandingLayout(width, height) {
   const ticTacToeLayout = createTicTacToeLayout(width, height);
   const layoutWidth = Math.max(1, Number.isFinite(width) ? width : ticTacToeLayout.width);

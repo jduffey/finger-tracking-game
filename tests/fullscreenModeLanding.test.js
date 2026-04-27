@@ -9,6 +9,7 @@ import {
   FULLSCREEN_MODE_LANDING_HOLD_MS,
   createFullscreenModeLandingLayout,
   createFullscreenModeLandingState,
+  getVerifiedFullscreenMenuHandPointerInput,
   getVerifiedFullscreenMenuHand,
   hasVerifiedFullscreenMenuHand,
   selectFullscreenModeLandingMode,
@@ -136,6 +137,60 @@ test("getVerifiedFullscreenMenuHand selects the first hand with all required fin
   assert.equal(getVerifiedFullscreenMenuHand([partialHand, verifiedHand]), verifiedHand);
   assert.equal(getVerifiedFullscreenMenuHand([partialHand]), null);
   assert.equal(getVerifiedFullscreenMenuHand(null), null);
+});
+
+test("getVerifiedFullscreenMenuHandPointerInput binds hold input to the verified hand", () => {
+  const partialHand = {
+    id: "partial",
+    fingerTips: {
+      thumb: { u: 0.1, v: 0.1 },
+      index: { u: 0.2, v: 0.2 },
+    },
+  };
+  const verifiedHand = {
+    id: "verified",
+    fingerTips: {
+      thumb: { u: 0.1, v: 0.1 },
+      index: { u: 0.7, v: 0.4 },
+      middle: { u: 0.3, v: 0.3 },
+      ring: { u: 0.4, v: 0.4 },
+      pinky: { u: 0.5, v: 0.5 },
+    },
+  };
+
+  const input = getVerifiedFullscreenMenuHandPointerInput(
+    [partialHand, verifiedHand],
+    { left: 100, top: 40, width: 800, height: 600 },
+    (point) => ({ x: point.u * 800 + 100, y: point.v * 600 + 40 }),
+  );
+
+  assert.equal(input.handVerified, true);
+  assert.equal(input.pointerActive, true);
+  assert.equal(input.pointerX, 560);
+  assert.equal(input.pointerY, 240);
+});
+
+test("getVerifiedFullscreenMenuHandPointerInput stays inactive without a projected verified hand", () => {
+  const input = getVerifiedFullscreenMenuHandPointerInput(
+    [
+      {
+        id: "partial",
+        fingerTips: {
+          thumb: { u: 0.1, v: 0.1 },
+          index: { u: 0.2, v: 0.2 },
+        },
+      },
+    ],
+    { left: 0, top: 0, width: 800, height: 600 },
+    () => ({ x: 200, y: 200 }),
+  );
+
+  assert.deepEqual(input, {
+    handVerified: false,
+    pointerActive: false,
+    pointerX: 0,
+    pointerY: 0,
+  });
 });
 
 test("stepFullscreenModeLanding waits for a verified hand before starting a 1.00 second hold", () => {
