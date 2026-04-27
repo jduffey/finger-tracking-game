@@ -88,18 +88,41 @@ test("createTicTacToeGame keeps the reset box reachable on narrow portrait fulls
     ...createTicTacToeGame(360, 640),
     board: [TIC_TAC_TOE_PLAYER_MARK, null, null, null, null, null, null, null, null],
   };
-  const reachableX = game.layout.width - 1;
-  const reachableY = game.layout.resetBoxTop + game.layout.resetBoxHeight / 2;
+  const reachablePoint = getResetBoxCenter(game.layout);
 
   const holdingReset = stepTicTacToeGame(game, 1 / 60, {
     pointerActive: true,
-    pointerX: reachableX,
-    pointerY: reachableY,
+    pointerX: reachablePoint.x,
+    pointerY: reachablePoint.y,
     pinchActive: false,
   });
 
-  assert.ok(game.layout.resetBoxLeft < game.layout.width);
+  assert.ok(game.layout.resetBoxLeft >= 0);
+  assert.ok(game.layout.resetBoxLeft + game.layout.resetBoxWidth <= game.layout.width);
   assert.equal(holdingReset.resetHoldActive, true);
+});
+
+test("createTicTacToeGame stacks rails above and below the board on portrait viewports", () => {
+  const game = createTicTacToeGame(390, 844);
+  const layout = game.layout;
+
+  assert.equal(layout.layoutMode, "portrait-trays");
+  assert.ok(layout.playerRailLeft >= 0);
+  assert.ok(layout.playerRailLeft + layout.playerRailWidth <= layout.width);
+  assert.ok(layout.aiRailLeft >= 0);
+  assert.ok(layout.aiRailLeft + layout.aiRailWidth <= layout.width);
+  assert.ok(layout.playerRailTop + layout.playerRailHeight < layout.boardTop);
+  assert.ok(layout.aiRailTop > layout.boardTop + layout.boardSize);
+  assert.ok(layout.resetBoxTop > layout.aiRailTop + layout.aiRailHeight);
+
+  const pickedUp = stepTicTacToeGame(game, 1 / 60, {
+    pointerActive: true,
+    pointerX: layout.playerRailCenterX,
+    pointerY: layout.playerRailCenterY,
+    pinchActive: true,
+  });
+
+  assert.ok(pickedUp.draggingPiece);
 });
 
 test("stepTicTacToeGame lets the player drag a piece from the left rail into the board", () => {

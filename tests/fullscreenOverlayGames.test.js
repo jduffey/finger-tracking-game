@@ -7,6 +7,15 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
   const timestamp = 1234;
 
   runFullscreenOverlayGameUpdates(timestamp, {
+    updateFullscreenModeLandingSimulation(nextTimestamp) {
+      calls.push(["landing", nextTimestamp]);
+    },
+    updateFullscreenExitControlSimulation(nextTimestamp) {
+      calls.push(["exit", nextTimestamp]);
+    },
+    updateFullscreenRestartControlSimulation(nextTimestamp) {
+      calls.push(["restart", nextTimestamp]);
+    },
     updateFullscreenHandBounceSimulation(nextTimestamp) {
       calls.push(["hand-bounce", nextTimestamp]);
     },
@@ -21,6 +30,12 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
     },
     updateFullscreenFingerPongSimulation(nextTimestamp) {
       calls.push(["finger-pong", nextTimestamp]);
+    },
+    updateFullscreenSkyPatrolSimulation(nextTimestamp) {
+      calls.push(["sky-patrol", nextTimestamp]);
+    },
+    updateFullscreenWfcWorldSimulation(nextTimestamp) {
+      calls.push(["fingerprint-worlds", nextTimestamp]);
     },
     updateFullscreenInvadersSimulation(nextTimestamp) {
       calls.push(["invaders", nextTimestamp]);
@@ -37,11 +52,16 @@ test("runFullscreenOverlayGameUpdates dispatches fullscreen game loops once", ()
   });
 
   assert.deepEqual(calls, [
+    ["landing", timestamp],
+    ["exit", timestamp],
+    ["restart", timestamp],
     ["hand-bounce", timestamp],
     ["brick-dodger", timestamp],
     ["breakout", timestamp],
     ["breakout-coop", timestamp],
     ["finger-pong", timestamp],
+    ["sky-patrol", timestamp],
+    ["fingerprint-worlds", timestamp],
     ["invaders", timestamp],
     ["flappy", timestamp],
     ["missile-command", timestamp],

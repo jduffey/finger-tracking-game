@@ -1,11 +1,12 @@
 export const MISSILE_COMMAND_COUNTDOWN_MS = 2_000;
 export const MISSILE_COMMAND_THREAT_SCORE = 125;
+export const MISSILE_COMMAND_SCORE_BURST_MS = 760;
 
 const MISSILE_COMMAND_MAX_STEP_SECONDS = 0.05;
 const MISSILE_COMMAND_SPAWN_DELAY_START_MS = 1_400;
 const MISSILE_COMMAND_SPAWN_DELAY_END_MS = 650;
 const MISSILE_COMMAND_DIFFICULTY_RAMP_MS = 90_000;
-const MISSILE_COMMAND_INTERCEPT_COOLDOWN_MS = 180;
+export const MISSILE_COMMAND_INTERCEPT_COOLDOWN_MS = 180;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -19,11 +20,18 @@ function createIdFactory(start = 1) {
 export function createMissileCommandLayout(width, height) {
   const safeWidth = Math.max(360, Number.isFinite(width) ? width : 360);
   const safeHeight = Math.max(240, Number.isFinite(height) ? height : 240);
-  const groundY = safeHeight - clamp(safeHeight * 0.13, 64, 118);
+  const hudTopInset = clamp(safeHeight * 0.12, 58, 96);
+  const hudBottomInset = clamp(safeHeight * 0.1, 48, 88);
+  const groundBandHeight = clamp(safeHeight * 0.13, 64, 118);
+  const groundY = safeHeight - Math.max(groundBandHeight, hudBottomInset);
 
   return {
     width: safeWidth,
     height: safeHeight,
+    hudTopInset,
+    hudBottomInset,
+    playTopY: hudTopInset,
+    playBottomY: groundY,
     groundY,
     interceptorSpeed: Math.max(420, safeHeight * 0.82),
     threatBaseSpeed: Math.max(80, safeHeight * 0.16),
@@ -85,9 +93,10 @@ function getThreatSpeed(layout, elapsedMs = 0) {
   return layout.threatBaseSpeed + layout.threatSpeedBonus * progress;
 }
 
-function createExplosion(x, y, maxRadius, durationMs, color, id) {
+function createExplosion(x, y, maxRadius, durationMs, color, id, kind) {
   return {
     id: `explosion-${id}`,
+    kind,
     x,
     y,
     ageMs: 0,
@@ -95,6 +104,26 @@ function createExplosion(x, y, maxRadius, durationMs, color, id) {
     maxRadius,
     color,
   };
+}
+
+function createScoreBurst(x, y, value, id) {
+  return {
+    id: `score-burst-${id}`,
+    x,
+    y,
+    value,
+    ageMs: 0,
+    durationMs: MISSILE_COMMAND_SCORE_BURST_MS,
+  };
+}
+
+function ageScoreBursts(scoreBursts, dtMs) {
+  return (Array.isArray(scoreBursts) ? scoreBursts : [])
+    .map((burst) => ({
+      ...burst,
+      ageMs: burst.ageMs + dtMs,
+    }))
+    .filter((burst) => burst.ageMs < burst.durationMs);
 }
 
 export function getMissileCommandExplosionRadius(explosion) {
@@ -122,7 +151,7 @@ function createThreat(layout, structures, elapsedMs, threatId, rng = Math.random
   const target = aliveStructures[targetIndex];
   const margin = clamp(layout.width * 0.08, 28, 72);
   const startX = margin + rng() * Math.max(1, layout.width - margin * 2);
-  const startY = -clamp(layout.height * 0.1, 20, 54);
+  const startY = layout.playTopY ?? clamp(layout.height * 0.12, 58, 96);
   const targetX = target.x;
   const targetY = target.y - target.height * 0.48;
   const dx = targetX - startX;
@@ -216,6 +245,7 @@ export function createMissileCommandGame(width, height) {
     threats: [],
     interceptors: [],
     explosions: [],
+    scoreBursts: [],
     score: 0,
     threatsStopped: 0,
     status: "countdown",
@@ -226,6 +256,7 @@ export function createMissileCommandGame(width, height) {
     nextThreatId: 1,
     nextInterceptorId: 1,
     nextExplosionId: 1,
+    nextScoreBurstId: 1,
     message: "Pinch to fire",
   };
 }
@@ -241,6 +272,7 @@ export function stepMissileCommandGame(state, dtSeconds, rng = Math.random) {
     ...state,
     elapsedMs: state.elapsedMs + dtMs,
     cooldownMs: Math.max(0, state.cooldownMs - dtMs),
+    scoreBursts: ageScoreBursts(state.scoreBursts, dtMs),
   };
 
   if (nextState.status === "countdown") {
@@ -281,6 +313,7 @@ export function stepMissileCommandGame(state, dtSeconds, rng = Math.random) {
             520,
             "rgba(255, 117, 61, 0.78)",
             nextState.nextExplosionId,
+            "impact",
           ),
         ],
         nextExplosionId: nextState.nextExplosionId + 1,
@@ -334,6 +367,7 @@ export function stepMissileCommandGame(state, dtSeconds, rng = Math.random) {
             960,
             "rgba(255, 233, 122, 0.82)",
             nextState.nextExplosionId,
+            "interceptor",
           ),
         ],
         nextExplosionId: nextState.nextExplosionId + 1,
@@ -361,6 +395,7 @@ export function stepMissileCommandGame(state, dtSeconds, rng = Math.random) {
 
   let score = nextState.score;
   let threatsStopped = nextState.threatsStopped;
+  let nextScoreBursts = nextState.scoreBursts;
   const survivingThreats = [];
   for (const threat of nextThreats) {
     const hitExplosion = nextExplosions.find(
@@ -371,6 +406,19 @@ export function stepMissileCommandGame(state, dtSeconds, rng = Math.random) {
     if (hitExplosion) {
       score += MISSILE_COMMAND_THREAT_SCORE;
       threatsStopped += 1;
+      nextScoreBursts = [
+        ...nextScoreBursts,
+        createScoreBurst(
+          threat.x,
+          threat.y,
+          MISSILE_COMMAND_THREAT_SCORE,
+          nextState.nextScoreBurstId,
+        ),
+      ];
+      nextState = {
+        ...nextState,
+        nextScoreBurstId: nextState.nextScoreBurstId + 1,
+      };
       continue;
     }
     survivingThreats.push(threat);
@@ -384,6 +432,7 @@ export function stepMissileCommandGame(state, dtSeconds, rng = Math.random) {
     threats: survivingThreats,
     interceptors: nextInterceptors,
     explosions: nextExplosions,
+    scoreBursts: nextScoreBursts,
     score,
     threatsStopped,
     spawnTimerMs,

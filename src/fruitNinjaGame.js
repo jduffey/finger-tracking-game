@@ -22,6 +22,10 @@ const FRUIT_NINJA_POPUP_TTL_MS = 720;
 const FRUIT_NINJA_PARTICLE_TTL_MS = 640;
 const FRUIT_NINJA_SPLIT_TTL_MS = 820;
 const FRUIT_NINJA_MAX_STEP_SECONDS = 0.05;
+const FRUIT_NINJA_TARGET_SPEED_SCALE = 0.7;
+const FRUIT_NINJA_TARGET_GRAVITY = FRUIT_NINJA_GRAVITY * FRUIT_NINJA_TARGET_SPEED_SCALE ** 2;
+const FRUIT_NINJA_TARGET_APEX_MIN_RATIO = 0.2;
+const FRUIT_NINJA_TARGET_APEX_MAX_RATIO = 0.28;
 
 const FRUIT_COLORS = [
   { fill: "#ff6b57", accent: "#ffd4bf", name: "Sun Peach" },
@@ -65,15 +69,46 @@ function createTargetId(prefix, nextId) {
   return `${prefix}-${nextId}`;
 }
 
+function createTargetLaunch(layout, spawnX, spawnY, radius, horizontalRange, horizontalJitter, rng = Math.random) {
+  const horizontalDirection = spawnX < layout.width * 0.5 ? 1 : -1;
+  const vx =
+    (horizontalDirection * randomBetween(horizontalRange.min, horizontalRange.max, rng) +
+      randomBetween(horizontalJitter.min, horizontalJitter.max, rng)) *
+    FRUIT_NINJA_TARGET_SPEED_SCALE;
+  const desiredApexY = clamp(
+    randomBetween(
+      layout.height * FRUIT_NINJA_TARGET_APEX_MIN_RATIO,
+      layout.height * FRUIT_NINJA_TARGET_APEX_MAX_RATIO,
+      rng,
+    ),
+    radius * 1.15,
+    layout.height - radius * 2.5,
+  );
+  const riseDistance = Math.max(radius * 2.5, spawnY - desiredApexY);
+  const vy = -Math.sqrt(2 * FRUIT_NINJA_TARGET_GRAVITY * riseDistance);
+
+  return { vx, vy };
+}
+
 function createFruitTarget(layout, nextId, rng = Math.random) {
   const radius = layout.targetRadius * randomBetween(0.88, 1.18, rng);
   const spawnX = randomBetween(radius * 1.2, layout.width - radius * 1.2, rng);
   const spawnY = layout.height + radius * randomBetween(1.2, 1.9, rng);
-  const horizontalDirection = spawnX < layout.width * 0.5 ? 1 : -1;
-  const vx =
-    horizontalDirection * randomBetween(layout.width * 0.09, layout.width * 0.22, rng) +
-    randomBetween(-30, 30, rng);
-  const vy = -randomBetween(layout.height * 1.82, layout.height * 1.96, rng);
+  const { vx, vy } = createTargetLaunch(
+    layout,
+    spawnX,
+    spawnY,
+    radius,
+    {
+      min: layout.width * 0.09,
+      max: layout.width * 0.22,
+    },
+    {
+      min: -30,
+      max: 30,
+    },
+    rng,
+  );
   const palette = randomChoice(FRUIT_COLORS, rng) ?? FRUIT_COLORS[0];
   return {
     id: createTargetId("fruit", nextId),
@@ -96,11 +131,21 @@ function createBombTarget(layout, nextId, rng = Math.random) {
   const radius = layout.targetRadius * randomBetween(0.92, 1.08, rng);
   const spawnX = randomBetween(radius * 1.2, layout.width - radius * 1.2, rng);
   const spawnY = layout.height + radius * randomBetween(1.2, 2.0, rng);
-  const horizontalDirection = spawnX < layout.width * 0.5 ? 1 : -1;
-  const vx =
-    horizontalDirection * randomBetween(layout.width * 0.08, layout.width * 0.18, rng) +
-    randomBetween(-40, 40, rng);
-  const vy = -randomBetween(layout.height * 1.78, layout.height * 1.92, rng);
+  const { vx, vy } = createTargetLaunch(
+    layout,
+    spawnX,
+    spawnY,
+    radius,
+    {
+      min: layout.width * 0.08,
+      max: layout.width * 0.18,
+    },
+    {
+      min: -40,
+      max: 40,
+    },
+    rng,
+  );
   return {
     id: createTargetId("bomb", nextId),
     kind: "bomb",
@@ -445,7 +490,7 @@ export function stepFruitNinjaGame(state, dtSeconds, pointer, now = performance.
       ...target,
       x: target.x + target.vx * safeDt,
       y: target.y + target.vy * safeDt,
-      vy: target.vy + FRUIT_NINJA_GRAVITY * safeDt,
+      vy: target.vy + FRUIT_NINJA_TARGET_GRAVITY * safeDt,
       rotation: target.rotation + target.spin * safeDt,
     };
 

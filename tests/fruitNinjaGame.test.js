@@ -151,13 +151,30 @@ test("stepFruitNinjaGame spawns targets that can rise to roughly the top quarter
     0,
     null,
     0,
-    constantRng(0),
+    constantRng(0.5),
   );
 
   assert.equal(nextState.targets.length, 1);
   const target = nextState.targets[0];
-  const apexY = target.y - (target.vy * target.vy) / (2 * 1380);
-  assert.ok(apexY <= nextState.layout.height * 0.26);
+  assert.ok(Math.abs(Math.abs(target.vx) - nextState.layout.width * 0.155 * 0.7) < 0.001);
+
+  let simulatedState = nextState;
+  let highestY = target.y;
+  for (let index = 0; index < 240; index += 1) {
+    const nextStep = stepFruitNinjaGame(simulatedState, 1 / 60, null, (index + 1) * 16, () => 1);
+    const activeTarget = nextStep.targets.find((candidate) => candidate.id === target.id);
+    if (!activeTarget) {
+      break;
+    }
+    highestY = Math.min(highestY, activeTarget.y);
+    simulatedState = nextStep;
+    if (activeTarget.vy >= 0) {
+      break;
+    }
+  }
+
+  assert.ok(highestY >= nextState.layout.height * 0.19);
+  assert.ok(highestY <= nextState.layout.height * 0.29);
 });
 
 test("stepFruitNinjaGame leaves targets and score unchanged after gameover", () => {

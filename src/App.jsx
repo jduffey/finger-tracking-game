@@ -60,9 +60,30 @@ import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.j
 import {
   getFullscreenTrackedHandLimit,
   getFullscreenTrackedFingerNames,
+  shouldShowFullscreenNeonHandOutline,
   shouldShowFullscreenHandSkeleton,
   shouldShowFullscreenInvadersBanner,
 } from "./fullscreenGameUi.js";
+import {
+  FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
+  FULLSCREEN_LANDING_MODE,
+  FULLSCREEN_MODE_LANDING_HOLD_MS,
+  createFullscreenModeLandingState,
+  getVerifiedFullscreenMenuHandPointerInput,
+  hasVerifiedFullscreenMenuHand,
+  selectFullscreenModeLandingMode,
+  stepFullscreenModeLanding,
+} from "./fullscreenModeLanding.js";
+import {
+  areFullscreenExitControlStatesEqual,
+  createFullscreenExitControlState,
+  stepFullscreenExitControl,
+} from "./fullscreenExitControl.js";
+import {
+  createFullscreenRestartControlState,
+  stepFullscreenRestartControl,
+} from "./fullscreenRestartControl.js";
+import { getFullscreenRestartControlLabel } from "./fullscreenRestartModes.js";
 import { runFullscreenOverlayGameUpdates } from "./fullscreenOverlayGames.js";
 import {
   MISSILE_COMMAND_COUNTDOWN_MS,
@@ -73,10 +94,57 @@ import {
   stepMissileCommandGame,
 } from "./missileCommandGame.js";
 import {
+  getMissileCommandCooldownUi,
+  getMissileCommandCrosshairUi,
+  getMissileCommandCountdownUi,
+  getMissileCommandExplosionUi,
+  getMissileCommandGameOverUi,
+  getMissileCommandInterceptorUi,
+  getMissileCommandLegendItems,
+  getMissileCommandLaunchPreview,
+  getMissileCommandSceneClassName,
+  getMissileCommandStructureUi,
+  getMissileCommandTargetWarnings,
+  getMissileCommandThreatUi,
+  getMissileCommandTacticalMetrics,
+} from "./missileCommandUi.js";
+import {
   SPACE_INVADERS_ENEMY_SCORE,
   createSpaceInvadersGame,
   stepSpaceInvadersGame,
 } from "./spaceInvadersGame.js";
+import {
+  SKY_PATROL_STARTING_LIVES,
+  createSkyPatrolGame,
+  stepSkyPatrolGame,
+} from "./skyPatrolGame.js";
+import { WfcWorldRenderer } from "./wfc/WfcWorldRenderer.jsx";
+import {
+  WFC_WORLD_MODE_ID,
+  createWfcWorldGame,
+  createWfcWorldStepInput,
+  stepWfcWorldGame,
+} from "./wfc/wfcWorldGame.js";
+import {
+  areSkyPatrolHudStatesEqual,
+  createSkyPatrolCanvasRenderer,
+  getSkyPatrolHudState,
+} from "./skyPatrolCanvas.js";
+import { SKY_PATROL_SPRITE_ATLAS_URL } from "./skyPatrolSpriteAtlas.js";
+import {
+  SKY_PATROL_ACTIVE_HAND_CONNECTIONS,
+  SKY_PATROL_ACTIVE_HAND_TIP_INDEXES,
+  getSkyPatrolActiveHandTipStyle,
+} from "./skyPatrolHandOverlay.js";
+import {
+  getSkyPatrolFireCooldownUi,
+  getSkyPatrolGameOverUi,
+  getSkyPatrolGunCooldownUi,
+  getSkyPatrolHudItems,
+  getSkyPatrolLegendUi,
+  getSkyPatrolLifeIcons,
+  getSkyPatrolStartPromptUi,
+} from "./skyPatrolUi.js";
 import {
   TIC_TAC_TOE_AI_MARK,
   TIC_TAC_TOE_AI_PIECE_LIMIT,
@@ -84,10 +152,21 @@ import {
   TIC_TAC_TOE_PLAYER_PIECE_LIMIT,
   TIC_TAC_TOE_RESET_HOLD_MS,
   createTicTacToeGame,
+  getTicTacToeCellIndex,
   getTicTacToeCellRect,
   restartTicTacToeRound,
   stepTicTacToeGame,
 } from "./ticTacToeGame.js";
+import {
+  getTicTacToeCellUi,
+  getTicTacToeCursorUi,
+  getTicTacToeHudUi,
+  getTicTacToeMarkUi,
+  getTicTacToeReservePips,
+  getTicTacToeResetUi,
+  getTicTacToeTurnUi,
+  getTicTacToeWinningLineUi,
+} from "./ticTacToeUi.js";
 import {
   FRUIT_NINJA_BASE_SCORE,
   FRUIT_NINJA_BLADE_TRAIL_MS,
@@ -1405,7 +1484,10 @@ export default function App() {
   const [gestureControlOSSessionKey, setGestureControlOSSessionKey] = useState(0);
   const [fullscreenIndexPoints, setFullscreenIndexPoints] = useState([]);
   const [fullscreenTipPoints, setFullscreenTipPoints] = useState([]);
-  const [fullscreenGridMode, setFullscreenGridMode] = useState("square");
+  const [fullscreenGridMode, setFullscreenGridMode] = useState(FULLSCREEN_LANDING_MODE);
+  const [fullscreenModeLandingState, setFullscreenModeLandingState] = useState(null);
+  const [fullscreenExitControlState, setFullscreenExitControlState] = useState(null);
+  const [fullscreenRestartControlState, setFullscreenRestartControlState] = useState(null);
   const [fullscreenRingTrail, setFullscreenRingTrail] = useState([]);
   const [fullscreenRingTrailNow, setFullscreenRingTrailNow] = useState(() => performance.now());
   const [fullscreenPulseBursts, setFullscreenPulseBursts] = useState([]);
@@ -1416,6 +1498,8 @@ export default function App() {
   const [fullscreenBreakoutCoopState, setFullscreenBreakoutCoopState] = useState(null);
   const [fullscreenFingerPongState, setFullscreenFingerPongState] = useState(null);
   const [fullscreenFruitNinjaState, setFullscreenFruitNinjaState] = useState(null);
+  const [fullscreenSkyPatrolHud, setFullscreenSkyPatrolHud] = useState(null);
+  const [fullscreenWfcWorldState, setFullscreenWfcWorldState] = useState(null);
   const [fullscreenInvadersState, setFullscreenInvadersState] = useState(null);
   const [fullscreenFlappyState, setFullscreenFlappyState] = useState(null);
   const [fullscreenMissileCommandState, setFullscreenMissileCommandState] = useState(null);
@@ -1482,6 +1566,7 @@ export default function App() {
   const flightCanvasRef = useRef(null);
   const runnerStageRef = useRef(null);
   const runnerCanvasRef = useRef(null);
+  const fullscreenSkyPatrolCanvasRef = useRef(null);
   const inputTestCellRefs = useRef([]);
   const leftPaneResizeStateRef = useRef({
     startWidth: 0,
@@ -1511,6 +1596,15 @@ export default function App() {
   const fullscreenPulseBurstsRef = useRef([]);
   const fullscreenPulseLastEmitByIdRef = useRef({});
   const fullscreenGridModeRef = useRef(fullscreenGridMode);
+  const fullscreenModeLandingStateRef = useRef(null);
+  const fullscreenModeLandingViewportRef = useRef(null);
+  const fullscreenModeLandingLastTickRef = useRef(0);
+  const fullscreenExitControlStateRef = useRef(null);
+  const fullscreenExitControlViewportRef = useRef(null);
+  const fullscreenExitControlLastTickRef = useRef(0);
+  const fullscreenRestartControlStateRef = useRef(null);
+  const fullscreenRestartControlViewportRef = useRef(null);
+  const fullscreenRestartControlLastTickRef = useRef(0);
   const fullscreenHandsRef = useRef([]);
   const fullscreenPrimaryHandIdRef = useRef(null);
   const fullscreenHandBounceStateRef = useRef(null);
@@ -1523,6 +1617,20 @@ export default function App() {
   const fullscreenBreakoutCoopStateRef = useRef(null);
   const fullscreenFingerPongStateRef = useRef(null);
   const fullscreenFruitNinjaStateRef = useRef(null);
+  const fullscreenSkyPatrolHudRef = useRef(null);
+  const fullscreenSkyPatrolStateRef = useRef(null);
+  const fullscreenSkyPatrolRendererRef = useRef(null);
+  const fullscreenSkyPatrolSpriteImageRef = useRef(null);
+  const fullscreenWfcWorldStateRef = useRef(null);
+  const fullscreenWfcWorldViewportRef = useRef(null);
+  const fullscreenWfcWorldLastTickRef = useRef(0);
+  const fullscreenWfcWorldMouseInputRef = useRef({
+    pointerActive: false,
+    pointerX: 0,
+    pointerY: 0,
+    pinchActive: false,
+    pinchStarted: false,
+  });
   const fullscreenInvadersStateRef = useRef(null);
   const fullscreenBreakoutViewportRef = useRef(null);
   const fullscreenFingerPongViewportRef = useRef(null);
@@ -1533,6 +1641,8 @@ export default function App() {
   const fullscreenBreakoutCoopSecondaryPinchLatchRef = useRef(false);
   const fullscreenFingerPongLastTickRef = useRef(0);
   const fullscreenFruitNinjaLastTickRef = useRef(0);
+  const fullscreenSkyPatrolViewportRef = useRef(null);
+  const fullscreenSkyPatrolLastTickRef = useRef(0);
   const fullscreenInvadersLastTickRef = useRef(0);
   const fullscreenFlappyStateRef = useRef(null);
   const fullscreenFlappyViewportRef = useRef(null);
@@ -1640,6 +1750,8 @@ export default function App() {
   const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
   const isMinorityReportLabPhase = phase === PHASES.MINORITY_REPORT_LAB;
   const isImmersiveAppPhase = shouldUseImmersiveAppLayout(phase);
+  const isFullscreenModeLanding =
+    isFullscreenCameraPhase && fullscreenGridMode === FULLSCREEN_LANDING_MODE;
   const isFullscreenHandBounceMode =
     isFullscreenCameraPhase &&
     fullscreenGridMode === "hand-bounce" &&
@@ -1662,6 +1774,14 @@ export default function App() {
     isFullscreenCameraPhase &&
     fullscreenGridMode === "fruit-ninja" &&
     Boolean(fullscreenFruitNinjaState);
+  const isFullscreenSkyPatrolMode =
+    isFullscreenCameraPhase &&
+    fullscreenGridMode === "sky-patrol" &&
+    Boolean(fullscreenSkyPatrolHud);
+  const isFullscreenWfcWorldMode =
+    isFullscreenCameraPhase &&
+    fullscreenGridMode === WFC_WORLD_MODE_ID &&
+    Boolean(fullscreenWfcWorldState);
   const isFullscreenInvadersMode =
     isFullscreenCameraPhase && fullscreenGridMode === "invaders" && Boolean(fullscreenInvadersState);
   const isFullscreenFlappyMode =
@@ -1674,6 +1794,14 @@ export default function App() {
     isFullscreenCameraPhase &&
     fullscreenGridMode === "tic-tac-toe" &&
     Boolean(fullscreenTicTacToeState);
+  const fullscreenRestartControlLabel = getFullscreenRestartControlLabel(fullscreenGridMode, {
+    handBounce: fullscreenHandBounceState,
+    brickDodger: fullscreenBrickDodgerState,
+    fingerPong: fullscreenFingerPongState,
+    fruitNinja: fullscreenFruitNinjaState,
+    skyPatrol: fullscreenSkyPatrolHud,
+    missileCommand: fullscreenMissileCommandState,
+  });
   const fullscreenTicTacToeLayout = fullscreenTicTacToeState?.layout ?? null;
   const fullscreenTicTacToeHasActiveBoard =
     fullscreenTicTacToeState?.board?.some(Boolean) ?? false;
@@ -1691,10 +1819,58 @@ export default function App() {
     0,
     TIC_TAC_TOE_AI_PIECE_LIMIT - fullscreenTicTacToeAiCount,
   );
-  const fullscreenTicTacToeResetCountdown = (
+  const fullscreenTicTacToePlayerReservePips = getTicTacToeReservePips(
+    fullscreenTicTacToePlayerReserveCount,
+    TIC_TAC_TOE_PLAYER_PIECE_LIMIT,
+  );
+  const fullscreenTicTacToeAiReservePips = getTicTacToeReservePips(
+    fullscreenTicTacToeAiReserveCount,
+    TIC_TAC_TOE_AI_PIECE_LIMIT,
+  );
+  const fullscreenTicTacToeTurnUi = getTicTacToeTurnUi(fullscreenTicTacToeState);
+  const fullscreenTicTacToeHudUi = getTicTacToeHudUi(fullscreenTicTacToeState, {
+    playerWins: fullscreenTicTacToeState?.playerWins ?? 0,
+    aiWins: fullscreenTicTacToeState?.aiWins ?? 0,
+    draws: fullscreenTicTacToeState?.draws ?? 0,
+    boardCount: fullscreenTicTacToePlayerCount + fullscreenTicTacToeAiCount,
+  });
+  const fullscreenTicTacToeResetUi = getTicTacToeResetUi(fullscreenTicTacToeState, {
+    hasActiveBoard: fullscreenTicTacToeHasActiveBoard,
+    totalMs: TIC_TAC_TOE_RESET_HOLD_MS,
+  });
+  const fullscreenTicTacToeWinningLineUi = getTicTacToeWinningLineUi(
+    fullscreenTicTacToeLayout,
+    fullscreenTicTacToeState?.winningLine,
+  );
+  const fullscreenTicTacToeDraggingCellIndex =
+    fullscreenTicTacToeState?.draggingPiece && fullscreenTicTacToeLayout
+      ? getTicTacToeCellIndex(
+          fullscreenTicTacToeLayout,
+          fullscreenTicTacToeState.draggingPiece.x,
+          fullscreenTicTacToeState.draggingPiece.y,
+        )
+      : -1;
+  const fullscreenTicTacToeCursorUi = getTicTacToeCursorUi(fullscreenTicTacToeState, {
+    handDetected,
+    pinchActive,
+    draggingCellIndex: fullscreenTicTacToeDraggingCellIndex,
+  });
+  const fullscreenModeLandingCountdown = (
     Math.max(
       0,
-      TIC_TAC_TOE_RESET_HOLD_MS - (fullscreenTicTacToeState?.resetHoldMs ?? 0),
+      FULLSCREEN_MODE_LANDING_HOLD_MS - (fullscreenModeLandingState?.holdMs ?? 0),
+    ) / 1000
+  ).toFixed(2);
+  const fullscreenExitControlCountdown = (
+    Math.max(
+      0,
+      FULLSCREEN_MODE_LANDING_HOLD_MS - (fullscreenExitControlState?.holdMs ?? 0),
+    ) / 1000
+  ).toFixed(2);
+  const fullscreenRestartControlCountdown = (
+    Math.max(
+      0,
+      FULLSCREEN_MODE_LANDING_HOLD_MS - (fullscreenRestartControlState?.holdMs ?? 0),
     ) / 1000
   ).toFixed(2);
   const isSandboxPhase = phase === PHASES.SANDBOX;
@@ -1839,6 +2015,17 @@ export default function App() {
       Number.isFinite(cameraAspectRatio) && cameraAspectRatio > 0 ? cameraAspectRatio : 4 / 3;
     return createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio);
   }, [cameraAspectRatio, isFullscreenCameraPhase, viewport.height, viewport.width]);
+  const fullscreenTicTacToeCursorPoint =
+    isFullscreenTicTacToeMode &&
+    fullscreenCameraViewport &&
+    handDetected &&
+    Number.isFinite(cursor.x) &&
+    Number.isFinite(cursor.y)
+      ? {
+          x: clampValue(cursor.x - fullscreenCameraViewport.left, 0, fullscreenCameraViewport.width),
+          y: clampValue(cursor.y - fullscreenCameraViewport.top, 0, fullscreenCameraViewport.height),
+        }
+      : null;
 
   const fullscreenCameraGridMetrics = useMemo(() => {
     if (!fullscreenCameraViewport) {
@@ -1945,6 +2132,71 @@ export default function App() {
       y: clampValue(cursor.y - fullscreenCameraViewport.top, 0, fullscreenCameraViewport.height),
     };
   }, [cursor.x, cursor.y, fullscreenCameraViewport, handDetected, isFullscreenMissileCommandMode]);
+  const fullscreenMissileLaunchPreview = useMemo(
+    () => getMissileCommandLaunchPreview(fullscreenMissileCommandState, fullscreenMissileAimPoint),
+    [fullscreenMissileAimPoint, fullscreenMissileCommandState],
+  );
+  const fullscreenMissileCooldownUi = useMemo(
+    () => getMissileCommandCooldownUi(fullscreenMissileCommandState),
+    [fullscreenMissileCommandState],
+  );
+  const fullscreenMissileCrosshairUi = useMemo(
+    () =>
+      getMissileCommandCrosshairUi(
+        fullscreenMissileCommandState,
+        fullscreenMissileAimPoint,
+        handDetected,
+      ),
+    [fullscreenMissileAimPoint, fullscreenMissileCommandState, handDetected],
+  );
+  const fullscreenMissileTargetWarnings = useMemo(
+    () => getMissileCommandTargetWarnings(fullscreenMissileCommandState),
+    [fullscreenMissileCommandState],
+  );
+  const fullscreenMissileLegendItems = useMemo(
+    () => getMissileCommandLegendItems(MISSILE_COMMAND_THREAT_SCORE),
+    [],
+  );
+  const fullscreenMissileTacticalMetrics = useMemo(
+    () => getMissileCommandTacticalMetrics(fullscreenMissileCommandState),
+    [fullscreenMissileCommandState],
+  );
+  const fullscreenMissileCountdownUi = useMemo(
+    () => getMissileCommandCountdownUi(fullscreenMissileCommandState),
+    [fullscreenMissileCommandState],
+  );
+  const fullscreenMissileGameOverUi = useMemo(
+    () => getMissileCommandGameOverUi(fullscreenMissileCommandState, "Restart Defense"),
+    [fullscreenMissileCommandState],
+  );
+  const fullscreenSkyPatrolHudItems = useMemo(
+    () => getSkyPatrolHudItems(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
+  );
+  const fullscreenSkyPatrolFireCooldownUi = useMemo(
+    () => getSkyPatrolFireCooldownUi(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
+  );
+  const fullscreenSkyPatrolGunCooldownUi = useMemo(
+    () => getSkyPatrolGunCooldownUi(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
+  );
+  const fullscreenSkyPatrolLifeIcons = useMemo(
+    () => getSkyPatrolLifeIcons(fullscreenSkyPatrolHud?.lives ?? 0, SKY_PATROL_STARTING_LIVES),
+    [fullscreenSkyPatrolHud?.lives],
+  );
+  const fullscreenSkyPatrolGameOverUi = useMemo(
+    () => getSkyPatrolGameOverUi(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
+  );
+  const fullscreenSkyPatrolLegendUi = useMemo(
+    () => getSkyPatrolLegendUi(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
+  );
+  const fullscreenSkyPatrolStartPromptUi = useMemo(
+    () => getSkyPatrolStartPromptUi(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
+  );
 
   const fullscreenHexGridMetrics = useMemo(() => {
     if (!fullscreenCameraViewport) {
@@ -2246,6 +2498,9 @@ export default function App() {
     if (phase !== PHASES.FULLSCREEN_CAMERA) {
       setFullscreenIndexPoints([]);
       setFullscreenTipPoints([]);
+      setFullscreenModeLandingState(null);
+      setFullscreenExitControlState(null);
+      setFullscreenRestartControlState(null);
       setFullscreenRingTrail([]);
       setFullscreenPulseBursts([]);
       setFullscreenHandBounceState(null);
@@ -2254,6 +2509,7 @@ export default function App() {
       setFullscreenBreakoutCoopState(null);
       setFullscreenFingerPongState(null);
       setFullscreenFruitNinjaState(null);
+      setFullscreenWfcWorldState(null);
       setFullscreenInvadersState(null);
       setFullscreenFlappyState(null);
       setFullscreenMissileCommandState(null);
@@ -2264,6 +2520,30 @@ export default function App() {
   useEffect(() => {
     fullscreenGridModeRef.current = fullscreenGridMode;
   }, [fullscreenGridMode]);
+
+  useEffect(() => {
+    fullscreenModeLandingStateRef.current = fullscreenModeLandingState;
+  }, [fullscreenModeLandingState]);
+
+  useEffect(() => {
+    fullscreenExitControlStateRef.current = fullscreenExitControlState;
+  }, [fullscreenExitControlState]);
+
+  useEffect(() => {
+    fullscreenRestartControlStateRef.current = fullscreenRestartControlState;
+  }, [fullscreenRestartControlState]);
+
+  useEffect(() => {
+    fullscreenModeLandingViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
+
+  useEffect(() => {
+    fullscreenExitControlViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
+
+  useEffect(() => {
+    fullscreenRestartControlViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
 
   useEffect(() => {
     fullscreenHandBounceStateRef.current = fullscreenHandBounceState;
@@ -2314,6 +2594,18 @@ export default function App() {
   }, [fullscreenCameraViewport]);
 
   useEffect(() => {
+    fullscreenSkyPatrolViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
+
+  useEffect(() => {
+    fullscreenWfcWorldStateRef.current = fullscreenWfcWorldState;
+  }, [fullscreenWfcWorldState]);
+
+  useEffect(() => {
+    fullscreenWfcWorldViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
+
+  useEffect(() => {
     fullscreenFlappyStateRef.current = fullscreenFlappyState;
   }, [fullscreenFlappyState]);
 
@@ -2359,6 +2651,78 @@ export default function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isImmersiveAppPhase, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== FULLSCREEN_LANDING_MODE ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenModeLandingLastTickRef.current = 0;
+      if (fullscreenModeLandingStateRef.current) {
+        fullscreenModeLandingStateRef.current = null;
+        setFullscreenModeLandingState(null);
+      }
+      return undefined;
+    }
+
+    const nextLandingState = createFullscreenModeLandingState(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenModeLandingLastTickRef.current = 0;
+    fullscreenModeLandingStateRef.current = nextLandingState;
+    setFullscreenModeLandingState(nextLandingState);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode === FULLSCREEN_LANDING_MODE ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenExitControlLastTickRef.current = 0;
+      if (fullscreenExitControlStateRef.current) {
+        fullscreenExitControlStateRef.current = null;
+        setFullscreenExitControlState(null);
+      }
+      return undefined;
+    }
+
+    const nextExitControlState = createFullscreenExitControlState(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenExitControlLastTickRef.current = 0;
+    fullscreenExitControlStateRef.current = nextExitControlState;
+    setFullscreenExitControlState(nextExitControlState);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      !fullscreenRestartControlLabel ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenRestartControlLastTickRef.current = 0;
+      if (fullscreenRestartControlStateRef.current) {
+        fullscreenRestartControlStateRef.current = null;
+        setFullscreenRestartControlState(null);
+      }
+      return undefined;
+    }
+
+    const nextRestartControlState = createFullscreenRestartControlState(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenRestartControlLastTickRef.current = 0;
+    fullscreenRestartControlStateRef.current = nextRestartControlState;
+    setFullscreenRestartControlState(nextRestartControlState);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenRestartControlLabel, phase]);
 
   useEffect(() => {
     if (
@@ -2483,6 +2847,89 @@ export default function App() {
     fullscreenFruitNinjaLastTickRef.current = 0;
     fullscreenFruitNinjaStateRef.current = nextGame;
     setFullscreenFruitNinjaState(nextGame);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (typeof Image === "undefined") {
+      return undefined;
+    }
+
+    const spriteImage = new Image();
+    spriteImage.onload = () => {
+      fullscreenSkyPatrolSpriteImageRef.current = spriteImage;
+      const renderer = fullscreenSkyPatrolRendererRef.current;
+      renderer?.setSpriteImage(spriteImage);
+      if (fullscreenSkyPatrolStateRef.current) {
+        renderer?.draw(fullscreenSkyPatrolStateRef.current);
+      }
+    };
+    spriteImage.src = SKY_PATROL_SPRITE_ATLAS_URL;
+
+    return () => {
+      spriteImage.onload = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== "sky-patrol" ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenSkyPatrolLastTickRef.current = 0;
+      fullscreenSkyPatrolStateRef.current = null;
+      fullscreenSkyPatrolHudRef.current = null;
+      fullscreenSkyPatrolRendererRef.current?.clear();
+      fullscreenSkyPatrolRendererRef.current = null;
+      setFullscreenSkyPatrolHud(null);
+      return undefined;
+    }
+
+    const nextGame = createSkyPatrolGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenSkyPatrolLastTickRef.current = 0;
+    publishFullscreenSkyPatrolState(nextGame);
+    return undefined;
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== WFC_WORLD_MODE_ID ||
+      !fullscreenCameraViewport
+    ) {
+      fullscreenWfcWorldLastTickRef.current = 0;
+      fullscreenWfcWorldMouseInputRef.current = {
+        pointerActive: false,
+        pointerX: 0,
+        pointerY: 0,
+        pinchActive: false,
+        pinchStarted: false,
+      };
+      if (fullscreenWfcWorldStateRef.current) {
+        fullscreenWfcWorldStateRef.current = null;
+        setFullscreenWfcWorldState(null);
+      }
+      return undefined;
+    }
+
+    const nextGame = createWfcWorldGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
+    );
+    fullscreenWfcWorldLastTickRef.current = 0;
+    fullscreenWfcWorldMouseInputRef.current = {
+      pointerActive: false,
+      pointerX: 0,
+      pointerY: 0,
+      pinchActive: false,
+      pinchStarted: false,
+    };
+    fullscreenWfcWorldStateRef.current = nextGame;
+    setFullscreenWfcWorldState(nextGame);
     return undefined;
   }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
@@ -3934,6 +4381,7 @@ export default function App() {
     isCalibratingRef.current = false;
     calibrationSampleRef.current = null;
     setCalibrationSampleFrames(0);
+    setFullscreenGridMode(FULLSCREEN_LANDING_MODE);
     setPhase(PHASES.FULLSCREEN_CAMERA);
     phaseRef.current = PHASES.FULLSCREEN_CAMERA;
     setCalibrationMessage(
@@ -3958,6 +4406,15 @@ export default function App() {
     setPhase(PHASES.CALIBRATION);
     phaseRef.current = PHASES.CALIBRATION;
     setCalibrationMessage("Back on Calibration Input Test.");
+  }
+
+  function returnToFullscreenCameraMenu(reason = "manual_mode_select") {
+    appLog.info("Returning to fullscreen camera menu", {
+      reason,
+      previousMode: fullscreenGridModeRef.current,
+    });
+    fullscreenGridModeRef.current = FULLSCREEN_LANDING_MODE;
+    setFullscreenGridMode(FULLSCREEN_LANDING_MODE);
   }
 
   function updateSandboxPhysics(timestamp, pointerPoint, hasHand, grabNow) {
@@ -5795,6 +6252,94 @@ export default function App() {
     setFullscreenFingerPongState(nextGame);
   }
 
+  function restartFullscreenSkyPatrolGame() {
+    const viewportMetrics = fullscreenSkyPatrolViewportRef.current;
+    if (!viewportMetrics) {
+      return;
+    }
+    const nextGame = createSkyPatrolGame(viewportMetrics.width, viewportMetrics.height);
+    fullscreenSkyPatrolLastTickRef.current = 0;
+    publishFullscreenSkyPatrolState(nextGame);
+  }
+
+  function getFullscreenRestartControlStatesFromRefs() {
+    return {
+      handBounce: fullscreenHandBounceStateRef.current,
+      brickDodger: fullscreenBrickDodgerStateRef.current,
+      fingerPong: fullscreenFingerPongStateRef.current,
+      fruitNinja: fullscreenFruitNinjaStateRef.current,
+      skyPatrol: fullscreenSkyPatrolHudRef.current,
+      missileCommand: fullscreenMissileCommandStateRef.current,
+    };
+  }
+
+  function runFullscreenRestartControlActionFromRefs() {
+    const mode = fullscreenGridModeRef.current;
+    const label = getFullscreenRestartControlLabel(
+      mode,
+      getFullscreenRestartControlStatesFromRefs(),
+    );
+    if (!label) {
+      return false;
+    }
+
+    switch (mode) {
+      case "hand-bounce":
+        restartFullscreenHandBounceGame();
+        return true;
+      case "brick-dodger":
+        restartFullscreenBrickDodgerGame();
+        return true;
+      case "finger-pong":
+        restartFullscreenFingerPongGame();
+        return true;
+      case "fruit-ninja":
+        restartFullscreenFruitNinjaGame();
+        return true;
+      case "sky-patrol":
+        restartFullscreenSkyPatrolGame();
+        return true;
+      case "missile-command":
+        restartFullscreenMissileCommandGame();
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  function syncFullscreenSkyPatrolRenderer() {
+    const canvas = fullscreenSkyPatrolCanvasRef.current;
+    const viewportMetrics = fullscreenSkyPatrolViewportRef.current;
+    if (!canvas || !viewportMetrics) {
+      return null;
+    }
+
+    let renderer = fullscreenSkyPatrolRendererRef.current;
+    if (!renderer || renderer.canvas !== canvas) {
+      renderer = createSkyPatrolCanvasRenderer(canvas, {
+        spriteImage: fullscreenSkyPatrolSpriteImageRef.current,
+      });
+      fullscreenSkyPatrolRendererRef.current = renderer;
+    }
+
+    renderer.setSpriteImage(fullscreenSkyPatrolSpriteImageRef.current);
+    renderer.resize(viewportMetrics.width, viewportMetrics.height);
+    return renderer;
+  }
+
+  function publishFullscreenSkyPatrolState(nextState) {
+    fullscreenSkyPatrolStateRef.current = nextState;
+
+    const nextHud = getSkyPatrolHudState(nextState);
+    if (!areSkyPatrolHudStatesEqual(fullscreenSkyPatrolHudRef.current, nextHud)) {
+      fullscreenSkyPatrolHudRef.current = nextHud;
+      setFullscreenSkyPatrolHud(nextHud);
+    }
+
+    const renderer = syncFullscreenSkyPatrolRenderer();
+    renderer?.draw(nextState);
+  }
+
   function restartFullscreenTicTacToeGame() {
     const existingGame = fullscreenTicTacToeStateRef.current;
     if (existingGame?.layout) {
@@ -6451,6 +6996,73 @@ export default function App() {
     }
   }
 
+  function drawNeonActiveHandOutline(hands) {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+    const activeHand = Array.isArray(hands) ? hands[0] ?? null : null;
+    const landmarks = Array.isArray(activeHand?.landmarks) ? activeHand.landmarks : [];
+    if (landmarks.length === 0) {
+      return;
+    }
+    const renderMetrics = computeCameraRenderMetrics();
+
+    const drawConnection = (startIndex, endIndex) => {
+      const projectedStart = projectCameraPointToCanvas(landmarks[startIndex], renderMetrics);
+      const projectedEnd = projectCameraPointToCanvas(landmarks[endIndex], renderMetrics);
+      if (!projectedStart || !projectedEnd) {
+        return;
+      }
+      ctx.beginPath();
+      ctx.moveTo(projectedStart.x, projectedStart.y);
+      ctx.lineTo(projectedEnd.x, projectedEnd.y);
+      ctx.stroke();
+    };
+
+    const drawHandConnections = () => {
+      for (const [startIndex, endIndex] of SKY_PATROL_ACTIVE_HAND_CONNECTIONS) {
+        drawConnection(startIndex, endIndex);
+      }
+    };
+
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.shadowColor = "rgba(80, 255, 230, 0.24)";
+    ctx.shadowBlur = 20;
+    ctx.strokeStyle = "rgba(64, 255, 225, 0.18)";
+    ctx.lineWidth = 8;
+    drawHandConnections();
+
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = "rgba(222, 255, 250, 0.24)";
+    ctx.lineWidth = 2.4;
+    drawHandConnections();
+
+    const tipStyle = getSkyPatrolActiveHandTipStyle(pinchStateRef.current);
+    for (const tipIndex of SKY_PATROL_ACTIVE_HAND_TIP_INDEXES) {
+      const projectedTip = projectCameraPointToCanvas(landmarks[tipIndex], renderMetrics);
+      if (!projectedTip) {
+        continue;
+      }
+      ctx.fillStyle = tipStyle.fill;
+      ctx.beginPath();
+      ctx.arc(projectedTip.x, projectedTip.y, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = tipStyle.stroke;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(projectedTip.x, projectedTip.y, 10, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawPoseOverlay(pose, hands = []) {
     const canvas = overlayCanvasRef.current;
     if (!canvas) {
@@ -6610,7 +7222,11 @@ export default function App() {
   function getFullscreenIndexOverlayPoints(hands) {
     const renderMetrics = computeCameraRenderMetrics("contain");
     const safeHands = Array.isArray(hands) ? hands : [];
-    return safeHands
+    const eligibleHands =
+      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE
+        ? safeHands.filter((hand) => hasVerifiedFullscreenMenuHand(hand))
+        : safeHands;
+    return eligibleHands
       .map((hand, handIndex) => {
         const indexTip = hand?.fingerTips?.index ?? hand?.indexTip ?? null;
         const projectedPoint = projectCameraPointToCanvas(indexTip, renderMetrics);
@@ -6630,11 +7246,15 @@ export default function App() {
   function getFullscreenTipOverlayPoints(hands) {
     const renderMetrics = computeCameraRenderMetrics("contain");
     const safeHands = Array.isArray(hands) ? hands : [];
+    const eligibleHands =
+      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE
+        ? safeHands.filter((hand) => hasVerifiedFullscreenMenuHand(hand))
+        : safeHands;
     const trackedFingerNames = getFullscreenTrackedFingerNames(
       fullscreenGridModeRef.current,
       EXTENT_FINGER_NAMES,
     );
-    return safeHands.flatMap((hand, handIndex) => {
+    return eligibleHands.flatMap((hand, handIndex) => {
       const handId = hand?.id ?? hand?.label ?? `hand-${handIndex}`;
       return trackedFingerNames.map((fingerName) => {
         const tip = hand?.fingerTips?.[fingerName] ?? hand?.[`${fingerName}Tip`] ?? null;
@@ -6757,12 +7377,21 @@ export default function App() {
     const tipPoints = getFullscreenTipOverlayPoints(hands);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    if (shouldShowFullscreenNeonHandOutline(fullscreenGridModeRef.current)) {
+      drawNeonActiveHandOutline(hands);
+      return {
+        indexPoints,
+        tipPoints,
+      };
+    }
+
     if (
       fullscreenGridModeRef.current === "hand-bounce" ||
       fullscreenGridModeRef.current === "brick-dodger" ||
       fullscreenGridModeRef.current === "breakout-coop" ||
       fullscreenGridModeRef.current === "breakout" ||
       fullscreenGridModeRef.current === "fruit-ninja" ||
+      fullscreenGridModeRef.current === "sky-patrol" ||
       fullscreenGridModeRef.current === "invaders" ||
       fullscreenGridModeRef.current === "flappy" ||
       fullscreenGridModeRef.current === "missile-command"
@@ -6809,6 +7438,156 @@ export default function App() {
       indexPoints,
       tipPoints,
     };
+  }
+
+  function getVerifiedFullscreenHoldControlInput(viewportMetrics) {
+    const renderMetrics = computeCameraRenderMetrics("contain");
+    return getVerifiedFullscreenMenuHandPointerInput(
+      fullscreenHandsRef.current,
+      viewportMetrics,
+      (point) => projectCameraPointToCanvas(point, renderMetrics),
+    );
+  }
+
+  function updateFullscreenModeLandingSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== FULLSCREEN_LANDING_MODE ||
+      !fullscreenModeLandingStateRef.current
+    ) {
+      fullscreenModeLandingLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenModeLandingViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenModeLandingLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenModeLandingLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenModeLandingLastTickRef.current = timestamp;
+    const holdInput = getVerifiedFullscreenHoldControlInput(viewportMetrics);
+    const pointerActive = handDetectedRef.current && holdInput.pointerActive;
+    const nextState = stepFullscreenModeLanding(fullscreenModeLandingStateRef.current, deltaSeconds, {
+      handVerified: holdInput.handVerified,
+      pointerActive,
+      pointerX: pointerActive ? holdInput.pointerX : 0,
+      pointerY: pointerActive ? holdInput.pointerY : 0,
+    });
+    fullscreenModeLandingStateRef.current = nextState;
+    setFullscreenModeLandingState(nextState);
+
+    if (nextState.selectedModeId === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID) {
+      returnFromFullscreenCameraScreen();
+      return;
+    }
+
+    if (nextState.selectedModeId && nextState.selectedModeId !== fullscreenGridModeRef.current) {
+      setFullscreenGridMode(nextState.selectedModeId);
+    }
+  }
+
+  function handleFullscreenModeLandingBoxClick(event, modeId) {
+    event.preventDefault();
+    event.stopPropagation();
+    const nextState = selectFullscreenModeLandingMode(fullscreenModeLandingStateRef.current, modeId);
+    fullscreenModeLandingStateRef.current = nextState;
+    setFullscreenModeLandingState(nextState);
+
+    if (nextState.selectedModeId === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID) {
+      returnFromFullscreenCameraScreen();
+      return;
+    }
+
+    if (nextState.selectedModeId && nextState.selectedModeId !== fullscreenGridModeRef.current) {
+      setFullscreenGridMode(nextState.selectedModeId);
+    }
+  }
+
+  function updateFullscreenExitControlSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE ||
+      !fullscreenExitControlStateRef.current
+    ) {
+      fullscreenExitControlLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenExitControlViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenExitControlLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenExitControlLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenExitControlLastTickRef.current = timestamp;
+    const holdInput = getVerifiedFullscreenHoldControlInput(viewportMetrics);
+    const pointerActive = handDetectedRef.current && holdInput.pointerActive;
+
+    const previousState = fullscreenExitControlStateRef.current;
+    const nextState = stepFullscreenExitControl(previousState, deltaSeconds, {
+      handVerified: holdInput.handVerified,
+      pointerActive,
+      pointerX: pointerActive ? holdInput.pointerX : 0,
+      pointerY: pointerActive ? holdInput.pointerY : 0,
+    });
+    fullscreenExitControlStateRef.current = nextState;
+    if (!areFullscreenExitControlStatesEqual(previousState, nextState)) {
+      setFullscreenExitControlState(nextState);
+    }
+
+    if (nextState.shouldExit) {
+      returnToFullscreenCameraMenu("exit_box_hold");
+    }
+  }
+
+  function updateFullscreenRestartControlSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      !getFullscreenRestartControlLabel(
+        fullscreenGridModeRef.current,
+        getFullscreenRestartControlStatesFromRefs(),
+      ) ||
+      !fullscreenRestartControlStateRef.current
+    ) {
+      fullscreenRestartControlLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenRestartControlViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenRestartControlLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenRestartControlLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenRestartControlLastTickRef.current = timestamp;
+    const holdInput = getVerifiedFullscreenHoldControlInput(viewportMetrics);
+    const pointerActive = handDetectedRef.current && holdInput.pointerActive;
+
+    const nextState = stepFullscreenRestartControl(
+      fullscreenRestartControlStateRef.current,
+      deltaSeconds,
+      {
+        handVerified: holdInput.handVerified,
+        pointerActive,
+        pointerX: pointerActive ? holdInput.pointerX : 0,
+        pointerY: pointerActive ? holdInput.pointerY : 0,
+      },
+    );
+    fullscreenRestartControlStateRef.current = nextState;
+    setFullscreenRestartControlState(nextState);
+
+    if (nextState.shouldRestart && runFullscreenRestartControlActionFromRefs()) {
+      fullscreenRestartControlLastTickRef.current = timestamp;
+      fullscreenRestartControlStateRef.current = null;
+      setFullscreenRestartControlState(null);
+    }
   }
 
   function updateFullscreenHandBounceSimulation(timestamp) {
@@ -7060,6 +7839,142 @@ export default function App() {
     setFullscreenFruitNinjaState(nextState);
   }
 
+  function updateFullscreenSkyPatrolSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== "sky-patrol" ||
+      !fullscreenSkyPatrolStateRef.current
+    ) {
+      fullscreenSkyPatrolLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenSkyPatrolViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenSkyPatrolLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenSkyPatrolLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenSkyPatrolLastTickRef.current = timestamp;
+
+    const nextState = stepSkyPatrolGame(
+      fullscreenSkyPatrolStateRef.current,
+      deltaSeconds,
+      {
+        pointerActive:
+          handDetectedRef.current &&
+          Number.isFinite(cursorRef.current?.x) &&
+          Number.isFinite(cursorRef.current?.y),
+        pointerX: handDetectedRef.current
+          ? clampValue(cursorRef.current?.x - viewportMetrics.left, 0, viewportMetrics.width)
+          : fullscreenSkyPatrolStateRef.current.ship.x,
+        pointerY: handDetectedRef.current
+          ? clampValue(cursorRef.current?.y - viewportMetrics.top, 0, viewportMetrics.height)
+          : fullscreenSkyPatrolStateRef.current.ship.y,
+        fireRequested: handDetectedRef.current && pinchStateRef.current,
+      },
+    );
+    publishFullscreenSkyPatrolState(nextState);
+  }
+
+  function getFullscreenWfcWorldMousePoint(event) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
+  }
+
+  function handleFullscreenWfcWorldMouseDown(event) {
+    if (event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    const point = getFullscreenWfcWorldMousePoint(event);
+    fullscreenWfcWorldMouseInputRef.current = {
+      pointerActive: true,
+      pointerX: point.x,
+      pointerY: point.y,
+      pinchActive: true,
+      pinchStarted: true,
+    };
+  }
+
+  function handleFullscreenWfcWorldMouseMove(event) {
+    const currentMouseInput = fullscreenWfcWorldMouseInputRef.current;
+    if (!currentMouseInput.pinchActive) {
+      return;
+    }
+    const point = getFullscreenWfcWorldMousePoint(event);
+    fullscreenWfcWorldMouseInputRef.current = {
+      ...currentMouseInput,
+      pointerActive: true,
+      pointerX: point.x,
+      pointerY: point.y,
+      pinchActive: true,
+    };
+  }
+
+  function stopFullscreenWfcWorldMouseInput(event) {
+    const currentMouseInput = fullscreenWfcWorldMouseInputRef.current;
+    if (!currentMouseInput.pinchActive && !currentMouseInput.pinchStarted) {
+      return;
+    }
+    const point = getFullscreenWfcWorldMousePoint(event);
+    fullscreenWfcWorldMouseInputRef.current = {
+      pointerActive: Boolean(currentMouseInput.pinchStarted),
+      pointerX: point.x,
+      pointerY: point.y,
+      pinchActive: false,
+      pinchStarted: Boolean(currentMouseInput.pinchStarted),
+    };
+  }
+
+  function updateFullscreenWfcWorldSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== WFC_WORLD_MODE_ID ||
+      !fullscreenWfcWorldStateRef.current
+    ) {
+      fullscreenWfcWorldLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenWfcWorldViewportRef.current;
+    if (!viewportMetrics) {
+      fullscreenWfcWorldLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenWfcWorldLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenWfcWorldLastTickRef.current = timestamp;
+
+    const mouseInput = fullscreenWfcWorldMouseInputRef.current;
+    const nextState = stepWfcWorldGame(
+      fullscreenWfcWorldStateRef.current,
+      deltaSeconds,
+      createWfcWorldStepInput({
+        viewport: viewportMetrics,
+        handDetected: handDetectedRef.current,
+        cursor: cursorRef.current,
+        pinchActive: pinchStateRef.current,
+        mouseInput,
+      }),
+    );
+    if (mouseInput.pinchStarted) {
+      fullscreenWfcWorldMouseInputRef.current = {
+        ...mouseInput,
+        pointerActive: Boolean(mouseInput.pinchActive),
+        pinchStarted: false,
+      };
+    }
+    fullscreenWfcWorldStateRef.current = nextState;
+    setFullscreenWfcWorldState(nextState);
+  }
+
   function updateFullscreenInvadersSimulation(timestamp) {
     if (
       phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
@@ -7187,11 +8102,16 @@ export default function App() {
 
   function updateFullscreenOverlayGames(timestamp) {
     runFullscreenOverlayGameUpdates(timestamp, {
+      updateFullscreenModeLandingSimulation,
+      updateFullscreenExitControlSimulation,
+      updateFullscreenRestartControlSimulation,
       updateFullscreenHandBounceSimulation,
       updateFullscreenBrickDodgerSimulation,
       updateFullscreenBreakoutSimulation,
       updateFullscreenBreakoutCoopSimulation,
       updateFullscreenFingerPongSimulation,
+      updateFullscreenSkyPatrolSimulation,
+      updateFullscreenWfcWorldSimulation,
       updateFullscreenInvadersSimulation,
       updateFullscreenFlappySimulation,
       updateFullscreenMissileCommandSimulation,
@@ -8835,7 +9755,47 @@ export default function App() {
             autoPlay
           />
           <canvas ref={overlayCanvasRef} className="camera-overlay" />
-          {fullscreenGridMode === "hex" ? (
+          {isFullscreenModeLanding ? (
+            <div
+              className="fullscreen-camera-mode-landing"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              {fullscreenModeLandingState?.layout?.boxes?.map((box) => (
+                <div
+                  key={box.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open ${box.label}`}
+                  className={`fullscreen-camera-mode-landing-box ${box.category.toLowerCase()} ${
+                    fullscreenModeLandingState?.holdModeId === box.id ? "active" : ""
+                  }`}
+                  onClick={(event) => handleFullscreenModeLandingBoxClick(event, box.id)}
+                  style={{
+                    left: `${box.left}px`,
+                    top: `${box.top}px`,
+                    width: `${box.width}px`,
+                    height: `${box.height}px`,
+                  }}
+                >
+                  <span className="fullscreen-camera-mode-landing-category">{box.category}</span>
+                  <span className="fullscreen-camera-mode-landing-title">{box.label}</span>
+                  <span className="fullscreen-camera-mode-landing-countdown">
+                    {fullscreenModeLandingState?.handVerified &&
+                    fullscreenModeLandingState?.holdModeId === box.id
+                      ? fullscreenModeLandingCountdown
+                      : (FULLSCREEN_MODE_LANDING_HOLD_MS / 1000).toFixed(2)}
+                  </span>
+                  <span className="fullscreen-camera-mode-landing-hint">
+                    {!fullscreenModeLandingState?.handVerified
+                      ? "Show 5 tips"
+                      : fullscreenModeLandingState?.holdModeId === box.id
+                      ? "Keep holding"
+                      : "Hold to open"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : fullscreenGridMode === "hex" ? (
             <div className="fullscreen-camera-hex-grid" style={fullscreenHexGridMetrics?.style ?? undefined}>
               {fullscreenHexGridMetrics?.cells?.map((cell) => (
                 <div
@@ -9280,13 +10240,15 @@ export default function App() {
               />
               <div
                 className={`fullscreen-camera-tic-tac-toe-rail player ${
-                  fullscreenTicTacToeState?.status === "player-turn" ? "active" : ""
-                } ${fullscreenTicTacToeState?.draggingPiece ? "dragging" : ""}`}
+                  fullscreenTicTacToeTurnUi.playerRailState
+                } ${fullscreenTicTacToeLayout?.layoutMode ?? "landscape-rails"} ${
+                  fullscreenTicTacToeState?.draggingPiece ? "dragging" : ""
+                }`}
                 style={{
-                  left: `${(fullscreenTicTacToeLayout?.playerRailCenterX ?? 0) - (fullscreenTicTacToeLayout?.railWidth ?? 0) / 2}px`,
-                  top: `${fullscreenTicTacToeLayout?.railTop ?? 0}px`,
-                  width: `${fullscreenTicTacToeLayout?.railWidth ?? 0}px`,
-                  height: `${fullscreenTicTacToeLayout?.railHeight ?? 0}px`,
+                  left: `${fullscreenTicTacToeLayout?.playerRailLeft ?? 0}px`,
+                  top: `${fullscreenTicTacToeLayout?.playerRailTop ?? 0}px`,
+                  width: `${fullscreenTicTacToeLayout?.playerRailWidth ?? 0}px`,
+                  height: `${fullscreenTicTacToeLayout?.playerRailHeight ?? 0}px`,
                 }}
               >
                 {[-1, 0, 1].map((offset, index) => (
@@ -9294,8 +10256,14 @@ export default function App() {
                     key={`tic-tac-toe-player-stack-${index}`}
                     className="fullscreen-camera-tic-tac-toe-reserve-piece player"
                     style={{
-                      left: "50%",
-                      top: `${(fullscreenTicTacToeLayout?.railHeight ?? 0) / 2 + offset * (fullscreenTicTacToeLayout?.reserveStepY ?? 0)}px`,
+                      left:
+                        fullscreenTicTacToeLayout?.reserveAxis === "x"
+                          ? `${(fullscreenTicTacToeLayout?.playerRailWidth ?? 0) / 2 + offset * (fullscreenTicTacToeLayout?.reserveStepX ?? 0)}px`
+                          : "50%",
+                      top:
+                        fullscreenTicTacToeLayout?.reserveAxis === "x"
+                          ? "50%"
+                          : `${(fullscreenTicTacToeLayout?.playerRailHeight ?? 0) / 2 + offset * (fullscreenTicTacToeLayout?.reserveStepY ?? 0)}px`,
                       width: `${fullscreenTicTacToeLayout?.reservePieceSize ?? 0}px`,
                       height: `${fullscreenTicTacToeLayout?.reservePieceSize ?? 0}px`,
                       opacity:
@@ -9325,19 +10293,29 @@ export default function App() {
                   </span>
                 </div>
                 <div className="fullscreen-camera-tic-tac-toe-rail-label">Your Rail</div>
+                <div className="fullscreen-camera-tic-tac-toe-rail-pips player" aria-hidden="true">
+                  {fullscreenTicTacToePlayerReservePips.map((pip) => (
+                    <span
+                      key={`player-reserve-pip-${pip.index}`}
+                      className={`fullscreen-camera-tic-tac-toe-rail-pip ${pip.className}`}
+                    />
+                  ))}
+                </div>
                 <div className="fullscreen-camera-tic-tac-toe-rail-count">
                   {fullscreenTicTacToePlayerReserveCount} left
                 </div>
               </div>
               <div
                 className={`fullscreen-camera-tic-tac-toe-rail ai ${
+                  fullscreenTicTacToeTurnUi.aiRailState
+                } ${fullscreenTicTacToeLayout?.layoutMode ?? "landscape-rails"} ${
                   fullscreenTicTacToeState?.status === "ai-turn" ? "thinking" : ""
                 }`}
                 style={{
-                  left: `${(fullscreenTicTacToeLayout?.aiRailCenterX ?? 0) - (fullscreenTicTacToeLayout?.railWidth ?? 0) / 2}px`,
-                  top: `${fullscreenTicTacToeLayout?.railTop ?? 0}px`,
-                  width: `${fullscreenTicTacToeLayout?.railWidth ?? 0}px`,
-                  height: `${fullscreenTicTacToeLayout?.railHeight ?? 0}px`,
+                  left: `${fullscreenTicTacToeLayout?.aiRailLeft ?? 0}px`,
+                  top: `${fullscreenTicTacToeLayout?.aiRailTop ?? 0}px`,
+                  width: `${fullscreenTicTacToeLayout?.aiRailWidth ?? 0}px`,
+                  height: `${fullscreenTicTacToeLayout?.aiRailHeight ?? 0}px`,
                 }}
               >
                 {[-1, 0, 1].map((offset, index) => (
@@ -9345,8 +10323,14 @@ export default function App() {
                     key={`tic-tac-toe-ai-stack-${index}`}
                     className="fullscreen-camera-tic-tac-toe-reserve-piece ai"
                     style={{
-                      left: "50%",
-                      top: `${(fullscreenTicTacToeLayout?.railHeight ?? 0) / 2 + offset * (fullscreenTicTacToeLayout?.reserveStepY ?? 0)}px`,
+                      left:
+                        fullscreenTicTacToeLayout?.reserveAxis === "x"
+                          ? `${(fullscreenTicTacToeLayout?.aiRailWidth ?? 0) / 2 + offset * (fullscreenTicTacToeLayout?.reserveStepX ?? 0)}px`
+                          : "50%",
+                      top:
+                        fullscreenTicTacToeLayout?.reserveAxis === "x"
+                          ? "50%"
+                          : `${(fullscreenTicTacToeLayout?.aiRailHeight ?? 0) / 2 + offset * (fullscreenTicTacToeLayout?.reserveStepY ?? 0)}px`,
                       width: `${fullscreenTicTacToeLayout?.reservePieceSize ?? 0}px`,
                       height: `${fullscreenTicTacToeLayout?.reservePieceSize ?? 0}px`,
                       opacity:
@@ -9376,33 +10360,44 @@ export default function App() {
                   </span>
                 </div>
                 <div className="fullscreen-camera-tic-tac-toe-rail-label">O Rail</div>
+                <div className="fullscreen-camera-tic-tac-toe-rail-pips ai" aria-hidden="true">
+                  {fullscreenTicTacToeAiReservePips.map((pip) => (
+                    <span
+                      key={`ai-reserve-pip-${pip.index}`}
+                      className={`fullscreen-camera-tic-tac-toe-rail-pip ${pip.className}`}
+                    />
+                  ))}
+                </div>
                 <div className="fullscreen-camera-tic-tac-toe-rail-count">
                   {fullscreenTicTacToeAiReserveCount} left
                 </div>
               </div>
               <div
                 className={`fullscreen-camera-tic-tac-toe-reset-box ${
-                  !fullscreenTicTacToeHasActiveBoard ? "disabled" : ""
+                  fullscreenTicTacToeResetUi.isDisabled ? "disabled" : ""
                 } ${
-                  fullscreenTicTacToeState?.resetHoldActive ? "active" : ""
+                  fullscreenTicTacToeResetUi.isActive ? "active" : ""
                 }`}
                 style={{
                   left: `${fullscreenTicTacToeLayout?.resetBoxLeft ?? 0}px`,
                   top: `${fullscreenTicTacToeLayout?.resetBoxTop ?? 0}px`,
                   width: `${fullscreenTicTacToeLayout?.resetBoxWidth ?? 0}px`,
                   height: `${fullscreenTicTacToeLayout?.resetBoxHeight ?? 0}px`,
+                  "--tic-tac-toe-reset-progress": fullscreenTicTacToeResetUi.progressDegrees,
                 }}
               >
-                <span className="fullscreen-camera-tic-tac-toe-reset-title">Reset</span>
+                <span
+                  className="fullscreen-camera-tic-tac-toe-reset-progress"
+                  aria-hidden="true"
+                />
+                <span className="fullscreen-camera-tic-tac-toe-reset-title">
+                  {fullscreenTicTacToeResetUi.label}
+                </span>
                 <span className="fullscreen-camera-tic-tac-toe-reset-countdown">
-                  {fullscreenTicTacToeResetCountdown}
+                  {fullscreenTicTacToeResetUi.countdownText}
                 </span>
                 <span className="fullscreen-camera-tic-tac-toe-reset-hint">
-                  {!fullscreenTicTacToeHasActiveBoard
-                    ? "No active board"
-                    : fullscreenTicTacToeState?.resetHoldActive
-                    ? "Keep your index inside"
-                    : "Hold your index inside"}
+                  {fullscreenTicTacToeResetUi.hint}
                 </span>
               </div>
               {Array.from({ length: 9 }, (_, index) => {
@@ -9412,20 +10407,18 @@ export default function App() {
                   return null;
                 }
 
-                const isPreview = fullscreenTicTacToeState?.previewCellIndex === index;
-                const isHover =
-                  fullscreenTicTacToeState?.status === "player-turn" &&
-                  fullscreenTicTacToeState?.hoverCellIndex === index &&
-                  !mark;
-                const isWinning = fullscreenTicTacToeState?.winningLine?.includes(index);
-                const isLastMove = fullscreenTicTacToeState?.lastMoveIndex === index;
+                const cellUi = getTicTacToeCellUi(fullscreenTicTacToeState, index, {
+                  draggingCellIndex: fullscreenTicTacToeDraggingCellIndex,
+                });
+                const markUi = mark
+                  ? getTicTacToeMarkUi(fullscreenTicTacToeState, index, mark, {
+                      playerMark: TIC_TAC_TOE_PLAYER_MARK,
+                      aiMark: TIC_TAC_TOE_AI_MARK,
+                    })
+                  : null;
                 const cellClassName = [
                   "fullscreen-camera-tic-tac-toe-cell",
-                  mark ? "occupied" : "empty",
-                  isPreview ? "preview" : "",
-                  isHover ? "hover" : "",
-                  isWinning ? "winning" : "",
-                  isLastMove ? "last-move" : "",
+                  ...cellUi.classNames,
                 ]
                   .filter(Boolean)
                   .join(" ");
@@ -9444,13 +10437,13 @@ export default function App() {
                     {mark ? (
                       <span
                         className={`fullscreen-camera-tic-tac-toe-mark ${
-                          mark === TIC_TAC_TOE_PLAYER_MARK ? "player" : "ai"
+                          markUi?.classNames.join(" ") ?? ""
                         }`}
                       >
                         {mark}
                       </span>
                     ) : null}
-                    {!mark && isPreview ? (
+                    {cellUi.showPreviewMark ? (
                       <span className="fullscreen-camera-tic-tac-toe-mark player preview">
                         {TIC_TAC_TOE_PLAYER_MARK}
                       </span>
@@ -9458,6 +10451,18 @@ export default function App() {
                   </div>
                 );
               })}
+              {fullscreenTicTacToeWinningLineUi ? (
+                <div
+                  className="fullscreen-camera-tic-tac-toe-winning-line"
+                  style={{
+                    left: `${fullscreenTicTacToeWinningLineUi.left}px`,
+                    top: `${fullscreenTicTacToeWinningLineUi.top}px`,
+                    width: `${fullscreenTicTacToeWinningLineUi.width}px`,
+                    height: `${fullscreenTicTacToeWinningLineUi.thickness}px`,
+                    transform: `translateY(-50%) rotate(${fullscreenTicTacToeWinningLineUi.angleDegrees}deg)`,
+                  }}
+                />
+              ) : null}
               {fullscreenTicTacToeState?.draggingPiece ? (
                 <div
                   className="fullscreen-camera-tic-tac-toe-drag-piece player"
@@ -9473,28 +10478,48 @@ export default function App() {
                   </span>
                 </div>
               ) : null}
-              <div className="fullscreen-camera-tic-tac-toe-scoreboard">
-                <span>You {fullscreenTicTacToeState?.playerWins ?? 0}</span>
-                <span>O {fullscreenTicTacToeState?.aiWins ?? 0}</span>
-                <span>Draws {fullscreenTicTacToeState?.draws ?? 0}</span>
-                <span>
-                  Board {fullscreenTicTacToePlayerCount + fullscreenTicTacToeAiCount}/9
-                </span>
-              </div>
-              <div className="fullscreen-camera-tic-tac-toe-legend">
-                <span>Pinch to grab</span>
-                <span>Release to place</span>
-                <span>Random opening, optimal after</span>
-              </div>
-              {fullscreenTicTacToeState?.message ? (
+              {fullscreenTicTacToeCursorUi.show && fullscreenTicTacToeCursorPoint ? (
                 <div
-                  className={`fullscreen-camera-tic-tac-toe-status ${
-                    fullscreenTicTacToeState?.status ?? ""
-                  }`}
+                  className={`fullscreen-camera-tic-tac-toe-cursor-indicator ${fullscreenTicTacToeCursorUi.tone}`}
+                  style={{
+                    left: `${fullscreenTicTacToeCursorPoint.x}px`,
+                    top: `${fullscreenTicTacToeCursorPoint.y}px`,
+                  }}
                 >
-                  {fullscreenTicTacToeState.message}
+                  {fullscreenTicTacToeCursorUi.label}
                 </div>
               ) : null}
+              <div className="fullscreen-camera-tic-tac-toe-topbar">
+                <div className="fullscreen-camera-tic-tac-toe-scoreboard">
+                  {fullscreenTicTacToeHudUi.scoreItems.map((item) => (
+                    <span key={item}>{item}</span>
+                  ))}
+                </div>
+                {fullscreenTicTacToeHudUi.statusMessage ? (
+                  <div
+                    className={`fullscreen-camera-tic-tac-toe-status ${fullscreenTicTacToeHudUi.statusTone}`}
+                  >
+                    {fullscreenTicTacToeHudUi.statusMessage}
+                  </div>
+                ) : null}
+              </div>
+              {fullscreenTicTacToeHudUi.showLegend ? (
+                <div className="fullscreen-camera-tic-tac-toe-legend">
+                  <span>Pinch to grab</span>
+                  <span>Release to place</span>
+                  <span>Random opening, optimal after</span>
+                </div>
+              ) : null}
+              <div
+                className={`fullscreen-camera-tic-tac-toe-turn-badge ${fullscreenTicTacToeTurnUi.tone}`}
+              >
+                <span className="fullscreen-camera-tic-tac-toe-turn-label">
+                  {fullscreenTicTacToeTurnUi.label}
+                </span>
+                <span className="fullscreen-camera-tic-tac-toe-turn-detail">
+                  {fullscreenTicTacToeTurnUi.detail}
+                </span>
+              </div>
             </div>
           ) : fullscreenGridMode === "hand-bounce" ? (
             <div
@@ -9659,6 +10684,141 @@ export default function App() {
                 <div className="fullscreen-camera-fruit-gameover">Round Over</div>
               ) : null}
             </div>
+          ) : fullscreenGridMode === "sky-patrol" ? (
+            <div
+              className="fullscreen-camera-sky-patrol"
+              style={fullscreenCameraViewport?.style ?? undefined}
+            >
+              <canvas
+                ref={fullscreenSkyPatrolCanvasRef}
+                className="fullscreen-camera-sky-patrol-canvas"
+              />
+              {fullscreenSkyPatrolHud?.incomingIndicators?.map((indicator) => (
+                <div
+                  key={indicator.id}
+                  className={`fullscreen-camera-sky-patrol-incoming-indicator ${indicator.kind}`}
+                  style={{ left: `${indicator.x}px` }}
+                >
+                  <span />
+                </div>
+              ))}
+              <div className="fullscreen-camera-sky-patrol-scoreboard">
+                {fullscreenSkyPatrolHudItems.map((item) => (
+                  <span key={item.id} className={`fullscreen-camera-sky-patrol-hud-chip ${item.id}`}>
+                    {item.id === "fire" ? (
+                      <span
+                        className={`fullscreen-camera-sky-patrol-fire-ring ${
+                          fullscreenSkyPatrolFireCooldownUi.ready ? "ready" : "reloading"
+                        }`}
+                        style={{
+                          "--sky-patrol-fire-progress": fullscreenSkyPatrolFireCooldownUi.progress,
+                        }}
+                      />
+                    ) : null}
+                    <span className="fullscreen-camera-sky-patrol-hud-label">{item.label}</span>
+                    {item.id === "lives" ? (
+                      <span className="fullscreen-camera-sky-patrol-life-icons">
+                        {fullscreenSkyPatrolLifeIcons.map((iconState, index) => (
+                          <span
+                            key={`sky-patrol-life-${index}`}
+                            className={`fullscreen-camera-sky-patrol-life-icon ${iconState}`}
+                          />
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="fullscreen-camera-sky-patrol-hud-value">{item.value}</span>
+                    )}
+                  </span>
+                ))}
+              </div>
+              <div
+                className={`fullscreen-camera-sky-patrol-gun-meter ${fullscreenSkyPatrolGunCooldownUi.state}`}
+                style={{
+                  "--sky-patrol-gun-fill": fullscreenSkyPatrolGunCooldownUi.fill,
+                }}
+              >
+                <span className="fullscreen-camera-sky-patrol-gun-meter-label">Guns</span>
+                <span className="fullscreen-camera-sky-patrol-gun-meter-track">
+                  <span className="fullscreen-camera-sky-patrol-gun-meter-fill" />
+                </span>
+                <span className="fullscreen-camera-sky-patrol-gun-meter-state">
+                  {fullscreenSkyPatrolGunCooldownUi.stateLabel}
+                </span>
+                {fullscreenSkyPatrolGunCooldownUi.cooldownLabel ? (
+                  <span className="fullscreen-camera-sky-patrol-gun-meter-timer">
+                    {fullscreenSkyPatrolGunCooldownUi.cooldownLabel}
+                  </span>
+                ) : null}
+              </div>
+              {fullscreenSkyPatrolHud?.radarBlips?.length ? (
+                <div className="fullscreen-camera-sky-patrol-radar" aria-hidden="true">
+                  <span className="fullscreen-camera-sky-patrol-radar-sweep" />
+                  {fullscreenSkyPatrolHud.radarBlips.map((blip) => (
+                    <span
+                      key={blip.id}
+                      className={`fullscreen-camera-sky-patrol-radar-blip ${blip.role}`}
+                      style={{
+                        left: `${blip.xPct}%`,
+                        top: `${blip.yPct}%`,
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              {fullscreenSkyPatrolLegendUi.visible ? (
+                <div
+                  className={`fullscreen-camera-sky-patrol-legend ${
+                    fullscreenSkyPatrolLegendUi.compact ? "compact" : ""
+                  } ${fullscreenSkyPatrolLegendUi.faded ? "faded" : ""}`}
+                >
+                  {fullscreenSkyPatrolLegendUi.items.map((item) => (
+                    <span
+                      key={item.id}
+                      className={`fullscreen-camera-sky-patrol-legend-chip ${item.role}`}
+                    >
+                      <span className="fullscreen-camera-sky-patrol-legend-symbol" />
+                      <span>{item.label}</span>
+                      <strong>{item.value}</strong>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {fullscreenSkyPatrolGameOverUi.visible ? (
+                <div className="fullscreen-camera-sky-patrol-banner game-over">
+                  <span className="fullscreen-camera-sky-patrol-game-over-title">
+                    {fullscreenSkyPatrolGameOverUi.title}
+                  </span>
+                  <span className="fullscreen-camera-sky-patrol-game-over-stats">
+                    {fullscreenSkyPatrolGameOverUi.stats.map((stat) => (
+                      <span key={stat.label}>
+                        {stat.label} {stat.value}
+                      </span>
+                    ))}
+                  </span>
+                  <span className="fullscreen-camera-sky-patrol-game-over-restart">
+                    {fullscreenSkyPatrolGameOverUi.restartText}
+                  </span>
+                </div>
+              ) : fullscreenSkyPatrolStartPromptUi.visible ? (
+                <div className="fullscreen-camera-sky-patrol-banner start-prompt">
+                  <span className="fullscreen-camera-sky-patrol-start-title">
+                    {fullscreenSkyPatrolStartPromptUi.title}
+                  </span>
+                  <span className="fullscreen-camera-sky-patrol-start-detail">
+                    {fullscreenSkyPatrolStartPromptUi.detail}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : fullscreenGridMode === WFC_WORLD_MODE_ID ? (
+            <WfcWorldRenderer
+              game={fullscreenWfcWorldState}
+              style={fullscreenCameraViewport?.style ?? undefined}
+              onMouseDown={handleFullscreenWfcWorldMouseDown}
+              onMouseMove={handleFullscreenWfcWorldMouseMove}
+              onMouseUp={stopFullscreenWfcWorldMouseInput}
+              onMouseLeave={stopFullscreenWfcWorldMouseInput}
+            />
           ) : fullscreenGridMode === "invaders" ? (
             <div
               className="fullscreen-camera-invaders"
@@ -9793,7 +10953,7 @@ export default function App() {
             </div>
           ) : fullscreenGridMode === "missile-command" ? (
             <div
-              className="fullscreen-camera-missile-command"
+              className={getMissileCommandSceneClassName()}
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               <div className="fullscreen-camera-missile-skyline" />
@@ -9801,75 +10961,124 @@ export default function App() {
                 className="fullscreen-camera-missile-ground"
                 style={{ top: `${fullscreenMissileCommandState?.layout.groundY ?? 0}px` }}
               />
-              {fullscreenMissileCommandState?.structures?.map((structure) => (
+              {fullscreenMissileTargetWarnings.map((warning) => (
                 <div
-                  key={structure.id}
-                  className={`fullscreen-camera-missile-structure ${structure.type} ${
-                    structure.alive ? "alive" : "destroyed"
-                  }`}
+                  key={`missile-target-warning-${warning.structureId}`}
+                  className={warning.className}
                   style={{
-                    left: `${structure.x - structure.width / 2}px`,
-                    top: `${structure.y - structure.height}px`,
-                    width: `${structure.width}px`,
-                    height: `${structure.height}px`,
+                    left: `${warning.x}px`,
+                    top: `${warning.y}px`,
+                    width: `${warning.width * 1.62}px`,
+                    height: `${warning.height * 1.62}px`,
+                  }}
+                >
+                  {warning.threatCount > 1 ? (
+                    <span className="fullscreen-camera-missile-target-warning-count">
+                      {warning.threatCount}
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+              {fullscreenMissileCommandState?.structures?.map((structure) => {
+                const structureUi = getMissileCommandStructureUi(structure, {
+                  selectedLaunchBaseId: fullscreenMissileLaunchPreview?.originStructureId,
+                });
+                return (
+                  <div
+                    key={structure.id}
+                    className={structureUi.className}
+                    style={{
+                      left: `${structure.x - structure.width / 2}px`,
+                      top: `${structure.y - structure.height}px`,
+                      width: `${structure.width}px`,
+                      height: `${structure.height}px`,
+                    }}
+                  >
+                    {structureUi.showSmoke ? (
+                      <span className="fullscreen-camera-missile-structure-smoke" />
+                    ) : null}
+                    {structureUi.fragments.map((fragment) => (
+                      <span
+                        key={fragment.id}
+                        className={`fullscreen-camera-missile-rubble-fragment ${fragment.className}`}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
+              {fullscreenMissileLaunchPreview ? (
+                <div
+                  className="fullscreen-camera-missile-launch-preview"
+                  style={{
+                    left: `${fullscreenMissileLaunchPreview.originX}px`,
+                    top: `${fullscreenMissileLaunchPreview.originY}px`,
+                    width: `${fullscreenMissileLaunchPreview.distance}px`,
+                    transform: `rotate(${fullscreenMissileLaunchPreview.angleRad}rad)`,
                   }}
                 />
-              ))}
-              {fullscreenMissileCommandState?.threats?.map((threat) => (
-                <div key={threat.id}>
-                  <div
-                    className="fullscreen-camera-missile-trail hostile"
-                    style={{
-                      left: `${threat.startX}px`,
-                      top: `${threat.startY}px`,
-                      width: `${Math.hypot(threat.x - threat.startX, threat.y - threat.startY)}px`,
-                      transform: `rotate(${Math.atan2(
-                        threat.y - threat.startY,
-                        threat.x - threat.startX,
-                      )}rad)`,
-                    }}
-                  />
-                  <div
-                    className="fullscreen-camera-missile-head hostile"
-                    style={{
-                      left: `${threat.x}px`,
-                      top: `${threat.y}px`,
-                    }}
-                  />
-                </div>
-              ))}
-              {fullscreenMissileCommandState?.interceptors?.map((interceptor) => (
-                <div key={interceptor.id}>
-                  <div
-                    className="fullscreen-camera-missile-trail interceptor"
-                    style={{
-                      left: `${interceptor.originX}px`,
-                      top: `${interceptor.originY}px`,
-                      width: `${Math.hypot(
-                        interceptor.x - interceptor.originX,
-                        interceptor.y - interceptor.originY,
-                      )}px`,
-                      transform: `rotate(${Math.atan2(
-                        interceptor.y - interceptor.originY,
-                        interceptor.x - interceptor.originX,
-                      )}rad)`,
-                    }}
-                  />
-                  <div
-                    className="fullscreen-camera-missile-head interceptor"
-                    style={{
-                      left: `${interceptor.x}px`,
-                      top: `${interceptor.y}px`,
-                    }}
-                  />
-                </div>
-              ))}
+              ) : null}
+              {fullscreenMissileCommandState?.threats?.map((threat) => {
+                const threatUi = getMissileCommandThreatUi(threat);
+                return (
+                  <div key={threat.id}>
+                    <div
+                      className={threatUi.trailClassName}
+                      style={{
+                        left: `${threat.startX}px`,
+                        top: `${threat.startY}px`,
+                        width: `${Math.hypot(threat.x - threat.startX, threat.y - threat.startY)}px`,
+                        transform: `rotate(${Math.atan2(
+                          threat.y - threat.startY,
+                          threat.x - threat.startX,
+                        )}rad)`,
+                      }}
+                    />
+                    <div
+                      className={threatUi.headClassName}
+                      style={{
+                        left: `${threat.x}px`,
+                        top: `${threat.y}px`,
+                      }}
+                    />
+                  </div>
+                );
+              })}
+              {fullscreenMissileCommandState?.interceptors?.map((interceptor) => {
+                const interceptorUi = getMissileCommandInterceptorUi();
+                return (
+                  <div key={interceptor.id}>
+                    <div
+                      className={interceptorUi.trailClassName}
+                      style={{
+                        left: `${interceptor.originX}px`,
+                        top: `${interceptor.originY}px`,
+                        width: `${Math.hypot(
+                          interceptor.x - interceptor.originX,
+                          interceptor.y - interceptor.originY,
+                        )}px`,
+                        transform: `rotate(${Math.atan2(
+                          interceptor.y - interceptor.originY,
+                          interceptor.x - interceptor.originX,
+                        )}rad)`,
+                      }}
+                    />
+                    <div
+                      className={interceptorUi.headClassName}
+                      style={{
+                        left: `${interceptor.x}px`,
+                        top: `${interceptor.y}px`,
+                      }}
+                    />
+                  </div>
+                );
+              })}
               {fullscreenMissileCommandState?.explosions?.map((explosion) => {
                 const radius = getMissileCommandExplosionRadius(explosion);
+                const explosionUi = getMissileCommandExplosionUi(explosion);
                 return (
                   <div
                     key={explosion.id}
-                    className="fullscreen-camera-missile-explosion"
+                    className={explosionUi.className}
                     style={{
                       left: `${explosion.x - radius}px`,
                       top: `${explosion.y - radius}px`,
@@ -9878,40 +11087,105 @@ export default function App() {
                       borderColor: explosion.color,
                       boxShadow: `0 0 ${Math.max(18, radius * 0.7)}px ${explosion.color}`,
                     }}
-                  />
+                  >
+                    <span
+                      className="fullscreen-camera-missile-explosion-core"
+                      style={{ opacity: explosionUi.coreOpacity }}
+                    />
+                    <span
+                      className="fullscreen-camera-missile-explosion-shockwave"
+                      style={{
+                        opacity: explosionUi.shockwaveOpacity,
+                        transform: `scale(${explosionUi.shockwaveScale})`,
+                      }}
+                    />
+                  </div>
                 );
               })}
-              {fullscreenMissileAimPoint ? (
+              {fullscreenMissileCommandState?.scoreBursts?.map((burst) => {
+                const progress = Math.min(1, burst.ageMs / Math.max(1, burst.durationMs));
+                return (
+                  <div
+                    key={burst.id}
+                    className="fullscreen-camera-missile-score-popup"
+                    style={{
+                      left: `${burst.x}px`,
+                      top: `${burst.y - progress * 34}px`,
+                      opacity: 1 - progress,
+                    }}
+                  >
+                    +{burst.value}
+                  </div>
+                );
+              })}
+              {fullscreenMissileCrosshairUi.point ? (
                 <div
-                  className="fullscreen-camera-missile-crosshair"
+                  className={fullscreenMissileCrosshairUi.className}
                   style={{
-                    left: `${fullscreenMissileAimPoint.x}px`,
-                    top: `${fullscreenMissileAimPoint.y}px`,
+                    left: `${fullscreenMissileCrosshairUi.point.x}px`,
+                    top: `${fullscreenMissileCrosshairUi.point.y}px`,
+                    "--missile-cooldown-progress": fullscreenMissileCooldownUi.reloadProgress,
                   }}
-                />
-              ) : null}
-              <div className="fullscreen-camera-missile-scoreboard">
-                <span>Score {fullscreenMissileCommandState?.score ?? 0}</span>
-                <span>Intercepts {fullscreenMissileCommandState?.threatsStopped ?? 0}</span>
-                <span>
-                  Structures{" "}
-                  {fullscreenMissileCommandState?.structures?.filter((structure) => structure.alive).length ?? 0}
-                </span>
-              </div>
-              <div className="fullscreen-camera-missile-legend">
-                <span>Threat +{MISSILE_COMMAND_THREAT_SCORE}</span>
-                <span>Pinch fires an interceptor</span>
-              </div>
-              {isFullscreenMissileCommandMode &&
-              fullscreenMissileCommandState.status === "countdown" &&
-              fullscreenMissileCommandState.countdownMs > 0 ? (
-                <div className="fullscreen-camera-missile-banner">
-                  {Math.max(1, Math.ceil(fullscreenMissileCommandState.countdownMs / 1000))}
+                >
+                  <span className="fullscreen-camera-missile-cooldown-ring" />
+                  <span className="fullscreen-camera-missile-crosshair-label">
+                    {fullscreenMissileCrosshairUi.label}
+                  </span>
                 </div>
               ) : null}
+              <div className="fullscreen-camera-missile-scoreboard">
+                {fullscreenMissileTacticalMetrics.items.map((item) => (
+                  <span
+                    key={item.id}
+                    className={`fullscreen-camera-missile-score-item ${
+                      item.id === "pressure" ? `pressure-${item.value}` : ""
+                    }`}
+                  >
+                    <span className="fullscreen-camera-missile-score-label">{item.label}</span>
+                    <span className="fullscreen-camera-missile-score-value">{item.value}</span>
+                  </span>
+                ))}
+              </div>
+              <div className="fullscreen-camera-missile-legend compact">
+                {fullscreenMissileLegendItems.map((item) => (
+                  <span key={item.id} className="fullscreen-camera-missile-legend-chip">
+                    <span className="fullscreen-camera-missile-legend-icon">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </span>
+                ))}
+              </div>
               {isFullscreenMissileCommandMode &&
-              fullscreenMissileCommandState.status === "game_over" ? (
-                <div className="fullscreen-camera-missile-banner game-over">Defense lost</div>
+              fullscreenMissileCountdownUi.visible ? (
+                <div className="fullscreen-camera-missile-banner countdown">
+                  <span className="fullscreen-camera-missile-banner-title">
+                    {fullscreenMissileCountdownUi.title}
+                  </span>
+                  <span className="fullscreen-camera-missile-banner-count">
+                    {fullscreenMissileCountdownUi.seconds}
+                  </span>
+                  <span className="fullscreen-camera-missile-banner-structures">
+                    {fullscreenMissileCountdownUi.structureIds.map((structureId) => (
+                      <span key={structureId} />
+                    ))}
+                  </span>
+                </div>
+              ) : null}
+              {isFullscreenMissileCommandMode && fullscreenMissileGameOverUi.visible ? (
+                <div className="fullscreen-camera-missile-banner game-over">
+                  <span className="fullscreen-camera-missile-game-over-title">
+                    {fullscreenMissileGameOverUi.title}
+                  </span>
+                  <span className="fullscreen-camera-missile-game-over-stats">
+                    {fullscreenMissileGameOverUi.stats.map((stat) => (
+                      <span key={stat.label}>
+                        {stat.label} {stat.value}
+                      </span>
+                    ))}
+                  </span>
+                  <span className="fullscreen-camera-missile-game-over-restart">
+                    {fullscreenMissileGameOverUi.restartText}
+                  </span>
+                </div>
               ) : null}
             </div>
           ) : (
@@ -9940,197 +11214,108 @@ export default function App() {
             </div>
           )}
 
-          <div className="fullscreen-camera-hud">
-            <div className="fullscreen-camera-meta">
-              <span className="fullscreen-camera-chip">{cameraPanelTitle}</span>
-              <span className={`tracking-indicator ${handDetected ? "ok" : "warn"}`}>
-                {handDetected ? "Hand detected" : "Hand not detected"} | FPS: {fps.toFixed(1)}
+          {fullscreenRestartControlLabel && fullscreenRestartControlState?.layout ? (
+            <div
+              className={`fullscreen-camera-restart-box ${
+                fullscreenRestartControlState.handVerified ? "" : "disabled"
+              } ${fullscreenRestartControlState.holdActive ? "active" : ""}`}
+              style={{
+                left: `${
+                  (fullscreenCameraViewport?.left ?? 0) + fullscreenRestartControlState.layout.left
+                }px`,
+                top: `${
+                  (fullscreenCameraViewport?.top ?? 0) + fullscreenRestartControlState.layout.top
+                }px`,
+                width: `${fullscreenRestartControlState.layout.boxWidth}px`,
+                height: `${fullscreenRestartControlState.layout.boxHeight}px`,
+              }}
+            >
+              <span className="fullscreen-camera-restart-title">
+                {fullscreenRestartControlLabel}
+              </span>
+              <span className="fullscreen-camera-restart-countdown">
+                {fullscreenRestartControlState.handVerified &&
+                fullscreenRestartControlState.holdActive
+                  ? fullscreenRestartControlCountdown
+                  : (FULLSCREEN_MODE_LANDING_HOLD_MS / 1000).toFixed(2)}
+              </span>
+              <span className="fullscreen-camera-restart-hint">
+                {!fullscreenRestartControlState.handVerified
+                  ? "Show 5 tips"
+                  : fullscreenRestartControlState.holdActive
+                  ? "Keep holding"
+                  : "Hold to restart"}
               </span>
             </div>
-            <div className="fullscreen-camera-meta fullscreen-camera-actions">
-              <span className="fullscreen-camera-note">
-                {fullscreenGridMode === "breakout-coop"
-                  ? `Breakout Co-op keeps index-finger steering on the paddle, uses support-hand pinch for a ${Math.round(BREAKOUT_COOP_SHIELD_DURATION_MS / 1000)} second shield pulse, and prism bricks split the ball while the shield recharges over about ${Math.round(BREAKOUT_COOP_SHIELD_COOLDOWN_MS / 1000)} seconds.`
-                  : fullscreenGridMode === "hand-bounce"
-                  ? "Hand Bounce turns your tracked palm into a bounce surface. The ball uses gravity-driven motion, rebounds off the side walls, and you only need to keep your hand under it."
-                  : fullscreenGridMode === "brick-dodger"
-                  ? "Brick Dodger uses the existing smoothed index-fingertip X position only. Drift across the full webcam overlay to dodge falling hazards, chase adjacent bonus pickups, and stretch the run as the descent speed ramps up."
-                  : fullscreenGridMode === "breakout"
-                  ? `Index fingertip steers the paddle left and right. Bricks use the Rings palette, the launch countdown is ${BREAKOUT_COUNTDOWN_MS / 1000} seconds, and each capsule adds one extra ball.`
-                  : fullscreenGridMode === "finger-pong"
-                  ? `Finger Pong keeps the full webcam visible behind a one-player rally. Your bottom paddle follows smoothed horizontal fingertip motion, the opening countdown is ${FINGER_PONG_COUNTDOWN_MS / 1000} seconds, and off-center contacts steer the return angle while rallies gently speed up.`
-                  : fullscreenGridMode === "tic-tac-toe"
-                  ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lets you pinch-drag X pieces from the left rail, adds a right-side reset box that clears the board after a 1.00 second index-fingertip hold, and gives O a random opening before switching to optimal play."
-                  : fullscreenGridMode === "fruit-ninja"
-                  ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
-                  : fullscreenGridMode === "invaders"
-                  ? "Index fingertip steers the ship with the existing fullscreen smoothing. Pinch fires on a short cooldown, enemies descend in arcade sweeps, and pinch restarts the wave after a loss."
-                  : fullscreenGridMode === "missile-command"
-                  ? `Index fingertip aims. Pinch launches interceptors from the nearest surviving base, blasts stop threats in an area, and the pace ramps over time after the ${MISSILE_COMMAND_COUNTDOWN_MS / 1000}-second opening countdown.`
-                  : fullscreenGridMode === "flappy"
-                  ? "Flappy overlay uses pinch rising edges only. Each distinct pinch flaps once, holding a pinch does not retrigger, and pinching after a crash restarts the round."
-                  : "Camera fits the window without cropping. Press `Esc` to close."}
+          ) : null}
+
+          {!isFullscreenModeLanding && fullscreenExitControlState?.layout ? (
+            <div
+              className={`fullscreen-camera-exit-box ${
+                fullscreenExitControlState.handVerified ? "" : "disabled"
+              } ${fullscreenExitControlState.holdActive ? "active" : ""}`}
+              style={{
+                left: `${
+                  (fullscreenCameraViewport?.left ?? 0) + fullscreenExitControlState.layout.left
+                }px`,
+                top: `${
+                  (fullscreenCameraViewport?.top ?? 0) + fullscreenExitControlState.layout.top
+                }px`,
+                width: `${fullscreenExitControlState.layout.boxWidth}px`,
+                height: `${fullscreenExitControlState.layout.boxHeight}px`,
+              }}
+            >
+              <span className="fullscreen-camera-exit-title">Exit</span>
+              <span className="fullscreen-camera-exit-countdown">
+                {fullscreenExitControlState.handVerified && fullscreenExitControlState.holdActive
+                  ? fullscreenExitControlCountdown
+                  : (FULLSCREEN_MODE_LANDING_HOLD_MS / 1000).toFixed(2)}
               </span>
-              <div className="button-row compact fullscreen-camera-mode-row">
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "square" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("square")}
-                >
-                  Squares
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "hex" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("hex")}
-                >
-                  Hex
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "voronoi" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("voronoi")}
-                >
-                  Voronoi
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "rings" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("rings")}
-                >
-                  Rings
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "pulse" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("pulse")}
-                >
-                  Pulse
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "tip-ripples" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("tip-ripples")}
-                >
-                  Tip Ripples
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "tip-ripples-v2" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("tip-ripples-v2")}
-                >
-                  Tip Ripples v2
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "static" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("static")}
-                >
-                  Static
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "hand-bounce" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("hand-bounce")}
-                >
-                  Hand Bounce
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "brick-dodger" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("brick-dodger")}
-                >
-                  Brick Dodger
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "breakout-coop" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("breakout-coop")}
-                >
-                  Breakout Co-op
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "breakout" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("breakout")}
-                >
-                  Breakout
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "finger-pong" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("finger-pong")}
-                >
-                  Finger Pong
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "tic-tac-toe" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("tic-tac-toe")}
-                >
-                  Tic Tac Toe
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "fruit-ninja" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("fruit-ninja")}
-                >
-                  Slice Air
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "invaders" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("invaders")}
-                >
-                  Invaders
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "flappy" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("flappy")}
-                >
-                  Flappy
-                </button>
-                <button
-                  type="button"
-                  className={fullscreenGridMode === "missile-command" ? "" : "secondary"}
-                  onClick={() => setFullscreenGridMode("missile-command")}
-                >
-                  Missile Command
-                </button>
-                {fullscreenGridMode === "brick-dodger" ? (
-                  <button type="button" className="secondary" onClick={restartFullscreenBrickDodgerGame}>
-                    Restart Run
-                  </button>
+              <span className="fullscreen-camera-exit-hint">
+                {!fullscreenExitControlState.handVerified
+                  ? "Show 5 tips"
+                  : fullscreenExitControlState.holdActive
+                  ? "Keep holding"
+                  : "Hold to exit"}
+              </span>
+            </div>
+          ) : null}
+
+          <div className="fullscreen-camera-hud">
+            <div className="fullscreen-camera-hud-bottom">
+              <span className={`tracking-indicator fullscreen-camera-status ${handDetected ? "ok" : "warn"}`}>
+                {handDetected ? "Hand detected" : "Hand not detected"} | FPS: {fps.toFixed(1)}
+              </span>
+              <div className="fullscreen-camera-meta fullscreen-camera-actions">
+                {!isFullscreenModeLanding ? (
+                  <span className="fullscreen-camera-note">
+                    {fullscreenGridMode === "breakout-coop"
+                      ? `Breakout Co-op keeps index-finger steering on the paddle, uses support-hand pinch for a ${Math.round(BREAKOUT_COOP_SHIELD_DURATION_MS / 1000)} second shield pulse, and prism bricks split the ball while the shield recharges over about ${Math.round(BREAKOUT_COOP_SHIELD_COOLDOWN_MS / 1000)} seconds.`
+                      : fullscreenGridMode === "hand-bounce"
+                      ? "Hand Bounce turns your tracked palm into a bounce surface. The ball uses gravity-driven motion, rebounds off the side walls, and you only need to keep your hand under it."
+                      : fullscreenGridMode === "brick-dodger"
+                      ? "Brick Dodger uses the existing smoothed index-fingertip X position only. Drift across the full webcam overlay to dodge falling hazards, chase adjacent bonus pickups, and stretch the run as the descent speed ramps up."
+                      : fullscreenGridMode === "breakout"
+                      ? `Index fingertip steers the paddle left and right. Bricks use the Rings palette, the launch countdown is ${BREAKOUT_COUNTDOWN_MS / 1000} seconds, and each capsule adds one extra ball.`
+                      : fullscreenGridMode === "finger-pong"
+                      ? `Finger Pong keeps the full webcam visible behind a one-player rally. Your bottom paddle follows smoothed horizontal fingertip motion, the opening countdown is ${FINGER_PONG_COUNTDOWN_MS / 1000} seconds, and off-center contacts steer the return angle while rallies gently speed up.`
+                      : fullscreenGridMode === "tic-tac-toe"
+                      ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lets you pinch-drag X pieces from the left rail, adds a right-side reset box that clears the board after a 1.00 second index-fingertip hold, and gives O a random opening before switching to optimal play."
+                      : fullscreenGridMode === "fruit-ninja"
+                      ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
+                      : fullscreenGridMode === "sky-patrol"
+                      ? "Index fingertip steers a fighter across a vertically scrolling 16-bit coastline. Pinch fires twin cannons, air fighters weave in from above, ground emplacements ride the terrain below, and pinching after a loss relaunches the sortie."
+                      : fullscreenGridMode === WFC_WORLD_MODE_ID
+                      ? "Fingerprint Worlds lets you seed a fantasy map with pinched terrain rules, then Wave Function Collapse fills the rest while obeying the adjacency constraints."
+                      : fullscreenGridMode === "invaders"
+                      ? "Index fingertip steers the ship with the existing fullscreen smoothing. Pinch fires on a short cooldown, enemies descend in arcade sweeps, and pinch restarts the wave after a loss."
+                      : fullscreenGridMode === "missile-command"
+                      ? `Index fingertip aims. Pinch launches interceptors from the nearest surviving base, blasts stop threats in an area, and the pace ramps over time after the ${MISSILE_COMMAND_COUNTDOWN_MS / 1000}-second opening countdown.`
+                      : fullscreenGridMode === "flappy"
+                      ? "Flappy overlay uses pinch rising edges only. Each distinct pinch flaps once, holding a pinch does not retrigger, and pinching after a crash restarts the round."
+                      : "Camera fits the window without cropping. Press `Esc` to close."}
+                  </span>
                 ) : null}
-                {fullscreenGridMode === "hand-bounce" ? (
-                  <button type="button" className="secondary" onClick={restartFullscreenHandBounceGame}>
-                    Restart Bounce
-                  </button>
-                ) : null}
-                {fullscreenGridMode === "finger-pong" ? (
-                  <button type="button" className="secondary" onClick={restartFullscreenFingerPongGame}>
-                    Restart Rally
-                  </button>
-                ) : null}
-                {fullscreenGridMode === "tic-tac-toe" ? (
-                  <button type="button" className="secondary" onClick={restartFullscreenTicTacToeGame}>
-                    New Board
-                  </button>
-                ) : null}
-                {fullscreenGridMode === "fruit-ninja" ? (
-                  <button type="button" className="secondary" onClick={restartFullscreenFruitNinjaGame}>
-                    Restart Round
-                  </button>
-                ) : null}
-                {fullscreenGridMode === "missile-command" ? (
-                  <button type="button" className="secondary" onClick={restartFullscreenMissileCommandGame}>
-                    Restart Defense
-                  </button>
-                ) : null}
-                <button type="button" className="secondary" onClick={returnFromFullscreenCameraScreen}>
-                  Back to Input Test
-                </button>
               </div>
             </div>
             {(cameraError || modelError) && (

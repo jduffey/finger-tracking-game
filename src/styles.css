@@ -412,6 +412,10 @@ body {
   overflow: hidden;
   pointer-events: none;
   position: absolute;
+  --tic-tac-toe-board-radius: 18px;
+  --tic-tac-toe-cell-radius: 16px;
+  --tic-tac-toe-panel-radius: 14px;
+  --tic-tac-toe-piece-radius: 16px;
   z-index: 2;
 }
 
@@ -435,7 +439,7 @@ body {
       transparent calc(66.666% + 2px)
     );
   border: 3px solid rgba(227, 239, 255, 0.22);
-  border-radius: 40px;
+  border-radius: var(--tic-tac-toe-board-radius);
   box-shadow:
     0 28px 56px rgba(0, 0, 0, 0.34),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
@@ -444,7 +448,7 @@ body {
 
 .fullscreen-camera-tic-tac-toe-cell {
   align-items: center;
-  border-radius: 30px;
+  border-radius: var(--tic-tac-toe-cell-radius);
   display: flex;
   justify-content: center;
   position: absolute;
@@ -463,6 +467,31 @@ body {
   box-shadow: inset 0 0 0 3px rgba(255, 214, 140, 0.24);
 }
 
+.fullscreen-camera-tic-tac-toe-cell.legal-drop {
+  background: rgba(255, 213, 101, 0.07);
+  box-shadow: inset 0 0 0 2px rgba(255, 213, 101, 0.18);
+}
+
+.fullscreen-camera-tic-tac-toe-cell.blocked-drop {
+  background: rgba(255, 104, 104, 0.08);
+  box-shadow: inset 0 0 0 2px rgba(255, 104, 104, 0.2);
+}
+
+.fullscreen-camera-tic-tac-toe-cell.drag-over.legal-drop {
+  background: rgba(255, 213, 101, 0.16);
+  box-shadow:
+    inset 0 0 0 4px rgba(255, 235, 164, 0.42),
+    0 0 32px rgba(255, 213, 101, 0.22);
+  transform: scale(1.015);
+}
+
+.fullscreen-camera-tic-tac-toe-cell.drag-over.blocked-drop {
+  background: rgba(255, 104, 104, 0.14);
+  box-shadow:
+    inset 0 0 0 4px rgba(255, 104, 104, 0.34),
+    0 0 30px rgba(255, 72, 72, 0.18);
+}
+
 .fullscreen-camera-tic-tac-toe-cell.occupied {
   background: rgba(255, 255, 255, 0.03);
 }
@@ -479,6 +508,7 @@ body {
 }
 
 .fullscreen-camera-tic-tac-toe-mark {
+  display: inline-block;
   font-size: clamp(4.4rem, 13vw, 10rem);
   font-weight: 900;
   letter-spacing: 0.04em;
@@ -494,8 +524,47 @@ body {
   color: #82f5d9;
 }
 
+.fullscreen-camera-tic-tac-toe-mark.last-move {
+  text-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.26),
+    0 0 26px rgba(145, 208, 255, 0.24);
+}
+
+.fullscreen-camera-tic-tac-toe-mark.ai-placed {
+  animation: tic-tac-toe-ai-placed 360ms ease-out both;
+}
+
 .fullscreen-camera-tic-tac-toe-mark.preview {
   opacity: 0.42;
+}
+
+@keyframes tic-tac-toe-ai-placed {
+  0% {
+    opacity: 0.2;
+    transform: scale(0.72) rotate(8deg);
+  }
+
+  68% {
+    opacity: 1;
+    transform: scale(1.08) rotate(-2deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.fullscreen-camera-tic-tac-toe-winning-line {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), #fff7c2 18% 82%, rgba(255, 255, 255, 0.1));
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 4px rgba(117, 255, 185, 0.16),
+    0 0 28px rgba(117, 255, 185, 0.36);
+  pointer-events: none;
+  position: absolute;
+  transform-origin: left center;
+  z-index: 3;
 }
 
 .fullscreen-camera-tic-tac-toe-rail {
@@ -503,21 +572,27 @@ body {
     linear-gradient(180deg, rgba(9, 17, 27, 0.8), rgba(6, 12, 20, 0.92)),
     linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 48%);
   border: 2px solid rgba(223, 236, 252, 0.18);
-  border-radius: 36px;
+  border-radius: var(--tic-tac-toe-panel-radius);
   box-shadow: 0 22px 42px rgba(0, 0, 0, 0.28);
   position: absolute;
 }
 
 .fullscreen-camera-tic-tac-toe-rail.player.active {
   box-shadow:
-    0 0 0 2px rgba(255, 214, 140, 0.18),
+    0 0 0 5px rgba(255, 214, 140, 0.22),
+    0 0 34px rgba(255, 214, 140, 0.18),
     0 18px 34px rgba(0, 0, 0, 0.28);
 }
 
-.fullscreen-camera-tic-tac-toe-rail.ai.thinking {
+.fullscreen-camera-tic-tac-toe-rail.ai.active {
   box-shadow:
-    0 0 0 2px rgba(130, 245, 217, 0.18),
+    0 0 0 5px rgba(130, 245, 217, 0.2),
+    0 0 34px rgba(130, 245, 217, 0.16),
     0 18px 34px rgba(0, 0, 0, 0.28);
+}
+
+.fullscreen-camera-tic-tac-toe-rail.inactive {
+  opacity: 0.48;
 }
 
 .fullscreen-camera-tic-tac-toe-rail-label,
@@ -544,11 +619,66 @@ body {
   font-weight: 700;
 }
 
+.fullscreen-camera-tic-tac-toe-rail-pips {
+  bottom: 42px;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+.fullscreen-camera-tic-tac-toe-rail-pip {
+  border: 1px solid rgba(226, 237, 250, 0.36);
+  border-radius: 999px;
+  height: 8px;
+  width: 8px;
+}
+
+.fullscreen-camera-tic-tac-toe-rail-pips.player .fullscreen-camera-tic-tac-toe-rail-pip.filled {
+  background: #ffd565;
+  border-color: rgba(255, 213, 101, 0.8);
+  box-shadow: 0 0 10px rgba(255, 213, 101, 0.24);
+}
+
+.fullscreen-camera-tic-tac-toe-rail-pips.ai .fullscreen-camera-tic-tac-toe-rail-pip.filled {
+  background: #82f5d9;
+  border-color: rgba(130, 245, 217, 0.78);
+  box-shadow: 0 0 10px rgba(130, 245, 217, 0.22);
+}
+
+.fullscreen-camera-tic-tac-toe-rail-pip.empty {
+  background: rgba(226, 237, 250, 0.08);
+}
+
+.fullscreen-camera-tic-tac-toe-rail.portrait-trays .fullscreen-camera-tic-tac-toe-rail-label {
+  font-size: 0.72rem;
+  left: 12px;
+  text-align: left;
+  top: 8px;
+  transform: none;
+  width: auto;
+}
+
+.fullscreen-camera-tic-tac-toe-rail.portrait-trays .fullscreen-camera-tic-tac-toe-rail-count {
+  bottom: 8px;
+  font-size: 0.78rem;
+  left: auto;
+  right: 12px;
+  transform: none;
+  width: auto;
+}
+
+.fullscreen-camera-tic-tac-toe-rail.portrait-trays .fullscreen-camera-tic-tac-toe-rail-pips {
+  bottom: 10px;
+}
+
 .fullscreen-camera-tic-tac-toe-reserve-piece,
 .fullscreen-camera-tic-tac-toe-active-piece,
 .fullscreen-camera-tic-tac-toe-drag-piece {
   align-items: center;
-  border-radius: 24px;
+  border-radius: var(--tic-tac-toe-piece-radius);
   display: flex;
   justify-content: center;
   position: absolute;
@@ -598,7 +728,49 @@ body {
 
 .fullscreen-camera-tic-tac-toe-drag-piece {
   transform: rotate(-5deg);
-  z-index: 3;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    0 22px 44px rgba(73, 28, 7, 0.34),
+    0 0 0 7px rgba(255, 213, 101, 0.16);
+  z-index: 5;
+}
+
+.fullscreen-camera-tic-tac-toe-cursor-indicator {
+  background: rgba(9, 17, 27, 0.82);
+  border: 2px solid rgba(226, 237, 250, 0.26);
+  border-radius: 999px;
+  color: #f4f7fb;
+  font-size: 0.84rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  padding: 8px 11px;
+  pointer-events: none;
+  position: absolute;
+  text-transform: uppercase;
+  transform: translate(18px, -50%);
+  white-space: nowrap;
+  z-index: 6;
+}
+
+.fullscreen-camera-tic-tac-toe-cursor-indicator.ready,
+.fullscreen-camera-tic-tac-toe-cursor-indicator.pinch {
+  border-color: rgba(255, 214, 140, 0.36);
+}
+
+.fullscreen-camera-tic-tac-toe-cursor-indicator.dragging,
+.fullscreen-camera-tic-tac-toe-cursor-indicator.valid {
+  border-color: rgba(117, 255, 185, 0.44);
+  box-shadow: 0 0 24px rgba(117, 255, 185, 0.18);
+}
+
+.fullscreen-camera-tic-tac-toe-cursor-indicator.blocked {
+  border-color: rgba(255, 104, 104, 0.44);
+  box-shadow: 0 0 22px rgba(255, 104, 104, 0.16);
+}
+
+.fullscreen-camera-tic-tac-toe-cursor-indicator.waiting {
+  border-color: rgba(130, 245, 217, 0.38);
 }
 
 .fullscreen-camera-tic-tac-toe-piece-label {
@@ -611,18 +783,19 @@ body {
 .fullscreen-camera-tic-tac-toe-reset-box {
   align-items: center;
   background:
-    linear-gradient(180deg, rgba(44, 18, 18, 0.9), rgba(20, 10, 12, 0.95)),
+    linear-gradient(180deg, rgba(16, 46, 68, 0.9), rgba(8, 20, 34, 0.95)),
     linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 48%);
-  border: 2px solid rgba(255, 181, 166, 0.18);
-  border-radius: 34px;
+  border: 2px solid rgba(122, 205, 255, 0.24);
+  border-radius: var(--tic-tac-toe-panel-radius);
   box-shadow: 0 22px 42px rgba(0, 0, 0, 0.3);
-  color: #fff6f1;
+  color: #eef8ff;
   display: flex;
   flex-direction: column;
   justify-content: center;
   padding: 16px 14px;
   position: absolute;
   text-align: center;
+  --tic-tac-toe-reset-progress: 0deg;
 }
 
 .fullscreen-camera-tic-tac-toe-reset-box.disabled {
@@ -636,12 +809,34 @@ body {
 
 .fullscreen-camera-tic-tac-toe-reset-box.active {
   background:
-    linear-gradient(180deg, rgba(126, 34, 34, 0.92), rgba(58, 14, 16, 0.97)),
+    linear-gradient(180deg, rgba(16, 83, 112, 0.92), rgba(7, 38, 62, 0.97)),
     linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 48%);
-  border-color: rgba(255, 213, 178, 0.32);
+  border-color: rgba(139, 232, 255, 0.42);
   box-shadow:
-    0 0 0 6px rgba(255, 126, 97, 0.14),
+    0 0 0 6px rgba(89, 203, 255, 0.16),
     0 24px 44px rgba(0, 0, 0, 0.32);
+}
+
+.fullscreen-camera-tic-tac-toe-reset-progress {
+  background:
+    conic-gradient(
+      from -90deg,
+      rgba(139, 232, 255, 0.92) var(--tic-tac-toe-reset-progress),
+      rgba(139, 232, 255, 0.12) 0
+    );
+  border-radius: 50%;
+  height: 30px;
+  margin-bottom: 10px;
+  position: relative;
+  width: 30px;
+}
+
+.fullscreen-camera-tic-tac-toe-reset-progress::after {
+  background: rgba(8, 20, 34, 0.95);
+  border-radius: 50%;
+  content: "";
+  inset: 6px;
+  position: absolute;
 }
 
 .fullscreen-camera-tic-tac-toe-reset-title {
@@ -672,58 +867,114 @@ body {
   max-width: 14ch;
 }
 
-.fullscreen-camera-tic-tac-toe-scoreboard,
+.fullscreen-camera-tic-tac-toe-topbar,
 .fullscreen-camera-tic-tac-toe-legend,
-.fullscreen-camera-tic-tac-toe-status {
+.fullscreen-camera-tic-tac-toe-turn-badge {
   background: rgba(9, 17, 27, 0.74);
   border: 2px solid rgba(202, 220, 239, 0.22);
-  border-radius: 18px;
+  border-radius: var(--tic-tac-toe-panel-radius);
   color: #f4f7fb;
   position: absolute;
 }
 
-.fullscreen-camera-tic-tac-toe-scoreboard,
+.fullscreen-camera-tic-tac-toe-topbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  left: 18px;
+  padding: 12px 16px;
+  right: 18px;
+  top: 18px;
+  z-index: 4;
+}
+
+.fullscreen-camera-tic-tac-toe-scoreboard {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  font-size: 1.22rem;
+  font-weight: 700;
+}
+
 .fullscreen-camera-tic-tac-toe-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
   left: 18px;
   padding: 14px 18px;
-}
-
-.fullscreen-camera-tic-tac-toe-scoreboard {
-  font-size: 1.22rem;
-  font-weight: 700;
-  top: 92px;
-}
-
-.fullscreen-camera-tic-tac-toe-legend {
   bottom: 18px;
   font-size: 1rem;
   max-width: min(560px, calc(100% - 36px));
 }
 
 .fullscreen-camera-tic-tac-toe-status {
-  font-size: clamp(1.25rem, 3vw, 1.9rem);
+  color: #f4f7fb;
+  flex: 1 1 280px;
+  font-size: clamp(1rem, 2vw, 1.4rem);
   font-weight: 800;
-  left: 50%;
-  max-width: min(72vw, 640px);
-  padding: 14px 18px;
-  text-align: center;
-  top: 18px;
-  transform: translateX(-50%);
+  line-height: 1.16;
+  text-align: right;
 }
 
 .fullscreen-camera-tic-tac-toe-status.player-win {
-  background: rgba(20, 59, 34, 0.82);
+  color: #bbf7d0;
 }
 
 .fullscreen-camera-tic-tac-toe-status.ai-win {
-  background: rgba(20, 47, 59, 0.82);
+  color: #bfdbfe;
 }
 
 .fullscreen-camera-tic-tac-toe-status.draw {
-  background: rgba(56, 51, 23, 0.82);
+  color: #fde68a;
+}
+
+.fullscreen-camera-tic-tac-toe-status.ai-turn {
+  color: #a7f3d0;
+}
+
+.fullscreen-camera-tic-tac-toe-turn-badge {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  left: 50%;
+  min-width: min(360px, calc(100% - 36px));
+  padding: 12px 18px;
+  text-align: center;
+  top: 82px;
+  transform: translateX(-50%);
+  z-index: 4;
+}
+
+.fullscreen-camera-tic-tac-toe-turn-badge.player,
+.fullscreen-camera-tic-tac-toe-turn-badge.dragging,
+.fullscreen-camera-tic-tac-toe-turn-badge.player-win {
+  border-color: rgba(255, 214, 140, 0.42);
+}
+
+.fullscreen-camera-tic-tac-toe-turn-badge.ai,
+.fullscreen-camera-tic-tac-toe-turn-badge.ai-win {
+  border-color: rgba(130, 245, 217, 0.4);
+}
+
+.fullscreen-camera-tic-tac-toe-turn-badge.draw {
+  border-color: rgba(255, 229, 146, 0.34);
+}
+
+.fullscreen-camera-tic-tac-toe-turn-label {
+  font-size: clamp(1.15rem, 2.4vw, 1.8rem);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-tic-tac-toe-turn-detail {
+  color: rgba(226, 237, 250, 0.82);
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 @keyframes tic-tac-toe-rail-pulse {
@@ -1273,6 +1524,829 @@ body {
   transition: width 140ms linear;
 }
 
+.fullscreen-camera-wfc-world {
+  background:
+    radial-gradient(circle at 34% 28%, rgba(115, 177, 123, 0.26), transparent 32%),
+    linear-gradient(135deg, rgba(20, 42, 55, 0.76), rgba(18, 25, 35, 0.9));
+  color: #f5f8ff;
+  overflow: hidden;
+  pointer-events: auto;
+  position: absolute;
+  z-index: 2;
+}
+
+.fullscreen-camera-wfc-status {
+  background: rgba(10, 17, 27, 0.74);
+  border: 1px solid rgba(223, 234, 248, 0.18);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  left: 24px;
+  padding: 10px 14px;
+  position: absolute;
+  z-index: 5;
+}
+
+.fullscreen-camera-wfc-status span,
+.fullscreen-camera-wfc-status strong {
+  color: rgba(235, 244, 255, 0.86);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.fullscreen-camera-wfc-status {
+  align-items: center;
+  bottom: 18px;
+  max-width: min(64vw, 680px);
+}
+
+.fullscreen-camera-wfc-status strong {
+  color: #9be9ff;
+  white-space: nowrap;
+}
+
+.fullscreen-camera-wfc-cell {
+  align-items: center;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--wfc-tile-color) 84%, #ffffff 16%), var(--wfc-tile-color)),
+    rgba(236, 242, 250, 0.1);
+  border: 1px solid rgba(10, 16, 24, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  color: var(--wfc-tile-text);
+  display: flex;
+  height: var(--wfc-cell-height);
+  justify-content: center;
+  left: var(--wfc-cell-left);
+  position: absolute;
+  top: var(--wfc-cell-top);
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+  width: var(--wfc-cell-width);
+  z-index: 3;
+}
+
+.fullscreen-camera-wfc-cell.unresolved {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(226, 240, 255, 0.12) 0,
+      rgba(226, 240, 255, 0.12) 7px,
+      rgba(226, 240, 255, 0.04) 7px,
+      rgba(226, 240, 255, 0.04) 14px
+    ),
+    rgba(10, 17, 27, 0.58);
+  color: rgba(235, 244, 255, 0.5);
+}
+
+.fullscreen-camera-wfc-cell.hovered {
+  box-shadow:
+    inset 0 0 0 2px #fff2a8,
+    0 0 18px rgba(255, 242, 168, 0.3);
+  transform: translateY(-1px);
+  z-index: 4;
+}
+
+.fullscreen-camera-wfc-cell.changed {
+  animation: wfc-cell-pop 180ms ease-out;
+}
+
+.fullscreen-camera-wfc-cell.conflict {
+  box-shadow:
+    inset 0 0 0 2px #ff7171,
+    0 0 18px rgba(255, 82, 82, 0.36);
+}
+
+.fullscreen-camera-wfc-cell-mark {
+  font-size: clamp(0.62rem, 1.05vw, 0.92rem);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.fullscreen-camera-wfc-cell-lock {
+  border-color: transparent transparent #fff2a8 transparent;
+  border-style: solid;
+  border-width: 0 0 9px 9px;
+  bottom: 3px;
+  height: 0;
+  position: absolute;
+  right: 3px;
+  width: 0;
+}
+
+.fullscreen-camera-wfc-palette-tile,
+.fullscreen-camera-wfc-control {
+  align-items: center;
+  border-radius: 8px;
+  display: flex;
+  position: absolute;
+  z-index: 5;
+}
+
+.fullscreen-camera-wfc-palette-tile {
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--wfc-tile-color) 82%, #ffffff 18%), var(--wfc-tile-color));
+  border: 1px solid rgba(10, 16, 24, 0.48);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  color: var(--wfc-tile-text);
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+  padding: 6px;
+}
+
+.fullscreen-camera-wfc-palette-tile.selected {
+  box-shadow:
+    inset 0 0 0 3px #fff2a8,
+    0 0 18px rgba(255, 242, 168, 0.28);
+}
+
+.fullscreen-camera-wfc-palette-tile span {
+  font-size: 1.05rem;
+  font-weight: 950;
+}
+
+.fullscreen-camera-wfc-palette-tile strong {
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.fullscreen-camera-wfc-control {
+  background: rgba(10, 17, 27, 0.76);
+  border: 1px solid rgba(223, 234, 248, 0.22);
+  color: #f5f8ff;
+  font-size: 0.86rem;
+  font-weight: 900;
+  justify-content: center;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-wfc-control.generate {
+  border-color: rgba(255, 242, 168, 0.48);
+  color: #fff2a8;
+}
+
+.fullscreen-camera-wfc-world.conflict .fullscreen-camera-wfc-status {
+  border-color: rgba(255, 113, 113, 0.58);
+  box-shadow: 0 0 18px rgba(255, 84, 84, 0.16);
+}
+
+@keyframes wfc-cell-pop {
+  0% {
+    transform: scale(0.88);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.fullscreen-camera-sky-patrol {
+  background:
+    linear-gradient(180deg, rgba(139, 197, 255, 0.92), rgba(65, 128, 191, 0.7) 18%, rgba(20, 38, 56, 0.28) 44%, transparent 56%),
+    linear-gradient(180deg, #0c2740 0%, #163a55 24%, #19506e 52%, #1b4b63 100%);
+  image-rendering: pixelated;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.fullscreen-camera-sky-patrol::before,
+.fullscreen-camera-sky-patrol::after {
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.fullscreen-camera-sky-patrol::before {
+  background:
+    radial-gradient(circle at 18% 16%, rgba(255, 255, 255, 0.18), transparent 18%),
+    radial-gradient(circle at 76% 14%, rgba(255, 255, 255, 0.16), transparent 14%),
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.03) 0,
+      rgba(255, 255, 255, 0.03) 2px,
+      transparent 2px,
+      transparent 9px
+    );
+  opacity: 0.48;
+}
+
+.fullscreen-camera-sky-patrol::after {
+  background:
+    radial-gradient(circle at 50% 92%, rgba(0, 0, 0, 0.34), transparent 34%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(2, 8, 14, 0.26) 100%);
+  z-index: 0;
+}
+
+.fullscreen-camera-sky-patrol-canvas {
+  display: block;
+  height: 100%;
+  image-rendering: pixelated;
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+  z-index: 1;
+}
+
+.fullscreen-camera-sky-patrol-incoming-indicator {
+  align-items: center;
+  display: flex;
+  height: 28px;
+  justify-content: center;
+  position: absolute;
+  top: 66px;
+  transform: translateX(-50%);
+  width: 34px;
+  z-index: 4;
+}
+
+.fullscreen-camera-sky-patrol-incoming-indicator span {
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-top: 14px solid rgba(255, 229, 124, 0.92);
+  filter: drop-shadow(0 0 10px rgba(255, 192, 82, 0.58));
+  height: 0;
+  width: 0;
+}
+
+.fullscreen-camera-sky-patrol-incoming-indicator.turret span,
+.fullscreen-camera-sky-patrol-incoming-indicator.depot span {
+  border-top-color: rgba(128, 236, 255, 0.9);
+}
+
+.fullscreen-camera-sky-patrol-terrain-row,
+.fullscreen-camera-sky-patrol-terrain-segment,
+.fullscreen-camera-sky-patrol-player,
+.fullscreen-camera-sky-patrol-enemy,
+.fullscreen-camera-sky-patrol-ground-target,
+.fullscreen-camera-sky-patrol-shot,
+.fullscreen-camera-sky-patrol-explosion {
+  position: absolute;
+}
+
+.fullscreen-camera-sky-patrol-terrain-row {
+  left: 0;
+  right: 0;
+  z-index: 1;
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment {
+  box-sizing: border-box;
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment.deep-water {
+  background:
+    linear-gradient(180deg, rgba(142, 224, 255, 0.18), rgba(6, 66, 104, 0.12)),
+    repeating-linear-gradient(
+      90deg,
+      #0d5175 0,
+      #0d5175 calc(var(--sky-patrol-tile, 20px) * 0.34),
+      #0a4060 calc(var(--sky-patrol-tile, 20px) * 0.34),
+      #0a4060 calc(var(--sky-patrol-tile, 20px) * 0.68),
+      #0b486b calc(var(--sky-patrol-tile, 20px) * 0.68),
+      #0b486b var(--sky-patrol-tile, 20px)
+    );
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment.shallow-water {
+  background:
+    linear-gradient(180deg, rgba(201, 249, 255, 0.16), rgba(31, 112, 141, 0.08)),
+    repeating-linear-gradient(
+      90deg,
+      #12708f 0,
+      #12708f calc(var(--sky-patrol-tile, 20px) * 0.3),
+      #1590aa calc(var(--sky-patrol-tile, 20px) * 0.3),
+      #1590aa calc(var(--sky-patrol-tile, 20px) * 0.62),
+      #10798d calc(var(--sky-patrol-tile, 20px) * 0.62),
+      #10798d var(--sky-patrol-tile, 20px)
+    );
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment.beach {
+  background:
+    linear-gradient(180deg, rgba(255, 248, 205, 0.2), rgba(255, 221, 149, 0.08)),
+    repeating-linear-gradient(
+      90deg,
+      #e4c27b 0,
+      #e4c27b calc(var(--sky-patrol-tile, 20px) * 0.32),
+      #d6ad63 calc(var(--sky-patrol-tile, 20px) * 0.32),
+      #d6ad63 calc(var(--sky-patrol-tile, 20px) * 0.7),
+      #edcf8f calc(var(--sky-patrol-tile, 20px) * 0.7),
+      #edcf8f var(--sky-patrol-tile, 20px)
+    );
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment.grass {
+  background:
+    linear-gradient(180deg, rgba(223, 255, 210, 0.18), rgba(69, 115, 58, 0.08)),
+    repeating-linear-gradient(
+      90deg,
+      #4a8b4c 0,
+      #4a8b4c calc(var(--sky-patrol-tile, 20px) * 0.34),
+      #3f7c43 calc(var(--sky-patrol-tile, 20px) * 0.34),
+      #3f7c43 calc(var(--sky-patrol-tile, 20px) * 0.68),
+      #589c59 calc(var(--sky-patrol-tile, 20px) * 0.68),
+      #589c59 var(--sky-patrol-tile, 20px)
+    );
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment.forest {
+  background:
+    linear-gradient(180deg, rgba(214, 255, 211, 0.12), rgba(29, 63, 29, 0.08)),
+    repeating-linear-gradient(
+      90deg,
+      #1f4f2d 0,
+      #1f4f2d calc(var(--sky-patrol-tile, 20px) * 0.28),
+      #2e6338 calc(var(--sky-patrol-tile, 20px) * 0.28),
+      #2e6338 calc(var(--sky-patrol-tile, 20px) * 0.56),
+      #274f30 calc(var(--sky-patrol-tile, 20px) * 0.56),
+      #274f30 var(--sky-patrol-tile, 20px)
+    );
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment.runway {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0) 0,
+      rgba(0, 0, 0, 0) 42%,
+      rgba(244, 242, 230, 0.92) 42%,
+      rgba(244, 242, 230, 0.92) 58%,
+      rgba(0, 0, 0, 0) 58%,
+      rgba(0, 0, 0, 0) 100%
+    ),
+    repeating-linear-gradient(
+      90deg,
+      #4f5367 0,
+      #4f5367 calc(var(--sky-patrol-tile, 20px) * 0.5),
+      #5f667d calc(var(--sky-patrol-tile, 20px) * 0.5),
+      #5f667d var(--sky-patrol-tile, 20px)
+    );
+  border-bottom: 1px solid rgba(21, 26, 32, 0.44);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fullscreen-camera-sky-patrol-terrain-segment.road {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0) 0,
+      rgba(0, 0, 0, 0) 45%,
+      rgba(240, 214, 105, 0.82) 45%,
+      rgba(240, 214, 105, 0.82) 55%,
+      rgba(0, 0, 0, 0) 55%,
+      rgba(0, 0, 0, 0) 100%
+    ),
+    repeating-linear-gradient(
+      90deg,
+      #655845 0,
+      #655845 calc(var(--sky-patrol-tile, 20px) * 0.52),
+      #766650 calc(var(--sky-patrol-tile, 20px) * 0.52),
+      #766650 var(--sky-patrol-tile, 20px)
+    );
+}
+
+.fullscreen-camera-sky-patrol-player,
+.fullscreen-camera-sky-patrol-enemy,
+.fullscreen-camera-sky-patrol-ground-target,
+.fullscreen-camera-sky-patrol-shot,
+.fullscreen-camera-sky-patrol-explosion {
+  z-index: 2;
+}
+
+.fullscreen-camera-sky-patrol-player {
+  background:
+    linear-gradient(180deg, rgba(255, 251, 235, 0.98), rgba(255, 179, 74, 0.92)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.28), transparent);
+  border: 3px solid rgba(16, 18, 24, 0.94);
+  clip-path: polygon(50% 0, 68% 16%, 88% 18%, 100% 56%, 72% 62%, 62% 100%, 38% 100%, 28% 62%, 0 56%, 12% 18%, 32% 16%);
+  filter: drop-shadow(0 12px 20px rgba(4, 12, 22, 0.42));
+  z-index: 3;
+}
+
+.fullscreen-camera-sky-patrol-player.invulnerable {
+  opacity: 0.52;
+  filter: drop-shadow(0 0 18px rgba(255, 214, 122, 0.7));
+}
+
+.fullscreen-camera-sky-patrol-enemy {
+  background:
+    linear-gradient(180deg, rgba(255, 240, 214, 0.96), rgba(255, 108, 87, 0.9)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.26), transparent);
+  border: 3px solid rgba(18, 13, 15, 0.94);
+  clip-path: polygon(50% 0, 72% 18%, 92% 20%, 100% 52%, 78% 62%, 60% 100%, 40% 100%, 22% 62%, 0 52%, 8% 20%, 28% 18%);
+  filter: drop-shadow(0 10px 18px rgba(36, 10, 15, 0.4));
+}
+
+.fullscreen-camera-sky-patrol-ground-target {
+  border: 3px solid rgba(17, 21, 28, 0.92);
+  box-shadow: 0 8px 16px rgba(6, 10, 14, 0.24);
+}
+
+.fullscreen-camera-sky-patrol-ground-target.turret {
+  background:
+    linear-gradient(180deg, rgba(238, 253, 225, 0.22), rgba(84, 102, 61, 0.08)),
+    linear-gradient(135deg, #485a3b, #72835d);
+  border-radius: 8px;
+  clip-path: polygon(20% 0, 80% 0, 100% 30%, 100% 100%, 0 100%, 0 30%);
+}
+
+.fullscreen-camera-sky-patrol-ground-target.depot {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(105, 91, 69, 0.08)),
+    linear-gradient(135deg, #6a5e4b, #a28a64);
+  border-radius: 10px;
+}
+
+.fullscreen-camera-sky-patrol-shot {
+  border-radius: 999px;
+}
+
+.fullscreen-camera-sky-patrol-shot.player {
+  background: linear-gradient(180deg, rgba(255, 250, 204, 0.98), rgba(255, 116, 64, 0.94));
+  border: 2px solid rgba(18, 16, 21, 0.95);
+  box-shadow: 0 0 14px rgba(255, 200, 115, 0.68);
+}
+
+.fullscreen-camera-sky-patrol-shot.enemy {
+  background: linear-gradient(180deg, rgba(225, 255, 255, 0.96), rgba(115, 226, 255, 0.9));
+  border: 2px solid rgba(12, 18, 26, 0.92);
+  box-shadow: 0 0 12px rgba(115, 226, 255, 0.52);
+}
+
+.fullscreen-camera-sky-patrol-explosion {
+  border-radius: 50%;
+  mix-blend-mode: screen;
+}
+
+.fullscreen-camera-sky-patrol-explosion.air,
+.fullscreen-camera-sky-patrol-explosion.player,
+.fullscreen-camera-sky-patrol-explosion.crash {
+  background: radial-gradient(circle, rgba(255, 252, 205, 0.96) 0%, rgba(255, 167, 65, 0.92) 42%, rgba(255, 91, 70, 0.34) 72%, transparent 100%);
+}
+
+.fullscreen-camera-sky-patrol-explosion.ground {
+  background: radial-gradient(circle, rgba(255, 246, 196, 0.94) 0%, rgba(255, 132, 69, 0.92) 38%, rgba(110, 64, 29, 0.36) 72%, transparent 100%);
+}
+
+.fullscreen-camera-sky-patrol-explosion.spark {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.96) 0%, rgba(255, 219, 122, 0.82) 34%, transparent 100%);
+}
+
+.fullscreen-camera-sky-patrol-scoreboard,
+.fullscreen-camera-sky-patrol-legend,
+.fullscreen-camera-sky-patrol-banner {
+  background: rgba(9, 17, 27, 0.72);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 14px;
+  color: #f4f7fb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 14px;
+  position: absolute;
+  z-index: 4;
+}
+
+.fullscreen-camera-sky-patrol-scoreboard {
+  font-size: 0.95rem;
+  font-weight: 700;
+  justify-content: center;
+  left: 50%;
+  max-width: calc(100% - 36px);
+  right: auto;
+  top: 18px;
+  transform: translateX(-50%);
+}
+
+.fullscreen-camera-sky-patrol-hud-chip {
+  align-items: baseline;
+  background: rgba(226, 240, 255, 0.07);
+  border: 1px solid rgba(226, 240, 255, 0.12);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 5px;
+  padding: 4px 8px;
+}
+
+.fullscreen-camera-sky-patrol-hud-chip.fire {
+  align-items: center;
+}
+
+.fullscreen-camera-sky-patrol-fire-ring {
+  background: conic-gradient(
+    rgba(255, 248, 201, 0.92) calc(var(--sky-patrol-fire-progress, 1) * 1turn),
+    rgba(255, 248, 201, 0.14) 0
+  );
+  border-radius: 50%;
+  height: 16px;
+  mask: radial-gradient(circle, transparent 48%, #000 52%);
+  width: 16px;
+}
+
+.fullscreen-camera-sky-patrol-fire-ring.ready {
+  filter: drop-shadow(0 0 8px rgba(255, 248, 201, 0.42));
+}
+
+.fullscreen-camera-sky-patrol-gun-meter {
+  align-items: center;
+  background: rgba(9, 17, 27, 0.72);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 14px;
+  color: #f4f7fb;
+  display: grid;
+  gap: 7px;
+  justify-items: center;
+  padding: 10px 9px;
+  pointer-events: none;
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 58px;
+  z-index: 4;
+}
+
+.fullscreen-camera-sky-patrol-gun-meter.cooldown {
+  border-color: rgba(255, 113, 113, 0.58);
+  box-shadow: 0 0 18px rgba(255, 84, 84, 0.16);
+}
+
+.fullscreen-camera-sky-patrol-gun-meter-label,
+.fullscreen-camera-sky-patrol-gun-meter-state,
+.fullscreen-camera-sky-patrol-gun-meter-timer {
+  line-height: 1;
+  text-align: center;
+}
+
+.fullscreen-camera-sky-patrol-gun-meter-label {
+  color: rgba(226, 239, 255, 0.72);
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-sky-patrol-gun-meter-track {
+  background: rgba(226, 240, 255, 0.12);
+  border: 1px solid rgba(226, 240, 255, 0.22);
+  border-radius: 999px;
+  height: 344px;
+  overflow: hidden;
+  position: relative;
+  width: 16px;
+}
+
+.fullscreen-camera-sky-patrol-gun-meter-fill {
+  background: linear-gradient(180deg, #fffef0 0%, #fff2a8 42%, #ff9f5c 100%);
+  border-radius: inherit;
+  bottom: 0;
+  box-shadow: 0 0 12px rgba(255, 242, 168, 0.5);
+  height: calc(var(--sky-patrol-gun-fill, 1) * 100%);
+  left: 0;
+  position: absolute;
+  width: 100%;
+}
+
+.fullscreen-camera-sky-patrol-gun-meter.cooldown .fullscreen-camera-sky-patrol-gun-meter-fill {
+  background: linear-gradient(180deg, #ffd0d0 0%, #ff7171 100%);
+  box-shadow: 0 0 14px rgba(255, 92, 92, 0.58);
+}
+
+.fullscreen-camera-sky-patrol-gun-meter.recharging .fullscreen-camera-sky-patrol-gun-meter-fill {
+  background: linear-gradient(180deg, #e4fbff 0%, #70d6ff 100%);
+  box-shadow: 0 0 14px rgba(112, 214, 255, 0.5);
+}
+
+.fullscreen-camera-sky-patrol-gun-meter-state {
+  color: rgba(235, 244, 255, 0.9);
+  font-size: 0.58rem;
+  font-weight: 800;
+}
+
+.fullscreen-camera-sky-patrol-gun-meter-timer {
+  color: #ffd0d0;
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.fullscreen-camera-sky-patrol-hud-label {
+  color: rgba(226, 239, 255, 0.72);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-sky-patrol-hud-value {
+  color: #f8fbff;
+  font-weight: 900;
+}
+
+.fullscreen-camera-sky-patrol-radar {
+  background:
+    linear-gradient(90deg, rgba(226, 240, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(226, 240, 255, 0.12) 1px, transparent 1px),
+    rgba(9, 17, 27, 0.64);
+  background-size: 33.333% 50%;
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 8px;
+  height: 58px;
+  left: 18px;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  top: 72px;
+  width: 178px;
+  z-index: 4;
+}
+
+.fullscreen-camera-sky-patrol-radar::before {
+  background: linear-gradient(90deg, transparent, rgba(112, 214, 255, 0.42), transparent);
+  content: "";
+  height: 100%;
+  left: 50%;
+  opacity: 0.42;
+  position: absolute;
+  top: 0;
+  width: 1px;
+}
+
+.fullscreen-camera-sky-patrol-radar-sweep {
+  background: linear-gradient(90deg, transparent, rgba(255, 242, 168, 0.18), transparent);
+  height: 100%;
+  left: 48%;
+  position: absolute;
+  top: 0;
+  width: 24%;
+}
+
+.fullscreen-camera-sky-patrol-radar-blip {
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+  height: 7px;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 7px;
+}
+
+.fullscreen-camera-sky-patrol-radar-blip.player {
+  color: #fff2a8;
+  height: 9px;
+  width: 9px;
+}
+
+.fullscreen-camera-sky-patrol-radar-blip.air {
+  color: #70d6ff;
+}
+
+.fullscreen-camera-sky-patrol-radar-blip.ground {
+  border-radius: 2px;
+  color: #ffcf7a;
+}
+
+.fullscreen-camera-sky-patrol-life-icons {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.fullscreen-camera-sky-patrol-life-icon {
+  background: #fff2a8;
+  clip-path: polygon(50% 0, 70% 28%, 100% 48%, 64% 62%, 58% 100%, 42% 100%, 36% 62%, 0 48%, 30% 28%);
+  display: inline-block;
+  height: 14px;
+  width: 14px;
+}
+
+.fullscreen-camera-sky-patrol-life-icon.lost {
+  background: rgba(226, 239, 255, 0.24);
+}
+
+.fullscreen-camera-sky-patrol-legend {
+  bottom: 18px;
+  font-size: 0.82rem;
+  left: 18px;
+}
+
+.fullscreen-camera-sky-patrol-legend.compact {
+  align-items: center;
+  gap: 8px;
+  max-width: min(68vw, 560px);
+  padding: 8px 10px;
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+
+.fullscreen-camera-sky-patrol-legend.compact.faded {
+  opacity: 0.38;
+  transform: translateY(5px);
+}
+
+.fullscreen-camera-sky-patrol-legend-chip {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.fullscreen-camera-sky-patrol-legend-chip strong {
+  color: #fff2a8;
+  font-size: 0.78rem;
+}
+
+.fullscreen-camera-sky-patrol-legend-symbol {
+  border: 1px solid rgba(12, 18, 26, 0.84);
+  display: inline-block;
+  height: 10px;
+  width: 10px;
+}
+
+.fullscreen-camera-sky-patrol-legend-chip.air .fullscreen-camera-sky-patrol-legend-symbol {
+  background: #70d6ff;
+  clip-path: polygon(50% 0, 100% 100%, 50% 74%, 0 100%);
+}
+
+.fullscreen-camera-sky-patrol-legend-chip.ground .fullscreen-camera-sky-patrol-legend-symbol {
+  background: #ffcf7a;
+  border-radius: 2px;
+}
+
+.fullscreen-camera-sky-patrol-legend-chip.control .fullscreen-camera-sky-patrol-legend-symbol {
+  background: #fff2a8;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(255, 242, 168, 0.42);
+}
+
+.fullscreen-camera-sky-patrol-banner {
+  font-size: 0.88rem;
+  font-weight: 700;
+  left: 50%;
+  max-width: min(72vw, 520px);
+  text-align: center;
+  top: 18px;
+  transform: translateX(-50%);
+}
+
+.fullscreen-camera-sky-patrol-banner.start-prompt {
+  align-items: center;
+  display: grid;
+  gap: 4px;
+  padding: 12px 16px;
+  top: 92px;
+}
+
+.fullscreen-camera-sky-patrol-start-title {
+  color: #fff2a8;
+  font-size: 0.94rem;
+  font-weight: 900;
+}
+
+.fullscreen-camera-sky-patrol-start-detail {
+  color: rgba(235, 244, 255, 0.88);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.fullscreen-camera-sky-patrol-banner.game-over {
+  display: grid;
+  gap: 8px;
+  font-size: clamp(1.25rem, 3.4vw, 2.35rem);
+  font-weight: 900;
+  left: 50%;
+  max-width: min(86vw, 620px);
+  padding: 16px 20px;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.42);
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-sky-patrol-game-over-title {
+  line-height: 1.05;
+}
+
+.fullscreen-camera-sky-patrol-game-over-stats {
+  color: rgba(235, 244, 255, 0.88);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: clamp(0.86rem, 1.8vw, 1.08rem);
+  gap: 12px;
+  justify-content: center;
+}
+
+.fullscreen-camera-sky-patrol-game-over-restart {
+  color: #fff2a8;
+  font-size: clamp(0.78rem, 1.5vw, 1rem);
+  font-weight: 800;
+}
+
 .fullscreen-camera-invaders {
   overflow: hidden;
   pointer-events: none;
@@ -1363,16 +2437,36 @@ body {
 }
 
 .fullscreen-camera-missile-command {
+  background:
+    radial-gradient(circle at 24% 18%, rgba(73, 213, 184, 0.1), transparent 28%),
+    linear-gradient(180deg, rgba(4, 10, 24, 0.1), rgba(2, 8, 17, 0.44));
   overflow: hidden;
   pointer-events: none;
   position: absolute;
   z-index: 2;
 }
 
+.fullscreen-camera-missile-command.retro-defense::before {
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.045) 0,
+      rgba(255, 255, 255, 0.045) 1px,
+      transparent 1px,
+      transparent 5px
+    ),
+    radial-gradient(circle at 78% 24%, transparent 0 18%, rgba(95, 255, 208, 0.08) 18.4%, transparent 19.2% 100%);
+  content: "";
+  inset: 0;
+  opacity: 0.68;
+  pointer-events: none;
+  position: absolute;
+}
+
 .fullscreen-camera-missile-skyline {
   background:
-    radial-gradient(circle at 50% 20%, rgba(120, 192, 255, 0.2), transparent 28%),
-    linear-gradient(180deg, rgba(4, 14, 28, 0.1), rgba(4, 14, 28, 0.58));
+    radial-gradient(circle at 50% 20%, rgba(112, 255, 211, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(4, 14, 28, 0.1), rgba(4, 14, 28, 0.66));
   inset: 0;
   position: absolute;
 }
@@ -1386,6 +2480,33 @@ body {
   left: 0;
   position: absolute;
   width: 100%;
+}
+
+.fullscreen-camera-missile-target-warning {
+  border: 2px solid rgba(255, 96, 76, 0.82);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 8px rgba(255, 96, 76, 0.1),
+    0 0 24px rgba(255, 78, 56, 0.36);
+  display: grid;
+  place-items: center;
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-missile-target-warning.multiple {
+  border-color: rgba(255, 226, 117, 0.9);
+  box-shadow:
+    0 0 0 10px rgba(255, 178, 71, 0.13),
+    0 0 30px rgba(255, 178, 71, 0.42);
+}
+
+.fullscreen-camera-missile-target-warning-count {
+  color: #fff8df;
+  font-size: 0.86rem;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
 }
 
 .fullscreen-camera-missile-structure {
@@ -1403,6 +2524,10 @@ body {
     0 10px 24px rgba(0, 0, 0, 0.2);
 }
 
+.fullscreen-camera-missile-structure.city.shape-block {
+  clip-path: none;
+}
+
 .fullscreen-camera-missile-structure.base {
   background:
     linear-gradient(180deg, rgba(255, 227, 169, 0.98), rgba(220, 152, 74, 0.9));
@@ -1413,8 +2538,69 @@ body {
 }
 
 .fullscreen-camera-missile-structure.destroyed {
-  filter: grayscale(1);
-  opacity: 0.34;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  filter: none;
+  opacity: 0.9;
+}
+
+.fullscreen-camera-missile-structure.destroyed.rubble {
+  clip-path: none;
+}
+
+.fullscreen-camera-missile-rubble-fragment {
+  background:
+    linear-gradient(180deg, rgba(130, 139, 144, 0.96), rgba(43, 51, 55, 0.96));
+  border: 2px solid rgba(7, 13, 16, 0.8);
+  bottom: 0;
+  position: absolute;
+}
+
+.fullscreen-camera-missile-rubble-fragment.fragment-left {
+  height: 46%;
+  left: 4%;
+  transform: rotate(-7deg);
+  width: 33%;
+}
+
+.fullscreen-camera-missile-rubble-fragment.fragment-center {
+  height: 62%;
+  left: 34%;
+  transform: rotate(3deg);
+  width: 29%;
+}
+
+.fullscreen-camera-missile-rubble-fragment.fragment-right {
+  height: 38%;
+  right: 4%;
+  transform: rotate(8deg);
+  width: 30%;
+}
+
+.fullscreen-camera-missile-structure-smoke {
+  background: radial-gradient(circle, rgba(184, 200, 202, 0.28), transparent 68%);
+  border-radius: 50%;
+  height: 86%;
+  left: 50%;
+  position: absolute;
+  top: -64%;
+  transform: translateX(-50%);
+  width: 86%;
+}
+
+.fullscreen-camera-missile-structure.selected-launch-base {
+  box-shadow:
+    0 0 0 4px rgba(255, 248, 201, 0.22),
+    0 0 24px rgba(255, 236, 141, 0.62),
+    0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+.fullscreen-camera-missile-launch-preview {
+  background: linear-gradient(90deg, rgba(255, 248, 201, 0.58), rgba(255, 248, 201, 0.06));
+  height: 2px;
+  position: absolute;
+  transform-origin: left center;
 }
 
 .fullscreen-camera-missile-trail {
@@ -1426,6 +2612,18 @@ body {
 .fullscreen-camera-missile-trail.hostile {
   background: linear-gradient(90deg, rgba(255, 214, 122, 0.16), rgba(255, 89, 64, 0.92));
   box-shadow: 0 0 14px rgba(255, 110, 84, 0.54);
+}
+
+.fullscreen-camera-missile-trail.hostile.urgent {
+  background: linear-gradient(90deg, rgba(255, 169, 80, 0.18), rgba(255, 70, 46, 0.98));
+  box-shadow: 0 0 18px rgba(255, 84, 52, 0.72);
+  height: 3px;
+}
+
+.fullscreen-camera-missile-trail.hostile.critical {
+  background: linear-gradient(90deg, rgba(255, 74, 52, 0.2), rgba(255, 30, 30, 1));
+  box-shadow: 0 0 24px rgba(255, 42, 42, 0.86);
+  height: 4px;
 }
 
 .fullscreen-camera-missile-trail.interceptor {
@@ -1446,17 +2644,74 @@ body {
   box-shadow: 0 0 18px rgba(255, 126, 97, 0.9);
 }
 
+.fullscreen-camera-missile-head.hostile.shape-diamond {
+  border-radius: 3px;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.fullscreen-camera-missile-head.hostile.urgent {
+  background: #ff4d3f;
+  box-shadow: 0 0 22px rgba(255, 77, 63, 0.96);
+  height: 14px;
+  width: 14px;
+}
+
+.fullscreen-camera-missile-head.hostile.critical {
+  background: #ff1f30;
+  box-shadow: 0 0 28px rgba(255, 31, 48, 1);
+  height: 16px;
+  width: 16px;
+}
+
 .fullscreen-camera-missile-head.interceptor {
   background: #e9fdff;
   box-shadow: 0 0 18px rgba(171, 247, 255, 0.92);
 }
 
+.fullscreen-camera-missile-head.interceptor.shape-circle {
+  border: 2px solid rgba(3, 25, 33, 0.62);
+  border-radius: 50%;
+}
+
 .fullscreen-camera-missile-explosion {
-  background: radial-gradient(circle, rgba(255, 251, 214, 0.18) 0%, rgba(255, 251, 214, 0.05) 54%, transparent 76%);
   border-radius: 50%;
   border-style: solid;
   border-width: 3px;
   position: absolute;
+}
+
+.fullscreen-camera-missile-explosion-core,
+.fullscreen-camera-missile-explosion-shockwave {
+  border-radius: 50%;
+  inset: 0;
+  position: absolute;
+}
+
+.fullscreen-camera-missile-explosion-core {
+  background: radial-gradient(circle, rgba(255, 251, 214, 0.56) 0%, rgba(255, 197, 90, 0.22) 52%, transparent 76%);
+}
+
+.fullscreen-camera-missile-explosion.impact .fullscreen-camera-missile-explosion-core {
+  background: radial-gradient(circle, rgba(255, 226, 190, 0.44) 0%, rgba(255, 92, 54, 0.2) 54%, transparent 78%);
+}
+
+.fullscreen-camera-missile-explosion-shockwave {
+  border: 2px solid rgba(255, 251, 214, 0.58);
+}
+
+.fullscreen-camera-missile-explosion.impact .fullscreen-camera-missile-explosion-shockwave {
+  border-color: rgba(255, 112, 72, 0.58);
+}
+
+.fullscreen-camera-missile-score-popup {
+  color: #fff8c9;
+  font-size: clamp(0.9rem, 2vw, 1.45rem);
+  font-weight: 900;
+  position: absolute;
+  text-shadow:
+    0 0 12px rgba(255, 226, 112, 0.72),
+    0 4px 12px rgba(0, 0, 0, 0.42);
+  transform: translate(-50%, -50%);
 }
 
 .fullscreen-camera-missile-crosshair {
@@ -1469,6 +2724,42 @@ body {
   width: 34px;
 }
 
+.fullscreen-camera-missile-crosshair.ready {
+  border-color: rgba(180, 255, 218, 0.95);
+  box-shadow: 0 0 16px rgba(92, 255, 196, 0.48);
+}
+
+.fullscreen-camera-missile-crosshair.cooling {
+  border-color: rgba(255, 201, 111, 0.82);
+}
+
+.fullscreen-camera-missile-crosshair.no-hand,
+.fullscreen-camera-missile-crosshair.no-bases {
+  border-color: rgba(214, 225, 239, 0.42);
+  border-style: dashed;
+  box-shadow: 0 0 14px rgba(214, 225, 239, 0.2);
+}
+
+.fullscreen-camera-missile-crosshair.no-bases {
+  border-color: rgba(255, 112, 98, 0.58);
+}
+
+.fullscreen-camera-missile-cooldown-ring {
+  background: conic-gradient(
+    rgba(255, 248, 201, 0.92) calc(var(--missile-cooldown-progress, 1) * 1turn),
+    rgba(255, 248, 201, 0.12) 0
+  );
+  border-radius: 50%;
+  inset: -9px;
+  mask: radial-gradient(circle, transparent 58%, #000 60%);
+  position: absolute;
+}
+
+.fullscreen-camera-missile-crosshair.no-hand .fullscreen-camera-missile-cooldown-ring,
+.fullscreen-camera-missile-crosshair.no-bases .fullscreen-camera-missile-cooldown-ring {
+  display: none;
+}
+
 .fullscreen-camera-missile-crosshair::before,
 .fullscreen-camera-missile-crosshair::after {
   background: rgba(255, 248, 201, 0.96);
@@ -1477,6 +2768,20 @@ body {
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-missile-crosshair-label {
+  color: #f4f7fb;
+  font-size: 0.58rem;
+  font-weight: 900;
+  left: 50%;
+  letter-spacing: 0;
+  line-height: 1;
+  position: absolute;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  top: calc(100% + 8px);
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .fullscreen-camera-missile-crosshair::before {
@@ -1509,30 +2814,136 @@ body {
   top: 18px;
 }
 
+.fullscreen-camera-missile-score-item {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.fullscreen-camera-missile-score-label {
+  color: rgba(226, 239, 255, 0.72);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-missile-score-value {
+  color: #f8fbff;
+  font-weight: 900;
+}
+
+.fullscreen-camera-missile-score-item.pressure-elevated .fullscreen-camera-missile-score-value {
+  color: #ffd878;
+}
+
+.fullscreen-camera-missile-score-item.pressure-high .fullscreen-camera-missile-score-value {
+  color: #ff7a65;
+}
+
 .fullscreen-camera-missile-legend {
   bottom: 18px;
   font-size: 0.82rem;
 }
 
+.fullscreen-camera-missile-legend.compact {
+  gap: 8px;
+  padding: 7px;
+}
+
+.fullscreen-camera-missile-legend-chip {
+  align-items: center;
+  background: rgba(226, 240, 255, 0.08);
+  border: 1px solid rgba(226, 240, 255, 0.16);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 6px;
+  padding: 5px 8px;
+}
+
+.fullscreen-camera-missile-legend-icon {
+  align-items: center;
+  background: rgba(255, 248, 201, 0.18);
+  border-radius: 50%;
+  color: #fff8d8;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 900;
+  height: 18px;
+  justify-content: center;
+  line-height: 1;
+  width: 18px;
+}
+
 .fullscreen-camera-missile-banner {
   color: #fffdf7;
+  display: grid;
   font-size: clamp(3.4rem, 12vw, 6rem);
   font-weight: 900;
+  gap: 6px;
   left: 50%;
   letter-spacing: 0.08em;
+  place-items: center;
   position: absolute;
   text-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
   top: 50%;
   transform: translate(-50%, -50%);
 }
 
+.fullscreen-camera-missile-banner.countdown {
+  letter-spacing: 0;
+}
+
+.fullscreen-camera-missile-banner-title {
+  font-size: clamp(1.2rem, 3vw, 2rem);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-missile-banner-count {
+  line-height: 0.92;
+}
+
+.fullscreen-camera-missile-banner-structures {
+  display: flex;
+  gap: 8px;
+}
+
+.fullscreen-camera-missile-banner-structures span {
+  background: rgba(255, 248, 201, 0.84);
+  border-radius: 999px;
+  box-shadow: 0 0 12px rgba(255, 248, 201, 0.48);
+  height: 8px;
+  width: 24px;
+}
+
 .fullscreen-camera-missile-banner.game-over {
   background: rgba(9, 17, 27, 0.76);
   border: 1px solid rgba(202, 220, 239, 0.22);
   border-radius: 20px;
-  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-size: clamp(1.45rem, 4vw, 2.5rem);
   letter-spacing: 0.04em;
   padding: 18px 24px;
+}
+
+.fullscreen-camera-missile-game-over-title {
+  font-weight: 900;
+}
+
+.fullscreen-camera-missile-game-over-stats {
+  color: rgba(235, 244, 255, 0.86);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: clamp(0.86rem, 1.8vw, 1.08rem);
+  gap: 10px;
+  justify-content: center;
+  letter-spacing: 0;
+}
+
+.fullscreen-camera-missile-game-over-restart {
+  color: #fff8c9;
+  font-size: clamp(0.8rem, 1.6vw, 1rem);
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 .fullscreen-camera-fruit-target,
@@ -1811,16 +3222,237 @@ body {
   position: absolute;
 }
 
+.fullscreen-camera-mode-landing {
+  inset: 0;
+  position: absolute;
+}
+
+.fullscreen-camera-mode-landing-box {
+  align-items: center;
+  background:
+    linear-gradient(180deg, rgba(20, 28, 38, 0.9), rgba(10, 16, 24, 0.96)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 52%);
+  border: 2px solid rgba(181, 207, 235, 0.2);
+  border-radius: 34px;
+  box-shadow: 0 22px 42px rgba(0, 0, 0, 0.3);
+  color: #f4f8ff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  padding: 10px 8px;
+  cursor: pointer;
+  pointer-events: auto;
+  position: absolute;
+  text-align: center;
+}
+
+.fullscreen-camera-mode-landing-box.visual {
+  border-color: rgba(255, 209, 150, 0.22);
+}
+
+.fullscreen-camera-mode-landing-box.game {
+  border-color: rgba(153, 221, 244, 0.24);
+}
+
+.fullscreen-camera-mode-landing-box.navigation {
+  border-color: rgba(175, 235, 195, 0.3);
+}
+
+.fullscreen-camera-mode-landing-box.active {
+  background:
+    linear-gradient(180deg, rgba(154, 52, 25, 0.92), rgba(72, 24, 16, 0.97)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 48%);
+  border-color: rgba(255, 224, 186, 0.34);
+  box-shadow:
+    0 0 0 6px rgba(255, 126, 97, 0.14),
+    0 24px 44px rgba(0, 0, 0, 0.32);
+}
+
+.fullscreen-camera-mode-landing-category {
+  color: rgba(213, 228, 247, 0.78);
+  font-size: clamp(0.56rem, 1vw, 0.84rem);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-mode-landing-title {
+  font-size: clamp(0.72rem, 1.7vw, 1.28rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1.08;
+  margin-top: 6px;
+  max-width: 11ch;
+}
+
+.fullscreen-camera-mode-landing-countdown {
+  font-size: clamp(1.05rem, 2.8vw, 3rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  margin-top: 8px;
+}
+
+.fullscreen-camera-mode-landing-hint {
+  color: rgba(232, 239, 249, 0.82);
+  font-size: clamp(0.6rem, 1vw, 0.94rem);
+  line-height: 1.2;
+  margin-top: 6px;
+  max-width: 13ch;
+}
+
+.fullscreen-camera-exit-box {
+  align-items: center;
+  background:
+    linear-gradient(180deg, rgba(32, 14, 18, 0.9), rgba(15, 9, 12, 0.96)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 52%);
+  border: 2px solid rgba(255, 183, 183, 0.22);
+  border-radius: 30px;
+  box-shadow: 0 22px 42px rgba(0, 0, 0, 0.3);
+  color: #fff6f4;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 14px 12px;
+  pointer-events: none;
+  position: absolute;
+  text-align: center;
+  z-index: 7;
+}
+
+.fullscreen-camera-exit-box.disabled {
+  background:
+    linear-gradient(180deg, rgba(38, 43, 51, 0.84), rgba(19, 24, 31, 0.92)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 48%);
+  border-color: rgba(182, 192, 206, 0.16);
+  box-shadow: 0 18px 32px rgba(0, 0, 0, 0.22);
+  color: rgba(233, 239, 247, 0.68);
+}
+
+.fullscreen-camera-exit-box.active {
+  background:
+    linear-gradient(180deg, rgba(143, 33, 47, 0.92), rgba(72, 18, 24, 0.97)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 48%);
+  border-color: rgba(255, 219, 219, 0.36);
+  box-shadow:
+    0 0 0 6px rgba(255, 122, 122, 0.14),
+    0 24px 44px rgba(0, 0, 0, 0.32);
+}
+
+.fullscreen-camera-exit-title {
+  font-size: 1.02rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-exit-box.disabled .fullscreen-camera-exit-title,
+.fullscreen-camera-exit-box.disabled .fullscreen-camera-exit-countdown,
+.fullscreen-camera-exit-box.disabled .fullscreen-camera-exit-hint {
+  opacity: 0.78;
+}
+
+.fullscreen-camera-exit-countdown {
+  font-size: clamp(1.7rem, 3.2vw, 2.7rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  margin-top: 8px;
+}
+
+.fullscreen-camera-exit-hint {
+  font-size: 0.88rem;
+  line-height: 1.2;
+  margin-top: 9px;
+  max-width: 11ch;
+}
+
+.fullscreen-camera-restart-box {
+  align-items: center;
+  background:
+    linear-gradient(180deg, rgba(11, 51, 45, 0.9), rgba(7, 26, 31, 0.96)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 52%);
+  border: 2px solid rgba(144, 237, 206, 0.24);
+  border-radius: 28px;
+  box-shadow: 0 22px 42px rgba(0, 0, 0, 0.3);
+  color: #effff8;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 14px 12px;
+  pointer-events: none;
+  position: absolute;
+  text-align: center;
+  z-index: 7;
+}
+
+.fullscreen-camera-restart-box.disabled {
+  background:
+    linear-gradient(180deg, rgba(38, 43, 51, 0.84), rgba(19, 24, 31, 0.92)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 48%);
+  border-color: rgba(182, 192, 206, 0.16);
+  box-shadow: 0 18px 32px rgba(0, 0, 0, 0.22);
+  color: rgba(233, 239, 247, 0.68);
+}
+
+.fullscreen-camera-restart-box.active {
+  background:
+    linear-gradient(180deg, rgba(25, 125, 95, 0.94), rgba(8, 63, 67, 0.98)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent 48%);
+  border-color: rgba(196, 255, 232, 0.38);
+  box-shadow:
+    0 0 0 6px rgba(71, 224, 173, 0.15),
+    0 24px 44px rgba(0, 0, 0, 0.32);
+}
+
+.fullscreen-camera-restart-title {
+  font-size: clamp(0.86rem, 1.4vw, 1.08rem);
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1.08;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-restart-box.disabled .fullscreen-camera-restart-title,
+.fullscreen-camera-restart-box.disabled .fullscreen-camera-restart-countdown,
+.fullscreen-camera-restart-box.disabled .fullscreen-camera-restart-hint {
+  opacity: 0.78;
+}
+
+.fullscreen-camera-restart-countdown {
+  font-size: clamp(1.7rem, 3.2vw, 2.7rem);
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+  margin-top: 8px;
+}
+
+.fullscreen-camera-restart-hint {
+  font-size: 0.88rem;
+  line-height: 1.2;
+  margin-top: 9px;
+  max-width: 13ch;
+}
+
 .fullscreen-camera-hud {
   display: flex;
   flex-direction: column;
   gap: 10px;
   inset: 0;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 18px;
   pointer-events: none;
   position: absolute;
   z-index: 6;
+}
+
+.fullscreen-camera-hud-bottom {
+  align-items: flex-end;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  width: 100%;
 }
 
 .fullscreen-camera-meta {
@@ -1835,18 +3467,8 @@ body {
   flex-direction: column;
 }
 
-.fullscreen-camera-mode-row {
-  justify-content: flex-end;
-}
-
-.fullscreen-camera-chip {
-  background: rgba(7, 13, 21, 0.76);
-  border: 1px solid rgba(168, 190, 215, 0.22);
-  border-radius: 999px;
-  color: #f1f7ff;
-  font-size: 0.92rem;
-  font-weight: 700;
-  padding: 8px 12px;
+.fullscreen-camera-status {
+  flex: 0 0 auto;
 }
 
 .fullscreen-camera-note {
@@ -3741,6 +5363,11 @@ button:disabled {
     align-items: stretch;
   }
 
+  .fullscreen-camera-hud-bottom {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
   .fullscreen-camera-note {
     max-width: 100%;
   }
@@ -3754,14 +5381,16 @@ button:disabled {
   .fullscreen-camera-hand-bounce-scoreboard,
   .fullscreen-camera-hand-bounce-legend,
   .fullscreen-camera-hand-bounce-banner,
+  .fullscreen-camera-sky-patrol-scoreboard,
+  .fullscreen-camera-sky-patrol-legend,
+  .fullscreen-camera-sky-patrol-banner,
   .fullscreen-camera-invaders-scoreboard,
   .fullscreen-camera-flappy-scoreboard,
   .fullscreen-camera-invaders-legend,
   .fullscreen-camera-flappy-legend,
   .fullscreen-camera-brick-dodger-legend,
-  .fullscreen-camera-tic-tac-toe-scoreboard,
+  .fullscreen-camera-tic-tac-toe-topbar,
   .fullscreen-camera-tic-tac-toe-legend,
-  .fullscreen-camera-tic-tac-toe-status,
   .fullscreen-camera-missile-scoreboard,
   .fullscreen-camera-missile-legend {
     gap: 8px;
@@ -3774,14 +5403,45 @@ button:disabled {
   .fullscreen-camera-hand-bounce-scoreboard,
   .fullscreen-camera-invaders-scoreboard,
   .fullscreen-camera-flappy-scoreboard,
-  .fullscreen-camera-tic-tac-toe-scoreboard,
   .fullscreen-camera-missile-scoreboard {
     right: 12px;
+  }
+
+  .fullscreen-camera-sky-patrol-scoreboard {
+    justify-content: center;
+    left: 50%;
+    max-width: calc(100% - 24px);
+    right: auto;
+    transform: translateX(-50%);
+  }
+
+  .fullscreen-camera-tic-tac-toe-topbar {
+    right: 12px;
+    top: 12px;
+  }
+
+  .fullscreen-camera-tic-tac-toe-scoreboard {
+    gap: 8px;
+    font-size: 0.9rem;
+  }
+
+  .fullscreen-camera-sky-patrol-radar {
+    height: 48px;
+    left: 12px;
+    top: 66px;
+    width: 148px;
+  }
+
+  .fullscreen-camera-tic-tac-toe-status {
+    flex-basis: 100%;
+    font-size: 0.95rem;
+    text-align: left;
   }
 
   .fullscreen-camera-breakout-legend,
   .fullscreen-camera-brick-dodger-legend,
   .fullscreen-camera-hand-bounce-legend,
+  .fullscreen-camera-sky-patrol-legend,
   .fullscreen-camera-invaders-legend,
   .fullscreen-camera-flappy-legend,
   .fullscreen-camera-tic-tac-toe-legend,
@@ -3804,11 +5464,24 @@ button:disabled {
     right: auto;
   }
 
-  .fullscreen-camera-tic-tac-toe-status {
+  .fullscreen-camera-sky-patrol-banner {
     left: 50%;
     max-width: calc(100% - 24px);
     right: auto;
     top: 12px;
+  }
+
+  .fullscreen-camera-sky-patrol-banner.start-prompt {
+    top: 108px;
+  }
+
+  .fullscreen-camera-sky-patrol-gun-meter {
+    right: 12px;
+    width: 50px;
+  }
+
+  .fullscreen-camera-sky-patrol-gun-meter-track {
+    height: 272px;
   }
 
   .fullscreen-camera-hand-bounce-banner {

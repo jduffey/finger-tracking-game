@@ -11,6 +11,17 @@ function constantRng(value) {
   return () => value;
 }
 
+test("createSpaceInvadersLayout scales the enemies, ship, and shots up by fifteen percent", () => {
+  const layout = createSpaceInvadersLayout(960, 720);
+
+  assert.ok(Math.abs(layout.enemyWidth - 66.24) < 0.001);
+  assert.ok(Math.abs(layout.enemyHeight - 33.12) < 0.001);
+  assert.ok(Math.abs(layout.shipWidth - 132.48) < 0.001);
+  assert.ok(Math.abs(layout.shipHeight - 41.4) < 0.001);
+  assert.ok(Math.abs(layout.shotWidth - 11.5) < 0.001);
+  assert.ok(Math.abs(layout.shotHeight - 28.98) < 0.001);
+});
+
 test("createSpaceInvadersGame centers the ship and spawns a full formation", () => {
   const game = createSpaceInvadersGame(960, 720, constantRng(0.2));
   assert.equal(game.status, "playing");

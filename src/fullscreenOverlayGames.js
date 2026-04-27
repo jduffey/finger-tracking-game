@@ -1,17 +1,34 @@
 export function runFullscreenOverlayGameUpdates(
   timestamp,
   {
+    updateFullscreenModeLandingSimulation,
+    updateFullscreenExitControlSimulation,
+    updateFullscreenRestartControlSimulation,
     updateFullscreenHandBounceSimulation,
     updateFullscreenBrickDodgerSimulation,
     updateFullscreenBreakoutSimulation,
     updateFullscreenBreakoutCoopSimulation,
     updateFullscreenFingerPongSimulation,
+    updateFullscreenSkyPatrolSimulation,
+    updateFullscreenWfcWorldSimulation,
     updateFullscreenInvadersSimulation,
     updateFullscreenFlappySimulation,
     updateFullscreenMissileCommandSimulation,
     updateFullscreenTicTacToeSimulation,
   } = {},
 ) {
+  if (typeof updateFullscreenModeLandingSimulation === "function") {
+    updateFullscreenModeLandingSimulation(timestamp);
+  }
+
+  if (typeof updateFullscreenExitControlSimulation === "function") {
+    updateFullscreenExitControlSimulation(timestamp);
+  }
+
+  if (typeof updateFullscreenRestartControlSimulation === "function") {
+    updateFullscreenRestartControlSimulation(timestamp);
+  }
+
   if (typeof updateFullscreenHandBounceSimulation === "function") {
     updateFullscreenHandBounceSimulation(timestamp);
   }
@@ -30,6 +47,14 @@ export function runFullscreenOverlayGameUpdates(
 
   if (typeof updateFullscreenFingerPongSimulation === "function") {
     updateFullscreenFingerPongSimulation(timestamp);
+  }
+
+  if (typeof updateFullscreenSkyPatrolSimulation === "function") {
+    updateFullscreenSkyPatrolSimulation(timestamp);
+  }
+
+  if (typeof updateFullscreenWfcWorldSimulation === "function") {
+    updateFullscreenWfcWorldSimulation(timestamp);
   }
 
   if (typeof updateFullscreenInvadersSimulation === "function") {
