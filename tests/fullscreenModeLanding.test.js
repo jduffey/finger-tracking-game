@@ -9,6 +9,7 @@ import {
   FULLSCREEN_MODE_LANDING_HOLD_MS,
   createFullscreenModeLandingLayout,
   createFullscreenModeLandingState,
+  getVerifiedFullscreenMenuHand,
   hasVerifiedFullscreenMenuHand,
   stepFullscreenModeLanding,
 } from "../src/fullscreenModeLanding.js";
@@ -110,6 +111,30 @@ test("hasVerifiedFullscreenMenuHand only accepts hands with all five fingertips"
     }),
     false,
   );
+});
+
+test("getVerifiedFullscreenMenuHand selects the first hand with all required fingertips", () => {
+  const partialHand = {
+    id: "partial",
+    fingerTips: {
+      thumb: { u: 0.1, v: 0.1 },
+      index: { u: 0.2, v: 0.2 },
+    },
+  };
+  const verifiedHand = {
+    id: "verified",
+    fingerTips: {
+      thumb: { u: 0.1, v: 0.1 },
+      index: { u: 0.2, v: 0.2 },
+      middle: { u: 0.3, v: 0.3 },
+      ring: { u: 0.4, v: 0.4 },
+      pinky: { u: 0.5, v: 0.5 },
+    },
+  };
+
+  assert.equal(getVerifiedFullscreenMenuHand([partialHand, verifiedHand]), verifiedHand);
+  assert.equal(getVerifiedFullscreenMenuHand([partialHand]), null);
+  assert.equal(getVerifiedFullscreenMenuHand(null), null);
 });
 
 test("stepFullscreenModeLanding waits for a verified hand before starting a 1.00 second hold", () => {

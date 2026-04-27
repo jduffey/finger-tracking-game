@@ -69,6 +69,7 @@ import {
   FULLSCREEN_LANDING_MODE,
   FULLSCREEN_MODE_LANDING_HOLD_MS,
   createFullscreenModeLandingState,
+  getVerifiedFullscreenMenuHand,
   hasVerifiedFullscreenMenuHand,
   stepFullscreenModeLanding,
 } from "./fullscreenModeLanding.js";
@@ -7435,10 +7436,8 @@ export default function App() {
     const previousTimestamp = fullscreenModeLandingLastTickRef.current || timestamp;
     const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
     fullscreenModeLandingLastTickRef.current = timestamp;
-    const primaryHand = Array.isArray(fullscreenHandsRef.current)
-      ? fullscreenHandsRef.current[0] ?? null
-      : null;
-    const handVerified = hasVerifiedFullscreenMenuHand(primaryHand);
+    const verifiedHand = getVerifiedFullscreenMenuHand(fullscreenHandsRef.current);
+    const handVerified = Boolean(verifiedHand);
 
     const pointerActive =
       handDetectedRef.current &&
@@ -7483,10 +7482,8 @@ export default function App() {
     const previousTimestamp = fullscreenExitControlLastTickRef.current || timestamp;
     const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
     fullscreenExitControlLastTickRef.current = timestamp;
-    const primaryHand = Array.isArray(fullscreenHandsRef.current)
-      ? fullscreenHandsRef.current[0] ?? null
-      : null;
-    const handVerified = hasVerifiedFullscreenMenuHand(primaryHand);
+    const verifiedHand = getVerifiedFullscreenMenuHand(fullscreenHandsRef.current);
+    const handVerified = Boolean(verifiedHand);
     const pointerActive =
       handDetectedRef.current &&
       handVerified &&
@@ -7532,10 +7529,8 @@ export default function App() {
     const previousTimestamp = fullscreenRestartControlLastTickRef.current || timestamp;
     const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
     fullscreenRestartControlLastTickRef.current = timestamp;
-    const primaryHand = Array.isArray(fullscreenHandsRef.current)
-      ? fullscreenHandsRef.current[0] ?? null
-      : null;
-    const handVerified = hasVerifiedFullscreenMenuHand(primaryHand);
+    const verifiedHand = getVerifiedFullscreenMenuHand(fullscreenHandsRef.current);
+    const handVerified = Boolean(verifiedHand);
     const pointerActive =
       handDetectedRef.current &&
       handVerified &&

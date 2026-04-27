@@ -70,6 +70,11 @@ export function hasVerifiedFullscreenMenuHand(hand) {
   });
 }
 
+export function getVerifiedFullscreenMenuHand(hands) {
+  const candidates = Array.isArray(hands) ? hands : [];
+  return candidates.find((hand) => hasVerifiedFullscreenMenuHand(hand)) ?? null;
+}
+
 export function createFullscreenModeLandingLayout(width, height) {
   const ticTacToeLayout = createTicTacToeLayout(width, height);
   const layoutWidth = Math.max(1, Number.isFinite(width) ? width : ticTacToeLayout.width);
