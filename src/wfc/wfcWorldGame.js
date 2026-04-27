@@ -8,10 +8,12 @@ import {
 } from "./wfcSolver.js";
 
 export const WFC_WORLD_MODE_ID = "fingerprint-worlds";
-export const WFC_WORLD_COLS = 16;
-export const WFC_WORLD_ROWS = 12;
-export const WFC_WORLD_COLLAPSE_STEP_MS = 18;
+export const WFC_WORLD_COLS = 39;
+export const WFC_WORLD_ROWS = 24;
+export const WFC_WORLD_COLLAPSE_STEP_MS = 5;
 const WFC_WORLD_CONFLICT_MS = 900;
+const WFC_HEX_WIDTH_RATIO = Math.sqrt(3) / 2;
+const WFC_HEX_ROW_STEP_RATIO = 0.75;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -27,6 +29,52 @@ function isPointInRect(rect, x, y) {
     y >= rect.top &&
     y <= rect.top + rect.height
   );
+}
+
+function isSameWfcWorldCell(a, b) {
+  return a?.col === b?.col && a?.row === b?.row;
+}
+
+function getWfcWorldHexVertices(centerX, centerY, width, height) {
+  return [
+    { x: centerX, y: centerY - height / 2 },
+    { x: centerX + width / 2, y: centerY - height / 4 },
+    { x: centerX + width / 2, y: centerY + height / 4 },
+    { x: centerX, y: centerY + height / 2 },
+    { x: centerX - width / 2, y: centerY + height / 4 },
+    { x: centerX - width / 2, y: centerY - height / 4 },
+  ];
+}
+
+function isPointOnLineSegment(point, a, b) {
+  const crossProduct = (point.y - a.y) * (b.x - a.x) - (point.x - a.x) * (b.y - a.y);
+  if (Math.abs(crossProduct) > 0.0001) {
+    return false;
+  }
+  const dotProduct = (point.x - a.x) * (b.x - a.x) + (point.y - a.y) * (b.y - a.y);
+  if (dotProduct < 0) {
+    return false;
+  }
+  const squaredLength = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+  return dotProduct <= squaredLength;
+}
+
+function isPointInPolygon(point, vertices) {
+  let inside = false;
+  for (let index = 0, previousIndex = vertices.length - 1; index < vertices.length; previousIndex = index, index += 1) {
+    const current = vertices[index];
+    const previous = vertices[previousIndex];
+    if (isPointOnLineSegment(point, previous, current)) {
+      return true;
+    }
+    const intersects =
+      current.y > point.y !== previous.y > point.y &&
+      point.x < ((previous.x - current.x) * (point.y - current.y)) / (previous.y - current.y) + current.x;
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
 
 function createConstrainedWfc(cols, rows, constraints) {
@@ -46,45 +94,28 @@ export function createWfcWorldLayout(width, height) {
   const edge = clamp(Math.min(safeWidth, safeHeight) * 0.035, 16, 34);
   const panelWidth = clamp(safeWidth * 0.22, 174, 250);
   const gap = clamp(safeWidth * 0.018, 14, 28);
-  const topInset = clamp(safeHeight * 0.085, 54, 78);
+  const topInset = edge;
   const bottomInset = clamp(safeHeight * 0.05, 24, 46);
-  const availableGridWidth = Math.max(1, safeWidth - edge * 2 - panelWidth - gap);
+  const availableGridWidth = Math.max(1, safeWidth - edge * 2);
   const availableGridHeight = Math.max(1, safeHeight - topInset - bottomInset);
-  const cellSize = Math.floor(Math.min(availableGridWidth / WFC_WORLD_COLS, availableGridHeight / WFC_WORLD_ROWS));
-  const gridWidth = cellSize * WFC_WORLD_COLS;
-  const gridHeight = cellSize * WFC_WORLD_ROWS;
-  const gridLeft = edge + Math.max(0, (availableGridWidth - gridWidth) / 2);
-  const gridTop = topInset + Math.max(0, (availableGridHeight - gridHeight) / 2);
-  const panelLeft = Math.min(safeWidth - panelWidth - edge, gridLeft + gridWidth + gap);
-  const compactPanel = safeHeight <= 520;
-  const tileGap = compactPanel ? 6 : 10;
-  const paletteColumns = compactPanel ? 4 : 2;
-  const paletteRows = Math.ceil(FINGERPRINT_WORLD_TILES.length / paletteColumns);
-  const controlGap = compactPanel ? 6 : 10;
-  const controlCount = 3;
-  const panelBottom = safeHeight - bottomInset;
-  const paletteTileWidth =
-    (panelWidth - tileGap * Math.max(0, paletteColumns - 1)) / paletteColumns;
-  const paletteTop = topInset;
-  const controlHeight = clamp(
-    safeHeight * (compactPanel ? 0.095 : 0.08),
-    compactPanel ? 32 : 44,
-    compactPanel ? 42 : 58,
-  );
-  const availablePaletteHeight =
-    panelBottom -
-    paletteTop -
-    14 -
-    controlCount * controlHeight -
-    Math.max(0, controlCount - 1) * controlGap;
-  const paletteTileHeight = clamp(
+  const cellHeight = Math.floor(
     Math.min(
-      paletteTileWidth * 0.72,
-      (availablePaletteHeight - Math.max(0, paletteRows - 1) * tileGap) / paletteRows,
+      availableGridWidth / ((WFC_WORLD_COLS + 0.5) * WFC_HEX_WIDTH_RATIO),
+      availableGridHeight / (1 + (WFC_WORLD_ROWS - 1) * WFC_HEX_ROW_STEP_RATIO),
     ),
-    compactPanel ? 28 : 50,
-    compactPanel ? 52 : 74,
   );
+  const cellWidth = cellHeight * WFC_HEX_WIDTH_RATIO;
+  const rowStep = cellHeight * WFC_HEX_ROW_STEP_RATIO;
+  const gridWidth = cellWidth * (WFC_WORLD_COLS + 0.5);
+  const gridHeight = cellHeight + rowStep * (WFC_WORLD_ROWS - 1);
+  const gridLeft = edge + Math.max(0, (availableGridWidth - gridWidth) / 2);
+  const gridTop = topInset;
+  const panelLeft = safeWidth - panelWidth - edge;
+  const tileGap = 8;
+  const paletteColumns = 3;
+  const paletteTileWidth = (panelWidth - tileGap * (paletteColumns - 1)) / paletteColumns;
+  const paletteTileHeight = paletteTileWidth;
+  const paletteTop = topInset;
   const palette = FINGERPRINT_WORLD_TILES.map((tile, index) => {
     const col = index % paletteColumns;
     const row = Math.floor(index / paletteColumns);
@@ -97,15 +128,15 @@ export function createWfcWorldLayout(width, height) {
     };
   });
   const controlTop =
-    paletteTop +
-    paletteRows * paletteTileHeight +
-    Math.max(0, paletteRows - 1) * tileGap +
-    14;
-  const controls = ["generate", "reroll", "clear"].map((id, index) => ({
+    paletteTop + Math.ceil(FINGERPRINT_WORLD_TILES.length / paletteColumns) * (paletteTileHeight + tileGap) + 14;
+  const controlIds = ["generate", "clear"];
+  const availableControlHeight = (safeHeight - bottomInset - controlTop - 20) / controlIds.length;
+  const controlHeight = clamp(paletteTileHeight * 1.18, 72, Math.min(96, availableControlHeight));
+  const controls = controlIds.map((id, index) => ({
     id,
-    label: id === "generate" ? "Generate" : id === "reroll" ? "Reroll" : "Clear",
+    label: id === "generate" ? "Generate" : "Clear",
     left: panelLeft,
-    top: controlTop + index * (controlHeight + controlGap),
+    top: controlTop + index * (controlHeight + 10),
     width: panelWidth,
     height: controlHeight,
   }));
@@ -120,7 +151,11 @@ export function createWfcWorldLayout(width, height) {
       top: gridTop,
       width: gridWidth,
       height: gridHeight,
-      cellSize,
+      cellSize: cellHeight,
+      cellWidth,
+      cellHeight,
+      rowStep,
+      cellShape: "hex",
     },
     palette,
     controls,
@@ -132,13 +167,68 @@ export function createWfcWorldLayout(width, height) {
   };
 }
 
+export function getWfcWorldCellCenter(layout, col, row) {
+  const cellWidth = layout?.grid?.cellWidth ?? layout?.grid?.cellSize ?? 0;
+  const cellHeight = layout?.grid?.cellHeight ?? layout?.grid?.cellSize ?? 0;
+  const rowStep = layout?.grid?.rowStep ?? cellHeight;
+  return {
+    x: layout.grid.left + cellWidth * (col + 0.5) + (row % 2 === 1 ? cellWidth / 2 : 0),
+    y: layout.grid.top + rowStep * row + cellHeight / 2,
+  };
+}
+
 export function mapPointerToWfcCell(layout, pointerX, pointerY) {
   if (!layout || !isPointInRect(layout.grid, pointerX, pointerY)) {
     return null;
   }
+  const point = { x: pointerX, y: pointerY };
+  const cellWidth = layout.grid.cellWidth ?? layout.grid.cellSize;
+  const cellHeight = layout.grid.cellHeight ?? layout.grid.cellSize;
+  for (let row = 0; row < layout.rows; row += 1) {
+    for (let col = 0; col < layout.cols; col += 1) {
+      const center = getWfcWorldCellCenter(layout, col, row);
+      const vertices = getWfcWorldHexVertices(center.x, center.y, cellWidth, cellHeight);
+      if (isPointInPolygon(point, vertices)) {
+        return { col, row };
+      }
+    }
+  }
+  return null;
+}
+
+export function createWfcWorldStepInput({
+  viewport,
+  handDetected = false,
+  cursor = null,
+  pinchActive = false,
+  mouseInput = null,
+} = {}) {
+  const mousePointerActive =
+    Boolean(mouseInput?.pointerActive) &&
+    Number.isFinite(mouseInput?.pointerX) &&
+    Number.isFinite(mouseInput?.pointerY);
+  const mouseActionActive = mousePointerActive && (mouseInput.pinchActive || mouseInput.pinchStarted);
+  if (mouseActionActive) {
+    return {
+      pointerActive: true,
+      pointerX: mouseInput.pointerX,
+      pointerY: mouseInput.pointerY,
+      pinchActive: Boolean(mouseInput.pinchActive),
+      ...(mouseInput.pinchStarted ? { pinchStarted: true } : {}),
+    };
+  }
+
+  const handPointerActive =
+    Boolean(handDetected) &&
+    Number.isFinite(cursor?.x) &&
+    Number.isFinite(cursor?.y) &&
+    Number.isFinite(viewport?.left) &&
+    Number.isFinite(viewport?.top);
   return {
-    col: clamp(Math.floor((pointerX - layout.grid.left) / layout.grid.cellSize), 0, layout.cols - 1),
-    row: clamp(Math.floor((pointerY - layout.grid.top) / layout.grid.cellSize), 0, layout.rows - 1),
+    pointerActive: handPointerActive,
+    pointerX: handPointerActive ? cursor.x - viewport.left : 0,
+    pointerY: handPointerActive ? cursor.y - viewport.top : 0,
+    pinchActive: handPointerActive && Boolean(pinchActive),
   };
 }
 
@@ -158,6 +248,8 @@ export function createWfcWorldGame(width, height) {
     phase: "seeding",
     selectedTileId: "grass",
     hoverCell: null,
+    paintDragActive: false,
+    lastPaintedCell: null,
     constraints: [],
     previousPinchActive: false,
     collapseAccumulatorMs: 0,
@@ -234,6 +326,8 @@ export function clearWfcWorld(game) {
     wfc: createWfcState({ cols: game.layout.cols, rows: game.layout.rows }),
     phase: "seeding",
     hoverCell: null,
+    paintDragActive: false,
+    lastPaintedCell: null,
     constraints: [],
     collapseAccumulatorMs: 0,
     conflictMs: 0,
@@ -261,7 +355,7 @@ function runAnimatedCollapse(game, dtMs, rng) {
       wfc,
       phase: "complete",
       collapseAccumulatorMs: 0,
-      message: "World complete. Pinch Reroll to watch new choices.",
+      message: "World complete. Pinch Generate to watch new choices.",
     };
   }
   if (wfc.status === "contradiction") {
@@ -271,7 +365,7 @@ function runAnimatedCollapse(game, dtMs, rng) {
       phase: "conflict",
       conflictMs: WFC_WORLD_CONFLICT_MS,
       collapseAccumulatorMs: 0,
-      message: "The generator found a conflict. Move one rule or reroll.",
+      message: "The generator found a conflict. Move one rule or generate again.",
     };
   }
 
@@ -286,14 +380,6 @@ function runWfcWorldControl(game, controlId, rng) {
   switch (controlId) {
     case "generate":
       return startWfcWorldCollapse(game);
-    case "reroll":
-      return {
-        ...startWfcWorldCollapse({
-          ...game,
-          wfc: createConstrainedWfc(game.layout.cols, game.layout.rows, game.constraints),
-        }),
-        message: "Rerolling the world around your rules.",
-      };
     case "clear":
       return clearWfcWorld(game);
     default:
@@ -318,6 +404,8 @@ export function stepWfcWorldGame(game, dtSeconds, input = {}, rng = Math.random)
   let nextGame = {
     ...game,
     hoverCell,
+    paintDragActive: pinchActive ? Boolean(game.paintDragActive) : false,
+    lastPaintedCell: pinchActive ? game.lastPaintedCell ?? null : null,
     previousPinchActive: pinchActive,
     conflictMs: Math.max(0, (game.conflictMs ?? 0) - dtMs),
   };
@@ -337,12 +425,39 @@ export function stepWfcWorldGame(game, dtSeconds, input = {}, rng = Math.random)
     const paletteTile = getWfcWorldPaletteTileAtPoint(nextGame.layout, pointerX, pointerY);
     const control = getWfcWorldControlAtPoint(nextGame.layout, pointerX, pointerY);
     if (paletteTile) {
-      nextGame = selectWfcWorldTile(nextGame, paletteTile.id);
+      nextGame = {
+        ...selectWfcWorldTile(nextGame, paletteTile.id),
+        paintDragActive: false,
+        lastPaintedCell: null,
+      };
     } else if (control) {
-      nextGame = runWfcWorldControl(nextGame, control.id, rng);
+      nextGame = {
+        ...runWfcWorldControl(nextGame, control.id, rng),
+        paintDragActive: false,
+        lastPaintedCell: null,
+      };
     } else if (hoverCell && nextGame.phase !== "collapsing") {
-      nextGame = placeWfcWorldConstraint(nextGame, hoverCell, nextGame.selectedTileId);
+      const paintedGame = placeWfcWorldConstraint(nextGame, hoverCell, nextGame.selectedTileId);
+      nextGame = {
+        ...paintedGame,
+        paintDragActive: paintedGame.phase !== "conflict",
+        lastPaintedCell: hoverCell,
+      };
     }
+  } else if (
+    pinchActive &&
+    pointerActive &&
+    nextGame.paintDragActive &&
+    hoverCell &&
+    !isSameWfcWorldCell(hoverCell, nextGame.lastPaintedCell) &&
+    nextGame.phase !== "collapsing"
+  ) {
+    const paintedGame = placeWfcWorldConstraint(nextGame, hoverCell, nextGame.selectedTileId);
+    nextGame = {
+      ...paintedGame,
+      paintDragActive: paintedGame.phase !== "conflict",
+      lastPaintedCell: hoverCell,
+    };
   }
 
   return runAnimatedCollapse(nextGame, dtMs, rng);

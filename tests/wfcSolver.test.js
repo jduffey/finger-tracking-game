@@ -33,7 +33,11 @@ test("setWfcConstraint locks a cell and propagates allowed neighbors", () => {
   assert.deepEqual(getWfcCellDomain(state, 1, 1), ["water"]);
   assert.deepEqual(
     getWfcCellDomain(state, 2, 1).toSorted(),
-    ["bridge", "sand", "water"],
+    ["grass", "water"],
+  );
+  assert.deepEqual(
+    getWfcCellDomain(state, 2, 2).toSorted(),
+    ["grass", "water"],
   );
 });
 
@@ -50,8 +54,47 @@ test("stepWfc collapses the lowest-entropy unresolved cell", () => {
   const next = stepWfc(seeded, constantRng(0));
 
   assert.equal(next.status, "ready");
-  assert.deepEqual(getWfcCellDomain(next, 1, 0), ["water"]);
-  assert.deepEqual(getWfcCellDomain(next, 2, 0).toSorted(), ["bridge", "sand", "water"]);
+  assert.deepEqual(getWfcCellDomain(next, 1, 0), ["grass"]);
+  assert.deepEqual(getWfcCellDomain(next, 2, 0).toSorted(), ["castle", "forest", "grass", "mountain", "water"]);
+});
+
+test("setWfcConstraint rejects bridges that cannot connect grass across water", () => {
+  const edgeBridge = setWfcConstraint(createWfcState({ cols: 3, rows: 3 }), 0, 0, "bridge");
+
+  assert.equal(edgeBridge.status, "contradiction");
+  assert.deepEqual(edgeBridge.contradictionCells, [{ col: 0, row: 0 }]);
+});
+
+test("isWfcGridValid requires bridges to connect two or three separated grass banks", () => {
+  const isolatedBridge = [
+    ["water", "water", "water", "water", "water"],
+    ["water", "water", "bridge", "water", "water"],
+    ["water", "water", "water", "water", "water"],
+    ["water", "water", "water", "water", "water"],
+  ];
+  const twoBankBridge = [
+    ["water", "water", "water", "water", "water"],
+    ["water", "grass", "bridge", "grass", "water"],
+    ["water", "water", "water", "water", "water"],
+    ["water", "water", "water", "water", "water"],
+  ];
+  const crowdedBridge = [
+    ["water", "water", "water", "grass", "water"],
+    ["water", "water", "bridge", "grass", "water"],
+    ["water", "water", "water", "water", "water"],
+    ["water", "water", "water", "water", "water"],
+  ];
+  const threeBankBridge = [
+    ["water", "water", "grass", "water", "water"],
+    ["water", "water", "bridge", "grass", "water"],
+    ["water", "water", "grass", "water", "water"],
+    ["water", "water", "water", "water", "water"],
+  ];
+
+  assert.equal(isWfcGridValid(isolatedBridge, FINGERPRINT_WORLD_ADJACENCY), false);
+  assert.equal(isWfcGridValid(twoBankBridge, FINGERPRINT_WORLD_ADJACENCY), true);
+  assert.equal(isWfcGridValid(crowdedBridge, FINGERPRINT_WORLD_ADJACENCY), false);
+  assert.equal(isWfcGridValid(threeBankBridge, FINGERPRINT_WORLD_ADJACENCY), true);
 });
 
 test("runWfc completes a valid grid while preserving placed constraints", () => {

@@ -1,22 +1,48 @@
-export const WFC_DIRECTIONS = ["n", "e", "s", "w"];
+export const WFC_DIRECTIONS = ["e", "se", "sw", "w", "nw", "ne"];
 
 export const WFC_DIRECTION_DELTAS = {
-  n: { dc: 0, dr: -1 },
   e: { dc: 1, dr: 0 },
-  s: { dc: 0, dr: 1 },
+  se: { dc: 0, dr: 1 },
+  sw: { dc: -1, dr: 1 },
   w: { dc: -1, dr: 0 },
+  nw: { dc: -1, dr: -1 },
+  ne: { dc: 0, dr: -1 },
 };
+
+export function getWfcDirectionDelta(direction, row = 0) {
+  const oddRow = Math.abs(row % 2) === 1;
+  switch (direction) {
+    case "e":
+      return { dc: 1, dr: 0 };
+    case "se":
+      return { dc: oddRow ? 1 : 0, dr: 1 };
+    case "sw":
+      return { dc: oddRow ? 0 : -1, dr: 1 };
+    case "w":
+      return { dc: -1, dr: 0 };
+    case "nw":
+      return { dc: oddRow ? 0 : -1, dr: -1 };
+    case "ne":
+      return { dc: oddRow ? 1 : 0, dr: -1 };
+    default:
+      return { dc: 0, dr: 0 };
+  }
+}
 
 export function getOppositeWfcDirection(direction) {
   switch (direction) {
-    case "n":
-      return "s";
     case "e":
       return "w";
-    case "s":
-      return "n";
+    case "se":
+      return "nw";
+    case "sw":
+      return "ne";
     case "w":
       return "e";
+    case "nw":
+      return "se";
+    case "ne":
+      return "sw";
     default:
       return "";
   }
@@ -42,15 +68,6 @@ export const FINGERPRINT_WORLD_TILES = [
     textColor: "#eff8ff",
   },
   {
-    id: "sand",
-    label: "Sand",
-    icon: "S",
-    weight: 3,
-    color: "#e5c66f",
-    accent: "#b88338",
-    textColor: "#37230d",
-  },
-  {
     id: "forest",
     label: "Forest",
     icon: "F",
@@ -67,15 +84,6 @@ export const FINGERPRINT_WORLD_TILES = [
     color: "#8e99a5",
     accent: "#4e5965",
     textColor: "#f6f8fb",
-  },
-  {
-    id: "road",
-    label: "Road",
-    icon: "R",
-    weight: 3,
-    color: "#9a7048",
-    accent: "#f0cf76",
-    textColor: "#fff4cf",
   },
   {
     id: "castle",
@@ -98,14 +106,12 @@ export const FINGERPRINT_WORLD_TILES = [
 ];
 
 const SAME_ON_ALL_SIDES = {
-  grass: ["grass", "sand", "forest", "mountain", "road", "castle"],
-  water: ["water", "sand", "bridge"],
-  sand: ["water", "sand", "grass", "road", "bridge"],
+  grass: ["grass", "water", "forest", "mountain", "castle", "bridge"],
+  water: ["grass", "water", "bridge"],
   forest: ["grass", "forest", "mountain"],
   mountain: ["grass", "forest", "mountain"],
-  road: ["grass", "sand", "road", "castle", "bridge"],
-  castle: ["grass", "road"],
-  bridge: ["water", "sand", "road"],
+  castle: ["grass"],
+  bridge: ["grass", "water"],
 };
 
 export const FINGERPRINT_WORLD_ADJACENCY = Object.fromEntries(

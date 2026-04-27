@@ -1,8 +1,8 @@
 import {
   FINGERPRINT_WORLD_ADJACENCY,
   FINGERPRINT_WORLD_TILES,
-  WFC_DIRECTION_DELTAS,
   WFC_DIRECTIONS,
+  getWfcDirectionDelta,
 } from "./wfcTiles.js";
 
 function clampIndex(value, max) {
@@ -15,6 +15,10 @@ function getCellIndex(state, col, row) {
 
 function isInBounds(state, col, row) {
   return col >= 0 && col < state.cols && row >= 0 && row < state.rows;
+}
+
+function isGridCellInBounds(grid, col, row) {
+  return row >= 0 && row < grid.length && col >= 0 && col < (grid[row]?.length ?? 0);
 }
 
 function uniqueInTileOrder(values, tileIds) {
@@ -52,8 +56,95 @@ function chooseWeightedTile(state, domain, rng = Math.random) {
   return domain[domain.length - 1] ?? null;
 }
 
+function orderWeightedTiles(state, domain, rng = Math.random) {
+  const remaining = [...domain];
+  const ordered = [];
+  while (remaining.length > 0) {
+    const tileId = chooseWeightedTile(state, remaining, rng);
+    if (!tileId) {
+      break;
+    }
+    ordered.push(tileId);
+    remaining.splice(remaining.indexOf(tileId), 1);
+  }
+  return ordered;
+}
+
 function domainsEqual(a, b) {
   return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+function hasAdjacentGrassBridgeBanks(assignments) {
+  return assignments.some(
+    (tileId, index) => tileId === "grass" && assignments[(index + 1) % assignments.length] === "grass",
+  );
+}
+
+function hasValidBridgeNeighborAssignment(neighbors, index = 0, assignments = []) {
+  if (index >= neighbors.length) {
+    const grassCount = assignments.filter((tileId) => tileId === "grass").length;
+    return grassCount >= 2 && grassCount <= 3 && !hasAdjacentGrassBridgeBanks(assignments);
+  }
+
+  for (const tileId of neighbors[index].choices) {
+    assignments[index] = tileId;
+    if (hasValidBridgeNeighborAssignment(neighbors, index + 1, assignments)) {
+      assignments.length = index;
+      return true;
+    }
+  }
+  assignments.length = index;
+  return false;
+}
+
+function getBridgeNeighborDomainOptions(state, col, row) {
+  const neighbors = [];
+  for (const direction of WFC_DIRECTIONS) {
+    const delta = getWfcDirectionDelta(direction, row);
+    const nextCol = col + delta.dc;
+    const nextRow = row + delta.dr;
+    if (!isInBounds(state, nextCol, nextRow)) {
+      return null;
+    }
+
+    const domain = state.domains[getCellIndex(state, nextCol, nextRow)] ?? [];
+    const choices = ["grass", "water"].filter((tileId) => domain.includes(tileId));
+    if (choices.length === 0) {
+      return null;
+    }
+    neighbors.push({ col: nextCol, row: nextRow, choices });
+  }
+  return neighbors;
+}
+
+function canCellBeBridge(state, col, row) {
+  const neighbors = getBridgeNeighborDomainOptions(state, col, row);
+  return Boolean(neighbors) && hasValidBridgeNeighborAssignment(neighbors);
+}
+
+function applyBridgeDomainRules(state) {
+  const changedCells = [];
+  for (let row = 0; row < state.rows; row += 1) {
+    for (let col = 0; col < state.cols; col += 1) {
+      const index = getCellIndex(state, col, row);
+      const domain = state.domains[index] ?? [];
+      if (!domain.includes("bridge") || canCellBeBridge(state, col, row)) {
+        continue;
+      }
+
+      const reducedDomain = domain.filter((tileId) => tileId !== "bridge");
+      if (reducedDomain.length === 0) {
+        return {
+          status: "contradiction",
+          contradictionCells: [{ col, row }],
+          changedCells,
+        };
+      }
+      state.domains[index] = reducedDomain;
+      changedCells.push({ col, row });
+    }
+  }
+  return { status: "ready", changedCells };
 }
 
 function markCompleteIfSolved(state) {
@@ -72,54 +163,70 @@ function propagateDomains(sourceState, queue) {
   });
   const pending = [...queue];
 
-  while (pending.length > 0) {
-    const { col, row } = pending.shift();
-    if (!isInBounds(state, col, row)) {
-      continue;
-    }
-    const domain = state.domains[getCellIndex(state, col, row)];
-    if (domain.length === 0) {
-      return {
-        ...state,
-        status: "contradiction",
-        contradictionCells: [{ col, row }],
-      };
-    }
-
-    for (const direction of WFC_DIRECTIONS) {
-      const delta = WFC_DIRECTION_DELTAS[direction];
-      const nextCol = col + delta.dc;
-      const nextRow = row + delta.dr;
-      if (!isInBounds(state, nextCol, nextRow)) {
+  while (true) {
+    while (pending.length > 0) {
+      const { col, row } = pending.shift();
+      if (!isInBounds(state, col, row)) {
         continue;
       }
-
-      const neighborIndex = getCellIndex(state, nextCol, nextRow);
-      const neighborDomain = state.domains[neighborIndex];
-      const allowedNeighbors = new Set();
-      for (const tileId of domain) {
-        for (const neighborId of state.adjacency[tileId]?.[direction] ?? []) {
-          allowedNeighbors.add(neighborId);
-        }
-      }
-      const reducedDomain = uniqueInTileOrder(
-        neighborDomain.filter((tileId) => allowedNeighbors.has(tileId)),
-        state.tileIds,
-      );
-
-      if (reducedDomain.length === 0) {
+      const domain = state.domains[getCellIndex(state, col, row)];
+      if (domain.length === 0) {
         return {
           ...state,
           status: "contradiction",
-          contradictionCells: [{ col: nextCol, row: nextRow }],
+          contradictionCells: [{ col, row }],
         };
       }
-      if (!domainsEqual(neighborDomain, reducedDomain)) {
-        state.domains[neighborIndex] = reducedDomain;
-        state.changedCells.push({ col: nextCol, row: nextRow });
-        pending.push({ col: nextCol, row: nextRow });
+
+      for (const direction of WFC_DIRECTIONS) {
+        const delta = getWfcDirectionDelta(direction, row);
+        const nextCol = col + delta.dc;
+        const nextRow = row + delta.dr;
+        if (!isInBounds(state, nextCol, nextRow)) {
+          continue;
+        }
+
+        const neighborIndex = getCellIndex(state, nextCol, nextRow);
+        const neighborDomain = state.domains[neighborIndex];
+        const allowedNeighbors = new Set();
+        for (const tileId of domain) {
+          for (const neighborId of state.adjacency[tileId]?.[direction] ?? []) {
+            allowedNeighbors.add(neighborId);
+          }
+        }
+        const reducedDomain = uniqueInTileOrder(
+          neighborDomain.filter((tileId) => allowedNeighbors.has(tileId)),
+          state.tileIds,
+        );
+
+        if (reducedDomain.length === 0) {
+          return {
+            ...state,
+            status: "contradiction",
+            contradictionCells: [{ col: nextCol, row: nextRow }],
+          };
+        }
+        if (!domainsEqual(neighborDomain, reducedDomain)) {
+          state.domains[neighborIndex] = reducedDomain;
+          state.changedCells.push({ col: nextCol, row: nextRow });
+          pending.push({ col: nextCol, row: nextRow });
+        }
       }
     }
+
+    const bridgeResult = applyBridgeDomainRules(state);
+    if (bridgeResult.status === "contradiction") {
+      return {
+        ...state,
+        status: "contradiction",
+        contradictionCells: bridgeResult.contradictionCells,
+      };
+    }
+    if (bridgeResult.changedCells.length === 0) {
+      break;
+    }
+    state.changedCells.push(...bridgeResult.changedCells);
+    pending.push(...bridgeResult.changedCells);
   }
 
   return markCompleteIfSolved(state);
@@ -210,16 +317,26 @@ export function stepWfc(state, rng = Math.random) {
 
   const col = bestIndex % state.cols;
   const row = Math.floor(bestIndex / state.cols);
-  const tileId = chooseWeightedTile(state, bestDomain, rng);
-  const nextState = cloneState(state, {
-    status: "ready",
-    stepCount: state.stepCount + 1,
-    changedCells: [{ col, row }],
-    contradictionCells: [],
-  });
-  nextState.domains[bestIndex] = [tileId];
+  for (const tileId of orderWeightedTiles(state, bestDomain, rng)) {
+    const nextState = cloneState(state, {
+      status: "ready",
+      stepCount: state.stepCount + 1,
+      changedCells: [{ col, row }],
+      contradictionCells: [],
+    });
+    nextState.domains[bestIndex] = [tileId];
+    const propagated = propagateDomains(nextState, [{ col, row }]);
+    if (propagated.status !== "contradiction") {
+      return propagated;
+    }
+  }
 
-  return propagateDomains(nextState, [{ col, row }]);
+  return {
+    ...state,
+    status: "contradiction",
+    contradictionCells: [{ col, row }],
+    changedCells: [],
+  };
 }
 
 export function runWfc(state, { maxSteps = 1000, rng = Math.random } = {}) {
@@ -259,17 +376,39 @@ export function isWfcGridValid(grid, adjacency = FINGERPRINT_WORLD_ADJACENCY) {
       if (!tileId) {
         return false;
       }
-      const east = cells[col + 1];
-      const south = grid[row + 1]?.[col];
-      if (east && !adjacency[tileId]?.e?.includes(east)) {
+      if (tileId === "bridge" && !isWfcGridBridgeValid(grid, col, row)) {
         return false;
       }
-      if (south && !adjacency[tileId]?.s?.includes(south)) {
-        return false;
+      for (const direction of WFC_DIRECTIONS) {
+        const delta = getWfcDirectionDelta(direction, row);
+        const neighbor = grid[row + delta.dr]?.[col + delta.dc];
+        if (neighbor && !adjacency[tileId]?.[direction]?.includes(neighbor)) {
+          return false;
+        }
       }
     }
   }
   return true;
+}
+
+function isWfcGridBridgeValid(grid, col, row) {
+  const neighbors = [];
+  for (const direction of WFC_DIRECTIONS) {
+    const delta = getWfcDirectionDelta(direction, row);
+    const nextCol = col + delta.dc;
+    const nextRow = row + delta.dr;
+    if (!isGridCellInBounds(grid, nextCol, nextRow)) {
+      return false;
+    }
+    const tileId = grid[nextRow][nextCol];
+    if (tileId !== "grass" && tileId !== "water") {
+      return false;
+    }
+    neighbors.push(tileId);
+  }
+
+  const grassCount = neighbors.filter((tileId) => tileId === "grass").length;
+  return grassCount >= 2 && grassCount <= 3 && !hasAdjacentGrassBridgeBanks(neighbors);
 }
 
 export function clampWfcCell(state, col, row) {
