@@ -20,18 +20,20 @@ function isPointerInRestartBox(layout, pointer) {
 
 export function createFullscreenRestartControlLayout(width, height) {
   const ticTacToeLayout = createTicTacToeLayout(width, height);
-  const baseSize = Math.min(ticTacToeLayout.width, ticTacToeLayout.height);
+  const layoutWidth = Math.max(1, Number.isFinite(width) ? width : ticTacToeLayout.width);
+  const layoutHeight = Math.max(1, Number.isFinite(height) ? height : ticTacToeLayout.height);
+  const baseSize = Math.min(layoutWidth, layoutHeight);
   const margin = clamp(baseSize * 0.035, 16, 34);
-  const maxWidth = Math.max(96, ticTacToeLayout.width - margin * 2);
-  const maxHeight = Math.max(88, ticTacToeLayout.height - margin * 2);
+  const maxWidth = Math.max(96, layoutWidth - margin * 2);
+  const maxHeight = Math.max(88, layoutHeight - margin * 2);
   const boxWidth = Math.min(maxWidth, clamp(ticTacToeLayout.resetBoxWidth * 1.02, 132, 220));
   const boxHeight = Math.min(maxHeight, clamp(ticTacToeLayout.resetBoxHeight * 0.88, 104, 158));
 
   return {
-    width: ticTacToeLayout.width,
-    height: ticTacToeLayout.height,
+    width: layoutWidth,
+    height: layoutHeight,
     left: margin,
-    top: ticTacToeLayout.height - margin - boxHeight,
+    top: layoutHeight - margin - boxHeight,
     boxWidth,
     boxHeight,
   };

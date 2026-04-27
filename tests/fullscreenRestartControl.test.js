@@ -26,6 +26,22 @@ test("createFullscreenRestartControlLayout anchors the restart box in the bottom
   assert.ok(layout.top > layout.height / 2);
 });
 
+test("createFullscreenRestartControlLayout keeps the restart box inside short fullscreen viewports", () => {
+  for (const [width, height] of [
+    [640, 360],
+    [480, 320],
+  ]) {
+    const layout = createFullscreenRestartControlLayout(width, height);
+
+    assert.equal(layout.width, width, `${width}x${height} should use the visible viewport width`);
+    assert.equal(layout.height, height, `${width}x${height} should use the visible viewport height`);
+    assert.ok(layout.left >= 0, `${width}x${height} should not overflow left`);
+    assert.ok(layout.top >= 0, `${width}x${height} should not overflow top`);
+    assert.ok(layout.left + layout.boxWidth <= width, `${width}x${height} should not overflow right`);
+    assert.ok(layout.top + layout.boxHeight <= height, `${width}x${height} should not overflow bottom`);
+  }
+});
+
 test("stepFullscreenRestartControl waits for a verified hand before starting the restart hold", () => {
   const base = createFullscreenRestartControlState(1280, 720);
   const pointer = getBoxCenter(base.layout);
