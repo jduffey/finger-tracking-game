@@ -11,11 +11,17 @@ import { createSkyPatrolGame, createSkyPatrolLayout } from "../src/skyPatrolGame
 function createMockContext() {
   return {
     drawImageCalls: [],
+    fillStyle: "#000000",
+    operations: [],
     beginPath() {},
-    clearRect() {},
+    clearRect(...args) {
+      this.operations.push({ type: "clearRect", args });
+    },
     closePath() {},
     fill() {},
-    fillRect() {},
+    fillRect(...args) {
+      this.operations.push({ type: "fillRect", fillStyle: this.fillStyle, args });
+    },
     lineTo() {},
     moveTo() {},
     restore() {},
@@ -25,6 +31,7 @@ function createMockContext() {
     rotate() {},
     drawImage(...args) {
       this.drawImageCalls.push({ args, image: args[0], x: args[1], y: args[2] });
+      this.operations.push({ type: "drawImage", args, image: args[0] });
     },
   };
 }
@@ -223,5 +230,36 @@ test("createSkyPatrolCanvasRenderer can draw extracted sprite atlas assets", () 
   assert.ok(
     context.drawImageCalls.some((call) => call.image === spriteImage && call.args.length === 9),
     "expected the sprite atlas to be drawn with a source rectangle",
+  );
+});
+
+test("createSkyPatrolCanvasRenderer draws damage flash after the scene", () => {
+  const layout = createSkyPatrolLayout(960, 720);
+  const { context, renderer } = createMockRenderer();
+
+  renderer.draw({
+    layout,
+    scrollOffset: 0,
+    damageFlashMs: 160,
+    ship: null,
+    airEnemies: [],
+    groundTargets: [],
+    playerShots: [],
+    enemyShots: [],
+    explosions: [],
+  });
+
+  const firstSceneDrawIndex = context.operations.findIndex((operation) => operation.type === "drawImage");
+  const flashIndex = context.operations.findIndex(
+    (operation) =>
+      operation.type === "fillRect" &&
+      String(operation.fillStyle).startsWith("rgba(255, 104, 78,"),
+  );
+
+  assert.notEqual(firstSceneDrawIndex, -1, "expected the scene to draw terrain");
+  assert.notEqual(flashIndex, -1, "expected a damage flash fill");
+  assert.ok(
+    flashIndex > firstSceneDrawIndex,
+    `expected damage flash after scene rendering, saw ${flashIndex} before ${firstSceneDrawIndex}`,
   );
 });

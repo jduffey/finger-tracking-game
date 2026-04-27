@@ -744,11 +744,6 @@ function drawSkyPatrolFrame(renderer, state) {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingEnabled = false;
-  if ((state.damageFlashMs ?? 0) > 0) {
-    const flashProgress = clamp(state.damageFlashMs / 320, 0, 1);
-    ctx.fillStyle = `rgba(255, 104, 78, ${0.22 * flashProgress})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
   drawTerrain(ctx, renderer, state);
   drawCloudLayer(ctx, renderer, state);
 
@@ -780,6 +775,11 @@ function drawSkyPatrolFrame(renderer, state) {
   }
   for (const burst of state.scoreBursts ?? []) {
     drawScoreBurst(ctx, burst, state.layout.tileSize);
+  }
+  if ((state.damageFlashMs ?? 0) > 0) {
+    const flashProgress = clamp(state.damageFlashMs / 320, 0, 1);
+    ctx.fillStyle = `rgba(255, 104, 78, ${0.22 * flashProgress})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 }
 
