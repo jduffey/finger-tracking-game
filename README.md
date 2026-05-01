@@ -6,7 +6,7 @@ Finger Tracking Game is a webcam-driven hand- and pose-tracking playground built
 
 ### Main app (`/`)
 
-- **Calibration Input Test**: the home screen for camera/model readiness, live overlays, calibration controls, and navigation.
+- **Calibration Input Test**: the home screen for camera/model readiness, live overlays, calibration controls, navigation, and optional PinchGlove D5 BLE contact testing.
 - **Core modes**: Whack-a-Mole, Pinch Sandbox, Track Runner, Star Flight, Conveyor Toss, Roulette, and Spatial Gesture Memory.
 - **Labs**: Body Pose Lab, Off-Axis Forest Walk, Minority Report Lab, Gesture Analytics Lab, Gesture Art Lab, and Gesture Control OS.
 - **Fullscreen Camera**: a fullscreen webcam playground with a dwell-select landing page. The menu waits until all five fingertips are recognized before using the hover cursor, then a 1.00 second index-fingertip hold launches visual overlays (`Squares`, `Hex`, `Voronoi`, `Rings`, `Pulse`, `Tip Ripples`, `Tip Ripples v2`, `Static`) or webcam-backed games (`Hand Bounce`, `Brick Dodger`, `Breakout Co-op`, `Breakout`, `Finger Pong`, `Tic Tac Toe`, `Slice Air`, `Sky Patrol`, `Invaders`, `Flappy`, `Missile Command`). `Sky Patrol` now renders on a cached canvas playfield for smoother vertical scrolling. Every non-menu fullscreen mode also includes a top-right `Exit` box that returns to the landing menu after the same 1.00 second verified-hand hold.
@@ -23,6 +23,7 @@ Finger Tracking Game is a webcam-driven hand- and pose-tracking playground built
 - npm
 - Webcam access
 - A modern desktop Chromium browser is recommended
+- Chrome or Edge is required for the optional PinchGlove D5 BLE input. Safari does not reliably support Web Bluetooth for this use case.
 - Internet access when hand tracking starts, because the default MediaPipe Hands runtime loads assets from `https://cdn.jsdelivr.net/npm/@mediapipe/hands`
 
 ## Install And Run
@@ -44,6 +45,7 @@ Then:
 2. Allow camera access when the browser asks.
 3. Wait for the camera stream and tracking model to initialize.
 4. Use the **Calibration Input Test** screen as the hub for the rest of the app.
+5. To test the PinchGlove contact sensor on the home input grid, click **Connect D5** from Chrome or Edge, choose the `PinchGlove` BLE device, then connect Feather D5 to GND. Webcam tracking still controls hover; D5 controls only the red pinch/contact state on that screen.
 
 From the hub:
 
@@ -70,6 +72,7 @@ npm run preview
 ## Tracking, Logging, And Persistence
 
 - Hand tracking starts with the MediaPipe Hands runtime and can probe or fall back to TFJS backends when needed.
+- The home Calibration Input Test can read the PinchGlove BLE touch characteristic and treats bit 0 of the three-byte little-endian contact mask as Feather D5.
 - Body Pose Lab and Off-Axis Forest Walk use pose detection rather than the hand-tracking flow.
 - Calibration is stored in `localStorage` under `fingerTrackingGame.calibration.v2`.
 - Verbose browser/runtime events are written to timestamped files in `logs/` only while running `npm run dev`.

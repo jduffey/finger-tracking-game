@@ -3628,6 +3628,106 @@ body {
   width: 100%;
 }
 
+.d5-input-panel {
+  align-items: center;
+  background: #f7fbff;
+  border: 1px solid #cbd8e8;
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(150px, 0.8fr) minmax(170px, 0.8fr);
+  margin-top: 12px;
+  padding: 10px;
+  width: 100%;
+}
+
+.d5-input-panel.active {
+  background: #eefbf2;
+  border-color: #69c58d;
+  box-shadow: 0 0 0 3px rgba(71, 166, 110, 0.16);
+}
+
+.d5-input-copy {
+  min-width: 0;
+}
+
+.d5-input-kicker {
+  color: #617181;
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.d5-input-copy h3 {
+  color: #1f3347;
+  font-size: 1.05rem;
+  margin: 2px 0 0;
+}
+
+.d5-input-state {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid #d8e2ed;
+  border-radius: 10px;
+  display: grid;
+  gap: 2px 8px;
+  grid-template-columns: auto 1fr;
+  padding: 8px 10px;
+}
+
+.d5-input-state strong {
+  color: #1f3347;
+  font-size: 1rem;
+}
+
+.d5-input-state span:last-child {
+  color: #536476;
+  font-size: 0.78rem;
+  grid-column: 2;
+}
+
+.d5-input-dot {
+  background: #dce3e8;
+  border: 2px solid #9aa7b2;
+  border-radius: 999px;
+  display: inline-block;
+  grid-row: 1 / span 2;
+  height: 24px;
+  width: 24px;
+}
+
+.d5-input-dot.active {
+  background: #2fbe67;
+  border-color: #168443;
+  box-shadow: 0 0 0 5px rgba(47, 190, 103, 0.18);
+}
+
+.d5-input-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr;
+}
+
+.d5-input-actions button {
+  min-height: 38px;
+}
+
+.d5-input-facts {
+  color: #40566b;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  gap: 6px 12px;
+  grid-column: 1 / -1;
+}
+
+.d5-input-error {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
 .input-test-primary {
   justify-content: center;
   margin-top: 10px;
@@ -5353,6 +5453,15 @@ button:disabled {
   .content-grid.body-layout .camera-card,
   .body-pose-panel {
     width: 100%;
+  }
+
+  .d5-input-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .d5-input-facts,
+  .d5-input-error {
+    grid-column: 1;
   }
 
   .fullscreen-camera-hud {

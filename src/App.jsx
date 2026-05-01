@@ -190,6 +190,8 @@ import {
   shouldAcceptPinchClick,
   shouldBypassGlobalPinchDebounce,
 } from "./pinchInput.js";
+import { formatRawBytes } from "./pinchGloveD5Input.js";
+import { usePinchGloveD5Bluetooth } from "./usePinchGloveD5Bluetooth.js";
 import {
   shouldShowInlineCameraPreview,
   shouldUseContainedCameraFit,
@@ -1411,6 +1413,11 @@ function createSandboxBlocks(stageWidth, stageHeight) {
 
 export default function App() {
   const appLog = useMemo(() => createScopedLogger("app"), []);
+  const {
+    state: d5Input,
+    connect: connectD5Input,
+    disconnect: disconnectD5Input,
+  } = usePinchGloveD5Bluetooth({ logger: appLog });
   const gestureEngineRef = useRef(null);
   const personalizationRef = useRef(null);
 
@@ -1920,8 +1927,10 @@ export default function App() {
       ? "Camera + Pinch Sandbox Controls"
       : "Camera + Calibration Controls";
   const showInlineCameraPreview = shouldShowInlineCameraPreview(phase);
+  const calibrationInputPinchActive =
+    phase === PHASES.CALIBRATION ? d5Input.d5Active : pinchActive;
   const inputTestPinchingCell =
-    phase === PHASES.CALIBRATION && !isCalibrating && pinchActive
+    phase === PHASES.CALIBRATION && !isCalibrating && calibrationInputPinchActive
       ? inputTestHoveredCell
       : -1;
   const isBodyPosePhase = phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB;
@@ -3356,9 +3365,11 @@ export default function App() {
     appLog.debug("Calibration input test state changed", {
       hoveredCellIndex: inputTestHoveredCell,
       totalCells: INPUT_TEST_CELL_COUNT,
-      pinchActive,
+      pinchActive: calibrationInputPinchActive,
+      d5Active: d5Input.d5Active,
+      d5Connected: d5Input.isConnected,
       pinchingHoverCell:
-        phase === PHASES.CALIBRATION && !isCalibrating && pinchActive
+        phase === PHASES.CALIBRATION && !isCalibrating && calibrationInputPinchActive
           ? inputTestHoveredCell
           : -1,
       phase,
@@ -3366,8 +3377,35 @@ export default function App() {
     });
   }, [
     appLog,
+    calibrationInputPinchActive,
+    d5Input.d5Active,
+    d5Input.isConnected,
     inputTestHoveredCell,
-    pinchActive,
+    phase,
+    isCalibrating,
+  ]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.CALIBRATION ||
+      isCalibrating ||
+      !d5Input.d5Active ||
+      inputTestHoveredCell < 0
+    ) {
+      return;
+    }
+
+    appLog.info("Calibration grid D5-active over hovered cell", {
+      hoveredCellIndex: inputTestHoveredCell,
+      rawHex: d5Input.rawHex,
+      lastEventAt: d5Input.lastEventAt,
+    });
+  }, [
+    appLog,
+    d5Input.d5Active,
+    d5Input.lastEventAt,
+    d5Input.rawHex,
+    inputTestHoveredCell,
     phase,
     isCalibrating,
   ]);
@@ -11776,7 +11814,11 @@ export default function App() {
               <span>Runtime: {activeRuntime}</span>
               <span>Backend: {activeBackend}</span>
               {phase !== PHASES.BODY_POSE && phase !== PHASES.OFF_AXIS_LAB && (
-                <span>Pinch: {pinchActive ? "active" : "idle"}</span>
+                <span>
+                  {phase === PHASES.CALIBRATION
+                    ? `D5: ${d5Input.d5Active ? "active" : "idle"}`
+                    : `Pinch: ${pinchActive ? "active" : "idle"}`}
+                </span>
               )}
             </div>
 
@@ -11908,9 +11950,54 @@ export default function App() {
           <section className="card panel calibration-panel">
             <h2>Calibration Input Test</h2>
             <p className="small-text">
-              Primary target area: hover any box, then pinch while hovering to verify gesture
-              input behavior.
+              Primary target area: hover any box with the webcam pointer, then close D5 to GND
+              to verify contact input behavior.
             </p>
+
+            <div className={`d5-input-panel ${d5Input.d5Active ? "active" : ""}`}>
+              <div className="d5-input-copy">
+                <span className="d5-input-kicker">Pinch source</span>
+                <h3>D5 BLE Contact</h3>
+                <p className="small-text">
+                  The grid still uses webcam hover. The red pinch state on this screen comes from
+                  Feather D5 connected to GND.
+                </p>
+              </div>
+
+              <div className="d5-input-state">
+                <span className={`d5-input-dot ${d5Input.d5Active ? "active" : ""}`} />
+                <strong>{d5Input.d5Active ? "D5 ACTIVE" : "D5 RELEASED"}</strong>
+                <span>{d5Input.deviceName || "No PinchGlove connected"}</span>
+              </div>
+
+              <div className="d5-input-actions">
+                <button
+                  type="button"
+                  onClick={connectD5Input}
+                  disabled={!d5Input.isSupported || d5Input.isConnecting || d5Input.isConnected}
+                >
+                  {d5Input.isConnecting ? "Connecting..." : "Connect D5"}
+                </button>
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={disconnectD5Input}
+                  disabled={!d5Input.isConnected}
+                >
+                  Disconnect D5
+                </button>
+              </div>
+
+              <div className="d5-input-facts">
+                <span>Web Bluetooth: {d5Input.isSupported ? "available" : "unavailable"}</span>
+                <span>BLE: {d5Input.isConnected ? "connected" : "disconnected"}</span>
+                <span>Mask: {d5Input.rawHex}</span>
+                <span>Bytes: {d5Input.rawBytes.length ? formatRawBytes(d5Input.rawBytes) : "none"}</span>
+                <span>Last: {d5Input.lastEventAt || "none"}</span>
+              </div>
+
+              {d5Input.error && <p className="error-text d5-input-error">{d5Input.error}</p>}
+            </div>
 
             <div className="input-test-panel input-test-primary">
               <div className="input-test-stage" ref={inputTestStageRef}>
@@ -11947,11 +12034,11 @@ export default function App() {
               <h3>Input Test</h3>
               <p className="small-text">
                 Move over any of the {INPUT_TEST_CELL_COUNT} cells to see hover color. Keep
-                hovering and pinch to switch to the red pinch color.
+                hovering and close the D5-to-GND contact to switch to the red D5 color.
               </p>
               <p className="small-text">
                 Hovered cell: {inputTestHoveredCell >= 0 ? inputTestHoveredCell + 1 : "none"} |
-                Pinch: {pinchActive ? "active" : "idle"}
+                D5: {d5Input.d5Active ? "active" : "idle"}
               </p>
             </div>
           </section>
