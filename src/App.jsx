@@ -195,6 +195,11 @@ import {
   shouldUseContainedCameraFit,
   shouldUseImmersiveAppLayout,
 } from "./cameraLayout.js";
+import {
+  getCameraVideoKeepAliveAction,
+  getStaleInferenceKeepAliveAction,
+  shouldRunTrackingKeepAlive,
+} from "./trackingKeepAlive.js";
 import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from "./poseTracking.js";
 import {
   createEmptyOffAxisState,
@@ -455,7 +460,8 @@ const CALIBRATION_SAMPLE_FRAMES = 10;
 const ARC_CALIBRATION_READY_CONFIDENCE = 0.86;
 const ARC_CALIBRATION_MAX_CAPTURE_FRAMES = 2400;
 const INVALID_LANDMARK_RECOVERY_THRESHOLD = 45;
-const NO_HAND_RECOVERY_THRESHOLD = 300;
+const NO_HAND_KEEP_ALIVE_NOTICE_THRESHOLD = 300;
+const NO_HAND_KEEP_ALIVE_LOG_INTERVAL = 1800;
 const HAND_DETECTION_GRACE_MS = 1600;
 const INITIAL_TRACKING_RUNTIME = "mediapipe";
 const FINGERTIP_OVERLAY_STYLES = {
@@ -1580,6 +1586,10 @@ export default function App() {
   const attachedVideoElementRef = useRef(null);
   const rafRef = useRef(0);
   const inferenceBusyRef = useRef(false);
+  const activeInferenceTokenRef = useRef(0);
+  const lastInferenceStartedAtRef = useRef(0);
+  const lastInferenceCompletedAtRef = useRef(0);
+  const lastTrackingKeepAliveAtRef = useRef(0);
   const mountedRef = useRef(true);
 
   const phaseRef = useRef(phase);
@@ -1674,6 +1684,7 @@ export default function App() {
   const noHandStreakRef = useRef(0);
   const trackingExtentsRef = useRef(createTrackingExtentState());
   const detectorRecoveryAttemptsRef = useRef(0);
+  const lastDetectorRecoveryAtRef = useRef(0);
   const recoveringDetectorRef = useRef(false);
 
   const calibrationTargetsRef = useRef(calibrationTargets);
@@ -2388,6 +2399,108 @@ export default function App() {
     }
 
     return true;
+  }
+
+  function getTrackingTimestamp() {
+    return typeof performance !== "undefined" && typeof performance.now === "function"
+      ? performance.now()
+      : Date.now();
+  }
+
+  function beginTrackingInference(timestamp) {
+    const inferenceToken = activeInferenceTokenRef.current + 1;
+    activeInferenceTokenRef.current = inferenceToken;
+    lastInferenceStartedAtRef.current = timestamp;
+    inferenceBusyRef.current = true;
+    return inferenceToken;
+  }
+
+  function completeTrackingInference(inferenceToken) {
+    lastInferenceCompletedAtRef.current = getTrackingTimestamp();
+    if (activeInferenceTokenRef.current === inferenceToken) {
+      inferenceBusyRef.current = false;
+    }
+  }
+
+  function isCurrentTrackingInference(inferenceToken) {
+    return activeInferenceTokenRef.current === inferenceToken;
+  }
+
+  function releaseStaleTrackingInference(timestamp, staleAction) {
+    const staleToken = activeInferenceTokenRef.current;
+    activeInferenceTokenRef.current += 1;
+    inferenceBusyRef.current = false;
+    inferenceBusySkipCounterRef.current = 0;
+    appLog.warn("Tracking keep-alive detected a stale hand inference; recycling detector", {
+      staleToken,
+      timestamp,
+      inferenceStartedAt: lastInferenceStartedAtRef.current,
+      inferenceAgeMs: roundMetric(staleAction.ageMs, 2),
+      cooldownRemainingMs: roundMetric(staleAction.cooldownRemainingMs, 2),
+      lastInferenceCompletedAt: lastInferenceCompletedAtRef.current,
+    });
+    void recoverDetectorFromInvalidLandmarks("stale_inference_keep_alive", {
+      inferenceAgeMs: staleAction.ageMs,
+      inferenceStartedAt: lastInferenceStartedAtRef.current,
+      lastInferenceCompletedAt: lastInferenceCompletedAtRef.current,
+    });
+  }
+
+  function runTrackingKeepAlive(timestamp, { allowDetectorRecovery = true } = {}) {
+    if (
+      !shouldRunTrackingKeepAlive({
+        now: timestamp,
+        lastRunAt: lastTrackingKeepAliveAtRef.current,
+      })
+    ) {
+      return;
+    }
+    lastTrackingKeepAliveAtRef.current = timestamp;
+
+    const video = videoRef.current;
+    const videoAction = getCameraVideoKeepAliveAction({
+      video,
+      stream: streamRef.current,
+      attachedVideoElement: attachedVideoElementRef.current,
+    });
+
+    if (videoAction.shouldAttach) {
+      appLog.info("Tracking keep-alive refreshing camera playback", videoAction);
+      void attachStreamToVideoElement(video, `keep_alive_${videoAction.reason}`).catch((error) => {
+        appLog.warn("Tracking keep-alive could not refresh camera playback", {
+          videoAction,
+          error,
+        });
+        setCameraError(
+          error instanceof Error
+            ? error.message
+            : "Camera video playback could not be restarted.",
+        );
+      });
+    } else if (videoAction.reason !== "healthy") {
+      appLog.debug("Tracking keep-alive skipped camera refresh", videoAction);
+    }
+
+    if (!allowDetectorRecovery) {
+      return;
+    }
+
+    const staleAction = getStaleInferenceKeepAliveAction({
+      now: timestamp,
+      inferenceBusy: inferenceBusyRef.current,
+      inferenceStartedAt: lastInferenceStartedAtRef.current,
+      recoveryInProgress: recoveringDetectorRef.current,
+      lastRecoveryAt: lastDetectorRecoveryAtRef.current,
+    });
+
+    if (staleAction.shouldRecover) {
+      releaseStaleTrackingInference(timestamp, staleAction);
+    } else if (
+      staleAction.reason !== "idle" &&
+      staleAction.reason !== "within_stale_window"
+    ) {
+      appLog.debug("Tracking keep-alive skipped detector recovery", staleAction);
+    }
   }
 
   useEffect(() => {
@@ -4258,6 +4371,7 @@ export default function App() {
 
     recoveringDetectorRef.current = true;
     detectorRecoveryAttemptsRef.current += 1;
+    lastDetectorRecoveryAtRef.current = getTrackingTimestamp();
     const attempt = detectorRecoveryAttemptsRef.current;
     const requestedConfig = getRecoveryConfig(attempt, reason);
     logTrackingExtentsSnapshot(`pre_recovery_${reason}`);
@@ -4288,6 +4402,7 @@ export default function App() {
           (requestedConfig.runtime === "mediapipe" ? "n/a" : "unknown"),
       );
       setActiveRuntime(getCurrentRuntime() || requestedConfig.runtime);
+      setModelError("");
       appLog.info("Detector recovery succeeded", {
         attempt,
         activeRuntime: getCurrentRuntime(),
@@ -9114,7 +9229,11 @@ export default function App() {
 
       rafRef.current = requestAnimationFrame(frameLoop);
 
-      if (phaseRef.current === PHASES.BODY_POSE || phaseRef.current === PHASES.OFF_AXIS_LAB) {
+      const poseOnlyFrame =
+        phaseRef.current === PHASES.BODY_POSE || phaseRef.current === PHASES.OFF_AXIS_LAB;
+      runTrackingKeepAlive(timestamp, { allowDetectorRecovery: !poseOnlyFrame });
+
+      if (poseOnlyFrame) {
         const video = videoRef.current;
         const poseDetector = poseDetectorRef.current;
         const handDetector = detectorRef.current;
@@ -9139,10 +9258,17 @@ export default function App() {
           return;
         }
 
-        inferenceBusyRef.current = true;
+        const inferenceToken = beginTrackingInference(timestamp);
         try {
           const pose = await detectPose(poseDetector, video);
           const detectedHands = handDetector ? await detectHands(handDetector, video) : [];
+          if (!isCurrentTrackingInference(inferenceToken)) {
+            appLog.warn("Ignoring stale pose-scene inference result after keep-alive recovery", {
+              inferenceToken,
+              activeInferenceToken: activeInferenceTokenRef.current,
+            });
+            return;
+          }
           const stableHands = assignStableHandLabels(detectedHands, {
             memory: handLabelMemoryRef.current,
             timestamp,
@@ -9154,7 +9280,7 @@ export default function App() {
         } catch (error) {
           appLog.error("Pose frame inference failed", { error });
         } finally {
-          inferenceBusyRef.current = false;
+          completeTrackingInference(inferenceToken);
         }
         return;
       }
@@ -9212,13 +9338,20 @@ export default function App() {
         return;
       }
 
-      inferenceBusyRef.current = true;
+      const inferenceToken = beginTrackingInference(timestamp);
       try {
         const detectedHands = await detectHands(detector, video);
         const minorityReportPose =
           phaseRef.current === PHASES.MINORITY_REPORT_LAB && poseDetectorRef.current
             ? await detectPose(poseDetectorRef.current, video)
             : null;
+        if (!isCurrentTrackingInference(inferenceToken)) {
+          appLog.warn("Ignoring stale hand inference result after keep-alive recovery", {
+            inferenceToken,
+            activeInferenceToken: activeInferenceTokenRef.current,
+          });
+          return;
+        }
         const detectionMeta = getLastDetectionMeta();
 
         if (detectionMeta.invalid) {
@@ -9258,12 +9391,15 @@ export default function App() {
 
         if (detectionMeta.reason === "no_hands" && !withinHandGraceWindow) {
           noHandStreakRef.current += 1;
-          if (noHandStreakRef.current === NO_HAND_RECOVERY_THRESHOLD) {
-            appLog.warn("No hands detected for extended period; attempting recovery", {
+          if (
+            noHandStreakRef.current === NO_HAND_KEEP_ALIVE_NOTICE_THRESHOLD ||
+            noHandStreakRef.current % NO_HAND_KEEP_ALIVE_LOG_INTERVAL === 0
+          ) {
+            appLog.info("No hands detected; tracking keep-alive is continuing detection", {
               noHandStreak: noHandStreakRef.current,
               detectionMeta,
+              millisSinceLastValidHand,
             });
-            void recoverDetectorFromInvalidLandmarks("continuous_no_hands", detectionMeta);
           }
         } else if (noHandStreakRef.current > 0) {
           appLog.info("No-hand streak ended", {
@@ -9320,7 +9456,7 @@ export default function App() {
         updateFullscreenOverlayGames(timestamp);
         updateGame(timestamp);
       } finally {
-        inferenceBusyRef.current = false;
+        completeTrackingInference(inferenceToken);
       }
     };
 
