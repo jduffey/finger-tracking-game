@@ -160,6 +160,56 @@ function IndexFingerMarker({ state }) {
   );
 }
 
+function HandSkeletonOverlay({ skeleton, width, height }) {
+  const hands = skeleton?.hands ?? [];
+  if (hands.length === 0 || !Number.isFinite(width) || !Number.isFinite(height)) {
+    return null;
+  }
+
+  return (
+    <svg
+      className="fullscreen-camera-landing-skeleton"
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      {hands.map((hand) => (
+        <g key={hand.id}>
+          {hand.connections.map((connection, index) => (
+            <line
+              key={`${hand.id}-bone-${index}`}
+              className="fullscreen-camera-landing-skeleton-bone"
+              x1={connection.start.x}
+              y1={connection.start.y}
+              x2={connection.end.x}
+              y2={connection.end.y}
+            />
+          ))}
+          {hand.joints
+            .filter((joint) => joint.index !== 8)
+            .map((joint) => (
+              <circle
+                key={`${hand.id}-joint-${joint.index}`}
+                className="fullscreen-camera-landing-skeleton-joint"
+                cx={joint.x}
+                cy={joint.y}
+                r="3"
+              />
+            ))}
+          {hand.indexTip ? (
+            <circle
+              className="fullscreen-camera-landing-skeleton-index-tip"
+              cx={hand.indexTip.x}
+              cy={hand.indexTip.y}
+              r="5"
+            />
+          ) : null}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 export default function FullscreenLandingPage({
   viewportStyle,
   layout,
@@ -184,6 +234,11 @@ export default function FullscreenLandingPage({
     >
       <HeaderControls />
       <LandingHeader />
+      <HandSkeletonOverlay
+        skeleton={state?.skeleton}
+        width={layout?.width}
+        height={layout?.height}
+      />
       {(layout?.sections ?? []).map((section) => (
         <DemoSection key={section.id} section={section} />
       ))}

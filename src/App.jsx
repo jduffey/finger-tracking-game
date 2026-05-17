@@ -68,6 +68,7 @@ import {
   FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
   FULLSCREEN_LANDING_MODE,
   FULLSCREEN_MODE_LANDING_HOLD_MS,
+  createFullscreenLandingHandSkeleton,
   createFullscreenModeLandingState,
   getVerifiedFullscreenMenuHandPointerInput,
   hasVerifiedFullscreenMenuHand,
@@ -7643,6 +7644,15 @@ export default function App() {
     );
   }
 
+  function getFullscreenLandingHandSkeleton(viewportMetrics) {
+    const renderMetrics = computeCameraRenderMetrics("cover");
+    return createFullscreenLandingHandSkeleton(
+      fullscreenHandsRef.current,
+      viewportMetrics,
+      (point) => projectCameraPointToCanvas(point, renderMetrics),
+    );
+  }
+
   function updateFullscreenModeLandingSimulation(timestamp) {
     if (
       phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
@@ -7670,16 +7680,23 @@ export default function App() {
       pointerX: pointerActive ? holdInput.pointerX : 0,
       pointerY: pointerActive ? holdInput.pointerY : 0,
     });
-    fullscreenModeLandingStateRef.current = nextState;
-    setFullscreenModeLandingState(nextState);
+    const nextStateWithSkeleton = {
+      ...nextState,
+      skeleton: getFullscreenLandingHandSkeleton(viewportMetrics),
+    };
+    fullscreenModeLandingStateRef.current = nextStateWithSkeleton;
+    setFullscreenModeLandingState(nextStateWithSkeleton);
 
-    if (nextState.selectedModeId === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID) {
+    if (nextStateWithSkeleton.selectedModeId === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID) {
       returnFromFullscreenCameraScreen();
       return;
     }
 
-    if (nextState.selectedModeId && nextState.selectedModeId !== fullscreenGridModeRef.current) {
-      setFullscreenGridMode(nextState.selectedModeId);
+    if (
+      nextStateWithSkeleton.selectedModeId &&
+      nextStateWithSkeleton.selectedModeId !== fullscreenGridModeRef.current
+    ) {
+      setFullscreenGridMode(nextStateWithSkeleton.selectedModeId);
     }
   }
 

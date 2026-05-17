@@ -3461,6 +3461,36 @@ body {
   z-index: 1;
 }
 
+.fullscreen-camera-landing-skeleton {
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  z-index: 6;
+}
+
+.fullscreen-camera-landing-skeleton-bone {
+  stroke: rgba(148, 220, 255, 0.72);
+  stroke-linecap: round;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.fullscreen-camera-landing-skeleton-joint {
+  fill: rgba(226, 241, 255, 0.9);
+  stroke: rgba(8, 13, 22, 0.7);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.fullscreen-camera-landing-skeleton-index-tip {
+  fill: #22d3ee;
+  filter: drop-shadow(0 0 7px rgba(34, 211, 238, 0.95));
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
 .fullscreen-camera-landing-panel h2 {
   align-items: center;
   display: flex;

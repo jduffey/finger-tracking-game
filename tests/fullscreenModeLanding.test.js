@@ -7,6 +7,7 @@ import {
   FULLSCREEN_CAMERA_LANDING_SECTIONS,
   FULLSCREEN_CAMERA_MODE_OPTIONS,
   FULLSCREEN_MODE_LANDING_HOLD_MS,
+  createFullscreenLandingHandSkeleton,
   createFullscreenModeLandingLayout,
   createFullscreenModeLandingState,
   getVerifiedFullscreenMenuHandPointerInput,
@@ -244,6 +245,29 @@ test("getVerifiedFullscreenMenuHandPointerInput stays inactive without a project
     pointerX: 0,
     pointerY: 0,
   });
+});
+
+test("createFullscreenLandingHandSkeleton projects hand bones and the index tip for the launcher layer", () => {
+  const landmarks = Array.from({ length: 21 }, (_, index) => ({
+    u: 0.1 + index * 0.01,
+    v: 0.2 + index * 0.01,
+  }));
+  const skeleton = createFullscreenLandingHandSkeleton(
+    [{ id: "hand-1", landmarks }],
+    { left: 10, top: 20, width: 640, height: 480 },
+    (point) => ({
+      x: 10 + point.u * 640,
+      y: 20 + point.v * 480,
+    }),
+  );
+
+  assert.equal(skeleton.hands.length, 1);
+  assert.equal(skeleton.hands[0].joints.length, 21);
+  assert.ok(skeleton.hands[0].connections.length >= 20);
+  assert.deepEqual(
+    skeleton.hands[0].indexTip,
+    skeleton.hands[0].joints.find((joint) => joint.index === 8),
+  );
 });
 
 test("stepFullscreenModeLanding waits for a verified hand before starting a 1.00 second hold", () => {

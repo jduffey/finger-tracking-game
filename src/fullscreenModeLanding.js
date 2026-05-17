@@ -70,6 +70,20 @@ export const FULLSCREEN_CAMERA_LANDING_OPTIONS = [
 ];
 
 const FULLSCREEN_MENU_REQUIRED_FINGER_NAMES = ["thumb", "index", "middle", "ring", "pinky"];
+const LANDING_HAND_ROOT_CONNECTIONS = [
+  [0, 1],
+  [0, 5],
+  [0, 9],
+  [0, 13],
+  [0, 17],
+];
+const LANDING_HAND_FINGER_CHAINS = [
+  [1, 2, 3, 4],
+  [5, 6, 7, 8],
+  [9, 10, 11, 12],
+  [13, 14, 15, 16],
+  [17, 18, 19, 20],
+];
 const BASE_TILE_WIDTH = 158;
 const BASE_TILE_HEIGHT = 110;
 const BASE_TILE_GAP = 16;
@@ -167,6 +181,64 @@ export function getVerifiedFullscreenMenuHandPointerInput(hands, viewport, proje
     pointerActive,
     pointerX: pointerActive ? pointerX : 0,
     pointerY: pointerActive ? pointerY : 0,
+  };
+}
+
+export function createFullscreenLandingHandSkeleton(hands, viewport, projectPoint) {
+  const safeHands = Array.isArray(hands) ? hands : [];
+  const viewportLeft = Number.isFinite(viewport?.left) ? viewport.left : 0;
+  const viewportTop = Number.isFinite(viewport?.top) ? viewport.top : 0;
+  const connections = [
+    ...LANDING_HAND_ROOT_CONNECTIONS,
+    ...LANDING_HAND_FINGER_CHAINS.flatMap((chain) =>
+      chain.slice(1).map((landmarkIndex, index) => [chain[index], landmarkIndex]),
+    ),
+  ];
+
+  return {
+    hands: safeHands
+      .map((hand, handIndex) => {
+        const landmarks = Array.isArray(hand?.landmarks) ? hand.landmarks : [];
+        if (landmarks.length === 0) {
+          return null;
+        }
+
+        const joints = landmarks
+          .map((landmark, index) => {
+            const projectedPoint =
+              typeof projectPoint === "function" ? projectPoint(landmark) : null;
+            if (!Number.isFinite(projectedPoint?.x) || !Number.isFinite(projectedPoint?.y)) {
+              return null;
+            }
+            return {
+              index,
+              x: projectedPoint.x - viewportLeft,
+              y: projectedPoint.y - viewportTop,
+            };
+          })
+          .filter(Boolean);
+        const jointByIndex = new Map(joints.map((joint) => [joint.index, joint]));
+        const projectedConnections = connections
+          .map(([startIndex, endIndex]) => {
+            const start = jointByIndex.get(startIndex);
+            const end = jointByIndex.get(endIndex);
+            return start && end
+              ? {
+                  start,
+                  end,
+                }
+              : null;
+          })
+          .filter(Boolean);
+
+        return {
+          id: hand?.id ?? hand?.label ?? `hand-${handIndex}`,
+          joints,
+          connections: projectedConnections,
+          indexTip: jointByIndex.get(8) ?? null,
+        };
+      })
+      .filter(Boolean),
   };
 }
 
@@ -313,6 +385,7 @@ export function createFullscreenModeLandingState(width, height) {
     pointerActive: false,
     pointerX: 0,
     pointerY: 0,
+    skeleton: { hands: [] },
     hoverModeId: null,
     holdModeId: null,
     holdMs: 0,
