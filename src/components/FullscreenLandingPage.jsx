@@ -119,8 +119,10 @@ function BackToInputTestButton({ item, active, holdProgress, onSelect }) {
       style={getLandingBoxStyle(item, active ? holdProgress : 0)}
       type="button"
     >
-      <span aria-hidden="true">←</span>
-      Back to Input Test
+      <span className="fullscreen-camera-landing-back-content">
+        <span aria-hidden="true">←</span>
+        Back to Input Test
+      </span>
     </button>
   );
 }
