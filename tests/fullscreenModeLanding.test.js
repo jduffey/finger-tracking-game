@@ -78,6 +78,27 @@ test("fullscreen landing data groups visual effects above games", () => {
   );
 });
 
+test("fullscreen landing data uses generated icon assets for imported previews", () => {
+  const expectedIconSources = {
+    square: "/assets/launcher-icons/squares.png",
+    hex: "/assets/launcher-icons/hex.png",
+    voronoi: "/assets/launcher-icons/voronoi.png",
+    rings: "/assets/launcher-icons/rings.png",
+    pulse: "/assets/launcher-icons/pulse.png",
+    "tip-ripples": "/assets/launcher-icons/tip-ripples.png",
+    "tip-ripples-v2": "/assets/launcher-icons/tip-ripples-v2.png",
+    static: "/assets/launcher-icons/static.png",
+    "hand-bounce": "/assets/launcher-icons/hand-bounce.png",
+    "brick-dodger": "/assets/launcher-icons/brick-dodger.png",
+    breakout: "/assets/launcher-icons/breakout.png",
+    invaders: "/assets/launcher-icons/invaders.png",
+  };
+
+  for (const [id, iconSrc] of Object.entries(expectedIconSources)) {
+    assert.equal(FULLSCREEN_CAMERA_MODE_OPTIONS.find((item) => item.id === id)?.iconSrc, iconSrc);
+  }
+});
+
 test("createFullscreenModeLandingLayout includes a footer back to input test control", () => {
   const layout = createFullscreenModeLandingLayout(1366, 768);
   const backBox = layout.boxes.find((box) => box.id === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID);

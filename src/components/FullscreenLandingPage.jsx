@@ -94,10 +94,19 @@ export function DemoTile({ item, active, holdProgress, onSelect }) {
       type="button"
       style={getLandingBoxStyle(item, active ? holdProgress : 0)}
     >
-      <span
-        className={`fullscreen-camera-mode-preview ${item.previewType}`}
-        aria-hidden="true"
-      />
+      {item.iconSrc ? (
+        <img
+          className="fullscreen-camera-mode-preview-image"
+          src={item.iconSrc}
+          alt=""
+          aria-hidden="true"
+        />
+      ) : (
+        <span
+          className={`fullscreen-camera-mode-preview ${item.previewType}`}
+          aria-hidden="true"
+        />
+      )}
       <span className="fullscreen-camera-mode-landing-title">{item.label}</span>
       <span className="fullscreen-camera-mode-landing-hint">
         {active ? "Keep hovering" : "Hover to play"}
