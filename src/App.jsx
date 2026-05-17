@@ -212,6 +212,9 @@ import BodyPoseLab from "./components/BodyPoseLab.jsx";
 import OffAxisChamberLab from "./components/OffAxisChamberLab.jsx";
 import RouletteFingerGame from "./components/RouletteFingerGame.jsx";
 import ConveyorSphereGame from "./components/ConveyorSphereGame.jsx";
+import FullscreenLandingPage, {
+  WebcamBackground,
+} from "./components/FullscreenLandingPage.jsx";
 import SpatialGestureMemory from "./components/SpatialGestureMemory.jsx";
 import GestureAnalyticsLab from "./components/GestureAnalyticsLab.jsx";
 import GestureArtLab from "./components/GestureArtLab.jsx";
@@ -1866,12 +1869,12 @@ export default function App() {
     pinchActive,
     draggingCellIndex: fullscreenTicTacToeDraggingCellIndex,
   });
-  const fullscreenModeLandingCountdown = (
-    Math.max(
-      0,
-      FULLSCREEN_MODE_LANDING_HOLD_MS - (fullscreenModeLandingState?.holdMs ?? 0),
-    ) / 1000
-  ).toFixed(2);
+  const fullscreenModeLandingHoldProgress = clampValue(
+    (fullscreenModeLandingState?.holdMs ?? 0) / FULLSCREEN_MODE_LANDING_HOLD_MS,
+    0,
+    1,
+  );
+  const fullscreenModeLandingLayout = fullscreenModeLandingState?.layout ?? null;
   const fullscreenExitControlCountdown = (
     Math.max(
       0,
@@ -2014,7 +2017,7 @@ export default function App() {
     }
   };
 
-  const cameraObjectFit = getCameraObjectFitForPhase(phase);
+  const cameraObjectFit = isFullscreenModeLanding ? "cover" : getCameraObjectFitForPhase(phase);
   const fullscreenCameraViewport = useMemo(() => {
     if (!isFullscreenCameraPhase) {
       return null;
@@ -2026,6 +2029,24 @@ export default function App() {
       Number.isFinite(cameraAspectRatio) && cameraAspectRatio > 0 ? cameraAspectRatio : 4 / 3;
     return createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio);
   }, [cameraAspectRatio, isFullscreenCameraPhase, viewport.height, viewport.width]);
+  const fullscreenCameraLandingViewport = useMemo(() => {
+    if (!isFullscreenCameraPhase) {
+      return null;
+    }
+
+    return {
+      left: 0,
+      top: 0,
+      width: viewport.width,
+      height: viewport.height,
+      style: {
+        left: "0px",
+        top: "0px",
+        width: `${viewport.width}px`,
+        height: `${viewport.height}px`,
+      },
+    };
+  }, [isFullscreenCameraPhase, viewport.height, viewport.width]);
   const fullscreenTicTacToeCursorPoint =
     isFullscreenTicTacToeMode &&
     fullscreenCameraViewport &&
@@ -2647,8 +2668,8 @@ export default function App() {
   }, [fullscreenRestartControlState]);
 
   useEffect(() => {
-    fullscreenModeLandingViewportRef.current = fullscreenCameraViewport;
-  }, [fullscreenCameraViewport]);
+    fullscreenModeLandingViewportRef.current = fullscreenCameraLandingViewport;
+  }, [fullscreenCameraLandingViewport]);
 
   useEffect(() => {
     fullscreenExitControlViewportRef.current = fullscreenCameraViewport;
@@ -2769,7 +2790,7 @@ export default function App() {
     if (
       phase !== PHASES.FULLSCREEN_CAMERA ||
       fullscreenGridMode !== FULLSCREEN_LANDING_MODE ||
-      !fullscreenCameraViewport
+      !fullscreenCameraLandingViewport
     ) {
       fullscreenModeLandingLastTickRef.current = 0;
       if (fullscreenModeLandingStateRef.current) {
@@ -2780,14 +2801,14 @@ export default function App() {
     }
 
     const nextLandingState = createFullscreenModeLandingState(
-      fullscreenCameraViewport.width,
-      fullscreenCameraViewport.height,
+      fullscreenCameraLandingViewport.width,
+      fullscreenCameraLandingViewport.height,
     );
     fullscreenModeLandingLastTickRef.current = 0;
     fullscreenModeLandingStateRef.current = nextLandingState;
     setFullscreenModeLandingState(nextLandingState);
     return undefined;
-  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+  }, [fullscreenCameraLandingViewport, fullscreenGridMode, phase]);
 
   useEffect(() => {
     if (
@@ -6673,7 +6694,13 @@ export default function App() {
     }
   }
 
-  function computeCameraRenderMetrics(objectFit = getCameraObjectFitForPhase(phaseRef.current)) {
+  function computeCameraRenderMetrics(
+    objectFit =
+      phaseRef.current === PHASES.FULLSCREEN_CAMERA &&
+      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE
+        ? "cover"
+        : getCameraObjectFitForPhase(phaseRef.current),
+  ) {
     const video = videoRef.current;
     const canvas = overlayCanvasRef.current;
     if (!video || !canvas || !video.videoWidth || !video.videoHeight || !canvas.width || !canvas.height) {
@@ -7556,7 +7583,9 @@ export default function App() {
   }
 
   function getVerifiedFullscreenHoldControlInput(viewportMetrics) {
-    const renderMetrics = computeCameraRenderMetrics("contain");
+    const renderMetrics = computeCameraRenderMetrics(
+      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE ? "cover" : "contain",
+    );
     return getVerifiedFullscreenMenuHandPointerInput(
       fullscreenHandsRef.current,
       viewportMetrics,
@@ -9882,55 +9911,21 @@ export default function App() {
     return (
       <div className="app fullscreen-camera-app">
         <div className="fullscreen-camera-stage" ref={cameraWrapRef}>
-          <video
-            ref={videoRef}
-            className="camera-video fullscreen-camera-video"
-            style={{ objectFit: cameraObjectFit }}
-            playsInline
-            muted
-            autoPlay
+          <WebcamBackground
+            videoRef={videoRef}
+            overlayCanvasRef={overlayCanvasRef}
+            cameraObjectFit={cameraObjectFit}
           />
-          <canvas ref={overlayCanvasRef} className="camera-overlay" />
           {isFullscreenModeLanding ? (
-            <div
-              className="fullscreen-camera-mode-landing"
-              style={fullscreenCameraViewport?.style ?? undefined}
-            >
-              {fullscreenModeLandingState?.layout?.boxes?.map((box) => (
-                <div
-                  key={box.id}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Open ${box.label}`}
-                  className={`fullscreen-camera-mode-landing-box ${box.category.toLowerCase()} ${
-                    fullscreenModeLandingState?.holdModeId === box.id ? "active" : ""
-                  }`}
-                  onClick={(event) => handleFullscreenModeLandingBoxClick(event, box.id)}
-                  style={{
-                    left: `${box.left}px`,
-                    top: `${box.top}px`,
-                    width: `${box.width}px`,
-                    height: `${box.height}px`,
-                  }}
-                >
-                  <span className="fullscreen-camera-mode-landing-category">{box.category}</span>
-                  <span className="fullscreen-camera-mode-landing-title">{box.label}</span>
-                  <span className="fullscreen-camera-mode-landing-countdown">
-                    {fullscreenModeLandingState?.handVerified &&
-                    fullscreenModeLandingState?.holdModeId === box.id
-                      ? fullscreenModeLandingCountdown
-                      : (FULLSCREEN_MODE_LANDING_HOLD_MS / 1000).toFixed(2)}
-                  </span>
-                  <span className="fullscreen-camera-mode-landing-hint">
-                    {!fullscreenModeLandingState?.handVerified
-                      ? "Show 5 tips"
-                      : fullscreenModeLandingState?.holdModeId === box.id
-                      ? "Keep holding"
-                      : "Hold to open"}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <FullscreenLandingPage
+              viewportStyle={fullscreenCameraLandingViewport?.style}
+              layout={fullscreenModeLandingLayout}
+              state={fullscreenModeLandingState}
+              holdProgress={fullscreenModeLandingHoldProgress}
+              handDetected={handDetected}
+              fps={fps}
+              onSelect={handleFullscreenModeLandingBoxClick}
+            />
           ) : fullscreenGridMode === "hex" ? (
             <div className="fullscreen-camera-hex-grid" style={fullscreenHexGridMetrics?.style ?? undefined}>
               {fullscreenHexGridMetrics?.cells?.map((cell) => (
@@ -11418,12 +11413,12 @@ export default function App() {
           ) : null}
 
           <div className="fullscreen-camera-hud">
-            <div className="fullscreen-camera-hud-bottom">
-              <span className={`tracking-indicator fullscreen-camera-status ${handDetected ? "ok" : "warn"}`}>
-                {handDetected ? "Hand detected" : "Hand not detected"} | FPS: {fps.toFixed(1)}
-              </span>
-              <div className="fullscreen-camera-meta fullscreen-camera-actions">
-                {!isFullscreenModeLanding ? (
+            {!isFullscreenModeLanding ? (
+              <div className="fullscreen-camera-hud-bottom">
+                <span className={`tracking-indicator fullscreen-camera-status ${handDetected ? "ok" : "warn"}`}>
+                  {handDetected ? "Hand detected" : "Hand not detected"} | FPS: {fps.toFixed(1)}
+                </span>
+                <div className="fullscreen-camera-meta fullscreen-camera-actions">
                   <span className="fullscreen-camera-note">
                     {fullscreenGridMode === "breakout-coop"
                       ? `Breakout Co-op keeps index-finger steering on the paddle, uses support-hand pinch for a ${Math.round(BREAKOUT_COOP_SHIELD_DURATION_MS / 1000)} second shield pulse, and prism bricks split the ball while the shield recharges over about ${Math.round(BREAKOUT_COOP_SHIELD_COOLDOWN_MS / 1000)} seconds.`
@@ -11451,9 +11446,9 @@ export default function App() {
                       ? "Flappy overlay uses pinch rising edges only. Each distinct pinch flaps once, holding a pinch does not retrigger, and pinching after a crash restarts the round."
                       : "Camera fits the window without cropping. Press `Esc` to close."}
                   </span>
-                ) : null}
+                </div>
               </div>
-            </div>
+            ) : null}
             {(cameraError || modelError) && (
               <div className="fullscreen-camera-errors">
                 {cameraError && <p className="error-text">{cameraError}</p>}

@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createTicTacToeLayout } from "../src/ticTacToeGame.js";
 import {
   FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
   FULLSCREEN_CAMERA_LANDING_OPTIONS,
+  FULLSCREEN_CAMERA_LANDING_SECTIONS,
   FULLSCREEN_CAMERA_MODE_OPTIONS,
   FULLSCREEN_MODE_LANDING_HOLD_MS,
   createFullscreenModeLandingLayout,
@@ -27,24 +27,65 @@ test("createFullscreenModeLandingLayout includes every mode and keeps box propor
   const width = 1366;
   const height = 768;
   const layout = createFullscreenModeLandingLayout(width, height);
-  const ticTacToeLayout = createTicTacToeLayout(width, height);
+  const visualPanel = layout.sections.find((section) => section.id === "visual-effects");
+  const gamesPanel = layout.sections.find((section) => section.id === "games");
 
   assert.equal(layout.boxes.length, FULLSCREEN_CAMERA_LANDING_OPTIONS.length);
   assert.ok(layout.boxes.some((box) => box.id === "fingerprint-worlds"));
+  assert.equal(layout.sections.length, 2);
+  assert.equal(visualPanel?.columns, 4);
+  assert.equal(visualPanel?.rows, 2);
+  assert.equal(gamesPanel?.columns, 6);
+  assert.equal(gamesPanel?.rows, 2);
   assert.ok(layout.boxWidth > 0);
   assert.ok(layout.boxHeight > 0);
+  assert.ok(layout.boxWidth > layout.boxHeight);
+});
+
+test("fullscreen landing data groups visual effects above games", () => {
+  assert.deepEqual(
+    FULLSCREEN_CAMERA_LANDING_SECTIONS.map((section) => section.title),
+    ["Visual Effects", "Games"],
+  );
+  assert.deepEqual(
+    FULLSCREEN_CAMERA_LANDING_SECTIONS[0].items.map((item) => item.label),
+    ["Squares", "Hex", "Voronoi", "Rings", "Pulse", "Tip Ripples", "Tip Ripples v2", "Static"],
+  );
+  assert.deepEqual(
+    FULLSCREEN_CAMERA_LANDING_SECTIONS[1].items.map((item) => item.label),
+    [
+      "Hand Bounce",
+      "Brick Dodger",
+      "Breakout Co-op",
+      "Breakout",
+      "Finger Pong",
+      "Tic Tac Toe",
+      "Slice Air",
+      "Sky Patrol",
+      "Fingerprint Worlds",
+      "Invaders",
+      "Flappy",
+      "Missile Command",
+    ],
+  );
   assert.ok(
-    Math.abs(layout.boxWidth / layout.boxHeight - ticTacToeLayout.resetBoxWidth / ticTacToeLayout.resetBoxHeight) < 1e-6,
+    FULLSCREEN_CAMERA_MODE_OPTIONS.every((item) => item.id && item.label && item.category && item.route),
+  );
+  assert.equal(
+    FULLSCREEN_CAMERA_MODE_OPTIONS.every((item) => item.previewType || item.icon),
+    true,
   );
 });
 
-test("createFullscreenModeLandingLayout includes a large back to input test tile", () => {
+test("createFullscreenModeLandingLayout includes a footer back to input test control", () => {
   const layout = createFullscreenModeLandingLayout(1366, 768);
   const backBox = layout.boxes.find((box) => box.id === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID);
 
   assert.ok(backBox);
   assert.equal(backBox.label, "Back to Input Test");
   assert.equal(backBox.category, "Navigation");
+  assert.ok(backBox.top >= layout.footerTop);
+  assert.ok(backBox.width > layout.boxWidth);
   assert.equal(FULLSCREEN_CAMERA_MODE_OPTIONS.some((option) => option.id === backBox.id), false);
 });
 
@@ -66,11 +107,22 @@ test("createFullscreenModeLandingLayout keeps the full menu inside representativ
     assert.ok(minLeft >= 0, `${width}x${height} should not overflow left`);
     assert.ok(minTop >= 0, `${width}x${height} should not overflow top`);
     assert.ok(maxRight <= layout.width, `${width}x${height} should not overflow right`);
-    assert.ok(maxBottom <= layout.height, `${width}x${height} should not overflow bottom`);
+    assert.ok(maxBottom <= layout.scrollHeight, `${width}x${height} should fit within scrollable height`);
   }
 });
 
-test("createFullscreenModeLandingLayout reserves space for the fullscreen HUD", () => {
+test("createFullscreenModeLandingLayout preserves usable mobile tile targets", () => {
+  const layout = createFullscreenModeLandingLayout(390, 844);
+  const demoBoxes = layout.boxes.filter((box) => box.category !== "Navigation");
+  const minWidth = Math.min(...demoBoxes.map((box) => box.width));
+  const minHeight = Math.min(...demoBoxes.map((box) => box.height));
+
+  assert.ok(minWidth >= 110);
+  assert.ok(minHeight >= 76);
+  assert.ok(layout.scrollHeight > layout.height);
+});
+
+test("createFullscreenModeLandingLayout reserves header and footer space around demo tiles", () => {
   for (const [width, height] of [
     [1280, 720],
     [960, 720],
@@ -78,12 +130,13 @@ test("createFullscreenModeLandingLayout reserves space for the fullscreen HUD", 
     [320, 440],
   ]) {
     const layout = createFullscreenModeLandingLayout(width, height);
-    const minTop = Math.min(...layout.boxes.map((box) => box.top));
-    const maxBottom = Math.max(...layout.boxes.map((box) => box.top + box.height));
+    const demoBoxes = layout.boxes.filter((box) => box.category !== "Navigation");
+    const minTop = Math.min(...demoBoxes.map((box) => box.top));
+    const maxBottom = Math.max(...demoBoxes.map((box) => box.top + box.height));
 
-    assert.ok(layout.contentTop >= 60, `${width}x${height} should reserve the top HUD`);
-    assert.ok(layout.height - layout.contentBottom >= 18, `${width}x${height} should preserve bottom padding`);
-    assert.ok(minTop >= layout.contentTop, `${width}x${height} should start below the top HUD`);
+    assert.ok(layout.contentTop >= 72, `${width}x${height} should reserve the header`);
+    assert.ok(layout.footerTop > layout.contentBottom, `${width}x${height} should reserve the footer`);
+    assert.ok(minTop >= layout.contentTop, `${width}x${height} should start below the header`);
     assert.ok(maxBottom <= layout.contentBottom, `${width}x${height} should stay inside the safe content area`);
   }
 });
