@@ -90,13 +90,22 @@ test("fullscreen landing data uses generated icon assets for imported previews",
     static: "/assets/launcher-icons/static.png",
     "hand-bounce": "/assets/launcher-icons/hand-bounce.png",
     "brick-dodger": "/assets/launcher-icons/brick-dodger.png",
+    "breakout-coop": "/assets/launcher-icons/breakout-coop.png",
     breakout: "/assets/launcher-icons/breakout.png",
+    "finger-pong": "/assets/launcher-icons/finger-pong.png",
+    "tic-tac-toe": "/assets/launcher-icons/tic-tac-toe.png",
+    "fruit-ninja": "/assets/launcher-icons/slice-air.png",
+    "sky-patrol": "/assets/launcher-icons/sky-patrol.png",
+    "fingerprint-worlds": "/assets/launcher-icons/fingerprint-worlds.png",
     invaders: "/assets/launcher-icons/invaders.png",
+    flappy: "/assets/launcher-icons/flappy.png",
+    "missile-command": "/assets/launcher-icons/missile-command.png",
   };
 
   for (const [id, iconSrc] of Object.entries(expectedIconSources)) {
     assert.equal(FULLSCREEN_CAMERA_MODE_OPTIONS.find((item) => item.id === id)?.iconSrc, iconSrc);
   }
+  assert.equal(FULLSCREEN_CAMERA_MODE_OPTIONS.every((item) => item.iconSrc), true);
 });
 
 test("createFullscreenModeLandingLayout includes a footer back to input test control", () => {

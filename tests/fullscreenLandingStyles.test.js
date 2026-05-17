@@ -24,3 +24,20 @@ test("fullscreen launcher hovered tiles use a full-card progress fill", () => {
   const activeRule = getRuleBody(".fullscreen-camera-mode-landing-box.active");
   assert.match(activeRule, /background:\s*rgba\(12,\s*44,\s*72,\s*0\.9\)/);
 });
+
+test("fullscreen launcher tiles constrain icons and labels inside the box", () => {
+  const boxRule = getRuleBody(".fullscreen-camera-mode-landing-box");
+  assert.match(boxRule, /gap:\s*clamp\(3px,\s*calc\(7px\s*\*\s*var\(--landing-scale,\s*1\)\),\s*8px\)/);
+  assert.match(boxRule, /overflow:\s*hidden/);
+
+  const titleRule = getRuleBody(".fullscreen-camera-mode-landing-title");
+  assert.match(titleRule, /max-height:\s*2\.18em/);
+  assert.match(titleRule, /overflow:\s*hidden/);
+  assert.match(titleRule, /overflow-wrap:\s*anywhere/);
+  assert.match(titleRule, /-webkit-line-clamp:\s*2/);
+
+  const imageRule = getRuleBody(".fullscreen-camera-mode-preview-image");
+  assert.match(imageRule, /height:\s*min\(clamp\(36px,\s*calc\(62px\s*\*\s*var\(--landing-scale,\s*1\)\),\s*68px\),\s*calc\(100%\s*-\s*2\.6em\)\)/);
+  assert.match(imageRule, /max-width:\s*100%/);
+  assert.match(imageRule, /object-fit:\s*contain/);
+});
