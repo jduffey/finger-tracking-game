@@ -7065,7 +7065,7 @@ export default function App() {
     if (!options.showSkeleton) {
       return;
     }
-    const renderMetrics = computeCameraRenderMetrics();
+    const renderMetrics = computeCameraRenderMetrics(options.objectFit);
 
     const safeHands = Array.isArray(hands) ? hands : [];
     for (let handIndex = 0; handIndex < safeHands.length; handIndex += 1) {
@@ -7078,6 +7078,45 @@ export default function App() {
       const pointerTip = fingerTips.index ?? hand.indexTip ?? null;
 
       if (Array.isArray(hand.landmarks) && hand.landmarks.length > 0) {
+        ctx.strokeStyle = style.line;
+        ctx.lineWidth = options.boneLineWidth ?? 1.45;
+        for (const [startIndex, endIndex] of HAND_ROOT_CONNECTIONS) {
+          const projectedStart = projectCameraPointToCanvas(
+            hand.landmarks[startIndex],
+            renderMetrics,
+          );
+          const projectedEnd = projectCameraPointToCanvas(
+            hand.landmarks[endIndex],
+            renderMetrics,
+          );
+          if (!projectedStart || !projectedEnd) {
+            continue;
+          }
+          ctx.beginPath();
+          ctx.moveTo(projectedStart.x, projectedStart.y);
+          ctx.lineTo(projectedEnd.x, projectedEnd.y);
+          ctx.stroke();
+        }
+        for (const chain of HAND_FINGER_CHAINS) {
+          for (let index = 1; index < chain.length; index += 1) {
+            const projectedStart = projectCameraPointToCanvas(
+              hand.landmarks[chain[index - 1]],
+              renderMetrics,
+            );
+            const projectedEnd = projectCameraPointToCanvas(
+              hand.landmarks[chain[index]],
+              renderMetrics,
+            );
+            if (!projectedStart || !projectedEnd) {
+              continue;
+            }
+            ctx.beginPath();
+            ctx.moveTo(projectedStart.x, projectedStart.y);
+            ctx.lineTo(projectedEnd.x, projectedEnd.y);
+            ctx.stroke();
+          }
+        }
+
         ctx.fillStyle = style.point;
         for (const point of hand.landmarks) {
           const projectedPoint = projectCameraPointToCanvas(point, renderMetrics);
@@ -7090,21 +7129,25 @@ export default function App() {
         }
       }
 
-      for (const fingerName of EXTENT_FINGER_NAMES) {
+      const highlightedFingerNames = options.highlightIndexOnly ? ["index"] : EXTENT_FINGER_NAMES;
+      for (const fingerName of highlightedFingerNames) {
         const tip = fingerTips[fingerName];
         const projectedTip = projectCameraPointToCanvas(tip, renderMetrics);
         if (!projectedTip) {
           continue;
         }
         const { x, y } = projectedTip;
-        ctx.fillStyle = style.point;
+        ctx.fillStyle =
+          options.highlightIndexOnly && fingerName === "index"
+            ? (options.indexHighlightFill ?? "#22d3ee")
+            : style.point;
         ctx.beginPath();
         ctx.arc(x, y, fingerName === "thumb" ? 6 : 5, 0, Math.PI * 2);
         ctx.fill();
       }
 
       const projectedPointerTip = projectCameraPointToCanvas(pointerTip, renderMetrics);
-      if (projectedPointerTip) {
+      if (projectedPointerTip && options.showPointerRing !== false) {
         const pointerX = projectedPointerTip.x;
         const pointerY = projectedPointerTip.y;
         ctx.strokeStyle = style.ring;
@@ -7119,13 +7162,15 @@ export default function App() {
         ctx.stroke();
       }
 
-      ctx.fillStyle = "#f5f9ff";
-      ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, monospace";
-      ctx.fillText(
-        `${hand.label ?? `Hand ${handIndex + 1}`}`,
-        18,
-        24 + handIndex * 16,
-      );
+      if (options.showHandLabels !== false) {
+        ctx.fillStyle = "#f5f9ff";
+        ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, monospace";
+        ctx.fillText(
+          `${hand.label ?? `Hand ${handIndex + 1}`}`,
+          18,
+          24 + handIndex * 16,
+        );
+      }
     }
 
     if (debugRef.current) {
@@ -7519,13 +7564,6 @@ export default function App() {
     const tipPoints = getFullscreenTipOverlayPoints(hands);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE) {
-      return {
-        indexPoints,
-        tipPoints,
-      };
-    }
-
     if (shouldShowFullscreenNeonHandOutline(fullscreenGridModeRef.current)) {
       drawNeonActiveHandOutline(hands);
       return {
@@ -7552,8 +7590,13 @@ export default function App() {
     }
 
     if (shouldShowFullscreenHandSkeleton(fullscreenGridModeRef.current)) {
+      const isFullscreenLandingSkeleton = fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE;
       drawCameraOverlayHands(hands, {
         showSkeleton: true,
+        objectFit: isFullscreenLandingSkeleton ? "cover" : undefined,
+        highlightIndexOnly: isFullscreenLandingSkeleton,
+        showPointerRing: !isFullscreenLandingSkeleton,
+        showHandLabels: !isFullscreenLandingSkeleton,
       });
       return {
         indexPoints,
