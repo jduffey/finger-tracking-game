@@ -1435,7 +1435,7 @@ export default function App() {
     width: window.innerWidth,
     height: window.innerHeight,
   }));
-  const [phase, setPhase] = useState(PHASES.CALIBRATION);
+  const [phase, setPhase] = useState(PHASES.FULLSCREEN_CAMERA);
   const [leftPaneWidth, setLeftPaneWidth] = useState(null);
   const [isLeftPaneResizing, setIsLeftPaneResizing] = useState(false);
 
