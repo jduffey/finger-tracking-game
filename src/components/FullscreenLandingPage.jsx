@@ -108,9 +108,6 @@ export function DemoTile({ item, active, holdProgress, onSelect }) {
         />
       )}
       <span className="fullscreen-camera-mode-landing-title">{item.label}</span>
-      <span className="fullscreen-camera-mode-landing-hint">
-        {active ? "Keep hovering" : "Hover to play"}
-      </span>
     </button>
   );
 }

@@ -3672,14 +3672,6 @@ body {
   max-width: min(14ch, 100%);
 }
 
-.fullscreen-camera-mode-landing-hint {
-  color: rgba(203, 216, 232, 0.82);
-  font-size: clamp(0.62rem, 0.88vw, 0.86rem);
-  line-height: 1.2;
-  margin-top: 4px;
-  max-width: 100%;
-}
-
 .fullscreen-camera-mode-preview {
   color: var(--preview-accent, #22d3ee);
   display: block;
