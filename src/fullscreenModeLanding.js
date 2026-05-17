@@ -310,6 +310,9 @@ export function createFullscreenModeLandingState(width, height) {
   return {
     layout: createFullscreenModeLandingLayout(width, height),
     handVerified: false,
+    pointerActive: false,
+    pointerX: 0,
+    pointerY: 0,
     hoverModeId: null,
     holdModeId: null,
     holdMs: 0,
@@ -353,6 +356,9 @@ export function stepFullscreenModeLanding(state, dtSeconds, input) {
   return {
     ...safeState,
     handVerified,
+    pointerActive: pointer.active,
+    pointerX: pointer.active ? pointer.x : 0,
+    pointerY: pointer.active ? pointer.y : 0,
     hoverModeId: hoveredModeId,
     holdModeId: hoveredModeId,
     holdMs,

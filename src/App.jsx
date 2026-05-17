@@ -7519,6 +7519,13 @@ export default function App() {
     const tipPoints = getFullscreenTipOverlayPoints(hands);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    if (fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE) {
+      return {
+        indexPoints,
+        tipPoints,
+      };
+    }
+
     if (shouldShowFullscreenNeonHandOutline(fullscreenGridModeRef.current)) {
       drawNeonActiveHandOutline(hands);
       return {

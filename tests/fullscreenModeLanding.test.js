@@ -325,6 +325,32 @@ test("stepFullscreenModeLanding clears the hold when the pointer leaves the hove
   assert.equal(switched.selectedModeId, null);
 });
 
+test("stepFullscreenModeLanding exposes the verified index fingertip pointer for the marker", () => {
+  const state = createFullscreenModeLandingState(1280, 720);
+
+  const nextState = stepFullscreenModeLanding(state, 0.016, {
+    handVerified: true,
+    pointerActive: true,
+    pointerX: 123,
+    pointerY: 234,
+  });
+
+  assert.equal(nextState.pointerActive, true);
+  assert.equal(nextState.pointerX, 123);
+  assert.equal(nextState.pointerY, 234);
+
+  const clearedState = stepFullscreenModeLanding(nextState, 0.016, {
+    handVerified: false,
+    pointerActive: true,
+    pointerX: 456,
+    pointerY: 567,
+  });
+
+  assert.equal(clearedState.pointerActive, false);
+  assert.equal(clearedState.pointerX, 0);
+  assert.equal(clearedState.pointerY, 0);
+});
+
 test("stepFullscreenModeLanding selects the back to input test tile after a verified hold", () => {
   const base = createFullscreenModeLandingState(1280, 720);
   const backBox = base.layout.boxes.find((box) => box.id === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID);

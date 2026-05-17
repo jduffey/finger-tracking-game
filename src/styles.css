@@ -3588,6 +3588,21 @@ body {
   opacity: 1;
 }
 
+.fullscreen-camera-landing-fingertip-marker {
+  background: #22d3ee;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 7px rgba(34, 211, 238, 0.2),
+    0 0 26px rgba(34, 211, 238, 0.76);
+  height: 16px;
+  pointer-events: none;
+  position: fixed;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  z-index: 7;
+}
+
 .fullscreen-camera-mode-landing-title {
   font-size: clamp(0.68rem, 1vw, 1.02rem);
   font-weight: 900;

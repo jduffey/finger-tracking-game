@@ -141,6 +141,23 @@ export function FooterStatus({ handDetected, fps }) {
   );
 }
 
+function IndexFingerMarker({ state }) {
+  if (!state?.pointerActive) {
+    return null;
+  }
+
+  return (
+    <span
+      className="fullscreen-camera-landing-fingertip-marker"
+      style={{
+        left: `${state.pointerX}px`,
+        top: `${state.pointerY}px`,
+      }}
+      aria-hidden="true"
+    />
+  );
+}
+
 export default function FullscreenLandingPage({
   viewportStyle,
   layout,
@@ -183,6 +200,7 @@ export default function FullscreenLandingPage({
         holdProgress={holdProgress}
         onSelect={onSelect}
       />
+      <IndexFingerMarker state={state} />
       <FooterStatus handDetected={handDetected} fps={fps} />
     </div>
   );
