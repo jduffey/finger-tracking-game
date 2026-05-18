@@ -553,7 +553,16 @@ export function stepFullscreenModeLanding(state, dtSeconds, input) {
     x: Number.isFinite(input?.pointerX) ? clamp(input.pointerX, 0, safeState.layout.width) : 0,
     y: Number.isFinite(input?.pointerY) ? clamp(input.pointerY, 0, safeState.layout.height) : 0,
   };
-  const hoveredBox = getHoveredModeBox(safeState.layout, pointer);
+  const hitPointer = {
+    active: pointer.active,
+    x: Number.isFinite(input?.hitPointerX)
+      ? clamp(input.hitPointerX, 0, safeState.layout.width)
+      : pointer.x,
+    y: Number.isFinite(input?.hitPointerY)
+      ? clamp(input.hitPointerY, 0, safeState.layout.scrollHeight ?? safeState.layout.height)
+      : pointer.y,
+  };
+  const hoveredBox = getHoveredModeBox(safeState.layout, hitPointer);
   const hoveredModeId = hoveredBox?.id ?? null;
   const elapsedMs = Math.max(0, Math.min(0.05, Number.isFinite(dtSeconds) ? dtSeconds : 0)) * 1000;
 

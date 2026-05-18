@@ -1627,6 +1627,7 @@ export default function App() {
   const fullscreenModeLandingStateRef = useRef(null);
   const fullscreenModeLandingViewportRef = useRef(null);
   const fullscreenModeLandingLastTickRef = useRef(0);
+  const fullscreenModeLandingScrollTopRef = useRef(0);
   const fullscreenLandingAppActiveRef = useRef(true);
   const fullscreenExitControlStateRef = useRef(null);
   const fullscreenExitControlViewportRef = useRef(null);
@@ -2856,6 +2857,7 @@ export default function App() {
       !fullscreenCameraLandingViewport
     ) {
       fullscreenModeLandingLastTickRef.current = 0;
+      fullscreenModeLandingScrollTopRef.current = 0;
       if (fullscreenModeLandingStateRef.current) {
         fullscreenModeLandingStateRef.current = null;
         setFullscreenModeLandingState(null);
@@ -2868,6 +2870,7 @@ export default function App() {
       fullscreenCameraLandingViewport.height,
     );
     fullscreenModeLandingLastTickRef.current = 0;
+    fullscreenModeLandingScrollTopRef.current = 0;
     fullscreenModeLandingStateRef.current = nextLandingState;
     setFullscreenModeLandingState(nextLandingState);
     return undefined;
@@ -7779,12 +7782,20 @@ export default function App() {
       fullscreenLandingAppActiveRef.current &&
       (typeof document === "undefined" || document.visibilityState !== "hidden");
     const pointerActive = appActive && handDetectedRef.current && holdInput.pointerActive;
+    const scrollTop = Math.max(
+      0,
+      Number.isFinite(fullscreenModeLandingScrollTopRef.current)
+        ? fullscreenModeLandingScrollTopRef.current
+        : 0,
+    );
     const nextState = stepFullscreenModeLanding(fullscreenModeLandingStateRef.current, deltaSeconds, {
       appActive,
       handVerified: holdInput.handVerified,
       pointerActive,
       pointerX: pointerActive ? holdInput.pointerX : 0,
       pointerY: pointerActive ? holdInput.pointerY : 0,
+      hitPointerX: pointerActive ? holdInput.pointerX : 0,
+      hitPointerY: pointerActive ? holdInput.pointerY + scrollTop : 0,
     });
     const nextStateWithSkeleton = {
       ...nextState,
@@ -7821,6 +7832,13 @@ export default function App() {
     if (nextState.selectedModeId && nextState.selectedModeId !== fullscreenGridModeRef.current) {
       setFullscreenGridMode(nextState.selectedModeId);
     }
+  }
+
+  function handleFullscreenModeLandingScrollOffsetChange(scrollTop) {
+    fullscreenModeLandingScrollTopRef.current = Math.max(
+      0,
+      Number.isFinite(scrollTop) ? scrollTop : 0,
+    );
   }
 
   function updateFullscreenExitControlSimulation(timestamp) {
@@ -10038,6 +10056,7 @@ export default function App() {
               handDetected={handDetected}
               fps={fps}
               onSelect={handleFullscreenModeLandingBoxClick}
+              onScrollOffsetChange={handleFullscreenModeLandingScrollOffsetChange}
             />
           ) : fullscreenGridMode === "hex" ? (
             <div className="fullscreen-camera-hex-grid" style={fullscreenHexGridMetrics?.style ?? undefined}>

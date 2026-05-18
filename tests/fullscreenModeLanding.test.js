@@ -444,6 +444,27 @@ test("stepFullscreenModeLanding exposes the verified index fingertip pointer for
   assert.equal(clearedState.pointerY, 0);
 });
 
+test("stepFullscreenModeLanding can hit-test scrolled mobile tiles while keeping marker coordinates visible", () => {
+  const state = createFullscreenModeLandingState(390, 844);
+  const targetBox = state.layout.boxes.find((box) => box.id === "missile-command");
+  const targetPoint = getBoxCenter(targetBox);
+  const scrollTop = Math.max(0, targetPoint.y - 420);
+  const visiblePointerY = targetPoint.y - scrollTop;
+
+  const nextState = stepFullscreenModeLanding(state, 1 / 60, {
+    handVerified: true,
+    pointerActive: true,
+    pointerX: targetPoint.x,
+    pointerY: visiblePointerY,
+    hitPointerX: targetPoint.x,
+    hitPointerY: targetPoint.y,
+  });
+
+  assert.equal(nextState.holdModeId, "missile-command");
+  assert.equal(nextState.pointerX, targetPoint.x);
+  assert.equal(nextState.pointerY, visiblePointerY);
+});
+
 test("stepFullscreenModeLanding selects the back to input test tile after a verified hold", () => {
   const base = createFullscreenModeLandingState(1280, 720);
   const backBox = base.layout.boxes.find((box) => box.id === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID);

@@ -209,6 +209,7 @@ export default function FullscreenLandingPage({
   handDetected,
   fps,
   onSelect,
+  onScrollOffsetChange,
 }) {
   const demoItems =
     layout?.boxes?.filter((box) => box.id !== FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID) ?? [];
@@ -221,6 +222,9 @@ export default function FullscreenLandingPage({
       style={{
         ...(viewportStyle ?? {}),
         "--landing-scale": layout?.scale ?? 1,
+      }}
+      onScroll={(event) => {
+        onScrollOffsetChange?.(event.currentTarget.scrollTop);
       }}
     >
       <LandingHeader />
