@@ -27,21 +27,6 @@ export function WebcamBackground({ videoRef, overlayCanvasRef, cameraObjectFit }
   );
 }
 
-function HeaderControls() {
-  return (
-    <div className="fullscreen-camera-landing-top-controls">
-      <button className="fullscreen-camera-landing-pill secondary" type="button">
-        <span className="fullscreen-camera-pill-icon info" aria-hidden="true" />
-        How to use
-      </button>
-      <button className="fullscreen-camera-landing-pill secondary" type="button">
-        <span className="fullscreen-camera-pill-icon settings" aria-hidden="true" />
-        Settings
-      </button>
-    </div>
-  );
-}
-
 function LandingHeader() {
   return (
     <header className="fullscreen-camera-landing-header">
@@ -238,7 +223,6 @@ export default function FullscreenLandingPage({
         "--landing-scale": layout?.scale ?? 1,
       }}
     >
-      <HeaderControls />
       <LandingHeader />
       <HandSkeletonOverlay
         skeleton={state?.skeleton}

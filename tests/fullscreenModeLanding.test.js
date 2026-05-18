@@ -13,6 +13,7 @@ import {
   getVerifiedFullscreenMenuHandPointerInput,
   getVerifiedFullscreenMenuHand,
   hasVerifiedFullscreenMenuHand,
+  resetFullscreenModeLandingHold,
   selectFullscreenModeLandingMode,
   stepFullscreenModeLanding,
 } from "../src/fullscreenModeLanding.js";
@@ -37,7 +38,7 @@ test("createFullscreenModeLandingLayout includes every mode and keeps box propor
   assert.equal(visualPanel?.columns, 4);
   assert.equal(visualPanel?.rows, 2);
   assert.equal(gamesPanel?.columns, 6);
-  assert.equal(gamesPanel?.rows, 2);
+  assert.equal(gamesPanel?.rows, 3);
   assert.ok(layout.boxWidth > 0);
   assert.ok(layout.boxHeight > 0);
   assert.ok(layout.boxWidth > layout.boxHeight);
@@ -50,7 +51,7 @@ test("fullscreen landing data groups visual effects above games", () => {
   );
   assert.deepEqual(
     FULLSCREEN_CAMERA_LANDING_SECTIONS[0].items.map((item) => item.label),
-    ["Squares", "Hex", "Voronoi", "Rings", "Pulse", "Tip Ripples", "Tip Ripples v2", "Static"],
+    ["Squares", "Hex", "Voronoi", "Rings", "Pulse", "Tip Ripples", "Static"],
   );
   assert.deepEqual(
     FULLSCREEN_CAMERA_LANDING_SECTIONS[1].items.map((item) => item.label),
@@ -59,6 +60,7 @@ test("fullscreen landing data groups visual effects above games", () => {
       "Brick Dodger",
       "Breakout Co-op",
       "Breakout",
+      "Find Your Grind",
       "Finger Pong",
       "Tic Tac Toe",
       "Slice Air",
@@ -73,7 +75,7 @@ test("fullscreen landing data groups visual effects above games", () => {
     FULLSCREEN_CAMERA_MODE_OPTIONS.every((item) => item.id && item.label && item.category && item.route),
   );
   assert.equal(
-    FULLSCREEN_CAMERA_MODE_OPTIONS.every((item) => item.previewType || item.icon),
+    FULLSCREEN_CAMERA_MODE_OPTIONS.every((item) => item.previewType || item.iconSrc),
     true,
   );
 });
@@ -86,12 +88,12 @@ test("fullscreen landing data uses generated icon assets for imported previews",
     rings: "/assets/launcher-icons/rings.png",
     pulse: "/assets/launcher-icons/pulse.png",
     "tip-ripples": "/assets/launcher-icons/tip-ripples.png",
-    "tip-ripples-v2": "/assets/launcher-icons/tip-ripples-v2.png",
     static: "/assets/launcher-icons/static.png",
     "hand-bounce": "/assets/launcher-icons/hand-bounce.png",
     "brick-dodger": "/assets/launcher-icons/brick-dodger.png",
     "breakout-coop": "/assets/launcher-icons/breakout-coop.png",
     breakout: "/assets/launcher-icons/breakout.png",
+    "find-your-grind-breakout": "/assets/launcher-icons/find-your-grind-breakout.png",
     "finger-pong": "/assets/launcher-icons/finger-pong.png",
     "tic-tac-toe": "/assets/launcher-icons/tic-tac-toe.png",
     "fruit-ninja": "/assets/launcher-icons/slice-air.png",
@@ -377,6 +379,43 @@ test("stepFullscreenModeLanding clears the hold when the pointer leaves the hove
   assert.equal(switched.holdModeId, "hex");
   assert.equal(switched.holdMs, 0);
   assert.equal(switched.selectedModeId, null);
+});
+
+test("stepFullscreenModeLanding clears stale hover progress when the app is inactive", () => {
+  const base = createFullscreenModeLandingState(1280, 720);
+  const firstBox = base.layout.boxes.find((box) => box.id === "square");
+  const firstPointer = getBoxCenter(firstBox);
+
+  const started = stepFullscreenModeLanding(base, 1 / 60, {
+    handVerified: true,
+    pointerActive: true,
+    pointerX: firstPointer.x,
+    pointerY: firstPointer.y,
+  });
+  const progressed = stepFullscreenModeLanding(started, 0.25, {
+    handVerified: true,
+    pointerActive: true,
+    pointerX: firstPointer.x,
+    pointerY: firstPointer.y,
+  });
+  const paused = stepFullscreenModeLanding(progressed, 0.2, {
+    appActive: false,
+    handVerified: true,
+    pointerActive: true,
+    pointerX: firstPointer.x,
+    pointerY: firstPointer.y,
+  });
+  const reset = resetFullscreenModeLandingHold(progressed);
+
+  assert.equal(progressed.holdModeId, "square");
+  assert.ok(progressed.holdMs > 0);
+  for (const state of [paused, reset]) {
+    assert.equal(state.pointerActive, false);
+    assert.equal(state.hoverModeId, null);
+    assert.equal(state.holdModeId, null);
+    assert.equal(state.holdMs, 0);
+    assert.equal(state.selectedModeId, null);
+  }
 });
 
 test("stepFullscreenModeLanding exposes the verified index fingertip pointer for the marker", () => {

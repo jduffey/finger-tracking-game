@@ -34,7 +34,9 @@ import {
   BREAKOUT_BRICK_SCORE,
   BREAKOUT_CAPSULE_SCORE,
   BREAKOUT_COUNTDOWN_MS,
+  FIND_YOUR_GRIND_BREAKOUT_MODE_ID,
   createBreakoutGame,
+  createFindYourGrindBreakoutGame,
   stepBreakoutGame,
 } from "./breakoutGame.js";
 import {
@@ -64,6 +66,11 @@ import {
   shouldShowFullscreenHandSkeleton,
   shouldShowFullscreenInvadersBanner,
 } from "./fullscreenGameUi.js";
+import { getFullscreenRingLayersForHand } from "./fullscreenRings.js";
+import {
+  getTipRippleStrokeWidth,
+  getTouchingTipRippleStrokeWidth,
+} from "./tipRipples.js";
 import {
   FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
   FULLSCREEN_LANDING_MODE,
@@ -72,6 +79,7 @@ import {
   createFullscreenModeLandingState,
   getVerifiedFullscreenMenuHandPointerInput,
   hasVerifiedFullscreenMenuHand,
+  resetFullscreenModeLandingHold,
   selectFullscreenModeLandingMode,
   stepFullscreenModeLanding,
 } from "./fullscreenModeLanding.js";
@@ -268,6 +276,10 @@ const FULLSCREEN_PULSE_RING_DURATION_MS = 1800;
 const FULLSCREEN_PULSE_RING_INTERVAL_MS = 260;
 const FULLSCREEN_RING_STEP_PX = 36;
 const FULLSCREEN_STATIC_RING_STEP_PX = FULLSCREEN_RING_STEP_PX * 2;
+const FULLSCREEN_TIP_RIPPLE_OUTER_DIAMETER_STEP_PX = FULLSCREEN_STATIC_RING_STEP_PX * 2;
+const FULLSCREEN_TIP_RIPPLE_TOUCHING_STROKE_WIDTH_PX = getTouchingTipRippleStrokeWidth(
+  FULLSCREEN_TIP_RIPPLE_OUTER_DIAMETER_STEP_PX,
+);
 const FULLSCREEN_RING_LAYERS = [
   { diameter: 44, color: "#ff0000" },
   { diameter: 80, color: "#ff8d00" },
@@ -1502,6 +1514,7 @@ export default function App() {
   const [fullscreenRingTrailNow, setFullscreenRingTrailNow] = useState(() => performance.now());
   const [fullscreenPulseBursts, setFullscreenPulseBursts] = useState([]);
   const [fullscreenPulseNow, setFullscreenPulseNow] = useState(() => performance.now());
+  const [fullscreenTipRippleNow, setFullscreenTipRippleNow] = useState(() => performance.now());
   const [fullscreenHandBounceState, setFullscreenHandBounceState] = useState(null);
   const [fullscreenBrickDodgerState, setFullscreenBrickDodgerState] = useState(null);
   const [fullscreenBreakoutState, setFullscreenBreakoutState] = useState(null);
@@ -1609,10 +1622,12 @@ export default function App() {
   const fullscreenRingTrailLastSampleAtRef = useRef(0);
   const fullscreenPulseBurstsRef = useRef([]);
   const fullscreenPulseLastEmitByIdRef = useRef({});
+  const fullscreenTipRippleStartedAtRef = useRef(0);
   const fullscreenGridModeRef = useRef(fullscreenGridMode);
   const fullscreenModeLandingStateRef = useRef(null);
   const fullscreenModeLandingViewportRef = useRef(null);
   const fullscreenModeLandingLastTickRef = useRef(0);
+  const fullscreenLandingAppActiveRef = useRef(true);
   const fullscreenExitControlStateRef = useRef(null);
   const fullscreenExitControlViewportRef = useRef(null);
   const fullscreenExitControlLastTickRef = useRef(0);
@@ -1767,6 +1782,9 @@ export default function App() {
   const isImmersiveAppPhase = shouldUseImmersiveAppLayout(phase);
   const isFullscreenModeLanding =
     isFullscreenCameraPhase && fullscreenGridMode === FULLSCREEN_LANDING_MODE;
+  const isFullscreenBreakoutGridMode =
+    fullscreenGridMode === "breakout" ||
+    fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID;
   const isFullscreenHandBounceMode =
     isFullscreenCameraPhase &&
     fullscreenGridMode === "hand-bounce" &&
@@ -1776,7 +1794,7 @@ export default function App() {
     fullscreenGridMode === "brick-dodger" &&
     Boolean(fullscreenBrickDodgerState);
   const isFullscreenBreakoutMode =
-    isFullscreenCameraPhase && fullscreenGridMode === "breakout" && Boolean(fullscreenBreakoutState);
+    isFullscreenCameraPhase && isFullscreenBreakoutGridMode && Boolean(fullscreenBreakoutState);
   const isFullscreenBreakoutCoopMode =
     isFullscreenCameraPhase &&
     fullscreenGridMode === "breakout-coop" &&
@@ -2536,6 +2554,50 @@ export default function App() {
   }, [appLog]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return undefined;
+    }
+
+    const markLandingAppActive = () => {
+      fullscreenLandingAppActiveRef.current = document.visibilityState !== "hidden";
+      fullscreenModeLandingLastTickRef.current = 0;
+    };
+
+    const clearLandingHold = () => {
+      fullscreenLandingAppActiveRef.current = false;
+      fullscreenModeLandingLastTickRef.current = 0;
+      setFullscreenModeLandingState((previous) => {
+        const sourceState = previous ?? fullscreenModeLandingStateRef.current;
+        if (!sourceState) {
+          fullscreenModeLandingStateRef.current = null;
+          return previous;
+        }
+        const nextState = resetFullscreenModeLandingHold(sourceState);
+        fullscreenModeLandingStateRef.current = nextState;
+        return nextState;
+      });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        clearLandingHold();
+        return;
+      }
+      markLandingAppActive();
+    };
+
+    window.addEventListener("blur", clearLandingHold);
+    window.addEventListener("focus", markLandingAppActive);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("blur", clearLandingHold);
+      window.removeEventListener("focus", markLandingAppActive);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
     appLog.info("Phase changed", { phase });
   }, [appLog, phase]);
 
@@ -2910,7 +2972,8 @@ export default function App() {
   useEffect(() => {
     if (
       phase !== PHASES.FULLSCREEN_CAMERA ||
-      fullscreenGridMode !== "breakout" ||
+      (fullscreenGridMode !== "breakout" &&
+        fullscreenGridMode !== FIND_YOUR_GRIND_BREAKOUT_MODE_ID) ||
       !fullscreenCameraViewport
     ) {
       fullscreenBreakoutLastTickRef.current = 0;
@@ -2921,10 +2984,16 @@ export default function App() {
       return undefined;
     }
 
-    const nextGame = createBreakoutGame(
-      fullscreenCameraViewport.width,
-      fullscreenCameraViewport.height,
-    );
+    const nextGame =
+      fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
+        ? createFindYourGrindBreakoutGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
+          )
+        : createBreakoutGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
+          );
     fullscreenBreakoutLastTickRef.current = 0;
     fullscreenBreakoutStateRef.current = nextGame;
     setFullscreenBreakoutState(nextGame);
@@ -3267,6 +3336,7 @@ export default function App() {
       .filter((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y))
       .map((point) => ({
         id: point.id,
+        label: point.label,
         x: point.x,
         y: point.y,
       }));
@@ -3409,6 +3479,30 @@ export default function App() {
       }
     };
   }, [fullscreenGridMode, fullscreenPulseBursts.length]);
+
+  useEffect(() => {
+    if (fullscreenGridMode !== "tip-ripples") {
+      fullscreenTipRippleStartedAtRef.current = 0;
+      return undefined;
+    }
+
+    let frameId = 0;
+    const startTime = performance.now();
+    fullscreenTipRippleStartedAtRef.current = startTime;
+    setFullscreenTipRippleNow(startTime);
+
+    const tick = () => {
+      setFullscreenTipRippleNow(performance.now());
+      frameId = window.requestAnimationFrame(tick);
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [fullscreenGridMode]);
 
   useEffect(() => {
     appLog.debug("Viewport changed", viewport);
@@ -7565,6 +7659,13 @@ export default function App() {
     const tipPoints = getFullscreenTipOverlayPoints(hands);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    if (fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE) {
+      return {
+        indexPoints,
+        tipPoints,
+      };
+    }
+
     if (shouldShowFullscreenNeonHandOutline(fullscreenGridModeRef.current)) {
       drawNeonActiveHandOutline(hands);
       return {
@@ -7578,6 +7679,7 @@ export default function App() {
       fullscreenGridModeRef.current === "brick-dodger" ||
       fullscreenGridModeRef.current === "breakout-coop" ||
       fullscreenGridModeRef.current === "breakout" ||
+      fullscreenGridModeRef.current === FIND_YOUR_GRIND_BREAKOUT_MODE_ID ||
       fullscreenGridModeRef.current === "fruit-ninja" ||
       fullscreenGridModeRef.current === "sky-patrol" ||
       fullscreenGridModeRef.current === "invaders" ||
@@ -7673,8 +7775,12 @@ export default function App() {
     const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
     fullscreenModeLandingLastTickRef.current = timestamp;
     const holdInput = getVerifiedFullscreenHoldControlInput(viewportMetrics);
-    const pointerActive = handDetectedRef.current && holdInput.pointerActive;
+    const appActive =
+      fullscreenLandingAppActiveRef.current &&
+      (typeof document === "undefined" || document.visibilityState !== "hidden");
+    const pointerActive = appActive && handDetectedRef.current && holdInput.pointerActive;
     const nextState = stepFullscreenModeLanding(fullscreenModeLandingStateRef.current, deltaSeconds, {
+      appActive,
       handVerified: holdInput.handVerified,
       pointerActive,
       pointerX: pointerActive ? holdInput.pointerX : 0,
@@ -7832,7 +7938,8 @@ export default function App() {
   function updateFullscreenBreakoutSimulation(timestamp) {
     if (
       phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
-      fullscreenGridModeRef.current !== "breakout" ||
+      (fullscreenGridModeRef.current !== "breakout" &&
+        fullscreenGridModeRef.current !== FIND_YOUR_GRIND_BREAKOUT_MODE_ID) ||
       !fullscreenBreakoutStateRef.current
     ) {
       fullscreenBreakoutLastTickRef.current = timestamp;
@@ -9584,19 +9691,17 @@ export default function App() {
           opacity,
         }}
       >
-        {FULLSCREEN_RING_LAYERS.slice()
-          .reverse()
-          .map((layer) => (
-            <div
-              key={`${keyPrefix}-${point.id}-${layer.color}`}
-              className="fullscreen-camera-ring-layer"
-              style={{
-                width: `${layer.diameter}px`,
-                height: `${layer.diameter}px`,
-                backgroundColor: layer.color,
-              }}
-            />
-          ))}
+        {getFullscreenRingLayersForHand(FULLSCREEN_RING_LAYERS, point.label).map((layer) => (
+          <div
+            key={`${keyPrefix}-${point.id}-${layer.color}`}
+            className="fullscreen-camera-ring-layer"
+            style={{
+              width: `${layer.diameter}px`,
+              height: `${layer.diameter}px`,
+              backgroundColor: layer.color,
+            }}
+          />
+        ))}
       </div>
     );
   }
@@ -9727,74 +9832,7 @@ export default function App() {
     );
   }
 
-  function renderFullscreenTipRippleSet(point, keyPrefix) {
-    if (!fullscreenCameraViewport || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
-      return null;
-    }
-
-    const localX = point.x - fullscreenCameraViewport.left;
-    const localY = point.y - fullscreenCameraViewport.top;
-    const viewportRadius = Math.max(
-      Math.hypot(localX, localY),
-      Math.hypot(fullscreenCameraViewport.width - localX, localY),
-      Math.hypot(localX, fullscreenCameraViewport.height - localY),
-      Math.hypot(
-        fullscreenCameraViewport.width - localX,
-        fullscreenCameraViewport.height - localY,
-      ),
-    );
-    const maxDiameter = viewportRadius * 2;
-    const startDiameter =
-      (FULLSCREEN_RING_LAYERS[0]?.diameter ?? 0) + FULLSCREEN_STATIC_RING_STEP_PX;
-    const diameters = [];
-    const clipPath = getStaticRippleClipPath(
-      point,
-      fullscreenTipPoints,
-      fullscreenCameraViewport,
-    );
-    for (
-      let diameter = startDiameter;
-      diameter <= maxDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
-      diameter += FULLSCREEN_STATIC_RING_STEP_PX
-    ) {
-      diameters.push(diameter);
-    }
-
-    return (
-      <div
-        key={`${keyPrefix}-${point.id}`}
-        className="fullscreen-camera-static-ripple-field"
-        style={{
-          clipPath,
-        }}
-      >
-        {diameters.map((diameter, index) => {
-          if (index % 2 === 0) {
-            return null;
-          }
-          const color =
-            FULLSCREEN_TIP_RIPPLE_COLORS[
-              Math.floor(index / 2) % FULLSCREEN_TIP_RIPPLE_COLORS.length
-            ];
-          return (
-            <div
-              key={`${keyPrefix}-${point.id}-${diameter}`}
-              className="fullscreen-camera-static-ring"
-              style={{
-                left: `${point.x - fullscreenCameraViewport.left}px`,
-                top: `${point.y - fullscreenCameraViewport.top}px`,
-                width: `${diameter}px`,
-                height: `${diameter}px`,
-                borderColor: color,
-              }}
-            />
-          );
-        })}
-      </div>
-    );
-  }
-
-  function renderFullscreenTipRippleBandSet(point, keyPrefix) {
+  function renderFullscreenTipRippleSet(point, keyPrefix, strokeWidth) {
     if (!fullscreenCameraViewport || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
       return null;
     }
@@ -9820,16 +9858,17 @@ export default function App() {
     const bands = [];
 
     for (
-      let bandIndex = 0, innerDiameter = centerDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
-      innerDiameter < maxDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
-      bandIndex += 1, innerDiameter += FULLSCREEN_STATIC_RING_STEP_PX * 2
+      let bandIndex = 0, outerDiameter = centerDiameter + FULLSCREEN_TIP_RIPPLE_OUTER_DIAMETER_STEP_PX;
+      outerDiameter < maxDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
+      bandIndex += 1, outerDiameter += FULLSCREEN_TIP_RIPPLE_OUTER_DIAMETER_STEP_PX
     ) {
-      const outerDiameter = innerDiameter + FULLSCREEN_STATIC_RING_STEP_PX;
-      const borderWidth = (outerDiameter - innerDiameter) / 2;
+      const borderWidth = Math.min(strokeWidth, outerDiameter / 2);
+      const contentDiameter = Math.max(0, outerDiameter - borderWidth * 2);
       const color =
         FULLSCREEN_TIP_RIPPLE_COLORS[bandIndex % FULLSCREEN_TIP_RIPPLE_COLORS.length];
       bands.push({
-        innerDiameter,
+        contentDiameter,
+        outerDiameter,
         borderWidth,
         color,
       });
@@ -9845,13 +9884,13 @@ export default function App() {
       >
         {bands.map((band) => (
           <div
-            key={`${keyPrefix}-${point.id}-${band.innerDiameter}`}
+            key={`${keyPrefix}-${point.id}-${band.outerDiameter}`}
             className="fullscreen-camera-tip-ripple-band"
             style={{
               left: `${point.x - fullscreenCameraViewport.left}px`,
               top: `${point.y - fullscreenCameraViewport.top}px`,
-              width: `${band.innerDiameter}px`,
-              height: `${band.innerDiameter}px`,
+              width: `${band.contentDiameter}px`,
+              height: `${band.contentDiameter}px`,
               borderWidth: `${band.borderWidth}px`,
               borderColor: band.color,
             }}
@@ -9974,6 +10013,13 @@ export default function App() {
     );
   }
 
+  const fullscreenTipRippleStrokeWidth = getTipRippleStrokeWidth(
+    fullscreenTipRippleNow - fullscreenTipRippleStartedAtRef.current,
+    {
+      thickStrokeWidth: FULLSCREEN_TIP_RIPPLE_TOUCHING_STROKE_WIDTH_PX,
+    },
+  );
+
   if (isFullscreenCameraPhase) {
     return (
       <div className="app fullscreen-camera-app">
@@ -10084,22 +10130,14 @@ export default function App() {
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               {fullscreenTipPoints.map((point) =>
-                renderFullscreenTipRippleSet(point, "fullscreen-tip-ripple-rings"),
+                renderFullscreenTipRippleSet(
+                  point,
+                  "fullscreen-tip-ripple-rings",
+                  fullscreenTipRippleStrokeWidth,
+                ),
               )}
               {fullscreenTipPoints.map((point) =>
                 renderFullscreenStaticCenter(point, "fullscreen-tip-ripple-center"),
-              )}
-            </div>
-          ) : fullscreenGridMode === "tip-ripples-v2" ? (
-            <div
-              className="fullscreen-camera-rings"
-              style={fullscreenCameraViewport?.style ?? undefined}
-            >
-              {fullscreenTipPoints.map((point) =>
-                renderFullscreenTipRippleBandSet(point, "fullscreen-tip-ripple-v2-bands"),
-              )}
-              {fullscreenTipPoints.map((point) =>
-                renderFullscreenStaticCenter(point, "fullscreen-tip-ripple-v2-center"),
               )}
             </div>
           ) : fullscreenGridMode === "static" ? (
@@ -10287,9 +10325,14 @@ export default function App() {
                 </div>
               ) : null}
             </div>
-          ) : fullscreenGridMode === "breakout" ? (
+          ) : fullscreenGridMode === "breakout" ||
+            fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID ? (
             <div
-              className="fullscreen-camera-breakout"
+              className={`fullscreen-camera-breakout ${
+                fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
+                  ? "find-your-grind"
+                  : ""
+              }`}
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               {fullscreenBreakoutState?.bricks
@@ -10490,7 +10533,7 @@ export default function App() {
                     {TIC_TAC_TOE_PLAYER_MARK}
                   </span>
                 </div>
-                <div className="fullscreen-camera-tic-tac-toe-rail-label">Your Rail</div>
+                <div className="fullscreen-camera-tic-tac-toe-rail-label">X Rail</div>
                 <div className="fullscreen-camera-tic-tac-toe-rail-pips player" aria-hidden="true">
                   {fullscreenTicTacToePlayerReservePips.map((pip) => (
                     <span
@@ -11493,12 +11536,14 @@ export default function App() {
                       ? "Hand Bounce turns your tracked palm into a bounce surface. The ball uses gravity-driven motion, rebounds off the side walls, and you only need to keep your hand under it."
                       : fullscreenGridMode === "brick-dodger"
                       ? "Brick Dodger uses the existing smoothed index-fingertip X position only. Drift across the full webcam overlay to dodge falling hazards, chase adjacent bonus pickups, and stretch the run as the descent speed ramps up."
+                      : fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
+                      ? "Find Your Grind Breakout uses small logo-colored bricks to spell the wordmark inside the blue frame, while the index fingertip steers the paddle like classic Breakout."
                       : fullscreenGridMode === "breakout"
                       ? `Index fingertip steers the paddle left and right. Bricks use the Rings palette, the launch countdown is ${BREAKOUT_COUNTDOWN_MS / 1000} seconds, and each capsule adds one extra ball.`
                       : fullscreenGridMode === "finger-pong"
                       ? `Finger Pong keeps the full webcam visible behind a one-player rally. Your bottom paddle follows smoothed horizontal fingertip motion, the opening countdown is ${FINGER_PONG_COUNTDOWN_MS / 1000} seconds, and off-center contacts steer the return angle while rallies gently speed up.`
                       : fullscreenGridMode === "tic-tac-toe"
-                      ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lets you pinch-drag X pieces from the left rail, adds a right-side reset box that clears the board after a 1.00 second index-fingertip hold, and gives O a random opening before switching to optimal play."
+                      ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lays out New Board, O Rail, the board, and X Rail from left to right, clears the board after a 1.00 second index-fingertip hold, and gives O a random opening before switching to optimal play."
                       : fullscreenGridMode === "fruit-ninja"
                       ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
                       : fullscreenGridMode === "sky-patrol"

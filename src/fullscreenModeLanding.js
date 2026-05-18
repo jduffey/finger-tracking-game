@@ -55,13 +55,6 @@ export const FULLSCREEN_CAMERA_LANDING_SECTIONS = [
         accent: "#1d9bf0",
       },
       {
-        id: "tip-ripples-v2",
-        label: "Tip Ripples v2",
-        preview: "ripples-v2",
-        iconSrc: "/assets/launcher-icons/tip-ripples-v2.png",
-        accent: "#38bdf8",
-      },
-      {
         id: "static",
         label: "Static",
         preview: "static",
@@ -104,6 +97,13 @@ export const FULLSCREEN_CAMERA_LANDING_SECTIONS = [
         preview: "breakout",
         iconSrc: "/assets/launcher-icons/breakout.png",
         accent: "#22d3ee",
+      },
+      {
+        id: "find-your-grind-breakout",
+        label: "Find Your Grind",
+        preview: "breakout",
+        iconSrc: "/assets/launcher-icons/find-your-grind-breakout.png",
+        accent: "#2a5eff",
       },
       {
         id: "finger-pong",
@@ -522,8 +522,27 @@ export function selectFullscreenModeLandingMode(state, modeId) {
   };
 }
 
+export function resetFullscreenModeLandingHold(state) {
+  const safeState = state ?? createFullscreenModeLandingState(1280, 720);
+  return {
+    ...safeState,
+    handVerified: false,
+    pointerActive: false,
+    pointerX: 0,
+    pointerY: 0,
+    hoverModeId: null,
+    holdModeId: null,
+    holdMs: 0,
+    selectedModeId: null,
+  };
+}
+
 export function stepFullscreenModeLanding(state, dtSeconds, input) {
   const safeState = state ?? createFullscreenModeLandingState(1280, 720);
+  if (input?.appActive === false) {
+    return resetFullscreenModeLandingHold(safeState);
+  }
+
   const handVerified = Boolean(input?.handVerified);
   const pointer = {
     active:
