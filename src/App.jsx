@@ -1533,6 +1533,7 @@ export default function App() {
   const [fullscreenTipPoints, setFullscreenTipPoints] = useState([]);
   const [fullscreenBodyPoses, setFullscreenBodyPoses] = useState([]);
   const [fullscreenSkeletonHands, setFullscreenSkeletonHands] = useState([]);
+  const [fullscreenDetectedHandCount, setFullscreenDetectedHandCount] = useState(0);
   const [fullscreenGridMode, setFullscreenGridMode] = useState(FULLSCREEN_LANDING_MODE);
   const [fullscreenModeLandingState, setFullscreenModeLandingState] = useState(null);
   const [fullscreenExitControlState, setFullscreenExitControlState] = useState(null);
@@ -2456,6 +2457,7 @@ export default function App() {
       }),
     [fullscreenSkeletonHands, fullscreenCameraViewport],
   );
+  const fullscreenDetectedBodyCount = fullscreenBodySkeletonOverlay?.people.length ?? 0;
 
   async function attachStreamToVideoElement(video, reason) {
     const stream = streamRef.current;
@@ -2881,6 +2883,7 @@ export default function App() {
       setFullscreenTipPoints([]);
       setFullscreenBodyPoses([]);
       setFullscreenSkeletonHands([]);
+      setFullscreenDetectedHandCount(0);
       fullscreenBodyPosesRef.current = [];
       if (fullscreenBodyPoseDetectorRef.current) {
         fullscreenBodyPoseDetectorRef.current.dispose?.();
@@ -9822,6 +9825,7 @@ export default function App() {
 
       if (recoveringDetectorRef.current) {
         fullscreenHandsRef.current = [];
+        setFullscreenDetectedHandCount(0);
         fullscreenPrimaryHandIdRef.current = null;
         recoveryFrameSkipCounterRef.current += 1;
         if (recoveryFrameSkipCounterRef.current % 30 === 0) {
@@ -9842,6 +9846,7 @@ export default function App() {
       const video = videoRef.current;
       if (!detector || !video || video.readyState < 2) {
         fullscreenHandsRef.current = [];
+        setFullscreenDetectedHandCount(0);
         fullscreenPrimaryHandIdRef.current = null;
         appLog.debug("Skipping frame due to missing detector/video readiness", {
           hasDetector: Boolean(detector),
@@ -9942,6 +9947,9 @@ export default function App() {
             pose: minorityReportPose,
           }).slice(0, fullscreenTrackedHandLimit);
           fullscreenHandsRef.current = stableHands;
+          if (phaseRef.current === PHASES.FULLSCREEN_CAMERA) {
+            setFullscreenDetectedHandCount(stableHands.length);
+          }
           const primaryHand = stableHands[0] ?? null;
           fullscreenPrimaryHandIdRef.current = primaryHand?.id ?? primaryHand?.label ?? null;
           processTrackingFrame(primaryHand, timestamp);
@@ -11928,8 +11936,13 @@ export default function App() {
           <div className="fullscreen-camera-hud">
             {!isFullscreenModeLanding ? (
               <div className="fullscreen-camera-hud-bottom">
-                <span className={`tracking-indicator fullscreen-camera-status ${handDetected ? "ok" : "warn"}`}>
-                  {handDetected ? "Hand detected" : "Hand not detected"} | FPS: {fps.toFixed(1)}
+                <span
+                  className={`tracking-indicator fullscreen-camera-status ${
+                    fullscreenDetectedHandCount > 0 ? "ok" : "warn"
+                  }`}
+                >
+                  Hands: {fullscreenDetectedHandCount} | Bodies: {fullscreenDetectedBodyCount} | FPS:{" "}
+                  {fps.toFixed(1)}
                 </span>
                 <div className="fullscreen-camera-meta fullscreen-camera-actions">
                   <span className="fullscreen-camera-note">

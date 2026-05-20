@@ -19,6 +19,9 @@ test("fullscreen camera HUD keeps detection status at bottom left without the mo
   const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
 
   assert.equal(source.includes('<span className="fullscreen-camera-chip">{cameraPanelTitle}</span>'), false);
+  assert.ok(source.includes("Hands: {fullscreenDetectedHandCount}"));
+  assert.ok(source.includes("Bodies: {fullscreenDetectedBodyCount}"));
+  assert.ok(source.includes("{fps.toFixed(1)}"));
 
   const bottomRowIndex = source.indexOf('className="fullscreen-camera-hud-bottom"');
   const statusIndex = source.indexOf('className={`tracking-indicator fullscreen-camera-status');
