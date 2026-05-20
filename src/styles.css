@@ -321,6 +321,57 @@ body {
   z-index: 3;
 }
 
+.fullscreen-body-skeleton-overlay {
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  z-index: 4;
+}
+
+.fullscreen-body-skeleton-person {
+  --body-skeleton-color: rgba(128, 202, 255, 0.82);
+  color: var(--body-skeleton-color);
+}
+
+.fullscreen-body-skeleton-person.person-2 {
+  --body-skeleton-color: rgba(255, 180, 105, 0.84);
+}
+
+.fullscreen-body-skeleton-person.person-3 {
+  --body-skeleton-color: rgba(122, 237, 181, 0.82);
+}
+
+.fullscreen-body-skeleton-person.person-4 {
+  --body-skeleton-color: rgba(202, 153, 255, 0.84);
+}
+
+.fullscreen-body-skeleton-bone {
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.fullscreen-body-skeleton-joint {
+  fill: rgba(245, 250, 255, 0.92);
+  stroke: currentColor;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.fullscreen-body-skeleton-joint.eyes {
+  fill: rgba(255, 120, 120, 0.96);
+}
+
+.fullscreen-body-skeleton-label {
+  fill: currentColor;
+  font: 13px ui-monospace, SFMono-Regular, Menlo, monospace;
+  paint-order: stroke;
+  stroke: rgba(5, 10, 18, 0.74);
+  stroke-width: 4;
+}
+
 .fullscreen-camera-grid {
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.62) 1px, transparent 1px),

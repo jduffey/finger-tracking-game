@@ -209,7 +209,17 @@ import {
   getStaleInferenceKeepAliveAction,
   shouldRunTrackingKeepAlive,
 } from "./trackingKeepAlive.js";
-import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from "./poseTracking.js";
+import {
+  detectPose,
+  detectPoses,
+  getLastPoseMeta,
+  getPoseRuntime,
+  initPoseTracking,
+} from "./poseTracking.js";
+import {
+  FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
+  createFullscreenBodySkeletonOverlay,
+} from "./fullscreenBodySkeletonOverlay.js";
 import {
   createEmptyOffAxisState,
   createHeldOffAxisState,
@@ -579,6 +589,16 @@ const RUNNER_COIN_COLOR_STEPS = [
 ];
 const TRACKING_DEFAULT_HAND_LIMIT = 2;
 const TRACKING_DETECTOR_MAX_HANDS = 4;
+const FULLSCREEN_BODY_SKELETON_INTERVAL_MS = 33;
+const FULLSCREEN_BODY_SKELETON_MODES = new Set([
+  "square",
+  "hex",
+  "voronoi",
+  "rings",
+  "pulse",
+  "tip-ripples",
+  "static",
+]);
 const LAB_DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
 const LAB_EVENT_LOG_LIMIT = 220;
 const LAB_TRAIN_CAPTURE_FRAMES = 24;
@@ -1507,6 +1527,7 @@ export default function App() {
   const [gestureControlOSSessionKey, setGestureControlOSSessionKey] = useState(0);
   const [fullscreenIndexPoints, setFullscreenIndexPoints] = useState([]);
   const [fullscreenTipPoints, setFullscreenTipPoints] = useState([]);
+  const [fullscreenBodyPoses, setFullscreenBodyPoses] = useState([]);
   const [fullscreenGridMode, setFullscreenGridMode] = useState(FULLSCREEN_LANDING_MODE);
   const [fullscreenModeLandingState, setFullscreenModeLandingState] = useState(null);
   const [fullscreenExitControlState, setFullscreenExitControlState] = useState(null);
@@ -1600,6 +1621,11 @@ export default function App() {
   const detectorRef = useRef(null);
   const poseDetectorRef = useRef(null);
   const poseInitPromiseRef = useRef(null);
+  const fullscreenBodyPosesRef = useRef([]);
+  const fullscreenBodyPoseDetectorRef = useRef(null);
+  const fullscreenBodyPoseInitPromiseRef = useRef(null);
+  const fullscreenBodyPoseInferenceBusyRef = useRef(false);
+  const fullscreenBodyPoseLastInferenceAtRef = useRef(0);
   const streamRef = useRef(null);
   const attachedVideoElementRef = useRef(null);
   const rafRef = useRef(0);
@@ -2408,6 +2434,15 @@ export default function App() {
     };
   }, [fullscreenCameraViewport, fullscreenTipPoints]);
 
+  const fullscreenBodySkeletonOverlay = useMemo(
+    () =>
+      createFullscreenBodySkeletonOverlay(fullscreenBodyPoses, fullscreenCameraViewport, {
+        keypointThreshold: POSE_KEYPOINT_THRESHOLD,
+        maxPeople: FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
+      }),
+    [fullscreenBodyPoses, fullscreenCameraViewport],
+  );
+
   async function attachStreamToVideoElement(video, reason) {
     const stream = streamRef.current;
     if (!video || !stream) {
@@ -2488,6 +2523,120 @@ export default function App() {
 
   function isCurrentTrackingInference(inferenceToken) {
     return activeInferenceTokenRef.current === inferenceToken;
+  }
+
+  function publishFullscreenBodyPoses(poses) {
+    const safePoses = Array.isArray(poses) ? poses.slice(0, FULLSCREEN_BODY_SKELETON_MAX_PEOPLE) : [];
+    fullscreenBodyPosesRef.current = safePoses;
+    setFullscreenBodyPoses(safePoses);
+  }
+
+  async function ensureFullscreenBodyPoseDetectorInitialized(reason = "fullscreen_body_skeleton") {
+    if (fullscreenBodyPoseDetectorRef.current) {
+      return true;
+    }
+
+    if (fullscreenBodyPoseInitPromiseRef.current) {
+      await fullscreenBodyPoseInitPromiseRef.current;
+      return Boolean(fullscreenBodyPoseDetectorRef.current);
+    }
+
+    const requestedBackend = getCurrentBackend() === "cpu" ? "cpu" : "webgl";
+    fullscreenBodyPoseInitPromiseRef.current = (async () => {
+      let detector = null;
+      try {
+        appLog.info("Initializing fullscreen body skeleton detector", {
+          reason,
+          requestedBackend,
+        });
+        detector = await initPoseTracking({
+          runtime: "tfjs",
+          backend: requestedBackend,
+          maxPoses: FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
+        });
+        if (
+          phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+          !FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridModeRef.current) ||
+          !mountedRef.current
+        ) {
+          detector.dispose?.();
+          detector = null;
+          return;
+        }
+        fullscreenBodyPoseDetectorRef.current = detector;
+        detector = null;
+      } catch (error) {
+        appLog.warn("Fullscreen body skeleton detector failed to initialize", { error });
+      } finally {
+        detector?.dispose?.();
+        fullscreenBodyPoseInitPromiseRef.current = null;
+      }
+    })();
+
+    await fullscreenBodyPoseInitPromiseRef.current;
+    return Boolean(fullscreenBodyPoseDetectorRef.current);
+  }
+
+  function scheduleFullscreenBodyPoseDetection(timestamp, hasTrackedHands) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      !FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridModeRef.current)
+    ) {
+      if (fullscreenBodyPosesRef.current.length > 0) {
+        publishFullscreenBodyPoses([]);
+      }
+      if (fullscreenBodyPoseDetectorRef.current) {
+        fullscreenBodyPoseDetectorRef.current.dispose?.();
+        fullscreenBodyPoseDetectorRef.current = null;
+      }
+      fullscreenBodyPoseInferenceBusyRef.current = false;
+      return;
+    }
+
+    if (!hasTrackedHands) {
+      if (fullscreenBodyPosesRef.current.length > 0) {
+        publishFullscreenBodyPoses([]);
+      }
+      return;
+    }
+
+    const video = videoRef.current;
+    if (!video || video.readyState < 2) {
+      return;
+    }
+
+    const detector = fullscreenBodyPoseDetectorRef.current;
+    if (!detector) {
+      if (!fullscreenBodyPoseInitPromiseRef.current) {
+        void ensureFullscreenBodyPoseDetectorInitialized("fullscreen_hand_visuals_ready");
+      }
+      return;
+    }
+
+    if (
+      fullscreenBodyPoseInferenceBusyRef.current ||
+      timestamp - fullscreenBodyPoseLastInferenceAtRef.current <
+        FULLSCREEN_BODY_SKELETON_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    fullscreenBodyPoseInferenceBusyRef.current = true;
+    fullscreenBodyPoseLastInferenceAtRef.current = timestamp;
+    void detectPoses(detector, video, {
+      maxPoses: FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
+    })
+      .then((poses) => {
+        if (phaseRef.current === PHASES.FULLSCREEN_CAMERA && mountedRef.current) {
+          publishFullscreenBodyPoses(poses);
+        }
+      })
+      .catch((error) => {
+        appLog.warn("Fullscreen body skeleton pose detection failed", { error });
+      })
+      .finally(() => {
+        fullscreenBodyPoseInferenceBusyRef.current = false;
+      });
   }
 
   function releaseStaleTrackingInference(timestamp, staleAction) {
@@ -2719,6 +2868,15 @@ export default function App() {
     if (phase !== PHASES.FULLSCREEN_CAMERA) {
       setFullscreenIndexPoints([]);
       setFullscreenTipPoints([]);
+      setFullscreenBodyPoses([]);
+      fullscreenBodyPosesRef.current = [];
+      if (fullscreenBodyPoseDetectorRef.current) {
+        fullscreenBodyPoseDetectorRef.current.dispose?.();
+        fullscreenBodyPoseDetectorRef.current = null;
+      }
+      fullscreenBodyPoseInitPromiseRef.current = null;
+      fullscreenBodyPoseInferenceBusyRef.current = false;
+      fullscreenBodyPoseLastInferenceAtRef.current = 0;
       setFullscreenModeLandingState(null);
       setFullscreenExitControlState(null);
       setFullscreenRestartControlState(null);
@@ -4416,6 +4574,10 @@ export default function App() {
       if (poseDetectorRef.current) {
         poseDetectorRef.current.dispose?.();
         poseDetectorRef.current = null;
+      }
+      if (fullscreenBodyPoseDetectorRef.current) {
+        fullscreenBodyPoseDetectorRef.current.dispose?.();
+        fullscreenBodyPoseDetectorRef.current = null;
       }
     };
   }, []);
@@ -9675,6 +9837,7 @@ export default function App() {
             const overlayPoints = drawFullscreenOverlay(stableHands);
             setFullscreenIndexPoints(overlayPoints.indexPoints);
             setFullscreenTipPoints(overlayPoints.tipPoints);
+            scheduleFullscreenBodyPoseDetection(timestamp, overlayPoints.tipPoints.length > 0);
           }
           processMinorityReportFrame(stableHands, timestamp);
           if (phaseRef.current === PHASES.GESTURE_ANALYTICS_LAB) {
@@ -11504,6 +11667,52 @@ export default function App() {
               ))}
             </div>
           )}
+
+          {FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridMode) &&
+          fullscreenBodySkeletonOverlay?.people.length ? (
+            <svg
+              className="fullscreen-body-skeleton-overlay"
+              style={fullscreenBodySkeletonOverlay.style ?? undefined}
+              viewBox={`0 0 ${fullscreenBodySkeletonOverlay.width} ${fullscreenBodySkeletonOverlay.height}`}
+              preserveAspectRatio="none"
+            >
+              {fullscreenBodySkeletonOverlay.people.map((person, personIndex) => (
+                <g
+                  key={person.id}
+                  className={`fullscreen-body-skeleton-person person-${personIndex + 1}`}
+                >
+                  {person.bones.map((bone) => (
+                    <line
+                      key={`${person.id}-${bone.startName}-${bone.endName}`}
+                      className="fullscreen-body-skeleton-bone"
+                      x1={bone.x1}
+                      y1={bone.y1}
+                      x2={bone.x2}
+                      y2={bone.y2}
+                    />
+                  ))}
+                  {person.keypoints.map((point) => (
+                    <circle
+                      key={`${person.id}-${point.name}`}
+                      className={`fullscreen-body-skeleton-joint ${point.group}`}
+                      cx={point.x}
+                      cy={point.y}
+                      r={point.group === "eyes" ? 4 : 5}
+                    />
+                  ))}
+                  {person.anchor ? (
+                    <text
+                      className="fullscreen-body-skeleton-label"
+                      x={person.anchor.x + 9}
+                      y={Math.max(16, person.anchor.y - 12)}
+                    >
+                      {person.label}
+                    </text>
+                  ) : null}
+                </g>
+              ))}
+            </svg>
+          ) : null}
 
           {fullscreenRestartControlLabel && fullscreenRestartControlState?.layout ? (
             <div
