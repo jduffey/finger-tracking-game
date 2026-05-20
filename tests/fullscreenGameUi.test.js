@@ -25,6 +25,12 @@ test("getFullscreenTrackedHandLimit locks tic tac toe to one hand", () => {
   assert.equal(getFullscreenTrackedHandLimit("flappy", 2), 2);
 });
 
+test("getFullscreenTrackedHandLimit lets visualization demos track four hands", () => {
+  for (const mode of ["square", "hex", "voronoi", "rings", "pulse", "tip-ripples", "static"]) {
+    assert.equal(getFullscreenTrackedHandLimit(mode, 2), 4);
+  }
+});
+
 test("shouldShowFullscreenHandSkeleton reuses the Minority Report hand overlay for tic tac toe", () => {
   assert.equal(shouldShowFullscreenHandSkeleton("landing"), false);
   assert.equal(shouldShowFullscreenHandSkeleton("tic-tac-toe"), true);

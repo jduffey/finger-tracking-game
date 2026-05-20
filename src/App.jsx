@@ -577,7 +577,8 @@ const RUNNER_COIN_COLOR_STEPS = [
     glowOuter: "rgba(255, 204, 64, 0.08)",
   },
 ];
-const TRACKING_MAX_HANDS = 2;
+const TRACKING_DEFAULT_HAND_LIMIT = 2;
+const TRACKING_DETECTOR_MAX_HANDS = 4;
 const LAB_DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
 const LAB_EVENT_LOG_LIMIT = 220;
 const LAB_TRAIN_CAPTURE_FRAMES = 24;
@@ -3943,12 +3944,12 @@ export default function App() {
       try {
         const preferredConfig =
           INITIAL_TRACKING_RUNTIME === "mediapipe"
-            ? { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_MAX_HANDS }
+            ? { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_DETECTOR_MAX_HANDS }
             : {
                 runtime: "tfjs",
                 backend: "webgl",
                 modelType: "full",
-                maxHands: TRACKING_MAX_HANDS,
+                maxHands: TRACKING_DETECTOR_MAX_HANDS,
               };
 
         appLog.info("Initializing hand-tracking detector", {
@@ -3971,7 +3972,7 @@ export default function App() {
             runtime: "tfjs",
             backend: "webgl",
             modelType: "full",
-            maxHands: TRACKING_MAX_HANDS,
+            maxHands: TRACKING_DETECTOR_MAX_HANDS,
           });
         }
 
@@ -4478,15 +4479,15 @@ export default function App() {
           runtime: "tfjs",
           backend: "webgl",
           modelType: "full",
-          maxHands: TRACKING_MAX_HANDS,
+          maxHands: TRACKING_DETECTOR_MAX_HANDS,
         };
       }
-      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_MAX_HANDS };
+      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_DETECTOR_MAX_HANDS };
     }
 
     // TFJS invalid-keypoint corruption should switch straight to MediaPipe.
     if (reason === "continuous_invalid_landmarks") {
-      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_MAX_HANDS };
+      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_DETECTOR_MAX_HANDS };
     }
 
     if (attempt === 1) {
@@ -4494,15 +4495,15 @@ export default function App() {
         runtime: "tfjs",
         backend: currentBackend === "cpu" ? "cpu" : "webgl",
         modelType: "full",
-        maxHands: TRACKING_MAX_HANDS,
+        maxHands: TRACKING_DETECTOR_MAX_HANDS,
       };
     }
 
     if (attempt === 2) {
-      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_MAX_HANDS };
+      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_DETECTOR_MAX_HANDS };
     }
 
-    return { runtime: "tfjs", backend: "cpu", modelType: "full", maxHands: TRACKING_MAX_HANDS };
+    return { runtime: "tfjs", backend: "cpu", modelType: "full", maxHands: TRACKING_DETECTOR_MAX_HANDS };
   }
 
   async function recoverDetectorFromInvalidLandmarks(reason, details) {
@@ -9516,7 +9517,7 @@ export default function App() {
             memory: handLabelMemoryRef.current,
             timestamp,
             pose,
-          }).slice(0, TRACKING_MAX_HANDS);
+          }).slice(0, TRACKING_DEFAULT_HAND_LIMIT);
           if (!cancelled && mountedRef.current) {
             processPoseFrame(pose, timestamp, stableHands);
           }
@@ -9656,8 +9657,11 @@ export default function App() {
         if (!cancelled && mountedRef.current) {
           const fullscreenTrackedHandLimit =
             phaseRef.current === PHASES.FULLSCREEN_CAMERA
-              ? getFullscreenTrackedHandLimit(fullscreenGridModeRef.current, TRACKING_MAX_HANDS)
-              : TRACKING_MAX_HANDS;
+              ? getFullscreenTrackedHandLimit(
+                  fullscreenGridModeRef.current,
+                  TRACKING_DEFAULT_HAND_LIMIT,
+                )
+              : TRACKING_DEFAULT_HAND_LIMIT;
           const stableHands = assignStableHandLabels(detectedHands, {
             memory: handLabelMemoryRef.current,
             timestamp,
