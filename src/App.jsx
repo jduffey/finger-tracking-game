@@ -2049,6 +2049,28 @@ export default function App() {
       Number.isFinite(cameraAspectRatio) && cameraAspectRatio > 0 ? cameraAspectRatio : 4 / 3;
     return createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio);
   }, [cameraAspectRatio, isFullscreenCameraPhase, viewport.height, viewport.width]);
+  const fullscreenBrowserViewport = useMemo(() => {
+    if (!isFullscreenCameraPhase) {
+      return null;
+    }
+
+    return {
+      left: 0,
+      top: 0,
+      width: viewport.width,
+      height: viewport.height,
+      style: {
+        left: "0px",
+        top: "0px",
+        width: `${viewport.width}px`,
+        height: `${viewport.height}px`,
+      },
+    };
+  }, [isFullscreenCameraPhase, viewport.height, viewport.width]);
+  const fullscreenBreakoutViewport =
+    fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
+      ? fullscreenBrowserViewport
+      : fullscreenCameraViewport;
   const fullscreenCameraLandingViewport = useMemo(() => {
     if (!isFullscreenCameraPhase) {
       return null;
@@ -2780,8 +2802,8 @@ export default function App() {
   }, [fullscreenInvadersState]);
 
   useEffect(() => {
-    fullscreenBreakoutViewportRef.current = fullscreenCameraViewport;
-  }, [fullscreenCameraViewport]);
+    fullscreenBreakoutViewportRef.current = fullscreenBreakoutViewport;
+  }, [fullscreenBreakoutViewport]);
 
   useEffect(() => {
     fullscreenBreakoutCoopViewportRef.current = fullscreenCameraViewport;
@@ -2977,7 +2999,7 @@ export default function App() {
       phase !== PHASES.FULLSCREEN_CAMERA ||
       (fullscreenGridMode !== "breakout" &&
         fullscreenGridMode !== FIND_YOUR_GRIND_BREAKOUT_MODE_ID) ||
-      !fullscreenCameraViewport
+      !fullscreenBreakoutViewport
     ) {
       fullscreenBreakoutLastTickRef.current = 0;
       if (fullscreenBreakoutStateRef.current) {
@@ -2990,18 +3012,18 @@ export default function App() {
     const nextGame =
       fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
         ? createFindYourGrindBreakoutGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
+            fullscreenBreakoutViewport.width,
+            fullscreenBreakoutViewport.height,
           )
         : createBreakoutGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
+            fullscreenBreakoutViewport.width,
+            fullscreenBreakoutViewport.height,
           );
     fullscreenBreakoutLastTickRef.current = 0;
     fullscreenBreakoutStateRef.current = nextGame;
     setFullscreenBreakoutState(nextGame);
     return undefined;
-  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+  }, [fullscreenBreakoutViewport, fullscreenGridMode, phase]);
 
   useEffect(() => {
     if (
@@ -10357,7 +10379,7 @@ export default function App() {
                   ? "find-your-grind"
                   : ""
               }`}
-              style={fullscreenCameraViewport?.style ?? undefined}
+              style={fullscreenBreakoutViewport?.style ?? undefined}
             >
               {fullscreenBreakoutState?.bricks
                 ?.filter((brick) => !brick.destroyed)

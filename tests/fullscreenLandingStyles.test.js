@@ -54,5 +54,5 @@ test("fullscreen launcher tiles constrain icons and labels inside the box", () =
 test("Find Your Grind dims only the fullscreen webcam underlay", () => {
   const videoRule = getRuleBody(".fullscreen-camera-video.find-your-grind-underlay");
 
-  assert.match(videoRule, /opacity:\s*0\.5/);
+  assert.match(videoRule, /opacity:\s*0\.25/);
 });

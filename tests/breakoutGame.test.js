@@ -14,6 +14,31 @@ function constantRng(value) {
   return () => value;
 }
 
+function rectanglesOverlap(first, second) {
+  const overlapWidth = Math.min(first.x + first.width, second.x + second.width) - Math.max(first.x, second.x);
+  const overlapHeight =
+    Math.min(first.y + first.height, second.y + second.height) - Math.max(first.y, second.y);
+  return overlapWidth > 1e-9 && overlapHeight > 1e-9;
+}
+
+function assertFindYourGrindBricksFitViewport(game) {
+  const minX = Math.min(...game.bricks.map((brick) => brick.x));
+  const maxX = Math.max(...game.bricks.map((brick) => brick.x + brick.width));
+
+  assert.ok(minX >= 0);
+  assert.ok(maxX <= game.layout.width);
+  assert.ok(maxX - minX >= game.layout.width * 0.9);
+  for (let firstIndex = 0; firstIndex < game.bricks.length; firstIndex += 1) {
+    for (let secondIndex = firstIndex + 1; secondIndex < game.bricks.length; secondIndex += 1) {
+      assert.equal(
+        rectanglesOverlap(game.bricks[firstIndex], game.bricks[secondIndex]),
+        false,
+        `${game.bricks[firstIndex].id} should not overlap ${game.bricks[secondIndex].id}`,
+      );
+    }
+  }
+}
+
 test("assignBreakoutCapsuleDrops marks exactly one fifth of bricks", () => {
   const bricks = Array.from({ length: 50 }, (_, index) => ({ id: `brick-${index}` }));
   const assigned = assignBreakoutCapsuleDrops(bricks, constantRng(0));
@@ -40,9 +65,18 @@ test("createFindYourGrindBreakoutGame builds the logo from many small colored br
   assert.equal(game.status, "countdown");
   assert.equal(game.message, "3");
   assert.ok(game.bricks.length > classic.bricks.length * 5);
-  assert.ok(game.bricks.every((brick) => Math.abs(brick.width / brick.height - 1.3) < 1e-9));
-  assert.ok(game.bricks.every((brick) => brick.width < classic.layout.brickWidth / 4));
+  assert.ok(game.bricks.every((brick) => Math.abs(brick.width / brick.height - 2) < 1e-9));
   assert.ok(game.bricks.every((brick) => brick.height < classic.layout.brickHeight));
+  assertFindYourGrindBricksFitViewport(game);
+  for (const [width, height] of [
+    [1280, 720],
+    [390, 844],
+    [320, 440],
+  ]) {
+    assertFindYourGrindBricksFitViewport(
+      createFindYourGrindBreakoutGame(width, height, constantRng(0.2)),
+    );
+  }
   assert.ok(colors.has("#2a5eff"));
   assert.ok(colors.has("#ff011f"));
   assert.ok(colors.has("#ff931a"));

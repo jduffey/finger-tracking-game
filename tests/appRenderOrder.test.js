@@ -35,3 +35,17 @@ test("App starts in fullscreen camera mode", () => {
 
   assert.equal(phaseInitializer, "const [phase, setPhase] = useState(PHASES.FULLSCREEN_CAMERA);");
 });
+
+test("Find Your Grind breakout uses the browser viewport for its playfield", () => {
+  const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+
+  assert.match(
+    source,
+    /const fullscreenBreakoutViewport =\s*fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID\s*\?\s*fullscreenBrowserViewport\s*:\s*fullscreenCameraViewport;/,
+  );
+  assert.match(
+    source,
+    /createFindYourGrindBreakoutGame\(\s*fullscreenBreakoutViewport\.width,\s*fullscreenBreakoutViewport\.height,\s*\)/,
+  );
+  assert.match(source, /style=\{fullscreenBreakoutViewport\?\.style \?\? undefined\}/);
+});
