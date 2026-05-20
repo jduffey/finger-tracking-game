@@ -60,6 +60,7 @@ import {
 } from "./fullscreenHandBounceGame.js";
 import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
 import {
+  getFullscreenDetectorHandLimit,
   getFullscreenTrackedHandLimit,
   getFullscreenTrackedFingerNames,
   shouldShowFullscreenNeonHandOutline,
@@ -218,6 +219,7 @@ import {
 } from "./poseTracking.js";
 import {
   FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
+  FULLSCREEN_HAND_SKELETON_MAX_HANDS,
   createFullscreenBodySkeletonOverlay,
   createFullscreenHandSkeletonOverlay,
 } from "./fullscreenBodySkeletonOverlay.js";
@@ -589,17 +591,18 @@ const RUNNER_COIN_COLOR_STEPS = [
   },
 ];
 const TRACKING_DEFAULT_HAND_LIMIT = 2;
-const TRACKING_DETECTOR_MAX_HANDS = 4;
+const TRACKING_DEFAULT_DETECTOR_MAX_HANDS = 4;
 const FULLSCREEN_BODY_SKELETON_INTERVAL_MS = 33;
-const FULLSCREEN_BODY_SKELETON_MODES = new Set([
-  "square",
-  "hex",
-  "voronoi",
-  "rings",
-  "pulse",
-  "tip-ripples",
-  "static",
-]);
+const FULLSCREEN_BODY_SKELETON_MODES = new Set(["voronoi"]);
+
+function getTrackingDetectorMaxHandsForContext(phase, fullscreenMode) {
+  if (phase !== PHASES.FULLSCREEN_CAMERA) {
+    return TRACKING_DEFAULT_DETECTOR_MAX_HANDS;
+  }
+
+  return getFullscreenDetectorHandLimit(fullscreenMode, TRACKING_DEFAULT_DETECTOR_MAX_HANDS);
+}
+
 const LAB_DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
 const LAB_EVENT_LOG_LIMIT = 220;
 const LAB_TRAIN_CAPTURE_FRAMES = 24;
@@ -1621,6 +1624,8 @@ export default function App() {
   });
 
   const detectorRef = useRef(null);
+  const detectorMaxHandsRef = useRef(TRACKING_DEFAULT_DETECTOR_MAX_HANDS);
+  const detectorReconfigurationSeqRef = useRef(0);
   const poseDetectorRef = useRef(null);
   const poseInitPromiseRef = useRef(null);
   const fullscreenBodyPosesRef = useRef([]);
@@ -2447,7 +2452,7 @@ export default function App() {
   const fullscreenHandSkeletonOverlay = useMemo(
     () =>
       createFullscreenHandSkeletonOverlay(fullscreenSkeletonHands, fullscreenCameraViewport, {
-        maxHands: FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
+        maxHands: FULLSCREEN_HAND_SKELETON_MAX_HANDS,
       }),
     [fullscreenSkeletonHands, fullscreenCameraViewport],
   );
@@ -4110,14 +4115,18 @@ export default function App() {
 
     const initModel = async () => {
       try {
+        const initialMaxHands = getTrackingDetectorMaxHandsForContext(
+          phaseRef.current,
+          fullscreenGridModeRef.current,
+        );
         const preferredConfig =
           INITIAL_TRACKING_RUNTIME === "mediapipe"
-            ? { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_DETECTOR_MAX_HANDS }
+            ? { runtime: "mediapipe", modelType: "full", maxHands: initialMaxHands }
             : {
                 runtime: "tfjs",
                 backend: "webgl",
                 modelType: "full",
-                maxHands: TRACKING_DETECTOR_MAX_HANDS,
+                maxHands: initialMaxHands,
               };
 
         appLog.info("Initializing hand-tracking detector", {
@@ -4140,7 +4149,7 @@ export default function App() {
             runtime: "tfjs",
             backend: "webgl",
             modelType: "full",
-            maxHands: TRACKING_DETECTOR_MAX_HANDS,
+            maxHands: initialMaxHands,
           });
         }
 
@@ -4150,6 +4159,7 @@ export default function App() {
           return;
         }
         detectorRef.current = detector;
+        detectorMaxHandsRef.current = preferredConfig.maxHands;
         const runtime = getCurrentRuntime() || preferredConfig.runtime;
         const backend =
           getCurrentBackend() || (runtime === "mediapipe" ? "n/a" : preferredConfig.backend || "webgl");
@@ -4179,6 +4189,96 @@ export default function App() {
       }
     };
   }, [appLog]);
+
+  useEffect(() => {
+    if (!modelReady || !detectorRef.current) {
+      return;
+    }
+
+    const requestedMaxHands = getTrackingDetectorMaxHandsForContext(phase, fullscreenGridMode);
+    if (detectorMaxHandsRef.current === requestedMaxHands) {
+      return;
+    }
+
+    let cancelled = false;
+    const requestId = detectorReconfigurationSeqRef.current + 1;
+    detectorReconfigurationSeqRef.current = requestId;
+
+    const reconfigureHandDetector = async () => {
+      const currentRuntime = getCurrentRuntime() || activeRuntime || INITIAL_TRACKING_RUNTIME;
+      const currentBackend = getCurrentBackend() || activeBackend || "webgl";
+      const requestedConfig =
+        currentRuntime === "mediapipe"
+          ? { runtime: "mediapipe", modelType: "full", maxHands: requestedMaxHands }
+          : {
+              runtime: "tfjs",
+              backend: currentBackend === "cpu" ? "cpu" : "webgl",
+              modelType: "full",
+              maxHands: requestedMaxHands,
+            };
+
+      recoveringDetectorRef.current = true;
+      appLog.info("Reconfiguring hand-tracking detector hand capacity", {
+        requestedRuntime: requestedConfig.runtime,
+        requestedBackend: requestedConfig.backend ?? "n/a",
+        previousMaxHands: detectorMaxHandsRef.current,
+        requestedMaxHands,
+        fullscreenGridMode,
+      });
+
+      try {
+        const previousDetector = detectorRef.current;
+        const nextDetector = await initHandTracking(requestedConfig);
+
+        if (cancelled || detectorReconfigurationSeqRef.current !== requestId) {
+          nextDetector?.dispose?.();
+          return;
+        }
+
+        detectorRef.current = nextDetector;
+        detectorMaxHandsRef.current = requestedMaxHands;
+        if (previousDetector && previousDetector !== nextDetector) {
+          previousDetector.dispose?.();
+        }
+        setActiveRuntime(getCurrentRuntime() || requestedConfig.runtime);
+        setActiveBackend(
+          getCurrentBackend() ||
+            requestedConfig.backend ||
+            (requestedConfig.runtime === "mediapipe" ? "n/a" : "unknown"),
+        );
+        setModelError("");
+        appLog.info("Hand-tracking detector capacity reconfigured", {
+          activeRuntime: getCurrentRuntime(),
+          activeBackend: getCurrentBackend(),
+          activeMaxHands: requestedMaxHands,
+        });
+      } catch (error) {
+        if (!cancelled && detectorReconfigurationSeqRef.current === requestId) {
+          appLog.error("Failed to reconfigure hand-tracking detector capacity", {
+            requestedRuntime: requestedConfig.runtime,
+            requestedBackend: requestedConfig.backend ?? "n/a",
+            requestedMaxHands,
+            error,
+          });
+          setModelError(
+            error instanceof Error
+              ? error.message
+              : "Failed to reconfigure hand tracking model.",
+          );
+        }
+      } finally {
+        if (detectorReconfigurationSeqRef.current === requestId) {
+          recoveringDetectorRef.current = false;
+        }
+      }
+    };
+
+    void reconfigureHandDetector();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBackend, activeRuntime, appLog, fullscreenGridMode, modelReady, phase]);
 
   useEffect(() => {
     appLog.debug("Starting camera overlay canvas sync effect");
@@ -4642,6 +4742,10 @@ export default function App() {
   function getRecoveryConfig(attempt, reason) {
     const currentRuntime = getCurrentRuntime() || activeRuntime;
     const currentBackend = getCurrentBackend() || activeBackend;
+    const requestedMaxHands = getTrackingDetectorMaxHandsForContext(
+      phaseRef.current,
+      fullscreenGridModeRef.current,
+    );
 
     // Keep MediaPipe as the sticky runtime once it has been reached.
     if (currentRuntime === "mediapipe") {
@@ -4651,15 +4755,15 @@ export default function App() {
           runtime: "tfjs",
           backend: "webgl",
           modelType: "full",
-          maxHands: TRACKING_DETECTOR_MAX_HANDS,
+          maxHands: requestedMaxHands,
         };
       }
-      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_DETECTOR_MAX_HANDS };
+      return { runtime: "mediapipe", modelType: "full", maxHands: requestedMaxHands };
     }
 
     // TFJS invalid-keypoint corruption should switch straight to MediaPipe.
     if (reason === "continuous_invalid_landmarks") {
-      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_DETECTOR_MAX_HANDS };
+      return { runtime: "mediapipe", modelType: "full", maxHands: requestedMaxHands };
     }
 
     if (attempt === 1) {
@@ -4667,15 +4771,15 @@ export default function App() {
         runtime: "tfjs",
         backend: currentBackend === "cpu" ? "cpu" : "webgl",
         modelType: "full",
-        maxHands: TRACKING_DETECTOR_MAX_HANDS,
+        maxHands: requestedMaxHands,
       };
     }
 
     if (attempt === 2) {
-      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_DETECTOR_MAX_HANDS };
+      return { runtime: "mediapipe", modelType: "full", maxHands: requestedMaxHands };
     }
 
-    return { runtime: "tfjs", backend: "cpu", modelType: "full", maxHands: TRACKING_DETECTOR_MAX_HANDS };
+    return { runtime: "tfjs", backend: "cpu", modelType: "full", maxHands: requestedMaxHands };
   }
 
   async function recoverDetectorFromInvalidLandmarks(reason, details) {
@@ -4705,6 +4809,7 @@ export default function App() {
       const previousDetector = detectorRef.current;
       const nextDetector = await initHandTracking(requestedConfig);
       detectorRef.current = nextDetector;
+      detectorMaxHandsRef.current = requestedConfig.maxHands;
       if (previousDetector && previousDetector !== nextDetector) {
         previousDetector.dispose?.();
       }
