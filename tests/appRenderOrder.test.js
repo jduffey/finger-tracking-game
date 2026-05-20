@@ -70,7 +70,7 @@ test("fullscreen body skeleton uses a separate SVG layer instead of the camera o
   assert.match(styles, /z-index:\s*4;/);
 });
 
-test("fullscreen body pose sidecar starts after Voronoi fingertip state updates", () => {
+test("fullscreen body pose sidecar runs after Voronoi state updates without requiring fingertips", () => {
   const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
   const fullscreenBlockIndex = source.indexOf("const overlayPoints = drawFullscreenOverlay(stableHands)");
   const setIndexPointsIndex = source.indexOf("setFullscreenIndexPoints(overlayPoints.indexPoints)", fullscreenBlockIndex);
@@ -82,6 +82,12 @@ test("fullscreen body pose sidecar starts after Voronoi fingertip state updates"
   assert.ok(setIndexPointsIndex > fullscreenBlockIndex);
   assert.ok(setTipPointsIndex > setIndexPointsIndex);
   assert.ok(scheduleIndex > setTipPointsIndex);
+  assert.equal(source.includes("function scheduleFullscreenBodyPoseDetection(timestamp, hasTrackedHands)"), false);
+  assert.equal(
+    source.includes("scheduleFullscreenBodyPoseDetection(timestamp, overlayPoints.tipPoints.length > 0)"),
+    false,
+  );
+  assert.equal(source.includes("if (!hasTrackedHands)"), false);
   assert.equal(awaitIndex, -1);
 });
 

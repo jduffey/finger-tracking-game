@@ -2591,7 +2591,7 @@ export default function App() {
     return Boolean(fullscreenBodyPoseDetectorRef.current);
   }
 
-  function scheduleFullscreenBodyPoseDetection(timestamp, hasTrackedHands) {
+  function scheduleFullscreenBodyPoseDetection(timestamp) {
     if (
       phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
       !FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridModeRef.current)
@@ -2607,13 +2607,6 @@ export default function App() {
       return;
     }
 
-    if (!hasTrackedHands) {
-      if (fullscreenBodyPosesRef.current.length > 0) {
-        publishFullscreenBodyPoses([]);
-      }
-      return;
-    }
-
     const video = videoRef.current;
     if (!video || video.readyState < 2) {
       return;
@@ -2622,7 +2615,7 @@ export default function App() {
     const detector = fullscreenBodyPoseDetectorRef.current;
     if (!detector) {
       if (!fullscreenBodyPoseInitPromiseRef.current) {
-        void ensureFullscreenBodyPoseDetectorInitialized("fullscreen_hand_visuals_ready");
+        void ensureFullscreenBodyPoseDetectorInitialized("fullscreen_body_skeleton_ready");
       }
       return;
     }
@@ -2641,7 +2634,11 @@ export default function App() {
       maxPoses: FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
     })
       .then((poses) => {
-        if (phaseRef.current === PHASES.FULLSCREEN_CAMERA && mountedRef.current) {
+        if (
+          phaseRef.current === PHASES.FULLSCREEN_CAMERA &&
+          FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridModeRef.current) &&
+          mountedRef.current
+        ) {
           publishFullscreenBodyPoses(poses);
         }
       })
@@ -9957,7 +9954,7 @@ export default function App() {
                 ? stableHands
                 : [],
             );
-            scheduleFullscreenBodyPoseDetection(timestamp, overlayPoints.tipPoints.length > 0);
+            scheduleFullscreenBodyPoseDetection(timestamp);
           }
           processMinorityReportFrame(stableHands, timestamp);
           if (phaseRef.current === PHASES.GESTURE_ANALYTICS_LAB) {
