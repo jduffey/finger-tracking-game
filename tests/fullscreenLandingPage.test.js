@@ -12,3 +12,8 @@ test("FullscreenLandingPage does not render inactive top-control buttons", () =>
   assert.equal(source.includes("Settings"), false);
   assert.equal(source.includes("fullscreen-camera-landing-top-controls"), false);
 });
+
+test("FullscreenLandingPage does not render the back to input test button", () => {
+  assert.equal(source.includes("Back to Input Test"), false);
+  assert.equal(source.includes("fullscreen-camera-landing-back"), false);
+});
