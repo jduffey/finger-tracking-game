@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
+  FULLSCREEN_HAND_SKELETON_MAX_HANDS,
   createFullscreenBodySkeletonOverlay,
   createFullscreenHandSkeletonOverlay,
 } from "../src/fullscreenBodySkeletonOverlay.js";
@@ -95,8 +96,8 @@ test("createFullscreenHandSkeletonOverlay projects full 21-point hand skeletons"
   );
 });
 
-test("createFullscreenHandSkeletonOverlay limits fullscreen rendering to four hands", () => {
-  const hands = Array.from({ length: 6 }, (_value, handIndex) => ({
+test("createFullscreenHandSkeletonOverlay limits fullscreen rendering to eight hands", () => {
+  const hands = Array.from({ length: 10 }, (_value, handIndex) => ({
     id: `hand-${handIndex + 1}`,
     landmarks: [{ u: 0.5, v: 0.5 }],
   }));
@@ -106,9 +107,19 @@ test("createFullscreenHandSkeletonOverlay limits fullscreen rendering to four ha
     style: {},
   });
 
-  assert.equal(overlay.hands.length, 4);
+  assert.equal(FULLSCREEN_HAND_SKELETON_MAX_HANDS, 8);
+  assert.equal(overlay.hands.length, 8);
   assert.deepEqual(
     overlay.hands.map((hand) => hand.id),
-    ["hand-1", "hand-2", "hand-3", "hand-4"],
+    [
+      "hand-1",
+      "hand-2",
+      "hand-3",
+      "hand-4",
+      "hand-5",
+      "hand-6",
+      "hand-7",
+      "hand-8",
+    ],
   );
 });

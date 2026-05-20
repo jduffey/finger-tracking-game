@@ -1,4 +1,5 @@
 export const FULLSCREEN_BODY_SKELETON_MAX_PEOPLE = 4;
+export const FULLSCREEN_HAND_SKELETON_MAX_HANDS = 8;
 
 const DEFAULT_KEYPOINT_THRESHOLD = 0.2;
 
@@ -185,7 +186,7 @@ export function createFullscreenHandSkeletonOverlay(hands, viewport, options = {
   const maxHands =
     Number.isFinite(options.maxHands) && options.maxHands > 0
       ? Math.floor(options.maxHands)
-      : FULLSCREEN_BODY_SKELETON_MAX_PEOPLE;
+      : FULLSCREEN_HAND_SKELETON_MAX_HANDS;
   const safeHands = Array.isArray(hands) ? hands.slice(0, maxHands) : [];
 
   const projectedHands = safeHands
