@@ -134,13 +134,6 @@ export const FULLSCREEN_CAMERA_LANDING_SECTIONS = [
         accent: "#59e04f",
       },
       {
-        id: "fingerprint-worlds",
-        label: "Fingerprint Worlds",
-        preview: "fingerprint-worlds",
-        iconSrc: "/assets/launcher-icons/fingerprint-worlds.png",
-        accent: "#7c6cff",
-      },
-      {
         id: "invaders",
         label: "Invaders",
         preview: "invaders",

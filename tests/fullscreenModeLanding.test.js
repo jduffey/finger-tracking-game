@@ -33,12 +33,12 @@ test("createFullscreenModeLandingLayout includes every mode and keeps box propor
   const gamesPanel = layout.sections.find((section) => section.id === "games");
 
   assert.equal(layout.boxes.length, FULLSCREEN_CAMERA_LANDING_OPTIONS.length);
-  assert.ok(layout.boxes.some((box) => box.id === "fingerprint-worlds"));
+  assert.equal(layout.boxes.some((box) => box.id === "fingerprint-worlds"), false);
   assert.equal(layout.sections.length, 2);
   assert.equal(visualPanel?.columns, 4);
   assert.equal(visualPanel?.rows, 2);
   assert.equal(gamesPanel?.columns, 6);
-  assert.equal(gamesPanel?.rows, 3);
+  assert.equal(gamesPanel?.rows, 2);
   assert.ok(layout.boxWidth > 0);
   assert.ok(layout.boxHeight > 0);
   assert.ok(layout.boxWidth > layout.boxHeight);
@@ -65,7 +65,6 @@ test("fullscreen landing data groups visual effects above games", () => {
       "Tic Tac Toe",
       "Slice Air",
       "Sky Patrol",
-      "Fingerprint Worlds",
       "Invaders",
       "Flappy",
       "Missile Command",
@@ -98,7 +97,6 @@ test("fullscreen landing data uses generated icon assets for imported previews",
     "tic-tac-toe": "/assets/launcher-icons/tic-tac-toe.png",
     "fruit-ninja": "/assets/launcher-icons/slice-air.png",
     "sky-patrol": "/assets/launcher-icons/sky-patrol.png",
-    "fingerprint-worlds": "/assets/launcher-icons/fingerprint-worlds.png",
     invaders: "/assets/launcher-icons/invaders.png",
     flappy: "/assets/launcher-icons/flappy.png",
     "missile-command": "/assets/launcher-icons/missile-command.png",
@@ -489,10 +487,10 @@ test("stepFullscreenModeLanding selects the back to input test tile after a veri
 
 test("selectFullscreenModeLandingMode lets mouse clicks choose a fullscreen mode without a verified hand", () => {
   const base = createFullscreenModeLandingState(1280, 720);
-  const selected = selectFullscreenModeLandingMode(base, "fingerprint-worlds");
+  const selected = selectFullscreenModeLandingMode(base, "sky-patrol");
   const ignored = selectFullscreenModeLandingMode(base, "not-a-mode");
 
   assert.equal(selected.handVerified, false);
-  assert.equal(selected.selectedModeId, "fingerprint-worlds");
+  assert.equal(selected.selectedModeId, "sky-patrol");
   assert.equal(ignored.selectedModeId, null);
 });
