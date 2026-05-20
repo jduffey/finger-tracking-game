@@ -31,6 +31,31 @@ const KEYPOINT_GROUPS = {
   legs: ["left_knee", "right_knee", "left_ankle", "right_ankle"],
 };
 
+const HAND_ROOT_CONNECTIONS = [
+  [0, 1],
+  [0, 5],
+  [0, 9],
+  [0, 13],
+  [0, 17],
+];
+
+const HAND_FINGER_CHAINS = [
+  [1, 2, 3, 4],
+  [5, 6, 7, 8],
+  [9, 10, 11, 12],
+  [13, 14, 15, 16],
+  [17, 18, 19, 20],
+];
+
+const HAND_CONNECTIONS = [
+  ...HAND_ROOT_CONNECTIONS,
+  ...HAND_FINGER_CHAINS.flatMap((chain) =>
+    chain.slice(1).map((landmarkIndex, index) => [chain[index], landmarkIndex]),
+  ),
+];
+
+const HAND_TIP_INDEXES = new Set([4, 8, 12, 16, 20]);
+
 function getPointGroup(name) {
   for (const [group, names] of Object.entries(KEYPOINT_GROUPS)) {
     if (names.includes(name)) {
@@ -130,5 +155,82 @@ export function createFullscreenBodySkeletonOverlay(poses, viewport, options = {
     height: viewport.height,
     style: viewport.style,
     people,
+  };
+}
+
+function projectHandLandmark(point, viewport, index) {
+  if (!Number.isFinite(point?.u) || !Number.isFinite(point?.v)) {
+    return null;
+  }
+
+  return {
+    index,
+    x: point.u * viewport.width,
+    y: point.v * viewport.height,
+    isTip: HAND_TIP_INDEXES.has(index),
+  };
+}
+
+export function createFullscreenHandSkeletonOverlay(hands, viewport, options = {}) {
+  if (
+    !viewport ||
+    !Number.isFinite(viewport.width) ||
+    !Number.isFinite(viewport.height) ||
+    viewport.width <= 0 ||
+    viewport.height <= 0
+  ) {
+    return null;
+  }
+
+  const maxHands =
+    Number.isFinite(options.maxHands) && options.maxHands > 0
+      ? Math.floor(options.maxHands)
+      : FULLSCREEN_BODY_SKELETON_MAX_PEOPLE;
+  const safeHands = Array.isArray(hands) ? hands.slice(0, maxHands) : [];
+
+  const projectedHands = safeHands
+    .map((hand, handIndex) => {
+      const landmarks = Array.isArray(hand?.landmarks) ? hand.landmarks : [];
+      if (landmarks.length === 0) {
+        return null;
+      }
+
+      const joints = landmarks
+        .map((landmark, index) => projectHandLandmark(landmark, viewport, index))
+        .filter(Boolean);
+      const jointByIndex = new Map(joints.map((joint) => [joint.index, joint]));
+      const bones = HAND_CONNECTIONS.map(([startIndex, endIndex]) => {
+        const start = jointByIndex.get(startIndex);
+        const end = jointByIndex.get(endIndex);
+        return start && end
+          ? {
+              startIndex,
+              endIndex,
+              x1: start.x,
+              y1: start.y,
+              x2: end.x,
+              y2: end.y,
+            }
+          : null;
+      }).filter(Boolean);
+
+      if (joints.length === 0 && bones.length === 0) {
+        return null;
+      }
+
+      return {
+        id: hand?.id ?? hand?.label ?? `hand-${handIndex + 1}`,
+        label: hand?.label ?? `Hand ${handIndex + 1}`,
+        joints,
+        bones,
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    width: viewport.width,
+    height: viewport.height,
+    style: viewport.style,
+    hands: projectedHands,
   };
 }

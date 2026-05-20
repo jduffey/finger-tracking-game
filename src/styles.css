@@ -372,6 +372,44 @@ body {
   stroke-width: 4;
 }
 
+.fullscreen-hand-skeleton-hand {
+  --hand-skeleton-color: rgba(255, 167, 110, 0.92);
+  color: var(--hand-skeleton-color);
+}
+
+.fullscreen-hand-skeleton-hand.hand-2 {
+  --hand-skeleton-color: rgba(110, 204, 255, 0.92);
+}
+
+.fullscreen-hand-skeleton-hand.hand-3 {
+  --hand-skeleton-color: rgba(122, 237, 181, 0.88);
+}
+
+.fullscreen-hand-skeleton-hand.hand-4 {
+  --hand-skeleton-color: rgba(202, 153, 255, 0.9);
+}
+
+.fullscreen-hand-skeleton-bone {
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.fullscreen-hand-skeleton-joint {
+  fill: rgba(245, 250, 255, 0.82);
+  stroke: currentColor;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.fullscreen-hand-skeleton-joint.tip {
+  fill: currentColor;
+  stroke: rgba(5, 10, 18, 0.74);
+  stroke-width: 1.2;
+}
+
 .fullscreen-camera-grid {
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.62) 1px, transparent 1px),

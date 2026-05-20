@@ -54,7 +54,7 @@ test("fullscreen body skeleton uses a separate SVG layer instead of the camera o
   const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
   const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
   const skeletonMarkupIndex = source.indexOf('className="fullscreen-body-skeleton-overlay"');
-  const skeletonMarkup = source.slice(skeletonMarkupIndex, skeletonMarkupIndex + 2600);
+  const skeletonMarkup = source.slice(skeletonMarkupIndex, skeletonMarkupIndex + 5200);
   const drawFullscreenIndex = source.indexOf("function drawFullscreenOverlay");
 
   assert.ok(skeletonMarkupIndex >= 0);
@@ -66,6 +66,7 @@ test("fullscreen body skeleton uses a separate SVG layer instead of the camera o
     false,
   );
   assert.match(styles, /\.fullscreen-body-skeleton-overlay\s*\{/);
+  assert.match(styles, /\.fullscreen-hand-skeleton-bone\s*\{/);
   assert.match(styles, /z-index:\s*4;/);
 });
 
@@ -82,4 +83,17 @@ test("fullscreen body pose sidecar starts after Voronoi fingertip state updates"
   assert.ok(setTipPointsIndex > setIndexPointsIndex);
   assert.ok(scheduleIndex > setTipPointsIndex);
   assert.equal(awaitIndex, -1);
+});
+
+test("fullscreen hand skeleton state updates after Voronoi fingertip state", () => {
+  const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const fullscreenBlockIndex = source.indexOf("const overlayPoints = drawFullscreenOverlay(stableHands)");
+  const setTipPointsIndex = source.indexOf("setFullscreenTipPoints(overlayPoints.tipPoints)", fullscreenBlockIndex);
+  const setHandsIndex = source.indexOf("setFullscreenSkeletonHands", fullscreenBlockIndex);
+  const scheduleIndex = source.indexOf("scheduleFullscreenBodyPoseDetection", fullscreenBlockIndex);
+
+  assert.ok(fullscreenBlockIndex >= 0);
+  assert.ok(setTipPointsIndex > fullscreenBlockIndex);
+  assert.ok(setHandsIndex > setTipPointsIndex);
+  assert.ok(scheduleIndex > setHandsIndex);
 });

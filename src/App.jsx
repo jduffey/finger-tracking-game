@@ -219,6 +219,7 @@ import {
 import {
   FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
   createFullscreenBodySkeletonOverlay,
+  createFullscreenHandSkeletonOverlay,
 } from "./fullscreenBodySkeletonOverlay.js";
 import {
   createEmptyOffAxisState,
@@ -1528,6 +1529,7 @@ export default function App() {
   const [fullscreenIndexPoints, setFullscreenIndexPoints] = useState([]);
   const [fullscreenTipPoints, setFullscreenTipPoints] = useState([]);
   const [fullscreenBodyPoses, setFullscreenBodyPoses] = useState([]);
+  const [fullscreenSkeletonHands, setFullscreenSkeletonHands] = useState([]);
   const [fullscreenGridMode, setFullscreenGridMode] = useState(FULLSCREEN_LANDING_MODE);
   const [fullscreenModeLandingState, setFullscreenModeLandingState] = useState(null);
   const [fullscreenExitControlState, setFullscreenExitControlState] = useState(null);
@@ -2442,6 +2444,13 @@ export default function App() {
       }),
     [fullscreenBodyPoses, fullscreenCameraViewport],
   );
+  const fullscreenHandSkeletonOverlay = useMemo(
+    () =>
+      createFullscreenHandSkeletonOverlay(fullscreenSkeletonHands, fullscreenCameraViewport, {
+        maxHands: FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
+      }),
+    [fullscreenSkeletonHands, fullscreenCameraViewport],
+  );
 
   async function attachStreamToVideoElement(video, reason) {
     const stream = streamRef.current;
@@ -2869,6 +2878,7 @@ export default function App() {
       setFullscreenIndexPoints([]);
       setFullscreenTipPoints([]);
       setFullscreenBodyPoses([]);
+      setFullscreenSkeletonHands([]);
       fullscreenBodyPosesRef.current = [];
       if (fullscreenBodyPoseDetectorRef.current) {
         fullscreenBodyPoseDetectorRef.current.dispose?.();
@@ -9837,6 +9847,11 @@ export default function App() {
             const overlayPoints = drawFullscreenOverlay(stableHands);
             setFullscreenIndexPoints(overlayPoints.indexPoints);
             setFullscreenTipPoints(overlayPoints.tipPoints);
+            setFullscreenSkeletonHands(
+              FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridModeRef.current)
+                ? stableHands
+                : [],
+            );
             scheduleFullscreenBodyPoseDetection(timestamp, overlayPoints.tipPoints.length > 0);
           }
           processMinorityReportFrame(stableHands, timestamp);
@@ -11669,14 +11684,15 @@ export default function App() {
           )}
 
           {FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridMode) &&
-          fullscreenBodySkeletonOverlay?.people.length ? (
+          (fullscreenBodySkeletonOverlay?.people.length ||
+            fullscreenHandSkeletonOverlay?.hands.length) ? (
             <svg
               className="fullscreen-body-skeleton-overlay"
-              style={fullscreenBodySkeletonOverlay.style ?? undefined}
-              viewBox={`0 0 ${fullscreenBodySkeletonOverlay.width} ${fullscreenBodySkeletonOverlay.height}`}
+              style={fullscreenCameraViewport?.style ?? undefined}
+              viewBox={`0 0 ${fullscreenCameraViewport?.width ?? 0} ${fullscreenCameraViewport?.height ?? 0}`}
               preserveAspectRatio="none"
             >
-              {fullscreenBodySkeletonOverlay.people.map((person, personIndex) => (
+              {fullscreenBodySkeletonOverlay?.people.map((person, personIndex) => (
                 <g
                   key={person.id}
                   className={`fullscreen-body-skeleton-person person-${personIndex + 1}`}
@@ -11709,6 +11725,32 @@ export default function App() {
                       {person.label}
                     </text>
                   ) : null}
+                </g>
+              ))}
+              {fullscreenHandSkeletonOverlay?.hands.map((hand, handIndex) => (
+                <g
+                  key={hand.id}
+                  className={`fullscreen-hand-skeleton-hand hand-${handIndex + 1}`}
+                >
+                  {hand.bones.map((bone) => (
+                    <line
+                      key={`${hand.id}-${bone.startIndex}-${bone.endIndex}`}
+                      className="fullscreen-hand-skeleton-bone"
+                      x1={bone.x1}
+                      y1={bone.y1}
+                      x2={bone.x2}
+                      y2={bone.y2}
+                    />
+                  ))}
+                  {hand.joints.map((joint) => (
+                    <circle
+                      key={`${hand.id}-${joint.index}`}
+                      className={`fullscreen-hand-skeleton-joint ${joint.isTip ? "tip" : ""}`}
+                      cx={joint.x}
+                      cy={joint.y}
+                      r={joint.isTip ? 4.3 : 2.7}
+                    />
+                  ))}
                 </g>
               ))}
             </svg>
