@@ -22,6 +22,7 @@ const BREAKOUT_EXTRA_BALL_SPEED_RATIO = 0.45;
 const BREAKOUT_CAPSULE_SPEED_RATIO = 0.22;
 const FIND_YOUR_GRIND_LOGO_ASPECT_RATIO = 576 / 398;
 const FIND_YOUR_GRIND_LETTER_GAP_COLUMNS = 1;
+const FIND_YOUR_GRIND_BRICK_WIDTH_SCALE = 1.3;
 
 const FIND_YOUR_GRIND_GLYPHS = {
   D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
@@ -157,13 +158,14 @@ function getWordColumnCount(word) {
 }
 
 function addLogoBrick(bricks, createBrickId, { x, y, width, height, color, role }) {
+  const scaledWidth = width * FIND_YOUR_GRIND_BRICK_WIDTH_SCALE;
   bricks.push({
     id: `find-your-grind-${createBrickId()}`,
     row: null,
     column: null,
-    x,
+    x: x - (scaledWidth - width) / 2,
     y,
-    width,
+    width: scaledWidth,
     height,
     color,
     role,

@@ -9,12 +9,21 @@ function getLandingBoxStyle(box, holdProgress = 0) {
   };
 }
 
-export function WebcamBackground({ videoRef, overlayCanvasRef, cameraObjectFit }) {
+export function WebcamBackground({
+  videoRef,
+  overlayCanvasRef,
+  cameraObjectFit,
+  videoClassName = "",
+}) {
+  const className = ["camera-video fullscreen-camera-video", videoClassName]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <>
       <video
         ref={videoRef}
-        className="camera-video fullscreen-camera-video"
+        className={className}
         style={{ objectFit: cameraObjectFit }}
         playsInline
         muted

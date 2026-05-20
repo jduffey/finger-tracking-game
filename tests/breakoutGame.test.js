@@ -40,6 +40,7 @@ test("createFindYourGrindBreakoutGame builds the logo from many small colored br
   assert.equal(game.status, "countdown");
   assert.equal(game.message, "3");
   assert.ok(game.bricks.length > classic.bricks.length * 5);
+  assert.ok(game.bricks.every((brick) => Math.abs(brick.width / brick.height - 1.3) < 1e-9));
   assert.ok(game.bricks.every((brick) => brick.width < classic.layout.brickWidth / 4));
   assert.ok(game.bricks.every((brick) => brick.height < classic.layout.brickHeight));
   assert.ok(colors.has("#2a5eff"));

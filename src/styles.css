@@ -312,6 +312,10 @@ body {
   background: transparent;
 }
 
+.fullscreen-camera-video.find-your-grind-underlay {
+  opacity: 0.5;
+}
+
 .camera-overlay {
   pointer-events: none;
   z-index: 3;

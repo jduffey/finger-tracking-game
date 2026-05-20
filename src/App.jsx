@@ -10046,6 +10046,11 @@ export default function App() {
             videoRef={videoRef}
             overlayCanvasRef={overlayCanvasRef}
             cameraObjectFit={cameraObjectFit}
+            videoClassName={
+              fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
+                ? "find-your-grind-underlay"
+                : ""
+            }
           />
           {isFullscreenModeLanding ? (
             <FullscreenLandingPage
