@@ -8,6 +8,7 @@ const FULLSCREEN_FOUR_HAND_TRACKING_MODES = new Set([
   "pulse",
   "tip-ripples",
   "static",
+  "hand-bounce",
 ]);
 const FULLSCREEN_HAND_SKELETON_MODES = new Set(["tic-tac-toe"]);
 const FULLSCREEN_NEON_HAND_OUTLINE_MODES = new Set(["sky-patrol"]);

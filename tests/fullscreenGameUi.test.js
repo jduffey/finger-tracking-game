@@ -31,6 +31,10 @@ test("getFullscreenTrackedHandLimit lets visualization demos track four hands", 
   }
 });
 
+test("getFullscreenTrackedHandLimit lets Hand Bounce track four hands", () => {
+  assert.equal(getFullscreenTrackedHandLimit("hand-bounce", 2), 4);
+});
+
 test("shouldShowFullscreenHandSkeleton reuses the Minority Report hand overlay for tic tac toe", () => {
   assert.equal(shouldShowFullscreenHandSkeleton("landing"), false);
   assert.equal(shouldShowFullscreenHandSkeleton("tic-tac-toe"), true);
