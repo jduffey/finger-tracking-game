@@ -60,6 +60,7 @@ import {
 } from "./fullscreenHandBounceGame.js";
 import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
 import {
+  getFullscreenDetectorHandLimit,
   getFullscreenTrackedHandLimit,
   getFullscreenTrackedFingerNames,
   shouldShowFullscreenNeonHandOutline,
@@ -209,7 +210,19 @@ import {
   getStaleInferenceKeepAliveAction,
   shouldRunTrackingKeepAlive,
 } from "./trackingKeepAlive.js";
-import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from "./poseTracking.js";
+import {
+  detectPose,
+  detectPoses,
+  getLastPoseMeta,
+  getPoseRuntime,
+  initPoseTracking,
+} from "./poseTracking.js";
+import {
+  FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
+  FULLSCREEN_HAND_SKELETON_MAX_HANDS,
+  createFullscreenBodySkeletonOverlay,
+  createFullscreenHandSkeletonOverlay,
+} from "./fullscreenBodySkeletonOverlay.js";
 import {
   createEmptyOffAxisState,
   createHeldOffAxisState,
@@ -577,7 +590,19 @@ const RUNNER_COIN_COLOR_STEPS = [
     glowOuter: "rgba(255, 204, 64, 0.08)",
   },
 ];
-const TRACKING_MAX_HANDS = 2;
+const TRACKING_DEFAULT_HAND_LIMIT = 2;
+const TRACKING_DEFAULT_DETECTOR_MAX_HANDS = 4;
+const FULLSCREEN_BODY_SKELETON_INTERVAL_MS = 33;
+const FULLSCREEN_BODY_SKELETON_MODES = new Set(["voronoi"]);
+
+function getTrackingDetectorMaxHandsForContext(phase, fullscreenMode) {
+  if (phase !== PHASES.FULLSCREEN_CAMERA) {
+    return TRACKING_DEFAULT_DETECTOR_MAX_HANDS;
+  }
+
+  return getFullscreenDetectorHandLimit(fullscreenMode, TRACKING_DEFAULT_DETECTOR_MAX_HANDS);
+}
+
 const LAB_DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
 const LAB_EVENT_LOG_LIMIT = 220;
 const LAB_TRAIN_CAPTURE_FRAMES = 24;
@@ -1506,6 +1531,9 @@ export default function App() {
   const [gestureControlOSSessionKey, setGestureControlOSSessionKey] = useState(0);
   const [fullscreenIndexPoints, setFullscreenIndexPoints] = useState([]);
   const [fullscreenTipPoints, setFullscreenTipPoints] = useState([]);
+  const [fullscreenBodyPoses, setFullscreenBodyPoses] = useState([]);
+  const [fullscreenSkeletonHands, setFullscreenSkeletonHands] = useState([]);
+  const [fullscreenDetectedHandCount, setFullscreenDetectedHandCount] = useState(0);
   const [fullscreenGridMode, setFullscreenGridMode] = useState(FULLSCREEN_LANDING_MODE);
   const [fullscreenModeLandingState, setFullscreenModeLandingState] = useState(null);
   const [fullscreenExitControlState, setFullscreenExitControlState] = useState(null);
@@ -1597,8 +1625,15 @@ export default function App() {
   });
 
   const detectorRef = useRef(null);
+  const detectorMaxHandsRef = useRef(TRACKING_DEFAULT_DETECTOR_MAX_HANDS);
+  const detectorReconfigurationSeqRef = useRef(0);
   const poseDetectorRef = useRef(null);
   const poseInitPromiseRef = useRef(null);
+  const fullscreenBodyPosesRef = useRef([]);
+  const fullscreenBodyPoseDetectorRef = useRef(null);
+  const fullscreenBodyPoseInitPromiseRef = useRef(null);
+  const fullscreenBodyPoseInferenceBusyRef = useRef(false);
+  const fullscreenBodyPoseLastInferenceAtRef = useRef(0);
   const streamRef = useRef(null);
   const attachedVideoElementRef = useRef(null);
   const rafRef = useRef(0);
@@ -2049,6 +2084,28 @@ export default function App() {
       Number.isFinite(cameraAspectRatio) && cameraAspectRatio > 0 ? cameraAspectRatio : 4 / 3;
     return createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio);
   }, [cameraAspectRatio, isFullscreenCameraPhase, viewport.height, viewport.width]);
+  const fullscreenBrowserViewport = useMemo(() => {
+    if (!isFullscreenCameraPhase) {
+      return null;
+    }
+
+    return {
+      left: 0,
+      top: 0,
+      width: viewport.width,
+      height: viewport.height,
+      style: {
+        left: "0px",
+        top: "0px",
+        width: `${viewport.width}px`,
+        height: `${viewport.height}px`,
+      },
+    };
+  }, [isFullscreenCameraPhase, viewport.height, viewport.width]);
+  const fullscreenBreakoutViewport =
+    fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
+      ? fullscreenBrowserViewport
+      : fullscreenCameraViewport;
   const fullscreenCameraLandingViewport = useMemo(() => {
     if (!isFullscreenCameraPhase) {
       return null;
@@ -2385,6 +2442,23 @@ export default function App() {
     };
   }, [fullscreenCameraViewport, fullscreenTipPoints]);
 
+  const fullscreenBodySkeletonOverlay = useMemo(
+    () =>
+      createFullscreenBodySkeletonOverlay(fullscreenBodyPoses, fullscreenCameraViewport, {
+        keypointThreshold: POSE_KEYPOINT_THRESHOLD,
+        maxPeople: FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
+      }),
+    [fullscreenBodyPoses, fullscreenCameraViewport],
+  );
+  const fullscreenHandSkeletonOverlay = useMemo(
+    () =>
+      createFullscreenHandSkeletonOverlay(fullscreenSkeletonHands, fullscreenCameraViewport, {
+        maxHands: FULLSCREEN_HAND_SKELETON_MAX_HANDS,
+      }),
+    [fullscreenSkeletonHands, fullscreenCameraViewport],
+  );
+  const fullscreenDetectedBodyCount = fullscreenBodySkeletonOverlay?.people.length ?? 0;
+
   async function attachStreamToVideoElement(video, reason) {
     const stream = streamRef.current;
     if (!video || !stream) {
@@ -2465,6 +2539,117 @@ export default function App() {
 
   function isCurrentTrackingInference(inferenceToken) {
     return activeInferenceTokenRef.current === inferenceToken;
+  }
+
+  function publishFullscreenBodyPoses(poses) {
+    const safePoses = Array.isArray(poses) ? poses.slice(0, FULLSCREEN_BODY_SKELETON_MAX_PEOPLE) : [];
+    fullscreenBodyPosesRef.current = safePoses;
+    setFullscreenBodyPoses(safePoses);
+  }
+
+  async function ensureFullscreenBodyPoseDetectorInitialized(reason = "fullscreen_body_skeleton") {
+    if (fullscreenBodyPoseDetectorRef.current) {
+      return true;
+    }
+
+    if (fullscreenBodyPoseInitPromiseRef.current) {
+      await fullscreenBodyPoseInitPromiseRef.current;
+      return Boolean(fullscreenBodyPoseDetectorRef.current);
+    }
+
+    const requestedBackend = getCurrentBackend() === "cpu" ? "cpu" : "webgl";
+    fullscreenBodyPoseInitPromiseRef.current = (async () => {
+      let detector = null;
+      try {
+        appLog.info("Initializing fullscreen body skeleton detector", {
+          reason,
+          requestedBackend,
+        });
+        detector = await initPoseTracking({
+          runtime: "tfjs",
+          backend: requestedBackend,
+          maxPoses: FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
+        });
+        if (
+          phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+          !FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridModeRef.current) ||
+          !mountedRef.current
+        ) {
+          detector.dispose?.();
+          detector = null;
+          return;
+        }
+        fullscreenBodyPoseDetectorRef.current = detector;
+        detector = null;
+      } catch (error) {
+        appLog.warn("Fullscreen body skeleton detector failed to initialize", { error });
+      } finally {
+        detector?.dispose?.();
+        fullscreenBodyPoseInitPromiseRef.current = null;
+      }
+    })();
+
+    await fullscreenBodyPoseInitPromiseRef.current;
+    return Boolean(fullscreenBodyPoseDetectorRef.current);
+  }
+
+  function scheduleFullscreenBodyPoseDetection(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      !FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridModeRef.current)
+    ) {
+      if (fullscreenBodyPosesRef.current.length > 0) {
+        publishFullscreenBodyPoses([]);
+      }
+      if (fullscreenBodyPoseDetectorRef.current) {
+        fullscreenBodyPoseDetectorRef.current.dispose?.();
+        fullscreenBodyPoseDetectorRef.current = null;
+      }
+      fullscreenBodyPoseInferenceBusyRef.current = false;
+      return;
+    }
+
+    const video = videoRef.current;
+    if (!video || video.readyState < 2) {
+      return;
+    }
+
+    const detector = fullscreenBodyPoseDetectorRef.current;
+    if (!detector) {
+      if (!fullscreenBodyPoseInitPromiseRef.current) {
+        void ensureFullscreenBodyPoseDetectorInitialized("fullscreen_body_skeleton_ready");
+      }
+      return;
+    }
+
+    if (
+      fullscreenBodyPoseInferenceBusyRef.current ||
+      timestamp - fullscreenBodyPoseLastInferenceAtRef.current <
+        FULLSCREEN_BODY_SKELETON_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    fullscreenBodyPoseInferenceBusyRef.current = true;
+    fullscreenBodyPoseLastInferenceAtRef.current = timestamp;
+    void detectPoses(detector, video, {
+      maxPoses: FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
+    })
+      .then((poses) => {
+        if (
+          phaseRef.current === PHASES.FULLSCREEN_CAMERA &&
+          FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridModeRef.current) &&
+          mountedRef.current
+        ) {
+          publishFullscreenBodyPoses(poses);
+        }
+      })
+      .catch((error) => {
+        appLog.warn("Fullscreen body skeleton pose detection failed", { error });
+      })
+      .finally(() => {
+        fullscreenBodyPoseInferenceBusyRef.current = false;
+      });
   }
 
   function releaseStaleTrackingInference(timestamp, staleAction) {
@@ -2696,6 +2881,17 @@ export default function App() {
     if (phase !== PHASES.FULLSCREEN_CAMERA) {
       setFullscreenIndexPoints([]);
       setFullscreenTipPoints([]);
+      setFullscreenBodyPoses([]);
+      setFullscreenSkeletonHands([]);
+      setFullscreenDetectedHandCount(0);
+      fullscreenBodyPosesRef.current = [];
+      if (fullscreenBodyPoseDetectorRef.current) {
+        fullscreenBodyPoseDetectorRef.current.dispose?.();
+        fullscreenBodyPoseDetectorRef.current = null;
+      }
+      fullscreenBodyPoseInitPromiseRef.current = null;
+      fullscreenBodyPoseInferenceBusyRef.current = false;
+      fullscreenBodyPoseLastInferenceAtRef.current = 0;
       setFullscreenModeLandingState(null);
       setFullscreenExitControlState(null);
       setFullscreenRestartControlState(null);
@@ -2780,8 +2976,8 @@ export default function App() {
   }, [fullscreenInvadersState]);
 
   useEffect(() => {
-    fullscreenBreakoutViewportRef.current = fullscreenCameraViewport;
-  }, [fullscreenCameraViewport]);
+    fullscreenBreakoutViewportRef.current = fullscreenBreakoutViewport;
+  }, [fullscreenBreakoutViewport]);
 
   useEffect(() => {
     fullscreenBreakoutCoopViewportRef.current = fullscreenCameraViewport;
@@ -2977,7 +3173,7 @@ export default function App() {
       phase !== PHASES.FULLSCREEN_CAMERA ||
       (fullscreenGridMode !== "breakout" &&
         fullscreenGridMode !== FIND_YOUR_GRIND_BREAKOUT_MODE_ID) ||
-      !fullscreenCameraViewport
+      !fullscreenBreakoutViewport
     ) {
       fullscreenBreakoutLastTickRef.current = 0;
       if (fullscreenBreakoutStateRef.current) {
@@ -2990,18 +3186,18 @@ export default function App() {
     const nextGame =
       fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
         ? createFindYourGrindBreakoutGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
+            fullscreenBreakoutViewport.width,
+            fullscreenBreakoutViewport.height,
           )
         : createBreakoutGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
+            fullscreenBreakoutViewport.width,
+            fullscreenBreakoutViewport.height,
           );
     fullscreenBreakoutLastTickRef.current = 0;
     fullscreenBreakoutStateRef.current = nextGame;
     setFullscreenBreakoutState(nextGame);
     return undefined;
-  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
+  }, [fullscreenBreakoutViewport, fullscreenGridMode, phase]);
 
   useEffect(() => {
     if (
@@ -3919,14 +4115,18 @@ export default function App() {
 
     const initModel = async () => {
       try {
+        const initialMaxHands = getTrackingDetectorMaxHandsForContext(
+          phaseRef.current,
+          fullscreenGridModeRef.current,
+        );
         const preferredConfig =
           INITIAL_TRACKING_RUNTIME === "mediapipe"
-            ? { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_MAX_HANDS }
+            ? { runtime: "mediapipe", modelType: "full", maxHands: initialMaxHands }
             : {
                 runtime: "tfjs",
                 backend: "webgl",
                 modelType: "full",
-                maxHands: TRACKING_MAX_HANDS,
+                maxHands: initialMaxHands,
               };
 
         appLog.info("Initializing hand-tracking detector", {
@@ -3949,7 +4149,7 @@ export default function App() {
             runtime: "tfjs",
             backend: "webgl",
             modelType: "full",
-            maxHands: TRACKING_MAX_HANDS,
+            maxHands: initialMaxHands,
           });
         }
 
@@ -3959,6 +4159,7 @@ export default function App() {
           return;
         }
         detectorRef.current = detector;
+        detectorMaxHandsRef.current = preferredConfig.maxHands;
         const runtime = getCurrentRuntime() || preferredConfig.runtime;
         const backend =
           getCurrentBackend() || (runtime === "mediapipe" ? "n/a" : preferredConfig.backend || "webgl");
@@ -3988,6 +4189,96 @@ export default function App() {
       }
     };
   }, [appLog]);
+
+  useEffect(() => {
+    if (!modelReady || !detectorRef.current) {
+      return;
+    }
+
+    const requestedMaxHands = getTrackingDetectorMaxHandsForContext(phase, fullscreenGridMode);
+    if (detectorMaxHandsRef.current === requestedMaxHands) {
+      return;
+    }
+
+    let cancelled = false;
+    const requestId = detectorReconfigurationSeqRef.current + 1;
+    detectorReconfigurationSeqRef.current = requestId;
+
+    const reconfigureHandDetector = async () => {
+      const currentRuntime = getCurrentRuntime() || activeRuntime || INITIAL_TRACKING_RUNTIME;
+      const currentBackend = getCurrentBackend() || activeBackend || "webgl";
+      const requestedConfig =
+        currentRuntime === "mediapipe"
+          ? { runtime: "mediapipe", modelType: "full", maxHands: requestedMaxHands }
+          : {
+              runtime: "tfjs",
+              backend: currentBackend === "cpu" ? "cpu" : "webgl",
+              modelType: "full",
+              maxHands: requestedMaxHands,
+            };
+
+      recoveringDetectorRef.current = true;
+      appLog.info("Reconfiguring hand-tracking detector hand capacity", {
+        requestedRuntime: requestedConfig.runtime,
+        requestedBackend: requestedConfig.backend ?? "n/a",
+        previousMaxHands: detectorMaxHandsRef.current,
+        requestedMaxHands,
+        fullscreenGridMode,
+      });
+
+      try {
+        const previousDetector = detectorRef.current;
+        const nextDetector = await initHandTracking(requestedConfig);
+
+        if (cancelled || detectorReconfigurationSeqRef.current !== requestId) {
+          nextDetector?.dispose?.();
+          return;
+        }
+
+        detectorRef.current = nextDetector;
+        detectorMaxHandsRef.current = requestedMaxHands;
+        if (previousDetector && previousDetector !== nextDetector) {
+          previousDetector.dispose?.();
+        }
+        setActiveRuntime(getCurrentRuntime() || requestedConfig.runtime);
+        setActiveBackend(
+          getCurrentBackend() ||
+            requestedConfig.backend ||
+            (requestedConfig.runtime === "mediapipe" ? "n/a" : "unknown"),
+        );
+        setModelError("");
+        appLog.info("Hand-tracking detector capacity reconfigured", {
+          activeRuntime: getCurrentRuntime(),
+          activeBackend: getCurrentBackend(),
+          activeMaxHands: requestedMaxHands,
+        });
+      } catch (error) {
+        if (!cancelled && detectorReconfigurationSeqRef.current === requestId) {
+          appLog.error("Failed to reconfigure hand-tracking detector capacity", {
+            requestedRuntime: requestedConfig.runtime,
+            requestedBackend: requestedConfig.backend ?? "n/a",
+            requestedMaxHands,
+            error,
+          });
+          setModelError(
+            error instanceof Error
+              ? error.message
+              : "Failed to reconfigure hand tracking model.",
+          );
+        }
+      } finally {
+        if (detectorReconfigurationSeqRef.current === requestId) {
+          recoveringDetectorRef.current = false;
+        }
+      }
+    };
+
+    void reconfigureHandDetector();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBackend, activeRuntime, appLog, fullscreenGridMode, modelReady, phase]);
 
   useEffect(() => {
     appLog.debug("Starting camera overlay canvas sync effect");
@@ -4394,6 +4685,10 @@ export default function App() {
         poseDetectorRef.current.dispose?.();
         poseDetectorRef.current = null;
       }
+      if (fullscreenBodyPoseDetectorRef.current) {
+        fullscreenBodyPoseDetectorRef.current.dispose?.();
+        fullscreenBodyPoseDetectorRef.current = null;
+      }
     };
   }, []);
 
@@ -4447,6 +4742,10 @@ export default function App() {
   function getRecoveryConfig(attempt, reason) {
     const currentRuntime = getCurrentRuntime() || activeRuntime;
     const currentBackend = getCurrentBackend() || activeBackend;
+    const requestedMaxHands = getTrackingDetectorMaxHandsForContext(
+      phaseRef.current,
+      fullscreenGridModeRef.current,
+    );
 
     // Keep MediaPipe as the sticky runtime once it has been reached.
     if (currentRuntime === "mediapipe") {
@@ -4456,15 +4755,15 @@ export default function App() {
           runtime: "tfjs",
           backend: "webgl",
           modelType: "full",
-          maxHands: TRACKING_MAX_HANDS,
+          maxHands: requestedMaxHands,
         };
       }
-      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_MAX_HANDS };
+      return { runtime: "mediapipe", modelType: "full", maxHands: requestedMaxHands };
     }
 
     // TFJS invalid-keypoint corruption should switch straight to MediaPipe.
     if (reason === "continuous_invalid_landmarks") {
-      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_MAX_HANDS };
+      return { runtime: "mediapipe", modelType: "full", maxHands: requestedMaxHands };
     }
 
     if (attempt === 1) {
@@ -4472,15 +4771,15 @@ export default function App() {
         runtime: "tfjs",
         backend: currentBackend === "cpu" ? "cpu" : "webgl",
         modelType: "full",
-        maxHands: TRACKING_MAX_HANDS,
+        maxHands: requestedMaxHands,
       };
     }
 
     if (attempt === 2) {
-      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_MAX_HANDS };
+      return { runtime: "mediapipe", modelType: "full", maxHands: requestedMaxHands };
     }
 
-    return { runtime: "tfjs", backend: "cpu", modelType: "full", maxHands: TRACKING_MAX_HANDS };
+    return { runtime: "tfjs", backend: "cpu", modelType: "full", maxHands: requestedMaxHands };
   }
 
   async function recoverDetectorFromInvalidLandmarks(reason, details) {
@@ -4510,6 +4809,7 @@ export default function App() {
       const previousDetector = detectorRef.current;
       const nextDetector = await initHandTracking(requestedConfig);
       detectorRef.current = nextDetector;
+      detectorMaxHandsRef.current = requestedConfig.maxHands;
       if (previousDetector && previousDetector !== nextDetector) {
         previousDetector.dispose?.();
       }
@@ -9494,7 +9794,7 @@ export default function App() {
             memory: handLabelMemoryRef.current,
             timestamp,
             pose,
-          }).slice(0, TRACKING_MAX_HANDS);
+          }).slice(0, TRACKING_DEFAULT_HAND_LIMIT);
           if (!cancelled && mountedRef.current) {
             processPoseFrame(pose, timestamp, stableHands);
           }
@@ -9525,6 +9825,7 @@ export default function App() {
 
       if (recoveringDetectorRef.current) {
         fullscreenHandsRef.current = [];
+        setFullscreenDetectedHandCount(0);
         fullscreenPrimaryHandIdRef.current = null;
         recoveryFrameSkipCounterRef.current += 1;
         if (recoveryFrameSkipCounterRef.current % 30 === 0) {
@@ -9545,6 +9846,7 @@ export default function App() {
       const video = videoRef.current;
       if (!detector || !video || video.readyState < 2) {
         fullscreenHandsRef.current = [];
+        setFullscreenDetectedHandCount(0);
         fullscreenPrimaryHandIdRef.current = null;
         appLog.debug("Skipping frame due to missing detector/video readiness", {
           hasDetector: Boolean(detector),
@@ -9634,14 +9936,20 @@ export default function App() {
         if (!cancelled && mountedRef.current) {
           const fullscreenTrackedHandLimit =
             phaseRef.current === PHASES.FULLSCREEN_CAMERA
-              ? getFullscreenTrackedHandLimit(fullscreenGridModeRef.current, TRACKING_MAX_HANDS)
-              : TRACKING_MAX_HANDS;
+              ? getFullscreenTrackedHandLimit(
+                  fullscreenGridModeRef.current,
+                  TRACKING_DEFAULT_HAND_LIMIT,
+                )
+              : TRACKING_DEFAULT_HAND_LIMIT;
           const stableHands = assignStableHandLabels(detectedHands, {
             memory: handLabelMemoryRef.current,
             timestamp,
             pose: minorityReportPose,
           }).slice(0, fullscreenTrackedHandLimit);
           fullscreenHandsRef.current = stableHands;
+          if (phaseRef.current === PHASES.FULLSCREEN_CAMERA) {
+            setFullscreenDetectedHandCount(stableHands.length);
+          }
           const primaryHand = stableHands[0] ?? null;
           fullscreenPrimaryHandIdRef.current = primaryHand?.id ?? primaryHand?.label ?? null;
           processTrackingFrame(primaryHand, timestamp);
@@ -9649,6 +9957,12 @@ export default function App() {
             const overlayPoints = drawFullscreenOverlay(stableHands);
             setFullscreenIndexPoints(overlayPoints.indexPoints);
             setFullscreenTipPoints(overlayPoints.tipPoints);
+            setFullscreenSkeletonHands(
+              FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridModeRef.current)
+                ? stableHands
+                : [],
+            );
+            scheduleFullscreenBodyPoseDetection(timestamp);
           }
           processMinorityReportFrame(stableHands, timestamp);
           if (phaseRef.current === PHASES.GESTURE_ANALYTICS_LAB) {
@@ -10046,6 +10360,11 @@ export default function App() {
             videoRef={videoRef}
             overlayCanvasRef={overlayCanvasRef}
             cameraObjectFit={cameraObjectFit}
+            videoClassName={
+              fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
+                ? "find-your-grind-underlay"
+                : ""
+            }
           />
           {isFullscreenModeLanding ? (
             <FullscreenLandingPage
@@ -10352,7 +10671,7 @@ export default function App() {
                   ? "find-your-grind"
                   : ""
               }`}
-              style={fullscreenCameraViewport?.style ?? undefined}
+              style={fullscreenBreakoutViewport?.style ?? undefined}
             >
               {fullscreenBreakoutState?.bricks
                 ?.filter((brick) => !brick.destroyed)
@@ -11474,6 +11793,79 @@ export default function App() {
             </div>
           )}
 
+          {FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridMode) &&
+          (fullscreenBodySkeletonOverlay?.people.length ||
+            fullscreenHandSkeletonOverlay?.hands.length) ? (
+            <svg
+              className="fullscreen-body-skeleton-overlay"
+              style={fullscreenCameraViewport?.style ?? undefined}
+              viewBox={`0 0 ${fullscreenCameraViewport?.width ?? 0} ${fullscreenCameraViewport?.height ?? 0}`}
+              preserveAspectRatio="none"
+            >
+              {fullscreenBodySkeletonOverlay?.people.map((person, personIndex) => (
+                <g
+                  key={person.id}
+                  className={`fullscreen-body-skeleton-person person-${personIndex + 1}`}
+                >
+                  {person.bones.map((bone) => (
+                    <line
+                      key={`${person.id}-${bone.startName}-${bone.endName}`}
+                      className="fullscreen-body-skeleton-bone"
+                      x1={bone.x1}
+                      y1={bone.y1}
+                      x2={bone.x2}
+                      y2={bone.y2}
+                    />
+                  ))}
+                  {person.keypoints.map((point) => (
+                    <circle
+                      key={`${person.id}-${point.name}`}
+                      className={`fullscreen-body-skeleton-joint ${point.group}`}
+                      cx={point.x}
+                      cy={point.y}
+                      r={point.group === "eyes" ? 4 : 5}
+                    />
+                  ))}
+                  {person.anchor ? (
+                    <text
+                      className="fullscreen-body-skeleton-label"
+                      x={person.anchor.x + 9}
+                      y={Math.max(16, person.anchor.y - 12)}
+                    >
+                      {person.label}
+                    </text>
+                  ) : null}
+                </g>
+              ))}
+              {fullscreenHandSkeletonOverlay?.hands.map((hand, handIndex) => (
+                <g
+                  key={hand.id}
+                  className={`fullscreen-hand-skeleton-hand hand-${handIndex + 1}`}
+                >
+                  {hand.bones.map((bone) => (
+                    <line
+                      key={`${hand.id}-${bone.startIndex}-${bone.endIndex}`}
+                      className="fullscreen-hand-skeleton-bone"
+                      x1={bone.x1}
+                      y1={bone.y1}
+                      x2={bone.x2}
+                      y2={bone.y2}
+                    />
+                  ))}
+                  {hand.joints.map((joint) => (
+                    <circle
+                      key={`${hand.id}-${joint.index}`}
+                      className={`fullscreen-hand-skeleton-joint ${joint.isTip ? "tip" : ""}`}
+                      cx={joint.x}
+                      cy={joint.y}
+                      r={joint.isTip ? 4.3 : 2.7}
+                    />
+                  ))}
+                </g>
+              ))}
+            </svg>
+          ) : null}
+
           {fullscreenRestartControlLabel && fullscreenRestartControlState?.layout ? (
             <div
               className={`fullscreen-camera-restart-box ${
@@ -11544,8 +11936,13 @@ export default function App() {
           <div className="fullscreen-camera-hud">
             {!isFullscreenModeLanding ? (
               <div className="fullscreen-camera-hud-bottom">
-                <span className={`tracking-indicator fullscreen-camera-status ${handDetected ? "ok" : "warn"}`}>
-                  {handDetected ? "Hand detected" : "Hand not detected"} | FPS: {fps.toFixed(1)}
+                <span
+                  className={`tracking-indicator fullscreen-camera-status ${
+                    fullscreenDetectedHandCount > 0 ? "ok" : "warn"
+                  }`}
+                >
+                  Hands: {fullscreenDetectedHandCount} | Bodies: {fullscreenDetectedBodyCount} | FPS:{" "}
+                  {fps.toFixed(1)}
                 </span>
                 <div className="fullscreen-camera-meta fullscreen-camera-actions">
                   <span className="fullscreen-camera-note">

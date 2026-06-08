@@ -32,13 +32,13 @@ test("createFullscreenModeLandingLayout includes every mode and keeps box propor
   const visualPanel = layout.sections.find((section) => section.id === "visual-effects");
   const gamesPanel = layout.sections.find((section) => section.id === "games");
 
-  assert.equal(layout.boxes.length, FULLSCREEN_CAMERA_LANDING_OPTIONS.length);
-  assert.ok(layout.boxes.some((box) => box.id === "fingerprint-worlds"));
+  assert.equal(layout.boxes.length, FULLSCREEN_CAMERA_MODE_OPTIONS.length);
+  assert.equal(layout.boxes.some((box) => box.id === "fingerprint-worlds"), false);
   assert.equal(layout.sections.length, 2);
   assert.equal(visualPanel?.columns, 4);
   assert.equal(visualPanel?.rows, 2);
   assert.equal(gamesPanel?.columns, 6);
-  assert.equal(gamesPanel?.rows, 3);
+  assert.equal(gamesPanel?.rows, 2);
   assert.ok(layout.boxWidth > 0);
   assert.ok(layout.boxHeight > 0);
   assert.ok(layout.boxWidth > layout.boxHeight);
@@ -65,7 +65,6 @@ test("fullscreen landing data groups visual effects above games", () => {
       "Tic Tac Toe",
       "Slice Air",
       "Sky Patrol",
-      "Fingerprint Worlds",
       "Invaders",
       "Flappy",
       "Missile Command",
@@ -98,7 +97,6 @@ test("fullscreen landing data uses generated icon assets for imported previews",
     "tic-tac-toe": "/assets/launcher-icons/tic-tac-toe.png",
     "fruit-ninja": "/assets/launcher-icons/slice-air.png",
     "sky-patrol": "/assets/launcher-icons/sky-patrol.png",
-    "fingerprint-worlds": "/assets/launcher-icons/fingerprint-worlds.png",
     invaders: "/assets/launcher-icons/invaders.png",
     flappy: "/assets/launcher-icons/flappy.png",
     "missile-command": "/assets/launcher-icons/missile-command.png",
@@ -110,16 +108,17 @@ test("fullscreen landing data uses generated icon assets for imported previews",
   assert.equal(FULLSCREEN_CAMERA_MODE_OPTIONS.every((item) => item.iconSrc), true);
 });
 
-test("createFullscreenModeLandingLayout includes a footer back to input test control", () => {
+test("createFullscreenModeLandingLayout omits the footer back to input test control", () => {
   const layout = createFullscreenModeLandingLayout(1366, 768);
   const backBox = layout.boxes.find((box) => box.id === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID);
+  const backOption = FULLSCREEN_CAMERA_LANDING_OPTIONS.find(
+    (option) => option.id === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
+  );
 
-  assert.ok(backBox);
-  assert.equal(backBox.label, "Back to Input Test");
-  assert.equal(backBox.category, "Navigation");
-  assert.ok(backBox.top >= layout.footerTop);
-  assert.ok(backBox.width > layout.boxWidth);
-  assert.equal(FULLSCREEN_CAMERA_MODE_OPTIONS.some((option) => option.id === backBox.id), false);
+  assert.equal(backBox, undefined);
+  assert.equal(backOption?.label, "Back to Input Test");
+  assert.equal(backOption?.category, "Navigation");
+  assert.equal(FULLSCREEN_CAMERA_MODE_OPTIONS.some((option) => option.id === backOption?.id), false);
 });
 
 test("createFullscreenModeLandingLayout keeps the full menu inside representative viewports", () => {
@@ -465,34 +464,26 @@ test("stepFullscreenModeLanding can hit-test scrolled mobile tiles while keeping
   assert.equal(nextState.pointerY, visiblePointerY);
 });
 
-test("stepFullscreenModeLanding selects the back to input test tile after a verified hold", () => {
+test("selectFullscreenModeLandingMode preserves the back to input test navigation path", () => {
   const base = createFullscreenModeLandingState(1280, 720);
-  const backBox = base.layout.boxes.find((box) => box.id === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID);
-  const pointer = getBoxCenter(backBox);
-  const stepsToSelect = Math.ceil((FULLSCREEN_MODE_LANDING_HOLD_MS / 1000) * 60);
+  const selectedState = selectFullscreenModeLandingMode(
+    base,
+    FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
+  );
 
-  let selectedState = base;
-  for (let index = 0; index < stepsToSelect + 2; index += 1) {
-    selectedState = stepFullscreenModeLanding(selectedState, 1 / 60, {
-      handVerified: true,
-      pointerActive: true,
-      pointerX: pointer.x,
-      pointerY: pointer.y,
-    });
-    if (selectedState.selectedModeId) {
-      break;
-    }
-  }
-
+  assert.equal(
+    base.layout.boxes.some((box) => box.id === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID),
+    false,
+  );
   assert.equal(selectedState.selectedModeId, FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID);
 });
 
 test("selectFullscreenModeLandingMode lets mouse clicks choose a fullscreen mode without a verified hand", () => {
   const base = createFullscreenModeLandingState(1280, 720);
-  const selected = selectFullscreenModeLandingMode(base, "fingerprint-worlds");
+  const selected = selectFullscreenModeLandingMode(base, "sky-patrol");
   const ignored = selectFullscreenModeLandingMode(base, "not-a-mode");
 
   assert.equal(selected.handVerified, false);
-  assert.equal(selected.selectedModeId, "fingerprint-worlds");
+  assert.equal(selected.selectedModeId, "sky-patrol");
   assert.equal(ignored.selectedModeId, null);
 });

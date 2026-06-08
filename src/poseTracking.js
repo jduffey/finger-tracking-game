@@ -8,6 +8,8 @@ const poseLog = createScopedLogger("poseTracking");
 const DEFAULT_RUNTIME = "tfjs";
 const DEFAULT_MODEL = poseDetection.SupportedModels.MoveNet;
 const DEFAULT_MODEL_TYPE = poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING;
+const DEFAULT_MAX_POSES = 1;
+const MULTIPOSE_MODEL_TYPE = poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING;
 
 let activeRuntime = DEFAULT_RUNTIME;
 let lastPoseMeta = {
@@ -24,13 +26,22 @@ export async function initPoseTracking(options = {}) {
   const runtime = options.runtime ?? DEFAULT_RUNTIME;
   const backend = options.backend ?? "webgl";
   const model = options.model ?? DEFAULT_MODEL;
-  const modelType = options.modelType ?? DEFAULT_MODEL_TYPE;
+  const maxPoses =
+    Number.isFinite(options.maxPoses) && options.maxPoses > 0
+      ? Math.floor(options.maxPoses)
+      : DEFAULT_MAX_POSES;
+  const modelType =
+    options.modelType ??
+    (model === poseDetection.SupportedModels.MoveNet && maxPoses > 1
+      ? MULTIPOSE_MODEL_TYPE
+      : DEFAULT_MODEL_TYPE);
 
   poseLog.info("Initializing pose detector", {
     runtime,
     backend,
     model,
     modelType,
+    maxPoses,
   });
 
   if (runtime === "tfjs") {
@@ -46,10 +57,12 @@ export async function initPoseTracking(options = {}) {
       ? {
           runtime,
           modelType,
-          enableSmoothing: true,
+          enableSmoothing: maxPoses <= 1,
+          ...(maxPoses > 1 ? { enableTracking: true } : {}),
         }
       : {
           runtime,
+          maxPoses,
         };
 
   const detector = await poseDetection.createDetector(model, detectorConfig);
@@ -70,46 +83,8 @@ export function getLastPoseMeta() {
   return { ...lastPoseMeta };
 }
 
-export async function detectPose(detector, videoElement) {
-  if (!detector || !videoElement || videoElement.readyState < 2) {
-    lastPoseMeta = {
-      posesDetected: 0,
-      invalid: false,
-      reason: "detector_or_video_not_ready",
-    };
-    return null;
-  }
-
-  let poses = null;
-  try {
-    poses = await detector.estimatePoses(videoElement, {
-      maxPoses: 1,
-      flipHorizontal: false,
-    });
-  } catch (error) {
-    poseLog.error("Pose estimation failed", { error });
-    lastPoseMeta = {
-      posesDetected: 0,
-      invalid: true,
-      reason: "estimate_poses_failed",
-    };
-    return null;
-  }
-
-  if (!Array.isArray(poses) || poses.length === 0) {
-    lastPoseMeta = {
-      posesDetected: 0,
-      invalid: false,
-      reason: "no_pose",
-    };
-    return null;
-  }
-
-  const pose = poses[0];
+function normalizePose(pose, width, height) {
   const keypoints = Array.isArray(pose?.keypoints) ? pose.keypoints : [];
-  const width = Math.max(1, videoElement.videoWidth || videoElement.clientWidth);
-  const height = Math.max(1, videoElement.videoHeight || videoElement.clientHeight);
-
   const normalizedKeypoints = keypoints
     .map((point) => {
       if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
@@ -132,11 +107,6 @@ export async function detectPose(detector, videoElement) {
     .filter(Boolean);
 
   if (normalizedKeypoints.length === 0) {
-    lastPoseMeta = {
-      posesDetected: poses.length,
-      invalid: true,
-      reason: "invalid_keypoints",
-    };
     return null;
   }
 
@@ -145,14 +115,79 @@ export async function detectPose(detector, videoElement) {
     : normalizedKeypoints.reduce((total, point) => total + point.score, 0) /
       Math.max(1, normalizedKeypoints.length);
 
+  return {
+    id: pose.id ?? null,
+    score,
+    keypoints: normalizedKeypoints,
+  };
+}
+
+export async function detectPoses(detector, videoElement, options = {}) {
+  const maxPoses =
+    Number.isFinite(options.maxPoses) && options.maxPoses > 0
+      ? Math.floor(options.maxPoses)
+      : DEFAULT_MAX_POSES;
+
+  if (!detector || !videoElement || videoElement.readyState < 2) {
+    lastPoseMeta = {
+      posesDetected: 0,
+      invalid: false,
+      reason: "detector_or_video_not_ready",
+    };
+    return [];
+  }
+
+  let poses = null;
+  try {
+    poses = await detector.estimatePoses(videoElement, {
+      maxPoses,
+      flipHorizontal: false,
+    });
+  } catch (error) {
+    poseLog.error("Pose estimation failed", { error });
+    lastPoseMeta = {
+      posesDetected: 0,
+      invalid: true,
+      reason: "estimate_poses_failed",
+    };
+    return [];
+  }
+
+  if (!Array.isArray(poses) || poses.length === 0) {
+    lastPoseMeta = {
+      posesDetected: 0,
+      invalid: false,
+      reason: "no_pose",
+    };
+    return [];
+  }
+
+  const width = Math.max(1, videoElement.videoWidth || videoElement.clientWidth);
+  const height = Math.max(1, videoElement.videoHeight || videoElement.clientHeight);
+  const normalizedPoses = poses
+    .slice(0, maxPoses)
+    .map((pose) => normalizePose(pose, width, height))
+    .filter(Boolean);
+
+  if (normalizedPoses.length === 0) {
+    lastPoseMeta = {
+      posesDetected: poses.length,
+      invalid: true,
+      reason: "invalid_keypoints",
+    };
+    return [];
+  }
+
   lastPoseMeta = {
-    posesDetected: 1,
+    posesDetected: normalizedPoses.length,
     invalid: false,
     reason: "ok",
   };
 
-  return {
-    score,
-    keypoints: normalizedKeypoints,
-  };
+  return normalizedPoses;
+}
+
+export async function detectPose(detector, videoElement) {
+  const poses = await detectPoses(detector, videoElement, { maxPoses: 1 });
+  return poses[0] ?? null;
 }

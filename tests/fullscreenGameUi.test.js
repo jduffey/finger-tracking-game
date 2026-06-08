@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  getFullscreenDetectorHandLimit,
   getFullscreenTrackedHandLimit,
   getFullscreenTrackedFingerNames,
   shouldShowFullscreenNeonHandOutline,
@@ -23,6 +24,28 @@ test("getFullscreenTrackedFingerNames preserves all fingertips for other fullscr
 test("getFullscreenTrackedHandLimit locks tic tac toe to one hand", () => {
   assert.equal(getFullscreenTrackedHandLimit("tic-tac-toe", 2), 1);
   assert.equal(getFullscreenTrackedHandLimit("flappy", 2), 2);
+});
+
+test("getFullscreenTrackedHandLimit lets non-Voronoi visualization demos track four hands", () => {
+  for (const mode of ["square", "hex", "rings", "pulse", "tip-ripples", "static"]) {
+    assert.equal(getFullscreenTrackedHandLimit(mode, 2), 4);
+  }
+});
+
+test("getFullscreenTrackedHandLimit lets Voronoi track eight hands", () => {
+  assert.equal(getFullscreenTrackedHandLimit("voronoi", 2), 8);
+});
+
+test("getFullscreenDetectorHandLimit only raises the detector cap for Voronoi", () => {
+  assert.equal(getFullscreenDetectorHandLimit("voronoi", 4), 8);
+
+  for (const mode of ["square", "hex", "rings", "pulse", "tip-ripples", "static", "hand-bounce"]) {
+    assert.equal(getFullscreenDetectorHandLimit(mode, 4), 4);
+  }
+});
+
+test("getFullscreenTrackedHandLimit lets Hand Bounce track four hands", () => {
+  assert.equal(getFullscreenTrackedHandLimit("hand-bounce", 2), 4);
 });
 
 test("shouldShowFullscreenHandSkeleton reuses the Minority Report hand overlay for tic tac toe", () => {

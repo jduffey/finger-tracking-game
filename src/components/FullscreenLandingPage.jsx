@@ -1,5 +1,3 @@
-import { FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID } from "../fullscreenModeLanding.js";
-
 function getLandingBoxStyle(box, holdProgress = 0) {
   return {
     left: `${box.left}px`,
@@ -11,12 +9,21 @@ function getLandingBoxStyle(box, holdProgress = 0) {
   };
 }
 
-export function WebcamBackground({ videoRef, overlayCanvasRef, cameraObjectFit }) {
+export function WebcamBackground({
+  videoRef,
+  overlayCanvasRef,
+  cameraObjectFit,
+  videoClassName = "",
+}) {
+  const className = ["camera-video fullscreen-camera-video", videoClassName]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <>
       <video
         ref={videoRef}
-        className="camera-video fullscreen-camera-video"
+        className={className}
         style={{ objectFit: cameraObjectFit }}
         playsInline
         muted
@@ -93,27 +100,6 @@ export function DemoTile({ item, active, holdProgress, onSelect }) {
         />
       )}
       <span className="fullscreen-camera-mode-landing-title">{item.label}</span>
-    </button>
-  );
-}
-
-function BackToInputTestButton({ item, active, holdProgress, onSelect }) {
-  if (!item) {
-    return null;
-  }
-
-  return (
-    <button
-      className={`fullscreen-camera-landing-back ${active ? "active" : ""}`}
-      data-route={item.route}
-      onClick={(event) => onSelect(event, item.id)}
-      style={getLandingBoxStyle(item, active ? holdProgress : 0)}
-      type="button"
-    >
-      <span className="fullscreen-camera-landing-back-content">
-        <span aria-hidden="true">←</span>
-        Back to Input Test
-      </span>
     </button>
   );
 }
@@ -211,10 +197,7 @@ export default function FullscreenLandingPage({
   onSelect,
   onScrollOffsetChange,
 }) {
-  const demoItems =
-    layout?.boxes?.filter((box) => box.id !== FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID) ?? [];
-  const backItem =
-    layout?.boxes?.find((box) => box.id === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID) ?? null;
+  const demoItems = layout?.boxes ?? [];
 
   return (
     <div
@@ -245,12 +228,6 @@ export default function FullscreenLandingPage({
           onSelect={onSelect}
         />
       ))}
-      <BackToInputTestButton
-        item={backItem}
-        active={state?.holdModeId === backItem?.id}
-        holdProgress={holdProgress}
-        onSelect={onSelect}
-      />
       <IndexFingerMarker state={state} />
       <FooterStatus handDetected={handDetected} fps={fps} />
     </div>

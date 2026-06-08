@@ -134,13 +134,6 @@ export const FULLSCREEN_CAMERA_LANDING_SECTIONS = [
         accent: "#59e04f",
       },
       {
-        id: "fingerprint-worlds",
-        label: "Fingerprint Worlds",
-        preview: "fingerprint-worlds",
-        iconSrc: "/assets/launcher-icons/fingerprint-worlds.png",
-        accent: "#7c6cff",
-      },
-      {
         id: "invaders",
         label: "Invaders",
         preview: "invaders",
@@ -367,11 +360,10 @@ export function createFullscreenModeLandingLayout(width, height) {
   const layoutHeight = Math.max(1, Number.isFinite(height) ? height : 720);
   const edgePadding = clamp(Math.min(layoutWidth, layoutHeight) * 0.032, 16, 34);
   const headerHeight = clamp(layoutHeight * 0.12, 70, 108);
-  const backButtonHeight = clamp(layoutHeight * 0.064, 46, 56);
-  const backButtonWidth = Math.min(layoutWidth - edgePadding * 2, clamp(layoutWidth * 0.22, 220, 310));
-  const footerTop = layoutHeight - edgePadding - backButtonHeight;
+  const footerHeight = clamp(layoutHeight * 0.064, 46, 56);
+  const viewportFooterTop = layoutHeight - edgePadding - footerHeight;
   const contentTop = edgePadding + headerHeight;
-  const viewportContentBottom = Math.max(contentTop + 1, footerTop - edgePadding * 0.25);
+  const viewportContentBottom = Math.max(contentTop + 1, viewportFooterTop - edgePadding * 0.25);
   const availableWidth = Math.max(1, layoutWidth - edgePadding * 2);
   const availableHeight = Math.max(1, viewportContentBottom - contentTop);
   const baseSectionLayouts = FULLSCREEN_CAMERA_LANDING_SECTIONS.map((section) => {
@@ -461,20 +453,7 @@ export function createFullscreenModeLandingLayout(width, height) {
     };
   });
   const panelsBottom = nextPanelTop - sectionGap;
-  const backTop = allowVerticalOverflow ? panelsBottom + sectionGap : footerTop;
-  const backBox = {
-    id: FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
-    label: "Back to Input Test",
-    category: "Navigation",
-    kind: "navigation",
-    preview: "back",
-    accent: "#22d3ee",
-    left: (layoutWidth - backButtonWidth) / 2,
-    top: backTop,
-    width: backButtonWidth,
-    height: backButtonHeight,
-  };
-  boxes.push(backBox);
+  const footerTop = allowVerticalOverflow ? panelsBottom + sectionGap : viewportFooterTop;
 
   return {
     width: layoutWidth,
@@ -488,8 +467,8 @@ export function createFullscreenModeLandingLayout(width, height) {
     scale,
     contentTop,
     contentBottom: allowVerticalOverflow ? panelsBottom : viewportContentBottom,
-    footerTop: backTop,
-    scrollHeight: Math.max(layoutHeight, backTop + backButtonHeight + edgePadding),
+    footerTop,
+    scrollHeight: Math.max(layoutHeight, footerTop + footerHeight + edgePadding),
     edgePadding,
     panelPadding,
     panelHeadingHeight,
@@ -515,10 +494,11 @@ export function createFullscreenModeLandingState(width, height) {
 
 export function selectFullscreenModeLandingMode(state, modeId) {
   const safeState = state ?? createFullscreenModeLandingState(1280, 720);
-  const selectedBox = safeState.layout?.boxes?.find((box) => box.id === modeId) ?? null;
+  const selectedOption =
+    FULLSCREEN_CAMERA_LANDING_OPTIONS.find((option) => option.id === modeId) ?? null;
   return {
     ...safeState,
-    selectedModeId: selectedBox?.id ?? null,
+    selectedModeId: selectedOption?.id ?? null,
   };
 }
 
