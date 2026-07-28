@@ -2,8 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   SPACE_INVADERS_ENEMY_SCORE,
+  SPACE_INVADERS_STARTING_LIVES,
+  SPACE_INVADERS_UFO_SCORE,
+  advanceSpaceInvadersWave,
   createSpaceInvadersGame,
   createSpaceInvadersLayout,
+  createSpaceInvadersWave,
+  getSpaceInvadersResultStats,
+  getSpaceInvadersWaveConfig,
+  spawnSpaceInvadersPowerUp,
+  spawnSpaceInvadersUfo,
   stepSpaceInvadersGame,
 } from "../src/spaceInvadersGame.js";
 
@@ -27,6 +35,11 @@ test("createSpaceInvadersGame centers the ship and spawns a full formation", () 
   assert.equal(game.status, "playing");
   assert.equal(game.enemies.filter((enemy) => enemy.alive).length, 32);
   assert.equal(game.ship.x, game.layout.width / 2);
+  assert.equal(game.wave, 1);
+  assert.equal(game.formation.id, "classic");
+  assert.equal(game.lives, SPACE_INVADERS_STARTING_LIVES);
+  assert.equal(game.shields.length, 3);
+  assert.ok(game.shields.every((shield) => shield.hp === shield.maxHp));
 });
 
 test("createSpaceInvadersLayout keeps a narrow-screen formation moving horizontally", () => {
@@ -54,6 +67,8 @@ test("createSpaceInvadersLayout gives short screens enough descent headroom to s
   const initialFormationBottom = Math.max(...state.enemies.map((enemy) => enemy.y + enemy.height));
 
   assert.ok(layout.dangerLineY > initialFormationBottom + layout.descendStep * 4);
+  assert.equal(layout.shieldsEnabled, false);
+  assert.equal(state.shields.length, 0);
 
   let current = state;
   for (let descent = 0; descent < 4; descent += 1) {
@@ -149,6 +164,12 @@ test("stepSpaceInvadersGame awards score when a player shot destroys an enemy", 
   const next = stepSpaceInvadersGame(state, 0.016, state.ship.x, false, constantRng(0.2));
   assert.equal(next.score, SPACE_INVADERS_ENEMY_SCORE);
   assert.equal(next.status, "cleared");
+  assert.deepEqual(next.interWave, {
+    nextWave: 2,
+    remainingMs: 1500,
+  });
+  assert.equal(next.stats.enemiesDestroyed, 1);
+  assert.equal(next.stats.wavesCleared, 1);
 });
 
 test("stepSpaceInvadersGame enters game over when an enemy shot hits the ship and restarts on pinch", () => {
@@ -156,6 +177,7 @@ test("stepSpaceInvadersGame enters game over when an enemy shot hits the ship an
   const shipY = layout.shipY;
   const state = {
     ...createSpaceInvadersGame(960, 720, constantRng(0.2)),
+    lives: 1,
     enemies: [
       {
         id: "enemy-1",
@@ -187,4 +209,262 @@ test("stepSpaceInvadersGame enters game over when an enemy shot hits the ship an
   assert.equal(restarted.status, "playing");
   assert.equal(restarted.enemies.filter((enemy) => enemy.alive).length, 32);
   assert.equal(restarted.score, gameOver.score);
+  assert.equal(restarted.lives, SPACE_INVADERS_STARTING_LIVES);
+});
+
+test("waves rotate through deterministic formations and increase pressure", () => {
+  const layout = createSpaceInvadersLayout(960, 720);
+  const first = createSpaceInvadersWave(layout, 1);
+  const second = createSpaceInvadersWave(layout, 2);
+  const repeatedSecond = createSpaceInvadersWave(layout, 2);
+  const lateConfig = getSpaceInvadersWaveConfig(8);
+
+  assert.equal(first.formation.id, "classic");
+  assert.equal(second.formation.id, "staggered");
+  assert.equal(first.enemies.length, 32);
+  assert.deepEqual(second, repeatedSecond);
+  assert.notDeepEqual(
+    first.enemies.map(({ x, y }) => ({ x, y })),
+    second.enemies.map(({ x, y }) => ({ x, y })),
+  );
+  assert.ok(lateConfig.enemySpeedMultiplier > first.config.enemySpeedMultiplier);
+  assert.ok(lateConfig.enemyFireIntervalMs < first.config.enemyFireIntervalMs);
+  assert.equal(lateConfig.enemyBurstSize, 3);
+});
+
+test("enemy fire becomes a deterministic multi-column burst on later waves", () => {
+  const game = createSpaceInvadersGame(960, 720, constantRng(0.2), { wave: 4 });
+  const readyToFire = {
+    ...game,
+    enemyFireCooldownMs: 0,
+  };
+  const next = stepSpaceInvadersGame(
+    readyToFire,
+    0.016,
+    readyToFire.ship.x,
+    false,
+    constantRng(0.2),
+  );
+
+  assert.equal(next.enemyShots.length, 2);
+  assert.equal(new Set(next.enemyShots.map((shot) => shot.x)).size, 2);
+  assert.equal(next.stats.enemyShotsFired, 2);
+});
+
+test("shields absorb enemy fire and visibly lose integrity", () => {
+  const game = createSpaceInvadersGame(960, 720, constantRng(0.2));
+  const shield = game.shields[0];
+  const state = {
+    ...game,
+    enemyShots: [
+      {
+        id: "enemy-shot-shield",
+        x: shield.x + shield.width / 2 - game.layout.shotWidth / 2,
+        y: shield.y,
+        width: game.layout.shotWidth,
+        height: game.layout.shotHeight,
+        vy: game.layout.enemyShotSpeed,
+      },
+    ],
+  };
+  const next = stepSpaceInvadersGame(state, 1 / 120, state.ship.x, false, constantRng(0.2));
+
+  assert.equal(next.enemyShots.length, 0);
+  assert.equal(next.shields[0].hp, shield.hp - 1);
+  assert.equal(next.lives, SPACE_INVADERS_STARTING_LIVES);
+});
+
+test("ship hits consume lives, add recovery invulnerability, and eventually end the run", () => {
+  const game = createSpaceInvadersGame(960, 720, constantRng(0.2));
+  const createHit = (state, id) => ({
+    ...state,
+    shipInvulnerableMs: 0,
+    enemyShots: [
+      {
+        id,
+        x: state.ship.x - state.layout.shotWidth / 2,
+        y: state.ship.y - state.ship.height / 2,
+        width: state.layout.shotWidth,
+        height: state.layout.shotHeight,
+        vy: state.layout.enemyShotSpeed,
+      },
+    ],
+  });
+
+  const firstHit = stepSpaceInvadersGame(
+    createHit(game, "enemy-shot-1"),
+    0.016,
+    game.ship.x,
+    false,
+    constantRng(0.2),
+  );
+  assert.equal(firstHit.status, "playing");
+  assert.equal(firstHit.lives, 2);
+  assert.ok(firstHit.shipInvulnerableMs > 0);
+  assert.equal(firstHit.stats.livesLost, 1);
+
+  const secondHit = stepSpaceInvadersGame(
+    createHit(firstHit, "enemy-shot-2"),
+    0.016,
+    firstHit.ship.x,
+    false,
+    constantRng(0.2),
+  );
+  assert.equal(secondHit.status, "playing");
+  assert.equal(secondHit.lives, 1);
+
+  const finalHit = stepSpaceInvadersGame(
+    createHit(secondHit, "enemy-shot-3"),
+    0.016,
+    secondHit.ship.x,
+    false,
+    constantRng(0.2),
+  );
+  assert.equal(finalHit.status, "gameover");
+  assert.equal(finalHit.lives, 0);
+  assert.equal(finalHit.result.livesLost, 3);
+  assert.equal(getSpaceInvadersResultStats(finalHit).bestWave, 1);
+});
+
+test("cleared waves enter an intermission and advance without losing run state", () => {
+  const game = createSpaceInvadersGame(960, 720, constantRng(0.2));
+  const cleared = {
+    ...game,
+    score: 1000,
+    lives: 2,
+    status: "cleared",
+    restartCooldownMs: 700,
+    interWave: {
+      nextWave: 2,
+      remainingMs: 1500,
+    },
+    stats: {
+      ...game.stats,
+      wavesCleared: 1,
+    },
+  };
+
+  const waiting = stepSpaceInvadersGame(
+    cleared,
+    0.5,
+    cleared.ship.x,
+    false,
+    constantRng(0.2),
+  );
+  assert.equal(waiting.status, "cleared");
+  assert.equal(waiting.interWave.remainingMs, 1000);
+
+  const advanced = stepSpaceInvadersGame(
+    waiting,
+    1,
+    waiting.ship.x,
+    false,
+    constantRng(0.2),
+  );
+  assert.equal(advanced.status, "playing");
+  assert.equal(advanced.wave, 2);
+  assert.equal(advanced.formation.id, "staggered");
+  assert.equal(advanced.score, 1000);
+  assert.equal(advanced.lives, 2);
+  assert.equal(advanced.stats.wavesCleared, 1);
+  assert.equal(advanced.enemies.filter((enemy) => enemy.alive).length, 32);
+
+  const explicitAdvance = advanceSpaceInvadersWave(
+    {
+      ...advanced,
+      interWave: { nextWave: 3, remainingMs: 0 },
+    },
+    constantRng(0.2),
+  );
+  assert.equal(explicitAdvance.wave, 3);
+  assert.equal(explicitAdvance.formation.id, "pinch");
+});
+
+test("shooting a UFO awards bonus score and drops a deterministic power-up", () => {
+  const game = spawnSpaceInvadersUfo(
+    createSpaceInvadersGame(960, 720, constantRng(0.2)),
+    1,
+  );
+  const ufo = {
+    ...game.ufo,
+    x: 300,
+    y: 100,
+  };
+  const state = {
+    ...game,
+    ufo,
+    playerShots: [
+      {
+        id: "player-shot-ufo",
+        x: ufo.x + ufo.width / 2 - game.layout.shotWidth / 2,
+        y: ufo.y + ufo.height / 2,
+        width: game.layout.shotWidth,
+        height: game.layout.shotHeight,
+        vy: -game.layout.playerShotSpeed,
+      },
+    ],
+  };
+  const next = stepSpaceInvadersGame(state, 1 / 120, state.ship.x, false, constantRng(0.2));
+
+  assert.equal(next.ufo, null);
+  assert.equal(next.score, SPACE_INVADERS_UFO_SCORE);
+  assert.equal(next.stats.ufoHits, 1);
+  assert.equal(next.powerUps.length, 1);
+  assert.equal(next.powerUps[0].type, "rapid-fire");
+});
+
+test("power-ups can enable rapid fire or repair damaged shields", () => {
+  const game = createSpaceInvadersGame(960, 720, constantRng(0.2));
+  const rapidDrop = spawnSpaceInvadersPowerUp(
+    game,
+    "rapid-fire",
+    game.ship.x,
+    game.ship.y - game.layout.powerUpSize / 2,
+  );
+  const powered = stepSpaceInvadersGame(
+    rapidDrop,
+    1 / 120,
+    rapidDrop.ship.x,
+    false,
+    constantRng(0.2),
+  );
+  assert.equal(powered.activePowerUp.type, "rapid-fire");
+  assert.equal(powered.stats.powerUpsCollected, 1);
+
+  const firstShot = stepSpaceInvadersGame(
+    powered,
+    0.016,
+    powered.ship.x,
+    true,
+    constantRng(0.2),
+  );
+  const rapidSecondShot = stepSpaceInvadersGame(
+    firstShot,
+    0.12,
+    firstShot.ship.x,
+    true,
+    constantRng(0.2),
+  );
+  assert.equal(rapidSecondShot.playerShots.length, 2);
+
+  const damaged = {
+    ...powered,
+    activePowerUp: null,
+    shields: powered.shields.map((shield) => ({ ...shield, hp: 1 })),
+  };
+  const repairDrop = spawnSpaceInvadersPowerUp(
+    damaged,
+    "shield-repair",
+    damaged.ship.x,
+    damaged.ship.y - damaged.layout.powerUpSize / 2,
+  );
+  const repaired = stepSpaceInvadersGame(
+    repairDrop,
+    1 / 120,
+    repairDrop.ship.x,
+    false,
+    constantRng(0.2),
+  );
+  assert.ok(repaired.shields.every((shield) => shield.hp === 3));
+  assert.equal(repaired.stats.powerUpsCollected, 2);
 });
