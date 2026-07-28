@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useMemo, useRef, useState } from "react";
 
 import {
   MODE_MATURITY,
@@ -20,6 +20,10 @@ import {
 } from "../productHomeModel.js";
 import { getHomeAchievementSummary } from "../achievementCatalog.js";
 import "../productHome.css";
+
+const MyCreationsLauncher = lazy(
+  () => import("./MyCreationsLauncher.jsx"),
+);
 
 const AREA_FILTERS = [
   { id: "all", label: "All" },
@@ -305,6 +309,20 @@ export default function ProductHome({
           </span>
         </div>
         <div className="product-home-header-actions">
+          <Suspense
+            fallback={
+              <button
+                aria-label="Loading My Creations"
+                className="product-home-icon-button"
+                disabled
+                type="button"
+              >
+                <span aria-hidden="true">✦</span>
+              </button>
+            }
+          >
+            <MyCreationsLauncher onSelectMode={onSelectMode} />
+          </Suspense>
           <TrackingReadiness readiness={readiness} onOpenSetup={onOpenSetup} />
           <button
             aria-label="Open settings"

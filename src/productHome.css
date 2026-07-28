@@ -166,6 +166,18 @@
   gap: 7px;
 }
 
+.product-home-creations-loading {
+  align-items: center;
+  background: rgba(2, 5, 12, 0.8);
+  color: var(--home-copy);
+  display: flex;
+  font-weight: 800;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 89;
+}
+
 .product-home-main {
   margin: 0 auto;
   max-width: 1540px;
@@ -966,7 +978,8 @@ button.product-shortcut-card:hover {
   }
 
   .product-home-brand small,
-  .product-home-readiness > span:nth-child(2) {
+  .product-home-readiness > span:nth-child(2),
+  .product-home-creations-label {
     display: none;
   }
 
