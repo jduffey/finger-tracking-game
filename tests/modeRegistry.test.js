@@ -72,9 +72,18 @@ test("player-facing capability claims match the experiences that exist", () => {
   assert.doesNotMatch(ticTacToe.objective, /another player|best-of/i);
 
   const visualizer = getModeById("visualizer");
-  assert.equal(visualizer.maturity, MODE_MATURITY.PREVIEW);
-  assert.equal(visualizer.featured, undefined);
-  assert.doesNotMatch(visualizer.objective, /capture|mix/i);
+  assert.equal(visualizer.maturity, MODE_MATURITY.SUPPORTED);
+  assert.equal(visualizer.featured, true);
+  assert.match(visualizer.objective, /export|artwork/i);
+  assert.deepEqual(visualizer.variants, [
+    "square",
+    "hex",
+    "voronoi",
+    "rings",
+    "pulse",
+    "tip-ripples",
+    "static",
+  ]);
 
   for (const trackingOnlyLabId of [
     "track-runner",

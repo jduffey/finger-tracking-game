@@ -477,6 +477,155 @@ html[data-mirror-camera="false"] .circle-fifths-video {
   opacity: 0.25;
 }
 
+.fullscreen-camera-stage.motion-visualizer-active {
+  background:
+    radial-gradient(
+      circle at 50% 18%,
+      color-mix(
+        in srgb,
+        var(--visualizer-color-3, #35a7ff) 24%,
+        transparent
+      ),
+      transparent 42%
+    ),
+    var(--visualizer-background, #050914);
+}
+
+.motion-visualizer-active > .fullscreen-camera-video {
+  opacity: var(--visualizer-camera-opacity, 0.58);
+  transition: opacity 160ms ease;
+}
+
+.motion-visualizer-active .motion-visualizer-layer {
+  filter: drop-shadow(
+    0 0 var(--visualizer-glow-strength, 10px)
+      color-mix(
+        in srgb,
+        var(--visualizer-color-3, #35a7ff) 42%,
+        transparent
+      )
+  );
+  opacity: var(--visualizer-layer-opacity, 0.8);
+}
+
+.motion-visualizer-active .fullscreen-camera-grid {
+  background-image:
+    linear-gradient(
+      color-mix(
+          in srgb,
+          var(--visualizer-line, #fff) 62%,
+          transparent
+        )
+        1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(
+          in srgb,
+          var(--visualizer-line, #fff) 62%,
+          transparent
+        )
+        1px,
+      transparent 1px
+    );
+}
+
+.motion-visualizer-active .fullscreen-camera-grid-highlight {
+  background: color-mix(
+    in srgb,
+    var(--visualizer-color-1, #ff335f) 82%,
+    transparent
+  );
+}
+
+.motion-visualizer-active .fullscreen-camera-grid-neighbor {
+  background: color-mix(
+    in srgb,
+    var(--visualizer-color-2, #ff9f1c) 74%,
+    transparent
+  );
+}
+
+.motion-visualizer-active .fullscreen-camera-grid-outer-ring {
+  background: color-mix(
+    in srgb,
+    var(--visualizer-color-3, #ffe66d) 68%,
+    transparent
+  );
+}
+
+.motion-visualizer-active .fullscreen-camera-hex-cell {
+  box-shadow: inset 0 0 0 1px
+    color-mix(
+      in srgb,
+      var(--visualizer-line, #fff) 64%,
+      transparent
+    );
+}
+
+.motion-visualizer-active
+  .fullscreen-camera-hex-grid
+  .fullscreen-camera-grid-highlight {
+  background: color-mix(
+    in srgb,
+    var(--visualizer-color-1, #ff335f) 82%,
+    transparent
+  );
+}
+
+.motion-visualizer-active
+  .fullscreen-camera-hex-grid
+  .fullscreen-camera-grid-neighbor {
+  background: color-mix(
+    in srgb,
+    var(--visualizer-color-3, #ffe66d) 58%,
+    transparent
+  );
+}
+
+.motion-visualizer-active
+  .fullscreen-camera-hex-grid
+  .fullscreen-camera-grid-outer-ring {
+  background: color-mix(
+    in srgb,
+    var(--visualizer-color-5, #35a7ff) 44%,
+    transparent
+  );
+}
+
+.motion-visualizer-active .fullscreen-camera-voronoi-cell {
+  fill-opacity: 0.58;
+  stroke: var(--visualizer-line, #fff);
+}
+
+.motion-visualizer-active .fullscreen-camera-pulse-ring,
+.motion-visualizer-active .fullscreen-camera-static-ring {
+  border-color: var(--visualizer-line, #fff);
+}
+
+.motion-visualizer-active .fullscreen-camera-static-center {
+  background: var(--visualizer-color-1, #ff335f);
+  box-shadow: 0 0 var(--visualizer-glow-strength, 10px)
+    var(--visualizer-color-1, #ff335f);
+}
+
+.motion-visualizer-active .fullscreen-camera-static-seam line {
+  stroke: var(--visualizer-line, #fff);
+}
+
+.motion-visualizer-controls-loading {
+  background: rgba(5, 10, 19, 0.86);
+  border: 1px solid rgba(196, 225, 255, 0.2);
+  border-radius: 12px;
+  color: #eef7ff;
+  left: 16px;
+  padding: 10px 12px;
+  position: absolute;
+  top: 16px;
+  z-index: 9;
+}
+
 .camera-overlay {
   pointer-events: none;
   z-index: 3;

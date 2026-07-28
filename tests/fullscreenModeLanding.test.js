@@ -35,8 +35,8 @@ test("createFullscreenModeLandingLayout includes every mode and keeps box propor
   assert.equal(layout.boxes.length, FULLSCREEN_CAMERA_MODE_OPTIONS.length);
   assert.equal(layout.boxes.some((box) => box.id === "fingerprint-worlds"), false);
   assert.equal(layout.sections.length, 2);
-  assert.equal(visualPanel?.columns, 4);
-  assert.equal(visualPanel?.rows, 2);
+  assert.equal(visualPanel?.columns, 1);
+  assert.equal(visualPanel?.rows, 1);
   assert.equal(gamesPanel?.columns, 6);
   assert.equal(gamesPanel?.rows, 2);
   assert.ok(layout.boxWidth > 0);
@@ -51,7 +51,7 @@ test("fullscreen landing data groups visual effects above games", () => {
   );
   assert.deepEqual(
     FULLSCREEN_CAMERA_LANDING_SECTIONS[0].items.map((item) => item.label),
-    ["Squares", "Hex", "Voronoi", "Rings", "Pulse", "Tip Ripples", "Static"],
+    ["Motion Visualizer"],
   );
   assert.deepEqual(
     FULLSCREEN_CAMERA_LANDING_SECTIONS[1].items.map((item) => item.label),
@@ -81,13 +81,7 @@ test("fullscreen landing data groups visual effects above games", () => {
 
 test("fullscreen landing data uses generated icon assets for imported previews", () => {
   const expectedIconSources = {
-    square: "/assets/launcher-icons/squares.png",
-    hex: "/assets/launcher-icons/hex.png",
-    voronoi: "/assets/launcher-icons/voronoi.png",
     rings: "/assets/launcher-icons/rings.png",
-    pulse: "/assets/launcher-icons/pulse.png",
-    "tip-ripples": "/assets/launcher-icons/tip-ripples.png",
-    static: "/assets/launcher-icons/static.png",
     "hand-bounce": "/assets/launcher-icons/hand-bounce.png",
     "brick-dodger": "/assets/launcher-icons/brick-dodger.png",
     "breakout-coop": "/assets/launcher-icons/breakout-coop.png",
@@ -354,8 +348,10 @@ test("stepFullscreenModeLanding waits for a verified hand before starting a 1.00
 
 test("stepFullscreenModeLanding clears the hold when the pointer leaves the hovered box", () => {
   const base = createFullscreenModeLandingState(1280, 720);
-  const firstBox = base.layout.boxes.find((box) => box.id === "square");
-  const secondBox = base.layout.boxes.find((box) => box.id === "hex");
+  const firstBox = base.layout.boxes.find((box) => box.id === "rings");
+  const secondBox = base.layout.boxes.find(
+    (box) => box.id === "hand-bounce",
+  );
   const firstPointer = getBoxCenter(firstBox);
   const secondPointer = getBoxCenter(secondBox);
 
@@ -378,16 +374,16 @@ test("stepFullscreenModeLanding clears the hold when the pointer leaves the hove
     pointerY: secondPointer.y,
   });
 
-  assert.equal(progressed.holdModeId, "square");
+  assert.equal(progressed.holdModeId, "rings");
   assert.ok(progressed.holdMs > 0);
-  assert.equal(switched.holdModeId, "hex");
+  assert.equal(switched.holdModeId, "hand-bounce");
   assert.equal(switched.holdMs, 0);
   assert.equal(switched.selectedModeId, null);
 });
 
 test("stepFullscreenModeLanding honors custom dwell timing and supports dwell off", () => {
   const base = createFullscreenModeLandingState(1280, 720);
-  const targetBox = base.layout.boxes.find((box) => box.id === "square");
+  const targetBox = base.layout.boxes.find((box) => box.id === "rings");
   const pointer = getBoxCenter(targetBox);
   const input = {
     handVerified: true,
@@ -401,7 +397,7 @@ test("stepFullscreenModeLanding honors custom dwell timing and supports dwell of
   for (let index = 0; index < 6; index += 1) {
     customDwell = stepFullscreenModeLanding(customDwell, 0.05, input);
   }
-  assert.equal(customDwell.selectedModeId, "square");
+  assert.equal(customDwell.selectedModeId, "rings");
 
   const dwellOff = stepFullscreenModeLanding(base, 1 / 60, {
     ...input,
@@ -411,14 +407,14 @@ test("stepFullscreenModeLanding honors custom dwell timing and supports dwell of
     ...input,
     holdDurationMs: 0,
   });
-  assert.equal(stillOff.holdModeId, "square");
+  assert.equal(stillOff.holdModeId, "rings");
   assert.equal(stillOff.holdMs, 0);
   assert.equal(stillOff.selectedModeId, null);
 });
 
 test("stepFullscreenModeLanding clears stale hover progress when the app is inactive", () => {
   const base = createFullscreenModeLandingState(1280, 720);
-  const firstBox = base.layout.boxes.find((box) => box.id === "square");
+  const firstBox = base.layout.boxes.find((box) => box.id === "rings");
   const firstPointer = getBoxCenter(firstBox);
 
   const started = stepFullscreenModeLanding(base, 1 / 60, {
@@ -442,7 +438,7 @@ test("stepFullscreenModeLanding clears stale hover progress when the app is inac
   });
   const reset = resetFullscreenModeLandingHold(progressed);
 
-  assert.equal(progressed.holdModeId, "square");
+  assert.equal(progressed.holdModeId, "rings");
   assert.ok(progressed.holdMs > 0);
   for (const state of [paused, reset]) {
     assert.equal(state.pointerActive, false);

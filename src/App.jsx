@@ -375,6 +375,21 @@ import {
 import { resizeFullscreenGameState } from "./viewportStateTransform.js";
 import { createFixedStepSessionTiming } from "./sessionTiming.js";
 import {
+  MOTION_VISUALIZER_EFFECTS,
+  MOTION_VISUALIZER_STORAGE_KEY,
+  applyMotionVisualizerPreset,
+  createMotionVisualizerPreset,
+  deleteMotionVisualizerPreset,
+  getMotionVisualizerPalette,
+  getMotionVisualizerPulseDurationMs,
+  getMotionVisualizerTrailDurationMs,
+  isMotionVisualizerEffect,
+  loadMotionVisualizerState,
+  normalizeMotionVisualizerState,
+  saveMotionVisualizerState,
+  toggleMotionVisualizerFavorite,
+} from "./motionVisualizer.js";
+import {
   ALL_GESTURE_IDS,
   GESTURE_DEFINITIONS,
   GESTURE_IDS,
@@ -427,6 +442,11 @@ const SpatialGestureMemory = lazy(
 const ArcadeRunExperience = lazy(
   () => import("./components/ArcadeRunExperience.jsx"),
 );
+const MotionVisualizerControls = lazy(() =>
+  import("./components/MotionVisualizerControls.jsx").then((module) => ({
+    default: module.MotionVisualizerControls,
+  })),
+);
 const WfcWorldRenderer = lazy(() =>
   import("./wfc/WfcWorldRenderer.jsx").then((module) => ({
     default: module.WfcWorldRenderer,
@@ -472,13 +492,6 @@ const FULLSCREEN_RING_LAYERS = [
   { diameter: 116, color: "#ffdb00" },
   { diameter: 152, color: "#00d619" },
   { diameter: 188, color: "#009fff" },
-];
-const FULLSCREEN_TIP_RIPPLE_COLORS = [
-  FULLSCREEN_RING_LAYERS[1]?.color ?? "#ff8d00",
-  FULLSCREEN_RING_LAYERS[2]?.color ?? "#ffdb00",
-  FULLSCREEN_RING_LAYERS[3]?.color ?? "#00d619",
-  FULLSCREEN_RING_LAYERS[4]?.color ?? "#009fff",
-  FULLSCREEN_RING_LAYERS[0]?.color ?? "#ff0000",
 ];
 const FULLSCREEN_VORONOI_DOT_RADIUS = 4.5;
 const CIRCLE_OF_FIFTHS_AUTOSTART_SESSION_KEY = "circle-of-fifths-autostart";
@@ -1001,16 +1014,24 @@ function getCameraObjectFitForPhase(phase) {
   return shouldUseContainedCameraFit(phase) ? "contain" : "cover";
 }
 
-function pruneCursorTrail(trail, now) {
-  return trail.filter((point) => now - point.timestamp <= FULLSCREEN_RING_TRAIL_DURATION_MS);
+function pruneCursorTrail(
+  trail,
+  now,
+  durationMs = FULLSCREEN_RING_TRAIL_DURATION_MS,
+) {
+  return trail.filter((point) => now - point.timestamp <= durationMs);
 }
 
 function pruneTrackedCursorTrail(trail, now) {
   return trail.filter((point) => now - point.timestamp <= CURSOR_TRAIL_DURATION_MS);
 }
 
-function prunePulseBursts(bursts, now) {
-  return bursts.filter((burst) => now - burst.startTime <= FULLSCREEN_PULSE_RING_DURATION_MS);
+function prunePulseBursts(
+  bursts,
+  now,
+  durationMs = FULLSCREEN_PULSE_RING_DURATION_MS,
+) {
+  return bursts.filter((burst) => now - burst.startTime <= durationMs);
 }
 
 function createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio) {
@@ -1678,6 +1699,16 @@ export default function App() {
   const [preferences, setPreferences] = useState(() => loadUserPreferences());
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
+  const [motionVisualizerState, setMotionVisualizerState] = useState(() =>
+    loadMotionVisualizerState(),
+  );
+  const motionVisualizerStateRef = useRef(motionVisualizerState);
+  motionVisualizerStateRef.current = motionVisualizerState;
+  const [motionVisualizerControlsCollapsed, setMotionVisualizerControlsCollapsed] =
+    useState(false);
+  const [motionVisualizerStatus, setMotionVisualizerStatus] = useState(
+    "Motion Visualizer ready.",
+  );
   const [deviceCapabilities, setDeviceCapabilities] = useState(() =>
     assessDeviceCapabilities(collectDeviceCapabilitySignals()),
   );
@@ -2150,6 +2181,45 @@ export default function App() {
   const isFullscreenModeLanding =
     isFullscreenCameraPhase && fullscreenGridMode === FULLSCREEN_LANDING_MODE;
   const fullscreenExperienceMode = getModeByFullscreenId(fullscreenGridMode);
+  const isMotionVisualizerMode =
+    isFullscreenCameraPhase &&
+    isMotionVisualizerEffect(fullscreenGridMode);
+  const motionVisualizerPalette = getMotionVisualizerPalette(
+    motionVisualizerState.palette,
+  );
+  const motionVisualizerRingLayers = useMemo(
+    () =>
+      FULLSCREEN_RING_LAYERS.map((layer, index) => ({
+        ...layer,
+        color:
+          motionVisualizerPalette.colors[
+            index % motionVisualizerPalette.colors.length
+          ],
+      })),
+    [motionVisualizerPalette],
+  );
+  const motionVisualizerTrailDurationMs =
+    getMotionVisualizerTrailDurationMs(motionVisualizerState);
+  const motionVisualizerPulseDurationMs =
+    getMotionVisualizerPulseDurationMs(motionVisualizerState);
+  const motionVisualizerStageStyle = isMotionVisualizerMode
+    ? {
+        "--visualizer-background": motionVisualizerPalette.background,
+        "--visualizer-line": motionVisualizerPalette.line,
+        "--visualizer-color-1": motionVisualizerPalette.colors[0],
+        "--visualizer-color-2": motionVisualizerPalette.colors[1],
+        "--visualizer-color-3": motionVisualizerPalette.colors[2],
+        "--visualizer-color-4": motionVisualizerPalette.colors[3],
+        "--visualizer-color-5": motionVisualizerPalette.colors[4],
+        "--visualizer-camera-opacity":
+          motionVisualizerState.cameraOpacity / 100,
+        "--visualizer-layer-opacity":
+          0.28 + motionVisualizerState.intensity * 0.0072,
+        "--visualizer-glow-strength": `${
+          2 + motionVisualizerState.intensity * 0.13
+        }px`,
+      }
+    : undefined;
   const isFullscreenBreakoutGridMode =
     fullscreenGridMode === "breakout" ||
     fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID;
@@ -2426,10 +2496,30 @@ export default function App() {
 
     const stageWidth = viewport.width;
     const stageHeight = viewport.height;
+    if (isMotionVisualizerMode) {
+      return {
+        left: 0,
+        top: 0,
+        width: stageWidth,
+        height: stageHeight,
+        style: {
+          left: "0px",
+          top: "0px",
+          width: `${stageWidth}px`,
+          height: `${stageHeight}px`,
+        },
+      };
+    }
     const aspectRatio =
       Number.isFinite(cameraAspectRatio) && cameraAspectRatio > 0 ? cameraAspectRatio : 4 / 3;
     return createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio);
-  }, [cameraAspectRatio, isFullscreenCameraPhase, viewport.height, viewport.width]);
+  }, [
+    cameraAspectRatio,
+    isFullscreenCameraPhase,
+    isMotionVisualizerMode,
+    viewport.height,
+    viewport.width,
+  ]);
   const fullscreenBrowserViewport = useMemo(() => {
     if (!isFullscreenCameraPhase) {
       return null;
@@ -2893,7 +2983,10 @@ export default function App() {
         }
         return {
           key: point.id,
-          color: BREAKOUT_BRICK_COLORS[index % BREAKOUT_BRICK_COLORS.length],
+          color:
+            motionVisualizerPalette.colors[
+              index % motionVisualizerPalette.colors.length
+            ],
           polygon,
         };
       })
@@ -2910,7 +3003,11 @@ export default function App() {
       width,
       height,
     };
-  }, [fullscreenCameraViewport, fullscreenTipPoints]);
+  }, [
+    fullscreenCameraViewport,
+    fullscreenTipPoints,
+    motionVisualizerPalette,
+  ]);
 
   const fullscreenBodySkeletonOverlay = useMemo(
     () =>
@@ -3479,6 +3576,21 @@ export default function App() {
 
   useEffect(() => {
     fullscreenGridModeRef.current = fullscreenGridMode;
+  }, [fullscreenGridMode]);
+
+  useEffect(() => {
+    if (
+      !isMotionVisualizerEffect(fullscreenGridMode) ||
+      motionVisualizerStateRef.current.effect === fullscreenGridMode
+    ) {
+      return;
+    }
+    const next = saveMotionVisualizerState({
+      ...motionVisualizerStateRef.current,
+      effect: fullscreenGridMode,
+    });
+    motionVisualizerStateRef.current = next;
+    setMotionVisualizerState(next);
   }, [fullscreenGridMode]);
 
   useEffect(() => {
@@ -4222,7 +4334,11 @@ export default function App() {
         x: point.x,
         y: point.y,
       }));
-    const pruned = pruneCursorTrail(fullscreenRingTrailRef.current, now);
+    const pruned = pruneCursorTrail(
+      fullscreenRingTrailRef.current,
+      now,
+      motionVisualizerTrailDurationMs,
+    );
     const elapsed = now - fullscreenRingTrailLastSampleAtRef.current;
 
     if (normalizedPoints.length === 0) {
@@ -4247,12 +4363,18 @@ export default function App() {
         },
       ],
       now,
+      motionVisualizerTrailDurationMs,
     );
     fullscreenRingTrailRef.current = nextTrail;
     setFullscreenRingTrail(nextTrail);
     setFullscreenRingTrailNow(now);
     return undefined;
-  }, [fullscreenGridMode, fullscreenIndexPoints, fullscreenRingTrail.length]);
+  }, [
+    fullscreenGridMode,
+    fullscreenIndexPoints,
+    fullscreenRingTrail.length,
+    motionVisualizerTrailDurationMs,
+  ]);
 
   useEffect(() => {
     if (fullscreenGridMode !== "rings" || fullscreenRingTrail.length === 0) {
@@ -4262,7 +4384,11 @@ export default function App() {
     let frameId = 0;
     const tick = () => {
       const now = performance.now();
-      const pruned = pruneCursorTrail(fullscreenRingTrailRef.current, now);
+      const pruned = pruneCursorTrail(
+        fullscreenRingTrailRef.current,
+        now,
+        motionVisualizerTrailDurationMs,
+      );
       fullscreenRingTrailRef.current = pruned;
       setFullscreenRingTrailNow(now);
       setFullscreenRingTrail((previous) => (previous.length === pruned.length ? previous : pruned));
@@ -4277,7 +4403,11 @@ export default function App() {
         window.cancelAnimationFrame(frameId);
       }
     };
-  }, [fullscreenGridMode, fullscreenRingTrail.length]);
+  }, [
+    fullscreenGridMode,
+    fullscreenRingTrail.length,
+    motionVisualizerTrailDurationMs,
+  ]);
 
   useEffect(() => {
     if (fullscreenGridMode !== "pulse" || !fullscreenCameraViewport) {
@@ -4290,7 +4420,11 @@ export default function App() {
     }
 
     const now = performance.now();
-    const pruned = prunePulseBursts(fullscreenPulseBurstsRef.current, now);
+    const pruned = prunePulseBursts(
+      fullscreenPulseBurstsRef.current,
+      now,
+      motionVisualizerPulseDurationMs,
+    );
     const nextBursts = [...pruned];
     const nextLastEmitById = { ...fullscreenPulseLastEmitByIdRef.current };
     const largestRingRadius =
@@ -4335,7 +4469,13 @@ export default function App() {
     setFullscreenPulseBursts(nextBursts);
     setFullscreenPulseNow(now);
     return undefined;
-  }, [fullscreenCameraViewport, fullscreenGridMode, fullscreenIndexPoints, fullscreenPulseBursts.length]);
+  }, [
+    fullscreenCameraViewport,
+    fullscreenGridMode,
+    fullscreenIndexPoints,
+    fullscreenPulseBursts.length,
+    motionVisualizerPulseDurationMs,
+  ]);
 
   useEffect(() => {
     if (fullscreenGridMode !== "pulse" || fullscreenPulseBursts.length === 0) {
@@ -4345,7 +4485,11 @@ export default function App() {
     let frameId = 0;
     const tick = () => {
       const now = performance.now();
-      const pruned = prunePulseBursts(fullscreenPulseBurstsRef.current, now);
+      const pruned = prunePulseBursts(
+        fullscreenPulseBurstsRef.current,
+        now,
+        motionVisualizerPulseDurationMs,
+      );
       fullscreenPulseBurstsRef.current = pruned;
       setFullscreenPulseNow(now);
       setFullscreenPulseBursts((previous) => (previous.length === pruned.length ? previous : pruned));
@@ -4360,7 +4504,11 @@ export default function App() {
         window.cancelAnimationFrame(frameId);
       }
     };
-  }, [fullscreenGridMode, fullscreenPulseBursts.length]);
+  }, [
+    fullscreenGridMode,
+    fullscreenPulseBursts.length,
+    motionVisualizerPulseDurationMs,
+  ]);
 
   useEffect(() => {
     if (fullscreenGridMode !== "tip-ripples") {
@@ -4562,6 +4710,24 @@ export default function App() {
           "button, a, input, select, textarea, summary, [role='button'], [role='link']",
         ),
       );
+    const publishMotionVisualizerFallbackPoint = (x, y) => {
+      if (
+        phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+        !isMotionVisualizerEffect(fullscreenGridModeRef.current)
+      ) {
+        return;
+      }
+      const point = {
+        id: "pointer",
+        handId: "pointer",
+        fingerName: "index",
+        label: "Pointer",
+        x: clampValue(x, 0, viewportRef.current.width),
+        y: clampValue(y, 0, viewportRef.current.height),
+      };
+      setFullscreenIndexPoints([point]);
+      setFullscreenTipPoints([point]);
+    };
     const updateFallbackPoint = (event) => {
       if (
         trackingRequestedRef.current ||
@@ -4581,6 +4747,7 @@ export default function App() {
         x: event.clientX,
         y: event.clientY,
       };
+      publishMotionVisualizerFallbackPoint(event.clientX, event.clientY);
       return true;
     };
     const handleFallbackPointerMove = (event) => {
@@ -4624,6 +4791,27 @@ export default function App() {
       };
     };
     const handleFallbackKeyDown = (event) => {
+      const shortcutIndex = Number.parseInt(event.key, 10) - 1;
+      if (
+        phaseRef.current === PHASES.FULLSCREEN_CAMERA &&
+        isMotionVisualizerEffect(fullscreenGridModeRef.current) &&
+        !isNativeControl(event.target) &&
+        shortcutIndex >= 0 &&
+        shortcutIndex < MOTION_VISUALIZER_EFFECTS.length
+      ) {
+        event.preventDefault();
+        const effect = MOTION_VISUALIZER_EFFECTS[shortcutIndex];
+        const next = saveMotionVisualizerState({
+          ...motionVisualizerStateRef.current,
+          effect: effect.id,
+        });
+        motionVisualizerStateRef.current = next;
+        setMotionVisualizerState(next);
+        fullscreenGridModeRef.current = effect.id;
+        setFullscreenGridMode(effect.id);
+        setMotionVisualizerStatus(`${effect.label} effect selected.`);
+        return;
+      }
       if (
         trackingRequestedRef.current ||
         phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
@@ -4657,6 +4845,7 @@ export default function App() {
           y: nextPoint.y,
         };
         cursorRef.current = nextPoint;
+        publishMotionVisualizerFallbackPoint(nextPoint.x, nextPoint.y);
         return;
       }
       if ((event.key === " " || event.key === "Enter") && !event.repeat) {
@@ -6611,8 +6800,12 @@ export default function App() {
     if (mode.entryKind === "fullscreen-mode" && mode.fullscreenMode) {
       beginProgressionSession(mode, activeLaunchContextRef.current);
       openFullscreenCameraScreen();
-      fullscreenGridModeRef.current = mode.fullscreenMode;
-      setFullscreenGridMode(mode.fullscreenMode);
+      const fullscreenMode =
+        mode.id === "visualizer"
+          ? motionVisualizerStateRef.current.effect
+          : mode.fullscreenMode;
+      fullscreenGridModeRef.current = fullscreenMode;
+      setFullscreenGridMode(fullscreenMode);
       return;
     }
 
@@ -6764,6 +6957,128 @@ export default function App() {
     setPreferences(normalizeUserPreferences(nextPreferences));
   }
 
+  function persistMotionVisualizerState(nextState) {
+    const normalized = saveMotionVisualizerState(nextState);
+    motionVisualizerStateRef.current = normalized;
+    setMotionVisualizerState(normalized);
+    if (
+      phaseRef.current === PHASES.FULLSCREEN_CAMERA &&
+      isMotionVisualizerEffect(fullscreenGridModeRef.current) &&
+      fullscreenGridModeRef.current !== normalized.effect
+    ) {
+      fullscreenGridModeRef.current = normalized.effect;
+      setFullscreenGridMode(normalized.effect);
+    }
+    return normalized;
+  }
+
+  function updateMotionVisualizerSettings(patch) {
+    const next = persistMotionVisualizerState(
+      normalizeMotionVisualizerState({
+        ...motionVisualizerStateRef.current,
+        ...patch,
+      }),
+    );
+    if (patch?.effect) {
+      const effect = MOTION_VISUALIZER_EFFECTS.find(
+        (candidate) => candidate.id === next.effect,
+      );
+      setMotionVisualizerStatus(
+        `${effect?.label ?? "Visualizer"} effect selected.`,
+      );
+    } else {
+      setMotionVisualizerStatus("Remix controls updated.");
+    }
+  }
+
+  function toggleCurrentMotionVisualizerFavorite() {
+    const current = motionVisualizerStateRef.current;
+    const wasFavorite = current.favoriteEffects.includes(current.effect);
+    persistMotionVisualizerState(
+      toggleMotionVisualizerFavorite(current, current.effect),
+    );
+    const effect = MOTION_VISUALIZER_EFFECTS.find(
+      (candidate) => candidate.id === current.effect,
+    );
+    setMotionVisualizerStatus(
+      wasFavorite
+        ? `${effect?.label ?? "Effect"} removed from favorites.`
+        : `${effect?.label ?? "Effect"} added to favorites.`,
+    );
+  }
+
+  function applySelectedMotionVisualizerPreset(presetId) {
+    const before = motionVisualizerStateRef.current;
+    const next = applyMotionVisualizerPreset(before, presetId);
+    persistMotionVisualizerState(next);
+    setMotionVisualizerStatus(
+      next === before ? "That saved look is unavailable." : "Look applied.",
+    );
+  }
+
+  function saveCurrentMotionVisualizerPreset() {
+    const next = createMotionVisualizerPreset(
+      motionVisualizerStateRef.current,
+    );
+    persistMotionVisualizerState(next);
+    setMotionVisualizerStatus(
+      `${next.savedPresets.at(-1)?.label ?? "Look"} saved on this device.`,
+    );
+  }
+
+  function deleteSelectedMotionVisualizerPreset(presetId) {
+    const current = motionVisualizerStateRef.current;
+    const exists = current.savedPresets.some(
+      (preset) => preset.id === presetId,
+    );
+    persistMotionVisualizerState(
+      deleteMotionVisualizerPreset(current, presetId),
+    );
+    setMotionVisualizerStatus(
+      exists ? "Saved look deleted." : "That saved look is unavailable.",
+    );
+  }
+
+  async function exportMotionVisualizerArtwork() {
+    try {
+      const {
+        createMotionVisualizerSnapshotFilename,
+        createMotionVisualizerSnapshotSvg,
+      } = await import("./motionVisualizerSnapshot.js");
+      const exportViewport = fullscreenCameraViewport ?? {
+        width: viewportRef.current.width,
+        height: viewportRef.current.height,
+      };
+      const svg = createMotionVisualizerSnapshotSvg({
+        settings: motionVisualizerStateRef.current,
+        width: exportViewport.width,
+        height: exportViewport.height,
+        indexPoints: fullscreenIndexPoints,
+        tipPoints: fullscreenTipPoints,
+      });
+      const url = URL.createObjectURL(
+        new Blob([svg], { type: "image/svg+xml;charset=utf-8" }),
+      );
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = createMotionVisualizerSnapshotFilename(
+        motionVisualizerStateRef.current.effect,
+      );
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setMotionVisualizerStatus(
+        "Artwork exported without camera imagery.",
+      );
+    } catch (error) {
+      appLog.warn("Could not export Motion Visualizer artwork", { error });
+      setMotionVisualizerStatus(
+        "Artwork export failed. Please try again.",
+      );
+    }
+  }
+
   function deleteAllLocalProductData() {
     const confirmed = window.confirm(
       "Delete saved settings, calibration, gesture personalization, and local records?",
@@ -6779,6 +7094,7 @@ export default function App() {
       window.localStorage.removeItem(SGM_STORAGE_KEY);
       window.localStorage.removeItem(CREATIVE_GALLERY_STORAGE_KEY);
       window.localStorage.removeItem(ARCADE_RUN_STORAGE_KEY);
+      window.localStorage.removeItem(MOTION_VISUALIZER_STORAGE_KEY);
       window.localStorage.removeItem(
         "motion-arcade.fingerprint-worlds.v1",
       );
@@ -6796,6 +7112,9 @@ export default function App() {
     transformRef.current = null;
     setHasSavedCalibration(false);
     setPreferences(normalizeUserPreferences());
+    const resetVisualizer = normalizeMotionVisualizerState();
+    motionVisualizerStateRef.current = resetVisualizer;
+    setMotionVisualizerState(resetVisualizer);
   }
 
   function openSandboxScreen() {
@@ -12438,7 +12757,10 @@ export default function App() {
           opacity,
         }}
       >
-        {getFullscreenRingLayersForHand(FULLSCREEN_RING_LAYERS, point.label).map((layer) => (
+        {getFullscreenRingLayersForHand(
+          motionVisualizerRingLayers,
+          point.label,
+        ).map((layer) => (
           <div
             key={`${keyPrefix}-${point.id}-${layer.color}`}
             className="fullscreen-camera-ring-layer"
@@ -12459,7 +12781,10 @@ export default function App() {
     }
 
     const elapsed = Math.max(0, fullscreenPulseNow - burst.startTime);
-    const progress = Math.min(1, elapsed / FULLSCREEN_PULSE_RING_DURATION_MS);
+    const progress = Math.min(
+      1,
+      elapsed / motionVisualizerPulseDurationMs,
+    );
     if (progress <= 0 || progress >= 1) {
       return null;
     }
@@ -12612,7 +12937,9 @@ export default function App() {
       const borderWidth = Math.min(strokeWidth, outerDiameter / 2);
       const contentDiameter = Math.max(0, outerDiameter - borderWidth * 2);
       const color =
-        FULLSCREEN_TIP_RIPPLE_COLORS[bandIndex % FULLSCREEN_TIP_RIPPLE_COLORS.length];
+        motionVisualizerPalette.colors[
+          bandIndex % motionVisualizerPalette.colors.length
+        ];
       bands.push({
         contentDiameter,
         outerDiameter,
@@ -13031,7 +13358,13 @@ export default function App() {
   if (isFullscreenCameraPhase) {
     return (
       <div className="app fullscreen-camera-app">
-        <div className="fullscreen-camera-stage" ref={cameraWrapRef}>
+        <div
+          className={`fullscreen-camera-stage ${
+            isMotionVisualizerMode ? "motion-visualizer-active" : ""
+          }`}
+          ref={cameraWrapRef}
+          style={motionVisualizerStageStyle}
+        >
           <WebcamBackground
             videoRef={videoRef}
             overlayCanvasRef={overlayCanvasRef}
@@ -13055,7 +13388,10 @@ export default function App() {
               onScrollOffsetChange={handleFullscreenModeLandingScrollOffsetChange}
             />
           ) : fullscreenGridMode === "hex" ? (
-            <div className="fullscreen-camera-hex-grid" style={fullscreenHexGridMetrics?.style ?? undefined}>
+            <div
+              className="fullscreen-camera-hex-grid motion-visualizer-layer"
+              style={fullscreenHexGridMetrics?.style ?? undefined}
+            >
               {fullscreenHexGridMetrics?.cells?.map((cell) => (
                 <div
                   key={`fullscreen-hex-cell-${cell.key}`}
@@ -13087,7 +13423,7 @@ export default function App() {
             </div>
           ) : fullscreenGridMode === "voronoi" ? (
             <svg
-              className="fullscreen-camera-voronoi"
+              className="fullscreen-camera-voronoi motion-visualizer-layer"
               style={fullscreenVoronoiMetrics?.style ?? undefined}
               viewBox={`0 0 ${fullscreenVoronoiMetrics?.width ?? 0} ${fullscreenVoronoiMetrics?.height ?? 0}`}
               preserveAspectRatio="none"
@@ -13103,7 +13439,7 @@ export default function App() {
             </svg>
           ) : fullscreenGridMode === "rings" ? (
             <div
-              className="fullscreen-camera-rings"
+              className="fullscreen-camera-rings motion-visualizer-layer"
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               {fullscreenRingTrail.map((snapshot, snapshotIndex) => {
@@ -13111,7 +13447,12 @@ export default function App() {
                 if (age < FULLSCREEN_RING_TRAIL_SAMPLE_INTERVAL_MS) {
                   return null;
                 }
-                const progress = 1 - Math.min(1, age / FULLSCREEN_RING_TRAIL_DURATION_MS);
+                const progress =
+                  1 -
+                  Math.min(
+                    1,
+                    age / motionVisualizerTrailDurationMs,
+                  );
                 if (progress <= 0) {
                   return null;
                 }
@@ -13129,7 +13470,7 @@ export default function App() {
             </div>
           ) : fullscreenGridMode === "pulse" ? (
             <div
-              className="fullscreen-camera-rings"
+              className="fullscreen-camera-rings motion-visualizer-layer"
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               {fullscreenPulseBursts.map((burst) =>
@@ -13141,7 +13482,7 @@ export default function App() {
             </div>
           ) : fullscreenGridMode === "tip-ripples" ? (
             <div
-              className="fullscreen-camera-rings"
+              className="fullscreen-camera-rings motion-visualizer-layer"
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               {fullscreenTipPoints.map((point) =>
@@ -13157,7 +13498,7 @@ export default function App() {
             </div>
           ) : fullscreenGridMode === "static" ? (
             <div
-              className="fullscreen-camera-rings"
+              className="fullscreen-camera-rings motion-visualizer-layer"
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               {fullscreenIndexPoints.map((point) =>
@@ -15060,7 +15401,12 @@ export default function App() {
               ) : null}
             </div>
           ) : (
-            <div className="fullscreen-camera-grid" style={fullscreenCameraGridMetrics?.style ?? undefined}>
+            <div
+              className={`fullscreen-camera-grid ${
+                isMotionVisualizerMode ? "motion-visualizer-layer" : ""
+              }`}
+              style={fullscreenCameraGridMetrics?.style ?? undefined}
+            >
               {fullscreenCameraGridMetrics?.outerRing?.map((cell) => (
                 <div
                   key={`fullscreen-grid-outer-${cell.key}`}
@@ -15084,6 +15430,34 @@ export default function App() {
               ))}
             </div>
           )}
+
+          {isMotionVisualizerMode ? (
+            <Suspense
+              fallback={
+                <div
+                  className="motion-visualizer-controls-loading"
+                  role="status"
+                >
+                  Opening remix controls…
+                </div>
+              }
+            >
+              <MotionVisualizerControls
+                collapsed={motionVisualizerControlsCollapsed}
+                onApplyPreset={applySelectedMotionVisualizerPreset}
+                onChange={updateMotionVisualizerSettings}
+                onCollapseChange={setMotionVisualizerControlsCollapsed}
+                onDeletePreset={deleteSelectedMotionVisualizerPreset}
+                onExport={exportMotionVisualizerArtwork}
+                onSavePreset={saveCurrentMotionVisualizerPreset}
+                onToggleFavorite={
+                  toggleCurrentMotionVisualizerFavorite
+                }
+                settings={motionVisualizerState}
+                statusMessage={motionVisualizerStatus}
+              />
+            </Suspense>
+          ) : null}
 
           {FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridMode) &&
           (fullscreenBodySkeletonOverlay?.people.length ||
@@ -15245,10 +15619,17 @@ export default function App() {
               <div className="fullscreen-camera-hud-bottom">
                 <span
                   className={`tracking-indicator fullscreen-camera-status ${
-                    fullscreenDetectedHandCount > 0 ? "ok" : "warn"
+                    fullscreenDetectedHandCount > 0 ||
+                    (isMotionVisualizerMode && !trackingRequested)
+                      ? "ok"
+                      : "warn"
                   }`}
                 >
-                  {fullscreenDetectedHandCount > 0 ? "Tracking ready" : "Show your hand"}
+                  {isMotionVisualizerMode && !trackingRequested
+                    ? "Pointer ready"
+                    : fullscreenDetectedHandCount > 0
+                      ? "Tracking ready"
+                      : "Show your hand"}
                   {debugEnabled
                     ? ` · Hands ${fullscreenDetectedHandCount} · Bodies ${fullscreenDetectedBodyCount} · Inference ${fps.toFixed(1)} FPS`
                     : ""}

@@ -19,7 +19,11 @@ test("fullscreen camera HUD keeps concise detection status at bottom left and ga
   const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
 
   assert.equal(source.includes('<span className="fullscreen-camera-chip">{cameraPanelTitle}</span>'), false);
-  assert.ok(source.includes('fullscreenDetectedHandCount > 0 ? "Tracking ready" : "Show your hand"'));
+  assert.match(
+    source,
+    /fullscreenDetectedHandCount > 0\s+\?\s+"Tracking ready"\s+:\s+"Show your hand"/,
+  );
+  assert.ok(source.includes('"Pointer ready"'));
   assert.ok(source.includes("{debugEnabled"));
   assert.ok(source.includes("Hands ${fullscreenDetectedHandCount}"));
   assert.ok(source.includes("Bodies ${fullscreenDetectedBodyCount}"));
