@@ -32,6 +32,23 @@ import {
   loadSavedJamLoop,
   saveJamLoop,
 } from "./circleOfFifthsLoops.js";
+import {
+  JAM_ARPEGGIO_OPTIONS,
+  JAM_CHORD_TIMBRES,
+  JAM_KEY_OPTIONS,
+  JAM_PROGRESSION_PRESETS,
+  JAM_SCALE_OPTIONS,
+  createJamSoundSignature,
+  getJamAllowedSegmentIds,
+  getJamArpeggioMode,
+  getJamArpeggioNoteIndex,
+  getJamArpeggioStepDurationMs,
+  getJamChordTimbre,
+  getJamDrumMixScale,
+  getJamProgression,
+  getJamProgressionPreset,
+  resolveJamKeyLockedSegment,
+} from "./circleOfFifthsStudio.js";
 import { loadUserPreferences } from "./userPreferences.js";
 import {
   adaptHandsForCamera,
@@ -92,6 +109,7 @@ export default function CircleOfFifthsPage() {
   const loopClockIntervalRef = useRef(0);
   const loopAutoStopTimerRef = useRef(0);
   const loopNameRef = useRef("Untitled loop");
+  const studioControlsRef = useRef(null);
 
   const [viewport, setViewport] = useState(() => ({
     width: typeof window === "undefined" ? 1280 : window.innerWidth,
@@ -121,6 +139,20 @@ export default function CircleOfFifthsPage() {
   const [loopStatus, setLoopStatus] = useState(
     "Record chord changes and drum-pad hits, then replay them as a repeating loop.",
   );
+  const [chordTimbreId, setChordTimbreId] = useState("warm-pad");
+  const [arpeggioMode, setArpeggioMode] = useState("off");
+  const [jamKeyId, setJamKeyId] = useState("C");
+  const [jamScaleId, setJamScaleId] = useState("major");
+  const [keyLockEnabled, setKeyLockEnabled] = useState(false);
+  const [progressionPresetId, setProgressionPresetId] = useState("pop-lift");
+  const [progressionStep, setProgressionStep] = useState(0);
+  const [drumsPlaying, setDrumsPlaying] = useState(true);
+  const [drumVolume, setDrumVolume] = useState(72);
+  const [drumMutes, setDrumMutes] = useState({
+    kick: false,
+    snare: false,
+    hat: false,
+  });
 
   const wheelLayout = useMemo(
     () => createCircleOfFifthsLayout(viewport.width, viewport.height),
@@ -133,6 +165,30 @@ export default function CircleOfFifthsPage() {
   const selectedBeat = useMemo(() => getDrumBeatPreset(selectedBeatId), [selectedBeatId]);
   const sliderRatio = useMemo(() => getSliderRatioFromDrumBpm(drumBpm), [drumBpm]);
   const loopSummary = useMemo(() => getJamLoopSummary(loopDraft), [loopDraft]);
+  const allowedSegmentIds = useMemo(
+    () => new Set(getJamAllowedSegmentIds(jamKeyId, jamScaleId)),
+    [jamKeyId, jamScaleId],
+  );
+  const progression = useMemo(
+    () => getJamProgression(progressionPresetId, jamKeyId),
+    [jamKeyId, progressionPresetId],
+  );
+  const selectedProgression = useMemo(
+    () => getJamProgressionPreset(progressionPresetId),
+    [progressionPresetId],
+  );
+
+  studioControlsRef.current = {
+    chordTimbreId,
+    arpeggioMode,
+    jamKeyId,
+    jamScaleId,
+    keyLockEnabled,
+    progression,
+    drumBpm,
+    drumVolume,
+    drumMutes,
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -289,7 +345,8 @@ export default function CircleOfFifthsPage() {
         pinchActiveRef.current = isPinching;
 
         const nextSegment = getSegmentAtPoint(nextPoint, wheelLayout);
-        syncInteractiveChord(nextSegment);
+        const playableSegment = syncInteractiveChord(nextSegment);
+        const keyLockedOut = Boolean(nextSegment && !playableSegment);
 
         const nextHoveredBeatId = getHoveredBeatId(nextPoint, beatButtonRefs.current);
         const nextSliderHovered = isPointInsideElement(nextPoint, bpmSliderTrackRef.current);
@@ -324,15 +381,17 @@ export default function CircleOfFifthsPage() {
         setHoveredBeatId(nextHoveredBeatId);
         setBpmSliderHovered(nextSliderHovered || bpmDragActiveRef.current);
         setStatusMessage(
-          nextSegment
-            ? `Hovering ${nextSegment.title}. The chord sustains until you glide to another slice.`
-            : bpmDragActiveRef.current
-              ? "Pinch and slide left or right to change the drum machine BPM."
-              : "Trace the wheel with your index finger to sustain major and minor chords.",
+          keyLockedOut
+            ? `${nextSegment.title} is outside the ${jamKeyId} ${jamScaleId} key lock. Choose a lit chord.`
+            : playableSegment
+              ? `Hovering ${playableSegment.title}. The chord sustains until you glide to another slice.`
+              : bpmDragActiveRef.current
+                ? "Pinch and slide left or right to change the drum machine BPM."
+                : "Trace the wheel with your index finger to sustain major and minor chords.",
         );
 
-        if (nextSegment) {
-          setLastChordTitle(nextSegment.title);
+        if (playableSegment) {
+          setLastChordTitle(playableSegment.title);
         }
       } catch (error) {
         cancelled = true;
@@ -365,11 +424,24 @@ export default function CircleOfFifthsPage() {
       }
       processingFrameRef.current = false;
     };
-  }, [preferences, sessionState, viewport.height, viewport.width, wheelLayout]);
+  }, [
+    jamKeyId,
+    jamScaleId,
+    preferences,
+    sessionState,
+    viewport.height,
+    viewport.width,
+    wheelLayout,
+  ]);
 
   useEffect(() => {
     const audioContext = audioContextRef.current;
-    if (sessionState !== "active" || !audioContext || audioContext.state !== "running") {
+    if (
+      sessionState !== "active" ||
+      !drumsPlaying ||
+      !audioContext ||
+      audioContext.state !== "running"
+    ) {
       stopDrumScheduler(drumSchedulerIntervalRef);
       return undefined;
     }
@@ -378,6 +450,10 @@ export default function CircleOfFifthsPage() {
       audioContext,
       beatId: selectedBeatId,
       bpm: drumBpm,
+      getDrumMixOptions: () => ({
+        mutedInstruments: studioControlsRef.current.drumMutes,
+        volumePercent: studioControlsRef.current.drumVolume,
+      }),
       drumSchedulerIntervalRef,
       drumTransportRef,
     });
@@ -385,7 +461,7 @@ export default function CircleOfFifthsPage() {
     return () => {
       stopDrumScheduler(drumSchedulerIntervalRef);
     };
-  }, [drumBpm, selectedBeatId, sessionState]);
+  }, [drumBpm, drumsPlaying, selectedBeatId, sessionState]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -551,12 +627,44 @@ export default function CircleOfFifthsPage() {
     }
   }
 
-  function syncInteractiveChord(segment, { record = true } = {}) {
+  function syncInteractiveChord(
+    segment,
+    { record = true, respectKeyLock = true, advanceGuide = true } = {},
+  ) {
+    const studioControls = studioControlsRef.current;
+    const playableSegment = respectKeyLock
+      ? resolveJamKeyLockedSegment(segment, {
+          enabled: studioControls.keyLockEnabled,
+          keyId: studioControls.jamKeyId,
+          scaleId: studioControls.jamScaleId,
+        })
+      : segment;
     const previousSegmentId = activeChordRef.current?.segmentId ?? null;
-    syncContinuousChord(audioContextRef.current, activeChordRef, segment);
+    syncContinuousChord(audioContextRef.current, activeChordRef, playableSegment, {
+      timbreId: studioControls.chordTimbreId,
+      arpeggioMode: studioControls.arpeggioMode,
+      bpm: studioControls.drumBpm,
+    });
     const nextSegmentId = activeChordRef.current?.segmentId ?? null;
-    if (!record || previousSegmentId === nextSegmentId) {
-      return;
+    if (previousSegmentId === nextSegmentId) {
+      return playableSegment;
+    }
+
+    if (advanceGuide && nextSegmentId) {
+      setProgressionStep((currentStep) => {
+        const currentProgression = studioControlsRef.current.progression;
+        if (
+          currentProgression.length === 0 ||
+          currentProgression[currentStep]?.segment.id !== nextSegmentId
+        ) {
+          return currentStep;
+        }
+        return (currentStep + 1) % currentProgression.length;
+      });
+    }
+
+    if (!record) {
+      return playableSegment;
     }
 
     if (nextSegmentId) {
@@ -564,12 +672,13 @@ export default function CircleOfFifthsPage() {
         type: "chord-on",
         segmentId: nextSegmentId,
       });
-      return;
+      return playableSegment;
     }
 
     recordLoopEvent({
       type: "chord-off",
     });
+    return playableSegment;
   }
 
   function recordLoopEvent(event) {
@@ -789,20 +898,31 @@ export default function CircleOfFifthsPage() {
       if (!segment) {
         return;
       }
-      syncInteractiveChord(segment, { record: false });
+      syncInteractiveChord(segment, {
+        record: false,
+        respectKeyLock: false,
+        advanceGuide: false,
+      });
       setHoveredSegmentId(segment.id);
       setLastChordTitle(segment.title);
       return;
     }
 
     if (event.type === "chord-off") {
-      syncInteractiveChord(null, { record: false });
+      syncInteractiveChord(null, {
+        record: false,
+        respectKeyLock: false,
+        advanceGuide: false,
+      });
       setHoveredSegmentId(null);
       return;
     }
 
     if (event.type === "drum-hit") {
-      playDrumInstrument(audioContextRef.current, event.instrument);
+      playDrumInstrument(audioContextRef.current, event.instrument, undefined, {
+        mutedInstruments: studioControlsRef.current.drumMutes,
+        volumePercent: studioControlsRef.current.drumVolume,
+      });
     }
   }
 
@@ -936,7 +1056,15 @@ export default function CircleOfFifthsPage() {
     if (loopPlaybackRef.current.active) {
       stopLoopPlayback();
     }
-    playDrumInstrument(audioContext, instrument);
+    const mixScale = getJamDrumMixScale(instrument, drumVolume, drumMutes);
+    if (mixScale === 0) {
+      setLoopStatus(`${LOOP_DRUM_LABELS[instrument]} is muted. Unmute it to play or record.`);
+      return;
+    }
+    playDrumInstrument(audioContext, instrument, undefined, {
+      mutedInstruments: drumMutes,
+      volumePercent: drumVolume,
+    });
     recordLoopEvent({
       type: "drum-hit",
       instrument,
@@ -953,6 +1081,18 @@ export default function CircleOfFifthsPage() {
       return;
     }
 
+    const playableSegment = resolveJamKeyLockedSegment(segment, {
+      enabled: keyLockEnabled,
+      keyId: jamKeyId,
+      scaleId: jamScaleId,
+    });
+    if (!playableSegment) {
+      setStatusMessage(
+        `${segment.title} is outside the ${jamKeyId} ${jamScaleId} key lock. Choose a lit chord.`,
+      );
+      return;
+    }
+
     if (loopPlaybackRef.current.active) {
       stopLoopPlayback();
     }
@@ -961,10 +1101,10 @@ export default function CircleOfFifthsPage() {
       directChordReleaseTimerRef.current = 0;
     }
     directInputActiveRef.current = true;
-    syncInteractiveChord(segment);
-    setHoveredSegmentId(segment.id);
-    setLastChordTitle(segment.title);
-    setStatusMessage(`Playing ${segment.title} with pointer or keyboard control.`);
+    syncInteractiveChord(playableSegment);
+    setHoveredSegmentId(playableSegment.id);
+    setLastChordTitle(playableSegment.title);
+    setStatusMessage(`Playing ${playableSegment.title} with pointer or keyboard control.`);
   }
 
   function endDirectChord() {
@@ -991,6 +1131,44 @@ export default function CircleOfFifthsPage() {
       directChordReleaseTimerRef.current = 0;
       endDirectChord();
     }, 700);
+  }
+
+  function releaseChordForSoundChange() {
+    if (!activeChordRef.current) {
+      return;
+    }
+    syncInteractiveChord(null);
+    directInputActiveRef.current = false;
+    setHoveredSegmentId(null);
+  }
+
+  function selectProgression(presetId) {
+    const preset = getJamProgressionPreset(presetId);
+    releaseChordForSoundChange();
+    setProgressionPresetId(preset.id);
+    setJamScaleId(preset.scaleId);
+    setKeyLockEnabled(true);
+    setProgressionStep(0);
+    setStatusMessage(
+      `${preset.label} loaded in ${jamKeyId} ${preset.scaleId}. The highlighted chord is next.`,
+    );
+  }
+
+  function selectJamScale(scaleId) {
+    const nextPreset =
+      JAM_PROGRESSION_PRESETS.find((preset) => preset.scaleId === scaleId) ??
+      JAM_PROGRESSION_PRESETS[0];
+    releaseChordForSoundChange();
+    setJamScaleId(scaleId);
+    setProgressionPresetId(nextPreset.id);
+    setProgressionStep(0);
+  }
+
+  function toggleDrumMute(instrument) {
+    setDrumMutes((current) => ({
+      ...current,
+      [instrument]: !current[instrument],
+    }));
   }
 
   const sessionAnnouncement =
@@ -1112,9 +1290,158 @@ export default function CircleOfFifthsPage() {
           ×
         </button>
         <p className="circle-fifths-panel-label" id="circle-fifths-drums-title">
-          Drum machine
+          Jam controls
         </p>
-        <p className="circle-fifths-current-chord">{selectedBeat.label}</p>
+        <section
+          aria-labelledby="circle-fifths-sound-title"
+          className="circle-fifths-sound-controls"
+        >
+          <div className="circle-fifths-section-heading">
+            <div>
+              <h2 id="circle-fifths-sound-title">Chord palette</h2>
+              <p>Shape the wheel, then stay in key with an optional chord guide.</p>
+            </div>
+            <button
+              aria-pressed={keyLockEnabled}
+              className={keyLockEnabled ? "selected" : "secondary"}
+              onClick={() => {
+                releaseChordForSoundChange();
+                setKeyLockEnabled((enabled) => !enabled);
+              }}
+              type="button"
+            >
+              Key lock {keyLockEnabled ? "on" : "off"}
+            </button>
+          </div>
+          <div className="circle-fifths-select-grid">
+            <label>
+              <span>Timbre</span>
+              <select
+                onChange={(event) => {
+                  releaseChordForSoundChange();
+                  setChordTimbreId(event.target.value);
+                }}
+                value={chordTimbreId}
+              >
+                {JAM_CHORD_TIMBRES.map((timbre) => (
+                  <option key={timbre.id} value={timbre.id}>
+                    {timbre.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Arpeggio</span>
+              <select
+                onChange={(event) => {
+                  releaseChordForSoundChange();
+                  setArpeggioMode(event.target.value);
+                }}
+                value={arpeggioMode}
+              >
+                {JAM_ARPEGGIO_OPTIONS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Key</span>
+              <select
+                onChange={(event) => {
+                  releaseChordForSoundChange();
+                  setJamKeyId(event.target.value);
+                  setProgressionStep(0);
+                }}
+                value={jamKeyId}
+              >
+                {JAM_KEY_OPTIONS.map((keyOption) => (
+                  <option key={keyOption.id} value={keyOption.id}>
+                    {keyOption.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Scale</span>
+              <select
+                onChange={(event) => selectJamScale(event.target.value)}
+                value={jamScaleId}
+              >
+                {JAM_SCALE_OPTIONS.map((scale) => (
+                  <option key={scale.id} value={scale.id}>
+                    {scale.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className="circle-fifths-control-hint">
+            {getJamChordTimbre(chordTimbreId).description}{" "}
+            {getJamArpeggioMode(arpeggioMode).description}
+          </p>
+          <div
+            aria-label="Chord progression presets"
+            className="circle-fifths-preset-tabs"
+            role="group"
+          >
+            {JAM_PROGRESSION_PRESETS.map((preset) => (
+              <button
+                aria-pressed={progressionPresetId === preset.id}
+                className={progressionPresetId === preset.id ? "selected" : "secondary"}
+                key={preset.id}
+                onClick={() => selectProgression(preset.id)}
+                type="button"
+              >
+                <span>{preset.label}</span>
+                <small>{preset.description}</small>
+              </button>
+            ))}
+          </div>
+          <div className="circle-fifths-progression-heading">
+            <span>
+              {jamKeyId} {selectedProgression.description}
+            </span>
+            <span aria-live="polite">
+              Next: {progression[progressionStep]?.segment.label ?? "Choose a chord"}
+            </span>
+          </div>
+          <ol aria-label={`${selectedProgression.label} chord guide`}>
+            {progression.map((entry, index) => {
+              const isNext = index === progressionStep;
+              return (
+                <li key={`${entry.roman}-${entry.segment.id}`}>
+                  <button
+                    aria-current={isNext ? "step" : undefined}
+                    className={isNext ? "next" : ""}
+                    disabled={sessionState !== "active"}
+                    onClick={() => playDirectChordBriefly(entry.segment)}
+                    type="button"
+                  >
+                    <span>{entry.segment.label}</span>
+                    <small>{entry.roman}</small>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+
+        <div className="circle-fifths-drum-heading">
+          <div>
+            <p className="circle-fifths-panel-label">Drum machine</p>
+            <p className="circle-fifths-current-chord">{selectedBeat.label}</p>
+          </div>
+          <button
+            aria-pressed={drumsPlaying}
+            disabled={sessionState !== "active"}
+            onClick={() => setDrumsPlaying((playing) => !playing)}
+            type="button"
+          >
+            {drumsPlaying ? "Pause groove" : "Start groove"}
+          </button>
+        </div>
         <p className="circle-fifths-copy compact">
           Pinch or press a beat to switch the backing groove. Pinch and slide the BPM rail, or use
           its keyboard controls, to change tempo.
@@ -1146,6 +1473,36 @@ export default function CircleOfFifthsPage() {
               </button>
             );
           })}
+        </div>
+        <div className="circle-fifths-drum-mix">
+          <div aria-label="Drum mutes" className="circle-fifths-mute-buttons" role="group">
+            {JAM_LOOP_DRUM_INSTRUMENTS.map((instrument) => (
+              <button
+                aria-pressed={drumMutes[instrument]}
+                className={drumMutes[instrument] ? "muted" : "secondary"}
+                key={instrument}
+                onClick={() => toggleDrumMute(instrument)}
+                type="button"
+              >
+                {LOOP_DRUM_LABELS[instrument]} {drumMutes[instrument] ? "muted" : "on"}
+              </button>
+            ))}
+          </div>
+          <label className="circle-fifths-volume-control">
+            <span>
+              <strong>Drum mix</strong>
+              <output>{drumVolume}%</output>
+            </span>
+            <input
+              aria-label={`Drum mix volume, ${drumVolume} percent`}
+              max="100"
+              min="0"
+              onChange={(event) => setDrumVolume(Number(event.target.value))}
+              step="5"
+              type="range"
+              value={drumVolume}
+            />
+          </label>
         </div>
         <div className="circle-fifths-bpm-block">
           <div className="circle-fifths-bpm-meta">
@@ -1209,13 +1566,13 @@ export default function CircleOfFifthsPage() {
             {JAM_LOOP_DRUM_INSTRUMENTS.map((instrument, index) => (
               <button
                 aria-keyshortcuts={`${index + 1}`}
-                disabled={sessionState !== "active"}
+                disabled={sessionState !== "active" || drumMutes[instrument]}
                 key={instrument}
                 onClick={() => triggerLoopDrum(instrument)}
                 type="button"
               >
                 <span>{LOOP_DRUM_LABELS[instrument]}</span>
-                <small>Key {index + 1}</small>
+                <small>{drumMutes[instrument] ? "Muted" : `Key ${index + 1}`}</small>
               </button>
             ))}
           </div>
@@ -1399,13 +1756,18 @@ export default function CircleOfFifthsPage() {
             centerAngle,
           );
           const isHovered = hoveredSegmentId === segment.id;
+          const isKeyAllowed = !keyLockEnabled || allowedSegmentIds.has(segment.id);
 
           return (
             <g
-              aria-disabled={sessionState !== "active"}
-              aria-label={`Play ${segment.title} chord`}
+              aria-disabled={sessionState !== "active" || !isKeyAllowed}
+              aria-label={`Play ${segment.title} chord${
+                isKeyAllowed ? "" : `, outside ${jamKeyId} ${jamScaleId}`
+              }`}
               aria-pressed={isHovered}
-              className="circle-fifths-segment-control"
+              className={`circle-fifths-segment-control ${
+                isKeyAllowed ? "" : "key-locked"
+              }`}
               key={segment.id}
               onBlur={endDirectChord}
               onClick={(event) => {
@@ -1428,12 +1790,18 @@ export default function CircleOfFifthsPage() {
               onPointerCancel={endDirectChord}
               onPointerDown={(event) => {
                 event.preventDefault();
+                if (!isKeyAllowed) {
+                  setStatusMessage(
+                    `${segment.title} is outside the ${jamKeyId} ${jamScaleId} key lock. Choose a lit chord.`,
+                  );
+                  return;
+                }
                 event.currentTarget.setPointerCapture?.(event.pointerId);
                 beginDirectChord(segment);
               }}
               onPointerUp={endDirectChord}
               role="button"
-              tabIndex={sessionState === "active" ? 0 : -1}
+              tabIndex={sessionState === "active" && isKeyAllowed ? 0 : -1}
             >
               <path
                 className={`circle-fifths-segment ${segment.ring} ${isHovered ? "hovered" : ""}`}
@@ -1614,27 +1982,28 @@ function downloadTextFile(content, filename, type) {
   return true;
 }
 
-function syncContinuousChord(audioContext, activeChordRef, segment) {
+function syncContinuousChord(audioContext, activeChordRef, segment, soundOptions = {}) {
   if (!audioContext) {
     return;
   }
 
   const activeChord = activeChordRef.current;
+  const soundSignature = createJamSoundSignature(soundOptions);
   if (!segment) {
     releaseActiveChord(activeChord, audioContext.currentTime);
     activeChordRef.current = null;
     return;
   }
 
-  if (activeChord?.segmentId === segment.id) {
+  if (activeChord?.segmentId === segment.id && activeChord.soundSignature === soundSignature) {
     return;
   }
 
   releaseActiveChord(activeChord, audioContext.currentTime);
-  activeChordRef.current = startContinuousChord(audioContext, segment);
+  activeChordRef.current = startContinuousChord(audioContext, segment, soundOptions);
 }
 
-function startContinuousChord(audioContext, segment) {
+function startContinuousChord(audioContext, segment, soundOptions = {}) {
   if (!audioContext || !segment) {
     return null;
   }
@@ -1645,23 +2014,28 @@ function startContinuousChord(audioContext, segment) {
   }
 
   const now = audioContext.currentTime;
+  const timbre = getJamChordTimbre(soundOptions.timbreId);
+  const arpeggio = getJamArpeggioMode(soundOptions.arpeggioMode);
+  const soundSignature = createJamSoundSignature(soundOptions);
   const masterGain = audioContext.createGain();
   const lowPass = audioContext.createBiquadFilter();
   lowPass.type = "lowpass";
-  lowPass.frequency.setValueAtTime(1800, now);
-  lowPass.Q.setValueAtTime(0.9, now);
+  lowPass.frequency.setValueAtTime(timbre.filterFrequency, now);
+  lowPass.Q.setValueAtTime(timbre.filterQ, now);
 
   masterGain.gain.setValueAtTime(0.0001, now);
-  masterGain.gain.exponentialRampToValueAtTime(0.18, now + 0.08);
+  masterGain.gain.exponentialRampToValueAtTime(
+    timbre.masterGain,
+    now + timbre.attackSeconds,
+  );
 
   masterGain.connect(lowPass);
   lowPass.connect(audioContext.destination);
 
-  const voices = frequencies.map((frequency, index) => {
+  const createSustainedVoice = (frequency, index) => {
     const oscillator = audioContext.createOscillator();
     const voiceGain = audioContext.createGain();
-    oscillator.type =
-      index === 0 ? "sine" : index === frequencies.length - 1 ? "triangle" : "sawtooth";
+    oscillator.type = timbre.oscillatorTypes[index % timbre.oscillatorTypes.length];
     oscillator.frequency.setValueAtTime(frequency, now);
     oscillator.detune.setValueAtTime(index === 1 ? 4 : index === 2 ? -4 : 0, now);
     voiceGain.gain.setValueAtTime(
@@ -1672,13 +2046,44 @@ function startContinuousChord(audioContext, segment) {
     voiceGain.connect(masterGain);
     oscillator.start(now);
     return { oscillator, voiceGain };
-  });
+  };
+
+  const voices = arpeggio.id === "off" ? frequencies.map(createSustainedVoice) : [];
+  let arpeggioIntervalId = 0;
+  if (arpeggio.id !== "off") {
+    const stepDurationMs = getJamArpeggioStepDurationMs(soundOptions.bpm, arpeggio.id);
+    let step = 0;
+    const playArpeggioStep = () => {
+      const noteIndex = getJamArpeggioNoteIndex(step, frequencies.length, arpeggio.id);
+      const frequency = frequencies[noteIndex];
+      const startAt = audioContext.currentTime;
+      const oscillator = audioContext.createOscillator();
+      const noteGain = audioContext.createGain();
+      const gateSeconds = Math.max(0.06, (stepDurationMs / 1000) * 0.72);
+      oscillator.type = timbre.oscillatorTypes[noteIndex % timbre.oscillatorTypes.length];
+      oscillator.frequency.setValueAtTime(frequency, startAt);
+      noteGain.gain.setValueAtTime(0.0001, startAt);
+      noteGain.gain.exponentialRampToValueAtTime(0.82, startAt + 0.012);
+      noteGain.gain.exponentialRampToValueAtTime(0.0001, startAt + gateSeconds);
+      oscillator.connect(noteGain);
+      noteGain.connect(masterGain);
+      oscillator.start(startAt);
+      oscillator.stop(startAt + gateSeconds + 0.02);
+      cleanupOneShotVoice(oscillator, noteGain);
+      step += 1;
+    };
+    playArpeggioStep();
+    arpeggioIntervalId = window.setInterval(playArpeggioStep, stepDurationMs);
+  }
 
   return {
     segmentId: segment.id,
+    soundSignature,
+    releaseSeconds: timbre.releaseSeconds,
     masterGain,
     lowPass,
     voices,
+    arpeggioIntervalId,
   };
 }
 
@@ -1689,6 +2094,12 @@ function releaseActiveChord(activeChord, releaseAt = 0) {
 
   const now = Number.isFinite(releaseAt) ? releaseAt : 0;
   const safeReleaseAt = Math.max(now, 0);
+  const releaseSeconds = Math.max(0.04, activeChord.releaseSeconds ?? 0.12);
+
+  if (activeChord.arpeggioIntervalId) {
+    window.clearInterval(activeChord.arpeggioIntervalId);
+    activeChord.arpeggioIntervalId = 0;
+  }
 
   try {
     activeChord.masterGain.gain.cancelScheduledValues(safeReleaseAt);
@@ -1696,14 +2107,17 @@ function releaseActiveChord(activeChord, releaseAt = 0) {
       Math.max(activeChord.masterGain.gain.value, 0.0001),
       safeReleaseAt,
     );
-    activeChord.masterGain.gain.exponentialRampToValueAtTime(0.0001, safeReleaseAt + 0.12);
+    activeChord.masterGain.gain.exponentialRampToValueAtTime(
+      0.0001,
+      safeReleaseAt + releaseSeconds,
+    );
   } catch (error) {
     pageLog.warn("Failed to schedule chord release cleanly", { error });
   }
 
   activeChord.voices?.forEach(({ oscillator, voiceGain }) => {
     try {
-      oscillator.stop(safeReleaseAt + 0.16);
+      oscillator.stop(safeReleaseAt + releaseSeconds + 0.04);
       oscillator.addEventListener(
         "ended",
         () => {
@@ -1720,7 +2134,7 @@ function releaseActiveChord(activeChord, releaseAt = 0) {
   window.setTimeout(() => {
     activeChord.masterGain.disconnect();
     activeChord.lowPass.disconnect();
-  }, 320);
+  }, Math.ceil((releaseSeconds + 0.2) * 1000));
 }
 
 function persistAutostartIntent() {
@@ -1759,6 +2173,7 @@ function startDrumScheduler({
   audioContext,
   beatId,
   bpm,
+  getDrumMixOptions,
   drumSchedulerIntervalRef,
   drumTransportRef,
 }) {
@@ -1777,7 +2192,7 @@ function startDrumScheduler({
   const schedule = () => {
     while (drumTransportRef.current.nextNoteTime < audioContext.currentTime + lookAheadSeconds) {
       const { stepIndex, nextNoteTime } = drumTransportRef.current;
-      scheduleDrumStep(audioContext, beat, stepIndex, nextNoteTime);
+      scheduleDrumStep(audioContext, beat, stepIndex, nextNoteTime, getDrumMixOptions());
       drumTransportRef.current.stepIndex = (stepIndex + 1) % DRUM_STEPS_PER_BAR;
       drumTransportRef.current.nextNoteTime += sixteenthNoteSeconds;
     }
@@ -1794,33 +2209,43 @@ function stopDrumScheduler(drumSchedulerIntervalRef) {
   }
 }
 
-function scheduleDrumStep(audioContext, beat, stepIndex, time) {
+function scheduleDrumStep(audioContext, beat, stepIndex, time, mixOptions) {
   if (beat.steps.kick[stepIndex]) {
-    playKick(audioContext, time);
+    playDrumInstrument(audioContext, "kick", time, mixOptions);
   }
   if (beat.steps.snare[stepIndex]) {
-    playSnare(audioContext, time);
+    playDrumInstrument(audioContext, "snare", time, mixOptions);
   }
   if (beat.steps.hat[stepIndex]) {
-    playHat(audioContext, time);
+    playDrumInstrument(audioContext, "hat", time, mixOptions);
   }
 }
 
-function playDrumInstrument(audioContext, instrument, time = audioContext?.currentTime) {
+function playDrumInstrument(
+  audioContext,
+  instrument,
+  time = audioContext?.currentTime,
+  { mutedInstruments = {}, volumePercent = 72 } = {},
+) {
   if (!audioContext || !Number.isFinite(time)) {
     return;
   }
 
+  const mixScale = getJamDrumMixScale(instrument, volumePercent, mutedInstruments);
+  if (mixScale <= 0) {
+    return;
+  }
+
   if (instrument === "kick") {
-    playKick(audioContext, time);
+    playKick(audioContext, time, mixScale);
   } else if (instrument === "snare") {
-    playSnare(audioContext, time);
+    playSnare(audioContext, time, mixScale);
   } else if (instrument === "hat") {
-    playHat(audioContext, time);
+    playHat(audioContext, time, mixScale);
   }
 }
 
-function playKick(audioContext, time) {
+function playKick(audioContext, time, mixScale) {
   const oscillator = audioContext.createOscillator();
   const gain = audioContext.createGain();
 
@@ -1828,7 +2253,7 @@ function playKick(audioContext, time) {
   oscillator.frequency.setValueAtTime(150, time);
   oscillator.frequency.exponentialRampToValueAtTime(46, time + 0.14);
   gain.gain.setValueAtTime(0.0001, time);
-  gain.gain.exponentialRampToValueAtTime(0.75, time + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.75 * mixScale, time + 0.008);
   gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.18);
 
   oscillator.connect(gain);
@@ -1838,7 +2263,7 @@ function playKick(audioContext, time) {
   cleanupOneShotVoice(oscillator, gain);
 }
 
-function playSnare(audioContext, time) {
+function playSnare(audioContext, time, mixScale) {
   const noise = audioContext.createBufferSource();
   const noiseFilter = audioContext.createBiquadFilter();
   const noiseGain = audioContext.createGain();
@@ -1849,13 +2274,13 @@ function playSnare(audioContext, time) {
   noiseFilter.type = "highpass";
   noiseFilter.frequency.setValueAtTime(1200, time);
   noiseGain.gain.setValueAtTime(0.0001, time);
-  noiseGain.gain.exponentialRampToValueAtTime(0.38, time + 0.005);
+  noiseGain.gain.exponentialRampToValueAtTime(0.38 * mixScale, time + 0.005);
   noiseGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.12);
 
   oscillator.type = "triangle";
   oscillator.frequency.setValueAtTime(180, time);
   toneGain.gain.setValueAtTime(0.0001, time);
-  toneGain.gain.exponentialRampToValueAtTime(0.22, time + 0.01);
+  toneGain.gain.exponentialRampToValueAtTime(0.22 * mixScale, time + 0.01);
   toneGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.1);
 
   noise.connect(noiseFilter);
@@ -1874,7 +2299,7 @@ function playSnare(audioContext, time) {
   cleanupOneShotVoice(oscillator, toneGain);
 }
 
-function playHat(audioContext, time) {
+function playHat(audioContext, time, mixScale) {
   const noise = audioContext.createBufferSource();
   const bandpass = audioContext.createBiquadFilter();
   const highpass = audioContext.createBiquadFilter();
@@ -1887,7 +2312,7 @@ function playHat(audioContext, time) {
   highpass.type = "highpass";
   highpass.frequency.setValueAtTime(7000, time);
   gain.gain.setValueAtTime(0.0001, time);
-  gain.gain.exponentialRampToValueAtTime(0.14, time + 0.003);
+  gain.gain.exponentialRampToValueAtTime(0.14 * mixScale, time + 0.003);
   gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.05);
 
   noise.connect(bandpass);
