@@ -1611,6 +1611,14 @@ html[data-mirror-camera="false"] .circle-fifths-video {
   top: 18px;
 }
 
+.fullscreen-camera-finger-pong-scoreboard .pressure {
+  background: rgba(255, 202, 94, 0.16);
+  border: 1px solid rgba(255, 224, 145, 0.34);
+  border-radius: 999px;
+  color: #fff0bc;
+  padding: 2px 8px;
+}
+
 .fullscreen-camera-finger-pong-legend {
   bottom: 18px;
   font-size: 0.82rem;

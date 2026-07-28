@@ -61,10 +61,10 @@ import {
 import { selectBreakoutCoopSupportHand } from "./fullscreenBreakoutCoopInput.js";
 import {
   FINGER_PONG_COUNTDOWN_MS,
-  FINGER_PONG_MAX_SCORE,
   createFingerPongGame,
   stepFingerPongGame,
 } from "./fingerPongGame.js";
+import { getFingerPongMatchUi } from "./fingerPongUi.js";
 import {
   createFullscreenHandBounceDailyGame,
   createFullscreenHandBounceGame,
@@ -2149,6 +2149,9 @@ export default function App() {
     isFullscreenCameraPhase &&
     fullscreenGridMode === "finger-pong" &&
     Boolean(fullscreenFingerPongState);
+  const fullscreenFingerPongMatchUi = getFingerPongMatchUi(
+    fullscreenFingerPongState,
+  );
   const isFullscreenFruitNinjaMode =
     isFullscreenCameraPhase &&
     fullscreenGridMode === "fruit-ninja" &&
@@ -13461,15 +13464,23 @@ export default function App() {
                 }}
               />
               <div className="fullscreen-camera-finger-pong-scoreboard">
-                <span>Score {fullscreenFingerPongState?.score ?? 0}</span>
-                <span>Rally {fullscreenFingerPongState?.rallyCount ?? 0}</span>
-                <span>Best {fullscreenFingerPongState?.bestRally ?? 0}</span>
-                <span>Misses {fullscreenFingerPongState?.opponentScore ?? 0}</span>
+                <span>You {fullscreenFingerPongMatchUi.playerScore}</span>
+                <span>
+                  Opponent {fullscreenFingerPongMatchUi.opponentScore}
+                </span>
+                <span>Rally {fullscreenFingerPongMatchUi.rallyCount}</span>
+                <span>Best {fullscreenFingerPongMatchUi.bestRally}</span>
+                {fullscreenFingerPongMatchUi.pressureLabel ? (
+                  <strong className="pressure">
+                    {fullscreenFingerPongMatchUi.pressureLabel}
+                  </strong>
+                ) : null}
               </div>
               <div className="fullscreen-camera-finger-pong-legend">
-                <span>Horizontal fingertip steers</span>
+                <span>{fullscreenFingerPongMatchUi.serverLabel}</span>
+                <span>Move sideways to steer</span>
                 <span>Edge hits bend returns</span>
-                <span>First to {FINGER_PONG_MAX_SCORE}</span>
+                <span>{fullscreenFingerPongMatchUi.rulesLabel}</span>
               </div>
               {isFullscreenFingerPongMode &&
               fullscreenFingerPongState?.status === "countdown" &&
