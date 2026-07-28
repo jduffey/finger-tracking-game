@@ -10,6 +10,7 @@ import {
   formatModeMetadata,
   getHomeSections,
   getLibraryModes,
+  selectContinueMode,
   selectDailyChallengeMode,
   selectQuickPlayMode,
 } from "../src/productHomeModel.js";
@@ -92,6 +93,14 @@ test("daily challenge is stable within a day and rotates across dates", () => {
   assert.equal(first.id, sameDay.id);
   assert.notEqual(first.id, nextDay.id);
   assert.equal(first.area, PRODUCT_AREAS.PLAY);
+});
+
+test("continue ignores shell routes and returns the newest playable experience", () => {
+  assert.equal(
+    selectContinueMode(["home", "tracking-setup", "sky-patrol"])?.id,
+    "sky-patrol",
+  );
+  assert.equal(selectContinueMode(["home", "tracking-setup"]), null);
 });
 
 test("mode metadata is concise and omits unavailable fields", () => {

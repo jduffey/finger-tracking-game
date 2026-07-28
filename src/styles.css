@@ -415,7 +415,7 @@ body {
   height: 100dvh;
   overflow: hidden;
   position: relative;
-  width: 100vw;
+  width: 100%;
 }
 
 .camera-video,
@@ -6127,6 +6127,14 @@ button:disabled {
       max(8px, env(safe-area-inset-right))
       max(8px, env(safe-area-inset-bottom))
       max(8px, env(safe-area-inset-left));
+  }
+
+  .app.fullscreen-camera-app {
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+    padding: 0;
   }
 
   .top-bar {

@@ -253,6 +253,7 @@ import ExperienceOverlay from "./components/ExperienceOverlay.jsx";
 import { createGestureEngine } from "./gestures/gestureEngine.js";
 import {
   APP_PHASES,
+  PRODUCT_AREAS,
   TRACKING_PROFILES,
   getModeByFullscreenId,
   getModeById,
@@ -287,6 +288,7 @@ import {
   createSpatialMemoryResult,
   createWhackAMoleResult,
 } from "./gameResultAdapters.js";
+import { formatExperienceDuration } from "./experienceResult.js";
 import {
   RESIZABLE_LEFT_PANE_HANDLE_WIDTH_PX,
   RESIZABLE_LEFT_PANE_MIN_WIDTH_PX,
@@ -2951,6 +2953,7 @@ export default function App() {
 
   useEffect(() => {
     appLog.info("Phase changed", { phase });
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [appLog, phase]);
 
   useEffect(() => {
@@ -5690,7 +5693,12 @@ export default function App() {
     }
 
     setPendingModeId(null);
-    setPreferences((current) => recordRecentMode(current, mode.id));
+    if (
+      !mode.hiddenFromLibrary &&
+      [PRODUCT_AREAS.PLAY, PRODUCT_AREAS.CREATE, PRODUCT_AREAS.LABS].includes(mode.area)
+    ) {
+      setPreferences((current) => recordRecentMode(current, mode.id));
+    }
     if (updateHistory) {
       updateProductPath(mode.path);
     }
@@ -11673,6 +11681,14 @@ export default function App() {
           clearTimeMs: {
             label: "Clear time",
             format: (value) => `${(value / 1000).toFixed(1)}s`,
+          },
+          survivalMs: {
+            label: "Survival",
+            format: formatExperienceDuration,
+          },
+          averageHitTimeMs: {
+            label: "Reaction time",
+            format: (value) => `${Math.round(value)} ms`,
           },
         },
       }}

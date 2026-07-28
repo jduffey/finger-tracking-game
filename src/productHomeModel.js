@@ -2,6 +2,7 @@ import {
   MODE_MATURITY,
   PRODUCT_AREAS,
   getFeaturedModes,
+  getModeById,
   listModes,
 } from "./modeRegistry.js";
 
@@ -148,6 +149,23 @@ export function selectQuickPlayMode({
     ? Math.min(0.999999, Math.max(0, randomValue))
     : 0;
   return candidates[Math.floor(safeRandomValue * candidates.length)] ?? candidates[0];
+}
+
+export function selectContinueMode(recentModeIds = []) {
+  if (!Array.isArray(recentModeIds)) {
+    return null;
+  }
+
+  return (
+    recentModeIds
+      .map((modeId) => getModeById(modeId))
+      .find(
+        (mode) =>
+          mode &&
+          !mode.hiddenFromLibrary &&
+          HOME_AREA_ORDER.includes(mode.area),
+      ) ?? null
+  );
 }
 
 export function formatModeMetadata(mode) {

@@ -182,3 +182,15 @@ test("canonical elapsed time replaces an ambiguous duration metric", () => {
   assert.equal(view.primaryMetric.value, 5_000);
   assert.equal(view.primaryMetric.formattedValue, "0:05");
 });
+
+test("common arcade metrics use player-facing labels by default", () => {
+  const view = createExperienceResultViewModel({
+    metrics: {
+      targetsDestroyed: 4,
+      survivalMs: 12_500,
+    },
+  });
+
+  assert.equal(view.metrics[0].label, "Targets destroyed");
+  assert.equal(view.metrics[1].label, "Survival");
+});

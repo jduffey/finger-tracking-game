@@ -12,6 +12,7 @@ import {
   filterLibraryModes,
   formatModeMetadata,
   getLibraryModes,
+  selectContinueMode,
   selectDailyChallengeMode,
   selectQuickPlayMode,
 } from "../productHomeModel.js";
@@ -221,8 +222,7 @@ export default function ProductHome({
   );
   const leadMode = featuredModes.find((mode) => mode.id === "sky-patrol") ?? featuredModes[0];
   const dailyMode = useMemo(() => selectDailyChallengeMode(), []);
-  const continueMode =
-    recentModeIds.map((modeId) => getModeById(modeId)).find(Boolean) ?? null;
+  const continueMode = selectContinueMode(recentModeIds);
   const favoriteModes = favoriteModeIds
     .map((modeId) => getModeById(modeId))
     .filter(Boolean)

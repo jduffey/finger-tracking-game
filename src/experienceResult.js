@@ -61,6 +61,11 @@ const DEFAULT_METRIC_LABELS = Object.freeze({
   rally: "Best rally",
   streak: "Best streak",
   wave: "Wave",
+  survivalMs: "Survival",
+  targetsDestroyed: "Targets destroyed",
+  threatsStopped: "Threats stopped",
+  accuracyPercent: "Accuracy",
+  smoothnessPercent: "Smoothness",
 });
 
 function isRecord(value) {
