@@ -19,16 +19,10 @@ import {
   solveAffineFromPairs,
 } from "./calibration.js";
 import {
-  buildGridHoles,
   computeRunnerTrackGridLayout,
-  GAME_DURATION_MS,
   getRunnerTrackIndexFromNormalized,
   getRunnerTrackOffsetFromIndex,
-  isPointInCircle,
-  MOLE_VISIBLE_MS,
-  pickRandomHole,
   pickDistinctRandomChoice,
-  randomSpawnDelay,
   shouldCollectRunnerCoin,
 } from "./gameLogic.js";
 import {
@@ -75,6 +69,14 @@ import {
   createFullscreenHandBounceGame,
   stepFullscreenHandBounceGame,
 } from "./fullscreenHandBounceGame.js";
+import {
+  WHACK_A_MOLE_ACTIONS,
+  WHACK_A_MOLE_PHASES,
+  createDailyWhackAMoleSeed,
+  createWhackAMoleGame,
+  getWhackAMoleSummary,
+  reduceWhackAMoleGame,
+} from "./whackAMoleGame.js";
 import {
   createFlappyDailyChallengeGame,
   createFlappyGame,
@@ -378,6 +380,9 @@ const OffAxisChamberLab = lazy(
 );
 const RouletteFingerGame = lazy(
   () => import("./components/RouletteFingerGame.jsx"),
+);
+const WhackAMoleExperience = lazy(
+  () => import("./components/WhackAMoleExperience.jsx"),
 );
 const SpatialGestureMemory = lazy(
   () => import("./components/SpatialGestureMemory.jsx"),
@@ -1812,18 +1817,15 @@ export default function App() {
     trackSpacingPx: 0,
   });
 
-  const [score, setScore] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(Math.ceil(GAME_DURATION_MS / 1000));
-  const [gameRunning, setGameRunning] = useState(false);
-  const [activeMoleIndex, setActiveMoleIndex] = useState(null);
-  const [holes, setHoles] = useState([]);
+  const [whackAMoleState, setWhackAMoleState] = useState(() =>
+    createWhackAMoleGame(),
+  );
 
   const videoRef = useRef(null);
   const overlayCanvasRef = useRef(null);
   const cameraWrapRef = useRef(null);
   const contentGridRef = useRef(null);
   const cameraPaneRef = useRef(null);
-  const boardRef = useRef(null);
   const inputTestStageRef = useRef(null);
   const sandboxStageRef = useRef(null);
   const flightStageRef = useRef(null);
@@ -2037,16 +2039,7 @@ export default function App() {
   const runnerHudLastUpdateRef = useRef(0);
   const runnerGeometryLogKeyRef = useRef("");
 
-  const holesRef = useRef(holes);
-  const hitZonesRef = useRef([]);
-  const lastHoleIndexRef = useRef(-1);
-
-  const gameRunningRef = useRef(gameRunning);
-  const gameStartTimeRef = useRef(0);
-  const gameElapsedMsRef = useRef(0);
-  const nextSpawnAtRef = useRef(Number.POSITIVE_INFINITY);
-  const activeMoleRef = useRef(null);
-  const timeLeftRef = useRef(timeLeft);
+  const whackAMoleStateRef = useRef(whackAMoleState);
 
   const currentTarget = useMemo(
     () => calibrationTargets[calibrationTargetIndex] ?? null,
@@ -4338,21 +4331,19 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    appLog.debug("Game scoreboard state changed", {
-      score,
-      timeLeft,
-      gameRunning,
-      activeMoleIndex,
+    appLog.debug("Whack-a-Mole state changed", {
+      phase: whackAMoleState.phase,
+      score: whackAMoleState.score,
+      timeLeft: Math.ceil((whackAMoleState.remainingMs ?? 0) / 1000),
+      target: whackAMoleState.target?.holeIndex ?? null,
     });
-  }, [appLog, score, timeLeft, gameRunning, activeMoleIndex]);
+  }, [appLog, whackAMoleState]);
 
   useEffect(() => {
     recordActiveProgressionResult();
   }, [
-    gameRunning,
-    score,
+    whackAMoleState,
     spatialMemoryState,
-    timeLeft,
     fullscreenBrickDodgerState,
     fullscreenBreakoutCoopState,
     fullscreenBreakoutState,
@@ -4646,13 +4637,33 @@ export default function App() {
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      dispatchExperienceLifecycle({
+      const hidden = document.visibilityState === "hidden";
+      if (
+        hidden &&
+        experienceModeIdRef.current === "whack-a-mole"
+      ) {
+        applyWhackAMoleAction({
+          type: WHACK_A_MOLE_ACTIONS.PAUSE,
+          now: performance.now(),
+        });
+      }
+      const transition = dispatchExperienceLifecycle({
         type:
-          document.visibilityState === "hidden"
+          hidden
             ? EXPERIENCE_LIFECYCLE_EVENTS.PAUSE
             : EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
         reason: EXPERIENCE_PAUSE_REASONS.VISIBILITY,
       });
+      if (
+        !hidden &&
+        experienceModeIdRef.current === "whack-a-mole" &&
+        transition?.state?.phase !== EXPERIENCE_PHASES.PAUSED
+      ) {
+        applyWhackAMoleAction({
+          type: WHACK_A_MOLE_ACTIONS.RESUME,
+          now: performance.now(),
+        });
+      }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
@@ -4662,18 +4673,43 @@ export default function App() {
 
   useEffect(() => {
     if (!experienceModeId || !trackingRequested) {
-      dispatchExperienceLifecycle({
+      const transition = dispatchExperienceLifecycle({
         type: EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
         reason: EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS,
       });
+      if (
+        experienceModeId === "whack-a-mole" &&
+        transition?.state?.phase !== EXPERIENCE_PHASES.PAUSED
+      ) {
+        applyWhackAMoleAction({
+          type: WHACK_A_MOLE_ACTIONS.RESUME,
+          now: performance.now(),
+        });
+      }
       return;
     }
-    dispatchExperienceLifecycle({
+    if (experienceModeId === "whack-a-mole" && !handDetected) {
+      applyWhackAMoleAction({
+        type: WHACK_A_MOLE_ACTIONS.PAUSE,
+        now: performance.now(),
+      });
+    }
+    const transition = dispatchExperienceLifecycle({
       type: handDetected
         ? EXPERIENCE_LIFECYCLE_EVENTS.RESUME
         : EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
       reason: EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS,
     });
+    if (
+      experienceModeId === "whack-a-mole" &&
+      handDetected &&
+      transition?.state?.phase !== EXPERIENCE_PHASES.PAUSED
+    ) {
+      applyWhackAMoleAction({
+        type: WHACK_A_MOLE_ACTIONS.RESUME,
+        now: performance.now(),
+      });
+    }
   }, [experienceModeId, handDetected, trackingRequested]);
 
   useEffect(
@@ -4807,16 +4843,8 @@ export default function App() {
   }, [sandboxGrabbedBlockId]);
 
   useEffect(() => {
-    holesRef.current = holes;
-  }, [holes]);
-
-  useEffect(() => {
-    gameRunningRef.current = gameRunning;
-  }, [gameRunning]);
-
-  useEffect(() => {
-    timeLeftRef.current = timeLeft;
-  }, [timeLeft]);
+    whackAMoleStateRef.current = whackAMoleState;
+  }, [whackAMoleState]);
 
   useEffect(() => {
     appLog.info("Attempting to load saved calibration on startup");
@@ -5507,72 +5535,6 @@ export default function App() {
   }, [cameraReady, phase]);
 
   useEffect(() => {
-    if (phase !== PHASES.GAME) {
-      appLog.debug("Skipping board layout effect because phase is not GAME", { phase });
-      return undefined;
-    }
-    appLog.debug("Starting board layout effect");
-
-    const updateBoardLayout = () => {
-      const board = boardRef.current;
-      if (!board) {
-        appLog.debug("Skipped board layout update due to missing board ref");
-        return;
-      }
-      const rect = board.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) {
-        appLog.debug("Skipped board layout update due to zero-sized board rect", {
-          width: rect.width,
-          height: rect.height,
-        });
-        return;
-      }
-
-      const localHoles = buildGridHoles(rect.width, rect.height, 3, 3);
-      setHoles(localHoles);
-      holesRef.current = localHoles;
-      hitZonesRef.current = localHoles.map((hole) => ({
-        x: rect.left + hole.x,
-        y: rect.top + hole.y,
-        r: hole.r * 0.9,
-      }));
-      appLog.debug("Board layout updated", {
-        rect: {
-          left: rect.left,
-          top: rect.top,
-          width: rect.width,
-          height: rect.height,
-        },
-        holeCount: localHoles.length,
-      });
-    };
-
-    updateBoardLayout();
-
-    const board = boardRef.current;
-    if (!board || !window.ResizeObserver) {
-      appLog.warn("ResizeObserver unavailable for board layout; using window resize fallback");
-      window.addEventListener("resize", updateBoardLayout);
-      return () => {
-        appLog.debug("Cleaning up board layout fallback listener");
-        window.removeEventListener("resize", updateBoardLayout);
-      };
-    }
-
-    const observer = new ResizeObserver(updateBoardLayout);
-    observer.observe(board);
-    window.addEventListener("resize", updateBoardLayout);
-    window.addEventListener("scroll", updateBoardLayout, true);
-
-    return () => {
-      appLog.debug("Cleaning up board layout observers/listeners");
-      observer.disconnect();
-      window.removeEventListener("resize", updateBoardLayout);
-      window.removeEventListener("scroll", updateBoardLayout, true);
-    };
-  }, [appLog, phase]);
-
-  useEffect(() => {
     if (phase !== PHASES.CALIBRATION) {
       setInputTestGridSize((previous) =>
         previous.width === 0 && previous.height === 0 && previous.cellSize === 0
@@ -6174,13 +6136,7 @@ export default function App() {
     const durationMs = Math.max(0, performance.now() - session.startedAtMs);
     if (session.modeId === "whack-a-mole") {
       return createWhackAMoleResult({
-        summary: {
-          score,
-          hits: score,
-          gameRunning,
-          timeLeft,
-          completed: !gameRunning && timeLeft <= 0,
-        },
+        summary: getWhackAMoleSummary(whackAMoleStateRef.current),
         sessionId: session.sessionId,
         startedAt: session.startedAt,
         endedAt,
@@ -8049,17 +8005,61 @@ export default function App() {
   }
 
   function stopGameSession() {
+    const summary = getWhackAMoleSummary(whackAMoleStateRef.current);
     appLog.info("Stopping game session", {
-      wasRunning: gameRunningRef.current,
-      activeMole: activeMoleRef.current,
-      score,
-      timeLeft: timeLeftRef.current,
+      wasRunning: summary.gameRunning,
+      score: summary.score,
+      timeLeft: summary.timeLeft,
     });
-    gameRunningRef.current = false;
-    setGameRunning(false);
-    activeMoleRef.current = null;
-    setActiveMoleIndex(null);
-    nextSpawnAtRef.current = Number.POSITIVE_INFINITY;
+    const nextState = createWhackAMoleGame({
+      seed: whackAMoleStateRef.current?.seed,
+      config: whackAMoleStateRef.current?.config,
+    });
+    whackAMoleStateRef.current = nextState;
+    setWhackAMoleState(nextState);
+  }
+
+  function applyWhackAMoleAction(action) {
+    const nextState = reduceWhackAMoleGame(
+      whackAMoleStateRef.current,
+      action,
+    );
+    whackAMoleStateRef.current = nextState;
+    setWhackAMoleState(nextState);
+    return nextState;
+  }
+
+  function handleWhackAMoleAction(action) {
+    const previousState = whackAMoleStateRef.current;
+    if (
+      action?.type === WHACK_A_MOLE_ACTIONS.START &&
+      (previousState?.phase === WHACK_A_MOLE_PHASES.RESULT ||
+        activeProgressionSessionRef.current?.modeId !== "whack-a-mole")
+    ) {
+      beginRestartedProgressionSession(
+        getModeById("whack-a-mole"),
+        activeLaunchContextRef.current,
+      );
+    }
+
+    if (action?.type === WHACK_A_MOLE_ACTIONS.RESUME) {
+      const transition = dispatchExperienceLifecycle({
+        type: EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
+        reason: EXPERIENCE_PAUSE_REASONS.MANUAL,
+      });
+      if (transition?.state?.phase === EXPERIENCE_PHASES.PAUSED) {
+        return previousState;
+      }
+    }
+
+    const nextState = applyWhackAMoleAction(action);
+    if (action?.type === WHACK_A_MOLE_ACTIONS.PAUSE) {
+      dispatchExperienceLifecycle({
+        type: EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
+        reason: EXPERIENCE_PAUSE_REASONS.MANUAL,
+      });
+    }
+    return nextState;
   }
 
   function startRouletteSession() {
@@ -8097,19 +8097,12 @@ export default function App() {
 
   function startGameSession() {
     appLog.info("Starting game session requested", {
-      hasTransform: Boolean(transformRef.current),
       currentPhase: phaseRef.current,
+      launchContext: activeLaunchContextRef.current,
     });
-    if (!transformRef.current) {
-      setPhase(PHASES.CALIBRATION);
-      phaseRef.current = PHASES.CALIBRATION;
-      setCalibrationMessage("Calibration is required before starting the game.");
-      appLog.warn("Cannot start game session without calibration transform");
-      return;
-    }
-
-    beginRestartedProgressionSession(getModeById("whack-a-mole"));
-    const now = performance.now();
+    abandonActiveProgressionSession("opened_whack_briefing");
+    setLatestGameResult(null);
+    replaceExperienceLifecycle(null, null);
 
     setPhase(PHASES.GAME);
     phaseRef.current = PHASES.GAME;
@@ -8118,23 +8111,42 @@ export default function App() {
     resetArcCalibrationSession("start_game");
     calibrationSampleRef.current = null;
     setCalibrationSampleFrames(0);
-    setScore(0);
-    setTimeLeft(Math.ceil(GAME_DURATION_MS / 1000));
-    timeLeftRef.current = Math.ceil(GAME_DURATION_MS / 1000);
-    setActiveMoleIndex(null);
-    activeMoleRef.current = null;
-    lastHoleIndexRef.current = -1;
-
-    gameStartTimeRef.current = now;
-    gameElapsedMsRef.current = 0;
-    nextSpawnAtRef.current = 350;
-    gameRunningRef.current = true;
-    setGameRunning(true);
+    const daily =
+      activeLaunchContextRef.current?.challenge === "daily";
+    const seed = daily
+      ? createDailyWhackAMoleSeed(
+          activeLaunchContextRef.current?.dayKey ?? new Date(),
+          "standard",
+        )
+      : `whack-a-mole:practice:${Date.now()}`;
+    const nextState = createWhackAMoleGame({ seed });
+    whackAMoleStateRef.current = nextState;
+    setWhackAMoleState(nextState);
     appLog.info("Game session started", {
-      startAt: now,
-      firstSpawnAtMs: nextSpawnAtRef.current,
-      durationMs: GAME_DURATION_MS,
+      daily,
+      seed,
+      durationMs: nextState.config.roundDurationMs,
     });
+  }
+
+  function restartWhackAMoleSession() {
+    beginRestartedProgressionSession(
+      getModeById("whack-a-mole"),
+      activeLaunchContextRef.current,
+    );
+    const currentState = whackAMoleStateRef.current;
+    const idleState = createWhackAMoleGame({
+      seed: currentState?.seed,
+      config: currentState?.config,
+    });
+    const nextState = reduceWhackAMoleGame(idleState, {
+      type: WHACK_A_MOLE_ACTIONS.START,
+      now: performance.now(),
+      seed: idleState.seed,
+      config: idleState.config,
+    });
+    whackAMoleStateRef.current = nextState;
+    setWhackAMoleState(nextState);
   }
 
   function beginCalibration() {
@@ -8506,7 +8518,7 @@ export default function App() {
   function restartCurrentExperience() {
     switch (experienceModeIdRef.current) {
       case "whack-a-mole":
-        startGameSession();
+        restartWhackAMoleSession();
         break;
       case "spatial-memory":
         startSpatialGestureMemoryRound();
@@ -8558,13 +8570,24 @@ export default function App() {
     });
     switch (experienceModeId) {
       case "whack-a-mole":
+        {
+          const summary = getWhackAMoleSummary(whackAMoleState);
         return {
-          status: gameRunning ? "Round in progress" : "Round complete",
+          status:
+            whackAMoleState.phase === WHACK_A_MOLE_PHASES.IDLE
+              ? "Ready when you are"
+              : whackAMoleState.announcement,
           items: [
-            item("score", "Score", score, "strong"),
-            item("time", "Time", `${timeLeft}s`),
+            item("score", "Score", summary.score, "strong"),
+            item("time", "Time", `${summary.timeLeft}s`),
+            item(
+              "streak",
+              "Best streak",
+              `×${summary.bestStreak}`,
+            ),
           ],
         };
+        }
       case "spatial-memory":
         return {
           status: spatialMemoryState.message,
@@ -8819,7 +8842,7 @@ export default function App() {
       isCalibrating: isCalibratingRef.current,
       isArcCalibrating: isArcCalibratingRef.current,
       phase: phaseRef.current,
-      gameRunning: gameRunningRef.current,
+      whackPhase: whackAMoleStateRef.current?.phase,
     });
     const excludeInsideSelector = getPinchClickExcludeSelector({
       phase: phaseRef.current,
@@ -8915,104 +8938,10 @@ export default function App() {
       return;
     }
 
-    if (phaseRef.current !== PHASES.GAME || !gameRunningRef.current) {
-      appLog.debug("Pinch click ignored because game is not actively running");
-      return;
-    }
-
-    const activeMole = activeMoleRef.current;
-    if (!activeMole) {
-      appLog.debug("Pinch click ignored because there is no active mole");
-      return;
-    }
-
-    const hitZone = hitZonesRef.current[activeMole.holeIndex];
-    if (!hitZone) {
-      appLog.warn("Pinch click ignored because hit zone was not found", {
-        activeMole,
-      });
-      return;
-    }
-
-    if (isPointInCircle(cursorRef.current, hitZone)) {
-      appLog.info("Mole hit registered", {
-        holeIndex: activeMole.holeIndex,
-        cursor: cursorRef.current,
-        hitZone,
-      });
-      activeMoleRef.current = null;
-      setActiveMoleIndex(null);
-      setScore((value) => value + 1);
-      nextSpawnAtRef.current = gameElapsedMsRef.current + 100;
-    } else {
-      appLog.debug("Pinch click missed active mole", {
-        holeIndex: activeMole.holeIndex,
-        cursor: cursorRef.current,
-        hitZone,
-      });
-    }
-  }
-
-  function updateGame(timestamp, activeDeltaMs = 0) {
-    if (!gameRunningRef.current) {
-      return;
-    }
-
-    gameElapsedMsRef.current += Math.max(
-      0,
-      Number.isFinite(activeDeltaMs) ? activeDeltaMs : 0,
-    );
-    const elapsed = gameElapsedMsRef.current;
-    const remainingMs = GAME_DURATION_MS - elapsed;
-    const nextTimeLeft = Math.max(0, Math.ceil(remainingMs / 1000));
-
-    if (nextTimeLeft !== timeLeftRef.current) {
-      timeLeftRef.current = nextTimeLeft;
-      setTimeLeft(nextTimeLeft);
-      appLog.debug("Game timer tick", {
-        timestamp,
-        remainingMs,
-        nextTimeLeft,
-      });
-    }
-
-    if (remainingMs <= 0) {
-      appLog.info("Game timer expired");
-      stopGameSession();
-      return;
-    }
-
-    if (activeMoleRef.current && elapsed >= activeMoleRef.current.expiresAt) {
-      appLog.debug("Active mole expired", {
-        activeMole: activeMoleRef.current,
-        timestamp,
-      });
-      activeMoleRef.current = null;
-      setActiveMoleIndex(null);
-    }
-
-    if (!activeMoleRef.current && elapsed >= nextSpawnAtRef.current) {
-      const count = holesRef.current.length;
-      if (count > 0) {
-        const nextIndex = pickRandomHole(count, lastHoleIndexRef.current);
-        if (nextIndex >= 0) {
-          lastHoleIndexRef.current = nextIndex;
-          activeMoleRef.current = {
-            holeIndex: nextIndex,
-            expiresAt: elapsed + MOLE_VISIBLE_MS,
-          };
-          setActiveMoleIndex(nextIndex);
-          appLog.info("Spawned new mole", {
-            holeIndex: nextIndex,
-            expiresAt: elapsed + MOLE_VISIBLE_MS,
-          });
-        }
-      }
-      nextSpawnAtRef.current = elapsed + randomSpawnDelay();
-      appLog.debug("Scheduled next mole spawn", {
-        nextSpawnAt: nextSpawnAtRef.current,
-      });
-    }
+    appLog.debug("Pinch click did not resolve to an active control", {
+      phase: phaseRef.current,
+      timestamp,
+    });
   }
 
   function computeCameraRenderMetrics(
@@ -10788,7 +10717,7 @@ export default function App() {
     if (simulationEpochRef.current === null) {
       simulationEpochRef.current = timestamp;
     }
-    const frame = simulationTimingRef.current.advance(
+    simulationTimingRef.current.advance(
       timestamp,
       (_stepSeconds, step) => {
         const stepTimestamp =
@@ -10816,10 +10745,6 @@ export default function App() {
       };
     }
 
-    // Whack-a-Mole is a wall-clock round. It counts active visible time even
-    // when simulation catch-up is capped, while paused/tracking-lost gaps do not
-    // consume the round.
-    updateGame(timestamp, frame.frameDeltaMs);
   }
 
   function updateFrameTiming(timestamp) {
@@ -12395,12 +12320,18 @@ export default function App() {
       lifecycle={experienceLifecycle}
       modeLabel={activeExperienceMode.label}
       onExit={() => navigateToProductHome()}
-      onPause={(reason) =>
+      onPause={(reason) => {
+        if (experienceModeIdRef.current === "whack-a-mole") {
+          applyWhackAMoleAction({
+            type: WHACK_A_MOLE_ACTIONS.PAUSE,
+            now: performance.now(),
+          });
+        }
         dispatchExperienceLifecycle({
           type: EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
           reason,
-        })
-      }
+        });
+      }}
       onRestart={restartCurrentExperience}
       onResume={(reason) => {
         if (
@@ -12410,10 +12341,19 @@ export default function App() {
         ) {
           return;
         }
-        dispatchExperienceLifecycle({
+        const transition = dispatchExperienceLifecycle({
           type: EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
           reason,
         });
+        if (
+          experienceModeIdRef.current === "whack-a-mole" &&
+          transition?.state?.phase !== EXPERIENCE_PHASES.PAUSED
+        ) {
+          applyWhackAMoleAction({
+            type: WHACK_A_MOLE_ACTIONS.RESUME,
+            now: performance.now(),
+          });
+        }
       }}
       resultOptions={{
         metricDefinitions: {
@@ -12434,8 +12374,25 @@ export default function App() {
             format: formatExperienceDuration,
           },
           averageHitTimeMs: {
-            label: "Reaction time",
+            label: "Average reaction",
             format: (value) => `${Math.round(value)} ms`,
+          },
+          fastestHitMs: {
+            label: "Fastest hit",
+            format: (value) => `${Math.round(value)} ms`,
+          },
+          bestStreak: {
+            label: "Best streak",
+            format: (value) => `×${Math.round(value)}`,
+          },
+          goldHits: {
+            label: "Gold hits",
+          },
+          decoyHits: {
+            label: "Decoys hit",
+          },
+          decoysAvoided: {
+            label: "Decoys avoided",
           },
         },
       }}
@@ -14787,13 +14744,10 @@ export default function App() {
           { label: "Home", onClick: navigateToProductHome },
           { label: "Restart Gesture Control OS", onClick: startGestureControlOS, secondary: true },
         ]
+      : phase === PHASES.GAME
+      ? [{ label: "Home", onClick: navigateToProductHome }]
       : [
           { label: "Home", onClick: navigateToProductHome },
-          {
-            label: gameRunning ? "Restart Game" : "Start Game",
-            onClick: startGameSession,
-            disabled: !hasSavedCalibration,
-          },
           { label: "Recalibrate", onClick: handleRecalibrate, secondary: true },
         ];
 
@@ -15199,51 +15153,14 @@ export default function App() {
             onClearEventLog={clearLabEventLog}
           />
         ) : (
-          <section className="card panel">
-            <h2>Whack-a-Mole</h2>
-            <div className="stats-grid">
-              <div>
-                <strong>Score</strong>
-                <span>{score}</span>
-              </div>
-              <div>
-                <strong>Time</strong>
-                <span>{timeLeft}s</span>
-              </div>
-              <div>
-                <strong>Tracking</strong>
-                <span>{handDetected ? "yes" : "no"}</span>
-              </div>
-            </div>
-
-
-            <div className="game-board" ref={boardRef}>
-              {holes.map((hole) => (
-                <div
-                  key={hole.index}
-                  className="hole"
-                  style={{
-                    left: `${hole.x}px`,
-                    top: `${hole.y}px`,
-                    width: `${hole.r * 2.5}px`,
-                    height: `${hole.r * 1.6}px`,
-                  }}
-                />
-              ))}
-
-              {activeMoleIndex !== null && holes[activeMoleIndex] && (
-                <div
-                  className="mole"
-                  style={{
-                    left: `${holes[activeMoleIndex].x}px`,
-                    top: `${holes[activeMoleIndex].y - holes[activeMoleIndex].r * 0.45}px`,
-                    width: `${holes[activeMoleIndex].r * 1.5}px`,
-                    height: `${holes[activeMoleIndex].r * 1.5}px`,
-                  }}
-                />
-              )}
-            </div>
-          </section>
+          <WhackAMoleExperience
+            daily={activeLaunchContextRef.current?.challenge === "daily"}
+            dailyDate={activeLaunchContextRef.current?.dayKey}
+            onAction={handleWhackAMoleAction}
+            onExit={navigateToProductHome}
+            seed={whackAMoleState.seed}
+            state={whackAMoleState}
+          />
           )}
         </Suspense>
       </div>

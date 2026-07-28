@@ -2035,14 +2035,67 @@ const WHACK_A_MOLE_STYLES = `
   @media (max-height: 720px) and (min-width: 881px) {
     .wamx {
       min-height: 0;
+      padding: 1rem;
+    }
+
+    .wamx-brand-mark {
+      width: 2.3rem;
+      height: 2.3rem;
+    }
+
+    .wamx h3 {
+      font-size: clamp(1.7rem, 3.4vw, 2.75rem);
     }
 
     .wamx-steps {
-      margin-block: 0.8rem;
+      margin-block: 0.55rem 0.7rem;
     }
 
     .wamx-board {
-      width: min(100%, 37rem);
+      width: min(100%, 26rem);
+    }
+
+    .wamx-playfield,
+    .wamx-coach {
+      border-radius: 1rem;
+    }
+
+    .wamx-playfield,
+    .wamx-coach {
+      padding: 0.7rem;
+    }
+
+    .wamx-coach {
+      gap: 0.5rem;
+    }
+
+    .wamx-metric {
+      padding: 0.45rem 0.6rem;
+    }
+
+    .wamx-timer-track {
+      margin-block: 0.45rem 0.6rem;
+    }
+
+    .wamx-board-help {
+      margin-top: 0.35rem;
+    }
+
+    .wamx-briefing-copy {
+      padding: 1.4rem 2rem;
+    }
+
+    .wamx-briefing-legend {
+      padding: 1rem;
+    }
+
+    .wamx-callout {
+      margin-block: 0.8rem;
+      padding-block: 0.7rem;
+    }
+
+    .wamx-legend-item {
+      padding: 0.62rem;
     }
 
     .wamx-briefing-copy,

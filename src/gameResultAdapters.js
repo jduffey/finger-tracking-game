@@ -510,6 +510,11 @@ export function createWhackAMoleResult({
     attempts !== null && attempts > 0 ? (hits / attempts) * 100 : null,
   );
   const averageHitTimeMs = finite(summary?.averageHitTimeMs);
+  const fastestHitMs = finite(summary?.fastestHitMs);
+  const bestStreak = finite(summary?.bestStreak);
+  const goldHits = finite(summary?.goldHits);
+  const decoyHits = finite(summary?.decoyHits);
+  const decoysAvoided = finite(summary?.decoysAvoided);
   const resolvedDurationMs =
     finite(durationMs) !== null
       ? nonNegative(durationMs)
@@ -527,6 +532,19 @@ export function createWhackAMoleResult({
     ...(averageHitTimeMs === null
       ? {}
       : { averageHitTimeMs: nonNegative(averageHitTimeMs) }),
+    ...(fastestHitMs === null
+      ? {}
+      : { fastestHitMs: nonNegative(fastestHitMs) }),
+    ...(bestStreak === null
+      ? {}
+      : { bestStreak: nonNegativeInteger(bestStreak) }),
+    ...(goldHits === null ? {} : { goldHits: nonNegativeInteger(goldHits) }),
+    ...(decoyHits === null
+      ? {}
+      : { decoyHits: nonNegativeInteger(decoyHits) }),
+    ...(decoysAvoided === null
+      ? {}
+      : { decoysAvoided: nonNegativeInteger(decoysAvoided) }),
   };
   const descriptor = scoreDescriptor({
     outcome: "completed",
@@ -537,6 +555,12 @@ export function createWhackAMoleResult({
       ...(averageHitTimeMs === null
         ? {}
         : { averageHitTimeMs: BEST_METRIC_COMPARISONS.LOWER }),
+      ...(fastestHitMs === null
+        ? {}
+        : { fastestHitMs: BEST_METRIC_COMPARISONS.LOWER }),
+      ...(decoyHits === null
+        ? {}
+        : { decoyHits: BEST_METRIC_COMPARISONS.LOWER }),
     },
     durationMs: resolvedDurationMs,
   });

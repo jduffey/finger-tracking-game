@@ -6251,29 +6251,6 @@ button:disabled {
   opacity: 0.6;
 }
 
-.stats-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 4px;
-}
-
-.stats-grid div {
-  align-items: flex-start;
-  background: #f0f4f9;
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px;
-}
-
-.stats-grid strong {
-  color: #33485d;
-  font-size: 0.8rem;
-  letter-spacing: 0.02em;
-}
-
 .circle-fifths-page {
   background:
     radial-gradient(circle at 50% 50%, rgba(255, 241, 204, 0.12), rgba(255, 241, 204, 0) 26%),
@@ -6694,38 +6671,6 @@ button:disabled {
   }
 }
 
-.stats-grid span {
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.game-board {
-  aspect-ratio: 1 / 1;
-  background: linear-gradient(180deg, #85b95f 0%, #5c9a3f 60%, #4f8636 100%);
-  border-radius: 12px;
-  margin-top: 12px;
-  max-width: 560px;
-  position: relative;
-  width: min(100%, 74vh);
-}
-
-.hole {
-  background: radial-gradient(circle at 50% 45%, #111 0%, #202325 45%, #3b3f44 100%);
-  border-radius: 50%;
-  box-shadow: inset 0 8px 14px rgba(0, 0, 0, 0.4);
-  position: absolute;
-  transform: translate(-50%, -50%);
-}
-
-.mole {
-  background: radial-gradient(circle at 35% 30%, #f4c99b 0%, #d99d66 30%, #8b582e 72%);
-  border: 4px solid #5b2f17;
-  border-radius: 50%;
-  box-shadow: 0 10px 20px rgba(47, 26, 13, 0.4);
-  position: absolute;
-  transform: translate(-50%, -50%);
-}
-
 .calibration-layer {
   inset: 0;
   pointer-events: none;
@@ -7022,10 +6967,6 @@ button:disabled {
 
   .body-part-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .game-board {
-    width: 100%;
   }
 
   .flight-canvas {

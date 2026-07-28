@@ -96,6 +96,7 @@ const catalog = [
     supportsPointerFallback: true,
     supportsPause: true,
     supportsResults: true,
+    dailyChallenge: true,
   },
   {
     id: "sky-patrol",
