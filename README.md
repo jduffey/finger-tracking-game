@@ -1,15 +1,32 @@
-# Finger Tracking Game
+# Motion Arcade
 
-Finger Tracking Game is a webcam-driven hand- and pose-tracking playground built with React, Vite, and TensorFlow.js. It includes a calibration hub, multiple games and labs, fullscreen camera overlays, and a separate Circle of Fifths instrument page.
+Motion Arcade is a camera-powered collection of motion games and creative experiments
+built with React, Vite, and TensorFlow.js. The repository is still named
+`finger-tracking-game`, but the user-facing experience is organized around playing,
+creating, and exploring rather than around a tracking demo.
 
 ## What Is In This Repo
 
 ### Main app (`/`)
 
-- **Calibration Input Test**: the hub for camera/model readiness, live overlays, calibration controls, and navigation.
-- **Core modes**: Whack-a-Mole, Pinch Sandbox, Track Runner, Star Flight, Conveyor Toss, Roulette, and Spatial Gesture Memory.
-- **Labs**: Body Pose Lab, Off-Axis Forest Walk, Minority Report Lab, Gesture Analytics Lab, Gesture Art Lab, and Gesture Control OS.
-- **Fullscreen Camera**: the home screen, a fullscreen webcam playground with a dwell-select landing page. The menu waits until all five fingertips are recognized before using the hover cursor, then a 1.00 second index-fingertip hold launches visual overlays (`Squares`, `Hex`, `Voronoi`, `Rings`, `Pulse`, `Tip Ripples`, `Static`) or webcam-backed games (`Hand Bounce`, `Brick Dodger`, `Breakout Co-op`, `Breakout`, `Find Your Grind`, `Finger Pong`, `Tic Tac Toe`, `Slice Air`, `Sky Patrol`, `Invaders`, `Flappy`, `Missile Command`). `Tip Ripples` continuously breathes from thin rings to thick ripple bands while the demo is active. `Sky Patrol` now renders on a cached canvas playfield for smoother vertical scrolling. Every non-menu fullscreen mode also includes a top-right `Exit` box that returns to the landing menu after the same 1.00 second verified-hand hold.
+- **Home**: browse featured activities, search the library, switch between Play,
+  Create, and Labs, and revisit favorites or recent modes without granting camera
+  access first.
+- **Camera & Tracking Setup**: a privacy-first permission step with live readiness,
+  device selection, recovery guidance, and a pointer-only alternative where supported.
+- **Play**: arcade games including Sky Patrol, Slice Air, Missile Command, Brick
+  Dodger, Breakout, Finger Pong, Gesture Memory, and more.
+- **Create**: camera visualizers, gesture art, the Circle of Fifths instrument, and
+  other expressive tools.
+- **Labs**: pose tracking, off-axis perspective, gesture analytics, spatial
+  interfaces, and experimental interaction studies. Preview and experimental
+  activities are labeled in the library.
+- **Settings**: handedness, dwell and pinch tuning, camera preview, visual comfort,
+  audio, favorites, recent activity, and local-data controls.
+
+Fullscreen activities support a hand-driven dwell control and an ordinary pointer
+fallback. Showing a usable index fingertip is enough to drive the launcher; recognizing
+every fingertip is not required.
 
 ### Secondary page (`/circle-of-fifths.html`)
 
@@ -17,13 +34,18 @@ Finger Tracking Game is a webcam-driven hand- and pose-tracking playground built
 - One-hand index-finger tracking steers chord selection.
 - Pinch interactions choose drum presets and adjust BPM.
 - Uses webcam input and browser audio output.
+
 ## Requirements
 
-- Node.js 18 or newer
+- Node.js 20 or newer
 - npm
 - Webcam access
 - A modern desktop Chromium browser is recommended
 - Internet access when hand tracking starts, because the default MediaPipe Hands runtime loads assets from `https://cdn.jsdelivr.net/npm/@mediapipe/hands`
+
+Camera access requires a
+[secure context](https://developer.mozilla.org/docs/Web/Security/Secure_Contexts).
+`localhost` works for local development; remote deployments should use HTTPS.
 
 ## Install And Run
 
@@ -41,16 +63,14 @@ If you prefer, `npm install` works too.
 Then:
 
 1. Open the local URL printed by Vite. It is usually `http://localhost:5173`, but Vite will pick another port if that one is busy.
-2. Allow camera access when the browser asks.
-3. Wait for the camera stream and tracking model to initialize.
-4. The app starts on the **Fullscreen Camera** landing screen.
+2. Browse Home and choose an activity.
+3. If the activity uses tracking, choose **Set up camera** and approve the browser
+   permission prompt. The app does not request camera access just to browse.
+4. Follow the framing and model-readiness steps, then start the activity.
 
-From the **Calibration Input Test** hub, available from the fullscreen landing menu:
-
-- **Start Calibration** runs the 9-point affine calibration used by pointer-driven modes such as Whack-a-Mole.
-- **Start Lazy Arc Calibration** captures a sweep-based calibration and then launches Track Runner.
-- **Open Fullscreen Camera** returns to the fullscreen overlay and mini-game playground.
-- **Open Circle of Fifths Page** opens the separate instrument page at `/circle-of-fifths.html`.
+Advanced calibration remains available for modes that benefit from a tighter
+screen-to-fingertip mapping. The Circle of Fifths instrument can also be opened directly
+at `/circle-of-fifths.html`.
 
 To preview the production build locally:
 
@@ -65,14 +85,32 @@ npm run preview
 - `npm run build`: builds both `index.html` and `circle-of-fifths.html` into `dist/`
 - `npm run preview`: serves the built output locally
 - `npm test`: runs the Node test suite
+- `npm run test:ci`: runs the same suite with the explicit CI reporter
+- `npm run check`: runs the complete test suite, then creates a production build
 - `npm run symphony`: launches the optional Symphony workflow wrapper
 
-## Tracking, Logging, And Persistence
+Pull requests and pushes to `main` run `npm run check` on Node.js 22 through the
+repository's GitHub Actions quality workflow.
 
-- Hand tracking starts with the MediaPipe Hands runtime and can probe or fall back to TFJS backends when needed.
+## Camera, Privacy, And Local Data
+
+- Camera access starts only after a user chooses to set up or launch tracking and
+  approves the browser permission prompt.
+- Camera frames are processed locally in the browser. The application does not upload
+  or save video frames and does not request microphone access.
+- Hand tracking starts with the MediaPipe Hands runtime and can probe or fall back to
+  TFJS backends when needed.
+- The MediaPipe runtime downloads model assets from jsDelivr when tracking initializes;
+  that CDN request does not include camera images.
 - Body Pose Lab and Off-Axis Forest Walk use pose detection rather than the hand-tracking flow.
-- Calibration is stored in `localStorage` under `fingerTrackingGame.calibration.v2`.
-- Verbose browser/runtime events are written to timestamped files in `logs/` only while running `npm run dev`.
+- Calibration, preferences, favorites, recent activity, gesture personalization, and
+  selected game or lab progress can be stored in the browser's `localStorage`.
+- Local data can be cleared from Settings or through the browser's site-data controls.
+- Verbose browser/runtime events are written to timestamped files in `logs/` only while
+  running `npm run dev`; production builds do not send those logs.
+- The codebase contains no account system, advertising SDK, or third-party analytics.
+
+The user-facing policy is available at [`/privacy.html`](./public/privacy.html).
 
 ## Optional Symphony Setup
 
