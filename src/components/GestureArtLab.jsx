@@ -114,8 +114,10 @@ function createManualMapping(pointer, controls) {
 export default function GestureArtLab({
   hands,
   handDetected,
+  cameraActive = false,
   onBack,
   onOpenSetup,
+  onStopCamera,
 }) {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
@@ -631,7 +633,12 @@ export default function GestureArtLab({
           <strong>Light Painting</strong>
         </div>
         <div className="gesture-art-header-actions">
-          {!handDetected ? (
+          {cameraActive && onStopCamera ? (
+            <button className="secondary" onClick={onStopCamera} type="button">
+              Camera on · Turn off
+            </button>
+          ) : null}
+          {!cameraActive && !handDetected ? (
             <button className="secondary" onClick={onOpenSetup} type="button">
               Add camera
             </button>

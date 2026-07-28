@@ -301,6 +301,7 @@ import {
   TRACKING_READINESS_STATES,
   createTrackingInteractionCheck,
   createTrackingReadinessState,
+  getCameraErrorPresentation,
   reduceTrackingReadiness,
   updateTrackingInteractionCheck,
 } from "./trackingReadiness.js";
@@ -2163,6 +2164,33 @@ export default function App() {
         : trackingRequested
           ? "loading"
           : "idle";
+  const productCameraActive = trackingRequested && cameraReady;
+  const activeTrackingErrorPresentation = trackingRequested
+    ? getCameraErrorPresentation(trackingReadiness.status) ??
+      (cameraError
+        ? {
+            title: "The camera needs attention",
+            message:
+              "Camera input is unavailable right now. Retry it or turn the camera off to keep exploring.",
+            primaryAction: "Retry camera",
+          }
+        : modelError
+          ? {
+              title: "Hand tracking needs attention",
+              message:
+                "Tracked input is unavailable right now. Retry the model or use another available input.",
+              primaryAction: "Retry tracking",
+            }
+          : poseModelError &&
+              (phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB)
+            ? {
+                title: "Body tracking needs attention",
+                message:
+                  "The body model could not start. Retry it or return Home without exposing diagnostic details.",
+                primaryAction: "Retry body tracking",
+              }
+            : null)
+    : null;
   const trackingRecoveryRequired = Boolean(
     experienceModeId &&
       trackingRequested &&
@@ -6848,7 +6876,8 @@ export default function App() {
     }
 
     if (
-      trackingReadiness.status === TRACKING_READINESS_STATES.MODEL_ERROR
+      trackingReadiness.status === TRACKING_READINESS_STATES.MODEL_ERROR ||
+      Boolean(modelError)
     ) {
       setModelReady(false);
       setModelRetryAttempt((attempt) => attempt + 1);
@@ -6856,6 +6885,20 @@ export default function App() {
     }
 
     retryCamera("manual_retry");
+  }
+
+  function retryActiveTrackingError() {
+    if (
+      poseModelError &&
+      !cameraError &&
+      !modelError &&
+      (phaseRef.current === PHASES.BODY_POSE ||
+        phaseRef.current === PHASES.OFF_AXIS_LAB)
+    ) {
+      void ensurePoseDetectorInitialized("manual_retry");
+      return;
+    }
+    retryProductTrackingSetup();
   }
 
   function continueFromProductTrackingSetup() {
@@ -13080,6 +13123,7 @@ export default function App() {
   if (isProductHomePhase) {
     return (
       <ProductHome
+        cameraActive={productCameraActive}
         capabilities={deviceCapabilities}
         initialArea={productHomeArea}
         readiness={{ status: productTrackingStatus }}
@@ -13090,6 +13134,7 @@ export default function App() {
         onSelectMode={selectProductMode}
         onOpenSetup={() => openProductTrackingSetup()}
         onOpenSettings={() => openProductSettings()}
+        onStopCamera={stopProductCamera}
         onSelectArea={(area) => {
           setProductHomeArea(area);
           updateProductPath(getProductHomePathForArea(area));
@@ -13164,6 +13209,7 @@ export default function App() {
         fallback={<LazyExperienceFallback label="Building your Arcade Run…" />}
       >
         <ArcadeRunExperience
+          cameraActive={productCameraActive}
           capabilityOptions={arcadeRunCapabilityOptions}
           dailyDate={activeLaunchContextRef.current?.dayKey}
           incomingLegResult={arcadeRunIncomingResult}
@@ -13180,6 +13226,7 @@ export default function App() {
             arcadeRunLaunchRequestRef.current = null;
           }}
           onRunComplete={handleArcadeRunComplete}
+          onStopCamera={stopProductCamera}
           onSessionChange={handleArcadeRunSessionChange}
           returningLegRequest={arcadeRunLaunchRequestRef.current}
           storage={window.localStorage}
@@ -13194,10 +13241,12 @@ export default function App() {
         fallback={<LazyExperienceFallback label="Opening Light Painting…" />}
       >
         <GestureArtLab
+          cameraActive={productCameraActive}
           key={gestureArtSessionKey}
           hands={gestureArtHands}
           handDetected={handDetected}
           onBack={navigateToProductHome}
+          onStopCamera={stopProductCamera}
           onOpenSetup={() => {
             setPendingModeId("gesture-art");
             openProductTrackingSetup();
@@ -13227,6 +13276,15 @@ export default function App() {
                 : ""
             }
           />
+          {productCameraActive ? (
+            <button
+              className="fullscreen-camera-stop"
+              onClick={stopProductCamera}
+              type="button"
+            >
+              Camera on · Turn off
+            </button>
+          ) : null}
           {fullscreenGridMode === "hex" ? (
             <div
               className="fullscreen-camera-hex-grid motion-visualizer-layer"
@@ -15481,17 +15539,26 @@ export default function App() {
                 </div>
               </div>
             ) : null}
-            {(cameraError || modelError) && (
-              <div className="fullscreen-camera-errors">
-                {cameraError && <p className="error-text">{cameraError}</p>}
-                {cameraError && (
-                  <button type="button" onClick={() => retryCamera()}>
-                    Retry camera
+            {activeTrackingErrorPresentation ? (
+              <div className="fullscreen-camera-errors" role="alert">
+                <div className="error-text">
+                  <strong>{activeTrackingErrorPresentation.title}</strong>
+                  <span>{activeTrackingErrorPresentation.message}</span>
+                </div>
+                <div className="button-row">
+                  <button type="button" onClick={retryActiveTrackingError}>
+                    {activeTrackingErrorPresentation.primaryAction}
                   </button>
-                )}
-                {modelError && <p className="error-text">{modelError}</p>}
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={() => navigateToProductHome()}
+                  >
+                    Return Home
+                  </button>
+                </div>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
         {experienceOverlay}
@@ -15512,8 +15579,8 @@ export default function App() {
             cameraOverlayRef={overlayCanvasRef}
             cameraStageRef={cameraWrapRef}
             cameraVideoRef={videoRef}
-            cameraError={cameraError}
-            modelError={modelError}
+            cameraActive={productCameraActive}
+            trackingErrorPresentation={activeTrackingErrorPresentation}
             fps={fps}
             engineOutput={labEngineOutput}
             eventLog={labEventLog}
@@ -15540,6 +15607,8 @@ export default function App() {
             onClearEventLog={clearLabEventLog}
             onBack={returnFromMinorityReportLab}
             onReset={startMinorityReportLab}
+            onRetryTracking={retryActiveTrackingError}
+            onStopCamera={stopProductCamera}
           />
         </Suspense>
       </div>
@@ -15715,6 +15784,15 @@ export default function App() {
               ? "Tracking ready"
               : "Show your hand"}
           </button>
+          {productCameraActive ? (
+            <button
+              className="top-bar-settings"
+              onClick={stopProductCamera}
+              type="button"
+            >
+              Camera off
+            </button>
+          ) : null}
           <button className="top-bar-settings" onClick={openProductSettings} type="button">
             Settings
           </button>
@@ -15766,18 +15844,26 @@ export default function App() {
               )}
             </div>
 
-            {cameraError && (
-              <>
-                <p className="error-text">{cameraError}</p>
-                <button type="button" onClick={() => retryCamera()}>
-                  Retry camera
-                </button>
-              </>
-            )}
-            {modelError && <p className="error-text">{modelError}</p>}
-            {(phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB) && poseModelError && (
-              <p className="error-text">{poseModelError}</p>
-            )}
+            {activeTrackingErrorPresentation ? (
+              <div className="camera-support-error" role="alert">
+                <div className="error-text">
+                  <strong>{activeTrackingErrorPresentation.title}</strong>
+                  <span>{activeTrackingErrorPresentation.message}</span>
+                </div>
+                <div className="button-row">
+                  <button type="button" onClick={retryActiveTrackingError}>
+                    {activeTrackingErrorPresentation.primaryAction}
+                  </button>
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={stopProductCamera}
+                  >
+                    Turn camera off
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             {phase === PHASES.CALIBRATION && calibrationMessage ? (
               <p className="small-text" aria-live="polite">
@@ -16018,6 +16104,8 @@ export default function App() {
             cameraOverlayRef={overlayCanvasRef}
             cameraStageRef={cameraWrapRef}
             cameraVideoRef={videoRef}
+            cameraActive={productCameraActive}
+            trackingErrorPresentation={activeTrackingErrorPresentation}
             fps={fps}
             engineOutput={labEngineOutput}
             eventLog={labEventLog}
@@ -16042,6 +16130,8 @@ export default function App() {
             onExportSamples={exportLabSamples}
             onImportSamples={importLabSamples}
             onClearEventLog={clearLabEventLog}
+            onRetryTracking={retryActiveTrackingError}
+            onStopCamera={stopProductCamera}
           />
         ) : phase === PHASES.SPATIAL_GESTURE_MEMORY ? (
           <SpatialGestureMemory

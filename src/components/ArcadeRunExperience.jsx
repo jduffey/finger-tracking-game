@@ -519,6 +519,8 @@ export function ArcadeRunExperience({
   onClearPersistedSession,
   onRunComplete,
   onExit,
+  cameraActive = false,
+  onStopCamera,
   className = "",
 }) {
   const titleId = useId();
@@ -971,6 +973,15 @@ export function ArcadeRunExperience({
           </div>
         </div>
         <div className="arx-topbar-actions">
+          {cameraActive && onStopCamera ? (
+            <button
+              className="arx-button arx-button--quiet"
+              onClick={() => safeCall(onStopCamera)}
+              type="button"
+            >
+              Camera on · Turn off
+            </button>
+          ) : null}
           {session && session.status !== ARCADE_RUN_STATUSES.COMPLETE ? (
             <span className={`arx-save-status ${persistenceMessage ? "has-warning" : ""}`}>
               {persistenceMessage ? "Playing in memory" : "Progress saved"}

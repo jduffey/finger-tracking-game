@@ -93,6 +93,7 @@ export async function installSyntheticCameraStub(
         mediaRequestCount: 0,
         requestedConstraints: [],
         timers: [],
+        trackStopCount: 0,
       };
       globalThis.__motionArcadeTrackingE2E = state;
       const nativeMediaPlay = HTMLMediaElement.prototype.play;
@@ -127,6 +128,7 @@ export async function installSyntheticCameraStub(
         const originalStop = track.stop.bind(track);
         track.stop = () => {
           clearInterval(timer);
+          state.trackStopCount += 1;
           originalStop();
         };
         const originalSettings = track.getSettings.bind(track);
@@ -184,6 +186,12 @@ export async function getCameraRequestCount(page) {
 export async function getModelInitializationCount(page) {
   return page.evaluate(
     () => globalThis.__motionArcadeTrackingE2E?.modelInitializationCount ?? 0,
+  );
+}
+
+export async function getCameraTrackStopCount(page) {
+  return page.evaluate(
+    () => globalThis.__motionArcadeTrackingE2E?.trackStopCount ?? 0,
   );
 }
 

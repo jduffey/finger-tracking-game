@@ -10,6 +10,7 @@ test("the product shell keeps setup and settings available to mobile and assisti
   const homeStyles = readSource("src/productHome.css");
 
   assert.match(home, /aria-label="Open settings"/);
+  assert.match(home, /aria-label="Camera is on\. Turn camera off\."/);
   assert.match(home, /aria-controls="experience-list"/);
   assert.match(home, /role="list"/);
   assert.match(homeStyles, /@media \(max-width: 980px\)[\s\S]*?\.product-home \{[\s\S]*?overflow: visible;/);
@@ -17,6 +18,21 @@ test("the product shell keeps setup and settings available to mobile and assisti
     homeStyles,
     /\.product-home-icon-button\s*\{[^}]*display:\s*none;/,
   );
+});
+
+test("camera-owning surfaces expose plain-language recovery without raw diagnostics", () => {
+  const app = readSource("src/App.jsx");
+  const gestureHud = readSource("src/components/MinorityReportLab.jsx");
+
+  assert.match(app, /activeTrackingErrorPresentation/);
+  assert.match(app, /retryActiveTrackingError/);
+  assert.doesNotMatch(app, />\{cameraError\}</);
+  assert.doesNotMatch(app, />\{modelError\}</);
+  assert.doesNotMatch(app, />\{poseModelError\}</);
+  assert.match(gestureHud, /trackingErrorPresentation\.message/);
+  assert.match(gestureHud, /Camera on · Turn off/);
+  assert.doesNotMatch(gestureHud, />\{cameraError\}</);
+  assert.doesNotMatch(gestureHud, />\{modelError\}</);
 });
 
 test("tracking setup uses valid progress markup and a single mobile scroller", () => {

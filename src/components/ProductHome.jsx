@@ -70,7 +70,12 @@ function formatResultOutcome(outcome) {
   );
 }
 
-function TrackingReadiness({ readiness, onOpenSetup }) {
+function TrackingReadiness({
+  cameraActive,
+  readiness,
+  onOpenSetup,
+  onStopCamera,
+}) {
   const status = readiness?.status ?? "idle";
   const label =
     status === "ready"
@@ -82,18 +87,31 @@ function TrackingReadiness({ readiness, onOpenSetup }) {
           : "Camera is off";
 
   return (
-    <button
-      aria-label={`${label}. Open camera and tracking setup.`}
-      className={`product-home-readiness ${status}`}
-      onClick={onOpenSetup}
-      type="button"
-    >
-      <span className="product-home-readiness-dot" aria-hidden="true" />
-      <span>{label}</span>
-      <span className="product-home-readiness-action">
-        {status === "ready" ? "Check setup" : "Set up"}
-      </span>
-    </button>
+    <div className="product-home-camera-controls">
+      <button
+        aria-label={`${label}. Open camera and tracking setup.`}
+        className={`product-home-readiness ${status}`}
+        onClick={onOpenSetup}
+        type="button"
+      >
+        <span className="product-home-readiness-dot" aria-hidden="true" />
+        <span>{label}</span>
+        <span className="product-home-readiness-action">
+          {status === "ready" ? "Check setup" : "Set up"}
+        </span>
+      </button>
+      {cameraActive && onStopCamera ? (
+        <button
+          aria-label="Camera is on. Turn camera off."
+          className="product-home-camera-stop"
+          onClick={onStopCamera}
+          type="button"
+        >
+          <span aria-hidden="true">●</span>
+          <span className="product-home-camera-stop-label">Turn camera off</span>
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -211,8 +229,10 @@ export default function ProductHome({
   onSelectMode,
   onOpenSetup,
   onOpenSettings,
+  onStopCamera,
   onSelectArea,
   onToggleFavorite,
+  cameraActive = false,
   initialArea = "all",
 }) {
   const [query, setQuery] = useState("");
@@ -354,7 +374,12 @@ export default function ProductHome({
           >
             <MyCreationsLauncher onSelectMode={onSelectMode} />
           </Suspense>
-          <TrackingReadiness readiness={readiness} onOpenSetup={onOpenSetup} />
+          <TrackingReadiness
+            cameraActive={cameraActive}
+            readiness={readiness}
+            onOpenSetup={onOpenSetup}
+            onStopCamera={onStopCamera}
+          />
           <button
             aria-label="Open settings"
             className="product-home-icon-button"

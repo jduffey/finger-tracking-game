@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
   CAMERA_FAILURE_SCENARIOS,
   getCameraRequestCount,
+  getCameraTrackStopCount,
   getModelInitializationCount,
   holdTrackingModelInitialization,
   installCameraFailureStub,
@@ -143,6 +144,33 @@ test("busy-camera recovery keeps alternate devices available before retry", asyn
 
   await alert.getByRole("button", { name: "Try again" }).click();
   await expect.poll(() => getCameraRequestCount(page)).toBe(4);
+});
+
+test("an active camera stays visible after setup and can be stopped from Home", async ({
+  page,
+}) => {
+  await installSyntheticCameraStub(page);
+  await installSuccessfulTrackingModelStub(page);
+  await page.goto("/setup");
+
+  await page.getByRole("button", { name: "Enable camera" }).click();
+  await expect(
+    page.getByRole("button", { name: "Stop camera" }),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect.poll(() => getCameraRequestCount(page)).toBe(1);
+
+  await page.getByRole("button", { name: "Home" }).click();
+  const stopCamera = page.getByRole("button", {
+    name: "Camera is on. Turn camera off.",
+  });
+  await expect(stopCamera).toBeVisible();
+  await stopCamera.click();
+
+  await expect(stopCamera).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: /Camera is off\. Open camera/i }),
+  ).toBeVisible();
+  await expect.poll(() => getCameraTrackStopCount(page)).toBeGreaterThan(0);
 });
 
 test("tracking model failure offers retry and pointer fallback", async ({

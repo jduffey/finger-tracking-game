@@ -96,13 +96,19 @@
 }
 
 .product-home-header-actions,
+.product-home-camera-controls,
 .product-home-hero-actions {
   align-items: center;
   display: flex;
   gap: 10px;
 }
 
+.product-home-camera-controls {
+  align-items: center;
+}
+
 .product-home-readiness,
+.product-home-camera-stop,
 .product-home-icon-button,
 .product-primary-action,
 .product-secondary-action,
@@ -115,6 +121,18 @@
   font: inherit;
   justify-content: center;
   min-height: 44px;
+}
+
+.product-home-camera-stop {
+  align-items: center;
+  background: rgba(255, 125, 134, 0.1);
+  border: 1px solid rgba(255, 125, 134, 0.4);
+  border-radius: 999px;
+  color: #ffd8dc;
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 7px;
+  padding: 8px 12px;
 }
 
 .product-home-readiness {
@@ -1000,6 +1018,7 @@ button.product-shortcut-card:hover {
 
   .product-home-brand small,
   .product-home-readiness > span:nth-child(2),
+  .product-home-camera-stop-label,
   .product-home-creations-label {
     display: none;
   }
@@ -1116,6 +1135,11 @@ button.product-shortcut-card:hover {
   }
 
   .product-home-readiness {
+    min-width: 44px;
+    padding: 10px;
+  }
+
+  .product-home-camera-stop {
     min-width: 44px;
     padding: 10px;
   }

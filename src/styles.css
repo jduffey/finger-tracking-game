@@ -4831,6 +4831,20 @@ html[data-low-sensory="true"] .fullscreen-camera-invaders-ufo {
   pointer-events: auto;
 }
 
+.fullscreen-camera-stop {
+  backdrop-filter: blur(12px);
+  background: rgba(7, 13, 21, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  font-size: 0.78rem;
+  left: max(14px, env(safe-area-inset-left));
+  min-height: 44px;
+  padding: 8px 12px;
+  pointer-events: auto;
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  z-index: 18;
+}
+
 .fullscreen-camera-errors {
   align-items: flex-start;
   display: flex;
@@ -4845,6 +4859,24 @@ html[data-low-sensory="true"] .fullscreen-camera-invaders-ufo {
   color: #ffe4e4;
   margin: 0;
   padding: 10px 12px;
+}
+
+.fullscreen-camera-errors .error-text,
+.camera-support-error .error-text {
+  display: grid;
+  gap: 4px;
+}
+
+.fullscreen-camera-errors .error-text span {
+  color: #ffe4e4;
+}
+
+.camera-support-error .error-text span {
+  color: #5f2630;
+}
+
+.camera-support-error {
+  margin-top: 10px;
 }
 
 .help-text {
@@ -5300,9 +5332,15 @@ html[data-low-sensory="true"] .fullscreen-camera-invaders-ufo {
 }
 
 .minority-lab-error {
+  display: grid;
+  gap: 4px;
   margin: 0;
   max-width: min(420px, calc(100vw - 36px));
   pointer-events: auto;
+}
+
+.minority-lab-error span {
+  color: #ffe4e4;
 }
 
 .minority-stage-shell {
