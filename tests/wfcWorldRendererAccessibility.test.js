@@ -22,3 +22,11 @@ test("World Painter announces canvas status without exposing the decorative grid
   assert.match(source, /aria-atomic="true"/);
   assert.match(source, /role="status"/);
 });
+
+test("World Painter isolates the large grid from animation-frame shell renders", () => {
+  assert.match(source, /const WfcWorldCell = memo\(/);
+  assert.match(source, /const WfcWorldGridCells = memo\(/);
+  assert.match(source, /useLayoutEffect\(\(\) => \{/);
+  assert.match(source, /children\?\.\[hoverIndex\]/);
+  assert.doesNotMatch(source, /getWfcGrid/);
+});
