@@ -191,6 +191,11 @@ body {
   justify-content: center;
 }
 
+.content-grid.single-pane-layout,
+.content-grid.calibration-layout.single-pane-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .content-grid.body-layout .camera-card {
   justify-self: center;
   width: min(100%, 920px);
@@ -1221,6 +1226,38 @@ body {
   top: 0;
 }
 
+.fullscreen-camera-brick-dodger-lane-signal {
+  border-top: 5px solid transparent;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  height: 18%;
+  padding-top: 8px;
+  position: absolute;
+  text-align: center;
+  text-transform: uppercase;
+  top: 0;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.fullscreen-camera-brick-dodger-lane-signal.warning,
+.fullscreen-camera-brick-dodger-lane-signal.watch {
+  background: linear-gradient(180deg, rgba(255, 188, 74, 0.25), transparent);
+  border-color: #ffc15c;
+}
+
+.fullscreen-camera-brick-dodger-lane-signal.critical {
+  background: linear-gradient(180deg, rgba(255, 75, 69, 0.38), transparent);
+  border-color: #ff625c;
+}
+
+.fullscreen-camera-brick-dodger-lane-signal.pickup {
+  background: linear-gradient(180deg, rgba(112, 244, 220, 0.24), transparent);
+  border-color: #70f4dc;
+}
+
 .fullscreen-camera-brick-dodger-player {
   background:
     radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.96), transparent 42%),
@@ -1268,6 +1305,27 @@ body {
   position: absolute;
 }
 
+.fullscreen-camera-brick-dodger-bonus {
+  align-items: center;
+  color: #211504;
+  display: flex;
+  font-size: clamp(0.8rem, 2vw, 1.25rem);
+  font-weight: 1000;
+  justify-content: center;
+}
+
+.fullscreen-camera-brick-dodger-bonus.shield {
+  background: radial-gradient(circle, #edffff 0 28%, #61e5ff 30% 66%, #147aa7 68%);
+  border-radius: 50%;
+  clip-path: none;
+}
+
+.fullscreen-camera-brick-dodger-bonus.slow-time {
+  background: radial-gradient(circle, #f6edff 0 28%, #bd82ff 30% 66%, #6330a1 68%);
+  border-radius: 50%;
+  clip-path: none;
+}
+
 .fullscreen-camera-brick-dodger-scoreboard,
 .fullscreen-camera-brick-dodger-legend {
   background: rgba(9, 17, 27, 0.72);
@@ -1313,6 +1371,69 @@ body {
 
 .fullscreen-camera-brick-dodger-banner.game-over {
   background: rgba(43, 10, 10, 0.8);
+}
+
+.fullscreen-camera-brick-dodger-stage-meter {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  height: 5px;
+  left: 18px;
+  overflow: hidden;
+  position: absolute;
+  right: 18px;
+  top: 65px;
+}
+
+.fullscreen-camera-brick-dodger-stage-meter > span {
+  background: linear-gradient(90deg, #63e7ff, #ffe37b);
+  display: block;
+  height: 100%;
+  transition: width 180ms linear;
+}
+
+.fullscreen-camera-brick-dodger-slow-time {
+  background: rgba(75, 31, 121, 0.78);
+  border: 1px solid rgba(215, 174, 255, 0.52);
+  border-radius: 999px;
+  color: #f9edff;
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  position: absolute;
+  right: 18px;
+  top: 82px;
+}
+
+.fullscreen-camera-brick-dodger-recap {
+  background: rgba(8, 17, 28, 0.9);
+  border: 1px solid rgba(130, 235, 255, 0.34);
+  border-radius: 20px;
+  color: #fff;
+  display: grid;
+  gap: 8px;
+  left: 50%;
+  max-width: min(92%, 620px);
+  padding: 20px 24px;
+  place-items: center;
+  position: absolute;
+  text-align: center;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-brick-dodger-recap > strong {
+  font-size: clamp(1.4rem, 4vw, 2.5rem);
+}
+
+.fullscreen-camera-brick-dodger-recap > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+.fullscreen-camera-brick-dodger-recap.game-over {
+  border-color: rgba(255, 121, 111, 0.5);
 }
 
 .fullscreen-camera-breakout-brick {
@@ -1609,6 +1730,22 @@ body {
   position: absolute;
   top: 34%;
   width: 18%;
+}
+
+.fullscreen-camera-flappy-bird.pinch-pulse {
+  animation: flappy-pinch-pulse 180ms ease-out;
+}
+
+@keyframes flappy-pinch-pulse {
+  0% {
+    filter: brightness(1.8) drop-shadow(0 0 0 rgba(255, 244, 163, 0));
+  }
+  55% {
+    filter: brightness(1.3) drop-shadow(0 0 18px rgba(255, 244, 163, 0.82));
+  }
+  100% {
+    filter: none;
+  }
 }
 
 .fullscreen-camera-flappy-ground {
@@ -2617,6 +2754,84 @@ body {
   box-shadow: 0 0 14px rgba(110, 210, 255, 0.5);
 }
 
+.fullscreen-camera-invaders-shield {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(92, 245, 183, calc(0.18 + var(--shield-health) * 0.58)),
+      rgba(84, 198, 255, calc(0.14 + var(--shield-health) * 0.52))
+    );
+  border: 2px solid rgba(183, 255, 226, calc(0.28 + var(--shield-health) * 0.58));
+  border-radius: 999px 999px 12px 12px;
+  box-shadow: 0 0 22px rgba(75, 238, 182, calc(var(--shield-health) * 0.28));
+  opacity: calc(0.2 + var(--shield-health) * 0.8);
+  position: absolute;
+}
+
+.fullscreen-camera-invaders-ufo {
+  animation: invaders-ufo-pulse 900ms ease-in-out infinite alternate;
+  background:
+    radial-gradient(circle at 50% 18%, #fff5a4 0 18%, transparent 20%),
+    linear-gradient(180deg, #ff7dd9 0 42%, #7b4dff 43% 100%);
+  border: 3px solid rgba(16, 18, 24, 0.96);
+  border-radius: 50% 50% 36% 36%;
+  box-shadow: 0 0 20px rgba(255, 106, 220, 0.58);
+  position: absolute;
+}
+
+.fullscreen-camera-invaders-power-up {
+  align-items: center;
+  background: #fff7c7;
+  border: 3px solid rgba(16, 18, 24, 0.95);
+  border-radius: 50%;
+  box-shadow: 0 0 18px rgba(255, 240, 140, 0.62);
+  color: #122033;
+  display: flex;
+  font-size: 0.88rem;
+  font-weight: 950;
+  justify-content: center;
+  position: absolute;
+}
+
+.fullscreen-camera-invaders-power-up.shield-repair {
+  background: #9cffe0;
+}
+
+.fullscreen-camera-invaders-ship.invulnerable {
+  animation: invaders-ship-invulnerable 220ms steps(2, jump-none) infinite;
+}
+
+@keyframes invaders-ufo-pulse {
+  from {
+    filter: brightness(0.92);
+  }
+  to {
+    filter: brightness(1.28);
+  }
+}
+
+@keyframes invaders-ship-invulnerable {
+  50% {
+    opacity: 0.28;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fullscreen-camera-flappy-bird.pinch-pulse,
+  .fullscreen-camera-invaders-ufo,
+  .fullscreen-camera-invaders-ship.invulnerable {
+    animation: none;
+  }
+}
+
+html[data-reduced-motion="true"] .fullscreen-camera-flappy-bird.pinch-pulse,
+html[data-reduced-motion="true"] .fullscreen-camera-invaders-ufo,
+html[data-reduced-motion="true"] .fullscreen-camera-invaders-ship.invulnerable,
+html[data-low-sensory="true"] .fullscreen-camera-flappy-bird.pinch-pulse,
+html[data-low-sensory="true"] .fullscreen-camera-invaders-ufo {
+  animation: none;
+}
+
 .fullscreen-camera-invaders-scoreboard,
 .fullscreen-camera-invaders-legend {
   background: rgba(9, 17, 27, 0.72);
@@ -3064,6 +3279,64 @@ body {
   color: #ff7a65;
 }
 
+.fullscreen-camera-missile-wave-status,
+.fullscreen-camera-missile-resources {
+  background: rgba(9, 17, 27, 0.8);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 14px;
+  color: #f4f7fb;
+  display: grid;
+  gap: 5px;
+  padding: 9px 12px;
+  position: absolute;
+  right: 18px;
+  top: 18px;
+}
+
+.fullscreen-camera-missile-wave-status {
+  min-width: 180px;
+}
+
+.fullscreen-camera-missile-wave-status > span {
+  color: rgba(226, 239, 255, 0.74);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-missile-wave-status > div,
+.fullscreen-camera-missile-resources i {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  display: block;
+  height: 4px;
+  overflow: hidden;
+}
+
+.fullscreen-camera-missile-wave-status > div > span,
+.fullscreen-camera-missile-resources i > span {
+  background: #77f3cf;
+  display: block;
+  height: 100%;
+}
+
+.fullscreen-camera-missile-resources {
+  min-width: 180px;
+  top: 124px;
+}
+
+.fullscreen-camera-missile-resources > div {
+  display: grid;
+  font-size: 0.72rem;
+  font-weight: 800;
+  gap: 4px;
+}
+
+.fullscreen-camera-missile-resources.empty,
+.fullscreen-camera-missile-resources.charging {
+  border-color: rgba(255, 194, 92, 0.48);
+}
+
 .fullscreen-camera-missile-legend {
   bottom: 18px;
   font-size: 0.82rem;
@@ -3147,6 +3420,32 @@ body {
   font-size: clamp(1.45rem, 4vw, 2.5rem);
   letter-spacing: 0.04em;
   padding: 18px 24px;
+}
+
+.fullscreen-camera-missile-banner.intermission {
+  background: rgba(9, 17, 27, 0.86);
+  border: 1px solid rgba(119, 243, 207, 0.36);
+  border-radius: 20px;
+  font-size: 1rem;
+  letter-spacing: 0;
+  min-width: min(90vw, 460px);
+  padding: 20px 24px;
+}
+
+.fullscreen-camera-missile-medals {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  gap: 8px;
+  justify-content: center;
+}
+
+.fullscreen-camera-missile-medals > span {
+  background: rgba(255, 237, 151, 0.14);
+  border: 1px solid rgba(255, 237, 151, 0.3);
+  border-radius: 999px;
+  color: #fff0a5;
+  padding: 5px 9px;
 }
 
 .fullscreen-camera-missile-game-over-title {

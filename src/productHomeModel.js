@@ -96,9 +96,9 @@ export function filterLibraryModes(
 }
 
 export function selectDailyChallengeMode({ date = new Date() } = {}) {
-  const candidates = getFeaturedModes().filter(
+  const candidates = listModes({ area: PRODUCT_AREAS.PLAY }).filter(
     (mode) =>
-      mode.area === PRODUCT_AREAS.PLAY &&
+      mode.dailyChallenge === true &&
       mode.maturity !== MODE_MATURITY.EXPERIMENTAL &&
       mode.maturity !== MODE_MATURITY.INTERNAL,
   );

@@ -1,5 +1,5 @@
 export const USER_PREFERENCES_STORAGE_KEY = "motionArcade.preferences.v1";
-export const USER_PREFERENCES_VERSION = 1;
+export const USER_PREFERENCES_VERSION = 3;
 
 export const DEFAULT_USER_PREFERENCES = Object.freeze({
   version: USER_PREFERENCES_VERSION,
@@ -14,8 +14,10 @@ export const DEFAULT_USER_PREFERENCES = Object.freeze({
   reducedMotion: false,
   highContrast: false,
   lowSensory: false,
+  performanceMode: "auto",
   masterVolume: 0.8,
   musicVolume: 0.65,
+  effectsVolume: 0.8,
   muted: false,
   cameraPreview: "compact",
   favoriteModeIds: Object.freeze([]),
@@ -60,8 +62,12 @@ export function normalizeUserPreferences(value) {
     reducedMotion: Boolean(source.reducedMotion),
     highContrast: Boolean(source.highContrast),
     lowSensory: Boolean(source.lowSensory),
+    performanceMode: ["auto", "battery", "quality"].includes(source.performanceMode)
+      ? source.performanceMode
+      : DEFAULT_USER_PREFERENCES.performanceMode,
     masterVolume: clamp(source.masterVolume, 0, 1, 0.8),
     musicVolume: clamp(source.musicVolume, 0, 1, 0.65),
+    effectsVolume: clamp(source.effectsVolume, 0, 1, 0.8),
     muted: Boolean(source.muted),
     cameraPreview: ["hidden", "compact", "expanded"].includes(source.cameraPreview)
       ? source.cameraPreview

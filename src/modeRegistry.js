@@ -112,6 +112,7 @@ const catalog = [
     difficulty: "Medium",
     players: 1,
     featured: true,
+    dailyChallenge: true,
     ...sharedFullscreenGame,
   },
   {
@@ -146,6 +147,7 @@ const catalog = [
     difficulty: "Medium",
     players: 1,
     featured: true,
+    dailyChallenge: true,
     ...sharedFullscreenGame,
   },
   {
@@ -297,6 +299,7 @@ const catalog = [
     typicalMinutes: 2,
     difficulty: "Hard",
     players: 1,
+    dailyChallenge: true,
     ...sharedFullscreenGame,
   },
   {

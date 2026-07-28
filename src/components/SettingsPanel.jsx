@@ -64,6 +64,9 @@ function Toggle({ checked, id, onChange }) {
 
 export default function SettingsPanel({
   preferences,
+  capabilities,
+  qualityBudget,
+  trackingFps = 0,
   onChange,
   onBack,
   onReset,
@@ -240,6 +243,66 @@ export default function SettingsPanel({
               value={preferences.cursorScale}
               valueLabel={`${Math.round(preferences.cursorScale * 100)}%`}
             />
+            <SettingRow
+              controlId="performance-mode"
+              description="Automatic adapts to the device and live frame rate. Battery Saver favors cooler, lighter play."
+              title="Performance"
+            >
+              <select
+                id="performance-mode"
+                onChange={(event) => update("performanceMode", event.target.value)}
+                value={preferences.performanceMode}
+              >
+                <option value="auto">Automatic</option>
+                <option value="battery">Battery Saver</option>
+                <option value="quality">High Quality</option>
+              </select>
+            </SettingRow>
+          </div>
+        </section>
+
+        <section className="settings-section" aria-labelledby="settings-device">
+          <div className="settings-section-heading">
+            <h2 id="settings-device">Device readiness</h2>
+            <p>
+              These checks never open your camera. They help Motion Arcade choose a smooth
+              starting point.
+            </p>
+          </div>
+          <div className="settings-card settings-capability-card">
+            <dl className="settings-capability-grid">
+              <div>
+                <dt>Camera API</dt>
+                <dd>{capabilities?.camera?.status ?? "Unknown"}</dd>
+              </div>
+              <div>
+                <dt>Graphics</dt>
+                <dd>{capabilities?.graphics?.preferredApi ?? "Unknown"}</dd>
+              </div>
+              <div>
+                <dt>Active quality</dt>
+                <dd>{qualityBudget?.level ?? "Automatic"}</dd>
+              </div>
+              <div>
+                <dt>Tracking rate</dt>
+                <dd>
+                  {trackingFps > 0
+                    ? `${Math.round(trackingFps)} fps`
+                    : `Up to ${qualityBudget?.inferenceFps ?? "—"} fps`}
+                </dd>
+              </div>
+            </dl>
+            {capabilities?.issues?.length ? (
+              <ul className="settings-capability-notices">
+                {capabilities.issues.map((issue) => (
+                  <li key={issue.code}>{issue.message}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="settings-capability-ready">
+                This device has the browser features needed for the full experience.
+              </p>
+            )}
           </div>
         </section>
 
@@ -276,6 +339,16 @@ export default function SettingsPanel({
               value={preferences.musicVolume}
               valueLabel={`${Math.round(preferences.musicVolume * 100)}%`}
             />
+            <RangeSetting
+              id="effects-volume"
+              max={1}
+              min={0}
+              onChange={(value) => update("effectsVolume", value)}
+              step={0.05}
+              title="Effects volume"
+              value={preferences.effectsVolume}
+              valueLabel={`${Math.round(preferences.effectsVolume * 100)}%`}
+            />
           </div>
         </section>
 
@@ -288,6 +361,21 @@ export default function SettingsPanel({
             </p>
           </div>
           <div className="settings-card settings-data-actions">
+            <SettingRow
+              controlId="camera-preview"
+              description="Choose how much room the camera preview uses outside setup."
+              title="Camera preview"
+            >
+              <select
+                id="camera-preview"
+                onChange={(event) => update("cameraPreview", event.target.value)}
+                value={preferences.cameraPreview}
+              >
+                <option value="hidden">Hidden</option>
+                <option value="compact">Compact</option>
+                <option value="expanded">Expanded</option>
+              </select>
+            </SettingRow>
             <div className="settings-camera-action">
               <button disabled={!cameraActive} onClick={onStopCamera} type="button">
                 Stop camera

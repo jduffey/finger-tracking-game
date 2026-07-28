@@ -34,6 +34,11 @@ const TERMINAL_STATES = Object.freeze({
     status: "game_over",
     score: 1_200,
     threatsStopped: 12,
+    outcome: "victory",
+    wavesCleared: 5,
+    citiesSurviving: 4,
+    accuracy: 75,
+    perfectWaves: 2,
     elapsedMs: 95_000,
   },
   "brick-dodger": {
@@ -41,7 +46,11 @@ const TERMINAL_STATES = Object.freeze({
     score: 975,
     survivalMs: 48_000,
     elapsedMs: 50_000,
-    bonusStreak: 3,
+    stage: 4,
+    stagesCleared: 3,
+    nearMisses: 18,
+    bestMultiplier: 3,
+    pickupsCollected: 7,
   },
   "hand-bounce": {
     status: "gameover",
@@ -74,17 +83,41 @@ const TERMINAL_STATES = Object.freeze({
     board: ["X", "O", "X", "O", "X", null, "X", "O", null],
   },
   invaders: {
-    status: "cleared",
+    status: "gameover",
     score: 4_000,
+    wave: 3,
+    lives: 0,
     enemies: [
       { alive: false },
       { alive: false },
       { alive: false },
     ],
+    layout: { width: 800 },
+    stats: {
+      enemiesDestroyed: 18,
+      wavesCleared: 2,
+      shotsFired: 24,
+      enemyShotsFired: 10,
+      ufoHits: 2,
+      powerUpsCollected: 1,
+      livesLost: 3,
+      elapsedMs: 120_000,
+      bestWave: 3,
+    },
   },
   flappy: {
     status: "gameover",
     score: 8,
+    layout: { width: 800 },
+    stats: {
+      pipesCleared: 8,
+      centerBonuses: 3,
+      centerStreak: 0,
+      bestCenterStreak: 2,
+      flaps: 14,
+      elapsedMs: 30_000,
+      maxDifficultyLevel: 2,
+    },
   },
 });
 
@@ -144,14 +177,14 @@ test("terminal fullscreen modes map to stable mode ids and semantic outcomes", (
   const expected = {
     "sky-patrol": { modeId: "sky-patrol", outcome: "lost", score: 840 },
     "fruit-ninja": { modeId: "slice-air", outcome: "completed", score: 350 },
-    "missile-command": { modeId: "missile-command", outcome: "lost", score: 1_200 },
+    "missile-command": { modeId: "missile-command", outcome: "won", score: 1_200 },
     "brick-dodger": { modeId: "brick-dodger", outcome: "completed", score: 975 },
     "hand-bounce": { modeId: "hand-bounce", outcome: "completed", score: 14 },
     breakout: { modeId: "breakout", outcome: "won", score: 5_400 },
     "breakout-coop": { modeId: "breakout-coop", outcome: "won", score: 7_250 },
     "finger-pong": { modeId: "finger-pong", outcome: "won", score: 7 },
     "tic-tac-toe": { modeId: "tic-tac-toe", outcome: "won", score: 1 },
-    invaders: { modeId: "invaders", outcome: "won", score: 4_000 },
+    invaders: { modeId: "invaders", outcome: "lost", score: 4_000 },
     flappy: { modeId: "flappy", outcome: "completed", score: 8 },
   };
 
@@ -200,11 +233,19 @@ test("fullscreen results expose useful mode-specific secondary metrics", () => {
   assert.deepEqual(resultFor("missile-command").metrics, {
     score: 1_200,
     threatsStopped: 12,
+    wavesCleared: 5,
+    citiesSurviving: 4,
+    accuracyPercent: 75,
+    perfectWaves: 2,
     survivalMs: 120_000,
   });
   assert.deepEqual(resultFor("brick-dodger").metrics, {
     score: 975,
-    bonusStreak: 3,
+    stage: 4,
+    stagesCleared: 3,
+    nearMisses: 18,
+    bestMultiplier: 3,
+    pickups: 7,
     survivalMs: 120_000,
   });
   assert.deepEqual(resultFor("hand-bounce").metrics, {
@@ -265,18 +306,33 @@ test("fullscreen results expose useful mode-specific secondary metrics", () => {
   const invaders = resultFor("invaders");
   assert.deepEqual(invaders.metrics, {
     score: 4_000,
-    enemiesDestroyed: 3,
-    enemiesRemaining: 0,
-    clearTimeMs: 120_000,
+    wave: 3,
+    wavesCleared: 2,
+    enemiesDestroyed: 18,
+    accuracyPercent: 83,
+    ufoHits: 2,
+    powerUpsCollected: 1,
+    livesRemaining: 0,
   });
-  assert.equal(
-    invaders.metricComparisons.enemiesRemaining,
-    BEST_METRIC_COMPARISONS.LOWER,
-  );
   assert.deepEqual(resultFor("flappy").metrics, {
     score: 8,
     pipesCleared: 8,
+    centerBonuses: 3,
+    bestCenterStreak: 2,
+    flaps: 14,
+    difficultyLevel: 2,
   });
+});
+
+test("an Invaders wave clear is an intermission, not a terminal result", () => {
+  assert.equal(
+    createFullscreenGameResult({
+      fullscreenMode: "invaders",
+      state: { status: "cleared", score: 400, layout: { width: 800 } },
+      sessionId: "invaders-wave-clear",
+    }),
+    null,
+  );
 });
 
 test("loss and draw terminal variants remain distinct", () => {

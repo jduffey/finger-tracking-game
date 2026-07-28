@@ -30,6 +30,15 @@ import {
   stepBrickDodgerGame,
 } from "./brickDodgerGame.js";
 import {
+  getBrickDodgerLaneTelegraphUi,
+  getBrickDodgerMultiplierUi,
+  getBrickDodgerPickupUi,
+  getBrickDodgerResultUi,
+  getBrickDodgerSlowTimeUi,
+  getBrickDodgerStageRecapUi,
+  getBrickDodgerStageUi,
+} from "./brickDodgerUi.js";
+import {
   BREAKOUT_BRICK_COLORS,
   BREAKOUT_BRICK_SCORE,
   BREAKOUT_CAPSULE_SCORE,
@@ -59,7 +68,12 @@ import {
   createFullscreenHandBounceGame,
   stepFullscreenHandBounceGame,
 } from "./fullscreenHandBounceGame.js";
-import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
+import {
+  createFlappyDailyChallengeGame,
+  createFlappyGame,
+  flapFlappyGame,
+  stepFlappyGame,
+} from "./flappyGame.js";
 import {
   getFullscreenDetectorHandLimit,
   getFullscreenTrackedHandLimit,
@@ -99,6 +113,7 @@ import { runFullscreenOverlayGameUpdates } from "./fullscreenOverlayGames.js";
 import {
   MISSILE_COMMAND_COUNTDOWN_MS,
   MISSILE_COMMAND_THREAT_SCORE,
+  createMissileCommandDailyGame,
   createMissileCommandGame,
   getMissileCommandExplosionRadius,
   launchMissileCommandInterceptor,
@@ -113,11 +128,14 @@ import {
   getMissileCommandInterceptorUi,
   getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
+  getMissileCommandIntermissionUi,
+  getMissileCommandResourceUi,
   getMissileCommandSceneClassName,
   getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
   getMissileCommandThreatUi,
   getMissileCommandTacticalMetrics,
+  getMissileCommandWaveUi,
 } from "./missileCommandUi.js";
 import {
   SPACE_INVADERS_ENEMY_SCORE,
@@ -289,6 +307,19 @@ import {
   createWhackAMoleResult,
 } from "./gameResultAdapters.js";
 import { formatExperienceDuration } from "./experienceResult.js";
+import { CREATIVE_GALLERY_STORAGE_KEY } from "./creativeGallery.js";
+import { clearCreativeAssets } from "./creativeAssetStorage.js";
+import {
+  assessDeviceCapabilities,
+  collectDeviceCapabilitySignals,
+  getCapabilityLaunchRecommendation,
+} from "./deviceCapabilities.js";
+import {
+  QUALITY_LEVELS,
+  createDynamicQualityController,
+  getDynamicQualityBudget,
+  updateDynamicQuality,
+} from "./dynamicQuality.js";
 import {
   RESIZABLE_LEFT_PANE_HANDLE_WIDTH_PX,
   RESIZABLE_LEFT_PANE_MIN_WIDTH_PX,
@@ -304,6 +335,13 @@ import {
   isTwoHandGesture,
 } from "./gestures/constants.js";
 import { createGesturePersonalization } from "./gestures/personalization.js";
+import {
+  SPATIAL_MEMORY_ACTIONS,
+  SPATIAL_MEMORY_PHASES,
+  createSpatialMemoryExperience,
+  reduceSpatialMemoryExperience,
+  toSpatialMemoryLegacyState,
+} from "./spatialMemoryExperience.js";
 
 const PHASES = APP_PHASES;
 
@@ -667,8 +705,6 @@ const LAB_EVENT_LOG_LIMIT = 220;
 const LAB_TRAIN_CAPTURE_FRAMES = 24;
 const LAB_TRAIN_COUNTDOWN_SECONDS = 3;
 const SGM_STORAGE_KEY = "spatial_gesture_memory_stats_v1";
-const SGM_STEP_TIMEOUT_MS = 3600;
-const SGM_GLOBAL_BASE_TIME_MS = 10000;
 const SGM_GESTURE_POOL_EARLY = [
   GESTURE_IDS.SWIPE_LEFT,
   GESTURE_IDS.SWIPE_RIGHT,
@@ -977,11 +1013,6 @@ function randomChoice(values) {
   }
   const index = Math.floor(Math.random() * values.length);
   return values[index] ?? values[0];
-}
-
-function formatSgmStepLabel(step) {
-  const ids = Array.isArray(step) ? step : [step];
-  return ids.map((gestureId) => GESTURE_LABEL_BY_ID[gestureId] ?? gestureId).join(" + ");
 }
 
 function createInitialSpatialMemoryStats() {
@@ -1539,6 +1570,43 @@ export default function App() {
   const [trackingRequested, setTrackingRequested] = useState(false);
   const [pendingModeId, setPendingModeId] = useState(null);
   const [preferences, setPreferences] = useState(() => loadUserPreferences());
+  const [deviceCapabilities, setDeviceCapabilities] = useState(() =>
+    assessDeviceCapabilities(collectDeviceCapabilitySignals()),
+  );
+  const dynamicQualityControllerRef = useRef(null);
+  if (!dynamicQualityControllerRef.current) {
+    dynamicQualityControllerRef.current = createDynamicQualityController({
+      capabilities: deviceCapabilities,
+    });
+  }
+  const [dynamicQualityLevel, setDynamicQualityLevel] = useState(
+    dynamicQualityControllerRef.current.level,
+  );
+  const dynamicQualityBudget = useMemo(() => {
+    const requestedLevel =
+      preferences.performanceMode === "battery"
+        ? QUALITY_LEVELS.LOW
+        : preferences.performanceMode === "quality"
+          ? QUALITY_LEVELS.HIGH
+          : dynamicQualityLevel;
+    return getDynamicQualityBudget(requestedLevel, {
+      reducedMotion: preferences.reducedMotion,
+      limitEffects: preferences.lowSensory,
+    });
+  }, [
+    dynamicQualityLevel,
+    preferences.lowSensory,
+    preferences.performanceMode,
+    preferences.reducedMotion,
+  ]);
+  const capabilityRecommendation = useMemo(
+    () =>
+      getCapabilityLaunchRecommendation(deviceCapabilities, {
+        trackingRequired: true,
+        pointerFallback: true,
+      }),
+    [deviceCapabilities],
+  );
   const progressionStoreRef = useRef(null);
   if (!progressionStoreRef.current) {
     progressionStoreRef.current = createGameProgressionStore({
@@ -1602,6 +1670,9 @@ export default function App() {
       successRate: persisted.totalRounds > 0 ? persisted.completedRounds / persisted.totalRounds : 0,
     };
   });
+  const [spatialMemoryExperience, setSpatialMemoryExperience] = useState(() =>
+    createSpatialMemoryExperience(),
+  );
   const [analyticsHands, setAnalyticsHands] = useState([]);
   const [analyticsTimestamp, setAnalyticsTimestamp] = useState(0);
   const [gestureAnalyticsLabSessionKey, setGestureAnalyticsLabSessionKey] = useState(0);
@@ -1705,6 +1776,7 @@ export default function App() {
 
   const detectorRef = useRef(null);
   const detectorMaxHandsRef = useRef(TRACKING_DEFAULT_DETECTOR_MAX_HANDS);
+  const detectorModelTypeRef = useRef(dynamicQualityBudget.modelPreference);
   const detectorReconfigurationSeqRef = useRef(0);
   const poseDetectorRef = useRef(null);
   const poseInitPromiseRef = useRef(null);
@@ -1717,6 +1789,8 @@ export default function App() {
   const attachedVideoElementRef = useRef(null);
   const cameraRetryRef = useRef(null);
   const routeInitializedRef = useRef(false);
+  const pendingLaunchContextRef = useRef(null);
+  const activeLaunchContextRef = useRef({});
   const activeProgressionSessionRef = useRef(null);
   const experienceLifecycleRef = useRef(null);
   const experienceModeIdRef = useRef(null);
@@ -1729,6 +1803,7 @@ export default function App() {
   const lifecycleLastTickRef = useRef(0);
   const rafRef = useRef(0);
   const inferenceBusyRef = useRef(false);
+  const dynamicQualityBudgetRef = useRef(dynamicQualityBudget);
   const activeInferenceTokenRef = useRef(0);
   const lastInferenceStartedAtRef = useRef(0);
   const lastInferenceCompletedAtRef = useRef(0);
@@ -1738,6 +1813,7 @@ export default function App() {
   const phaseRef = useRef(phase);
   const poseStatusRef = useRef(poseStatus);
   const spatialMemoryRef = useRef(spatialMemoryState);
+  const spatialMemoryExperienceRef = useRef(spatialMemoryExperience);
   const viewportRef = useRef(viewport);
   const transformRef = useRef(transform);
   const cursorRef = useRef(cursor);
@@ -2108,8 +2184,14 @@ export default function App() {
       ? inputTestHoveredCell
       : -1;
   const isBodyPosePhase = phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB;
+  const hideInactiveCameraPane =
+    !trackingRequested &&
+    phase !== PHASES.CALIBRATION &&
+    Boolean(getModeByPhase(phase)?.supportsPointerFallback);
   const showLeftPaneResizer =
-    !isBodyPosePhase && viewport.width > DESKTOP_LAYOUT_BREAKPOINT_PX;
+    !hideInactiveCameraPane &&
+    !isBodyPosePhase &&
+    viewport.width > DESKTOP_LAYOUT_BREAKPOINT_PX;
 
   const getContentGridWidth = () =>
     contentGridRef.current?.getBoundingClientRect().width ?? viewport.width;
@@ -2355,6 +2437,30 @@ export default function App() {
       y: clampValue(cursor.y - fullscreenCameraViewport.top, 0, fullscreenCameraViewport.height),
     };
   }, [cursor.x, cursor.y, fullscreenCameraViewport, handDetected, isFullscreenMissileCommandMode]);
+  const fullscreenBrickDodgerStageUi = useMemo(
+    () => getBrickDodgerStageUi(fullscreenBrickDodgerState),
+    [fullscreenBrickDodgerState],
+  );
+  const fullscreenBrickDodgerTelegraphs = useMemo(
+    () => getBrickDodgerLaneTelegraphUi(fullscreenBrickDodgerState),
+    [fullscreenBrickDodgerState],
+  );
+  const fullscreenBrickDodgerMultiplierUi = useMemo(
+    () => getBrickDodgerMultiplierUi(fullscreenBrickDodgerState),
+    [fullscreenBrickDodgerState],
+  );
+  const fullscreenBrickDodgerSlowTimeUi = useMemo(
+    () => getBrickDodgerSlowTimeUi(fullscreenBrickDodgerState),
+    [fullscreenBrickDodgerState],
+  );
+  const fullscreenBrickDodgerStageRecapUi = useMemo(
+    () => getBrickDodgerStageRecapUi(fullscreenBrickDodgerState),
+    [fullscreenBrickDodgerState],
+  );
+  const fullscreenBrickDodgerResultUi = useMemo(
+    () => getBrickDodgerResultUi(fullscreenBrickDodgerState),
+    [fullscreenBrickDodgerState],
+  );
   const fullscreenMissileLaunchPreview = useMemo(
     () => getMissileCommandLaunchPreview(fullscreenMissileCommandState, fullscreenMissileAimPoint),
     [fullscreenMissileAimPoint, fullscreenMissileCommandState],
@@ -2382,6 +2488,18 @@ export default function App() {
   );
   const fullscreenMissileTacticalMetrics = useMemo(
     () => getMissileCommandTacticalMetrics(fullscreenMissileCommandState),
+    [fullscreenMissileCommandState],
+  );
+  const fullscreenMissileResourceUi = useMemo(
+    () => getMissileCommandResourceUi(fullscreenMissileCommandState),
+    [fullscreenMissileCommandState],
+  );
+  const fullscreenMissileWaveUi = useMemo(
+    () => getMissileCommandWaveUi(fullscreenMissileCommandState),
+    [fullscreenMissileCommandState],
+  );
+  const fullscreenMissileIntermissionUi = useMemo(
+    () => getMissileCommandIntermissionUi(fullscreenMissileCommandState),
     [fullscreenMissileCommandState],
   );
   const fullscreenMissileCountdownUi = useMemo(
@@ -3041,8 +3159,25 @@ export default function App() {
     if (phase !== PHASES.BODY_POSE && phase !== PHASES.OFF_AXIS_LAB) {
       setPoseStatus(createEmptyPoseStatus());
     }
-    if (phase !== PHASES.SPATIAL_GESTURE_MEMORY && spatialMemoryRef.current?.active) {
-      setSpatialMemoryState((prev) => ({ ...prev, active: false }));
+    if (
+      phase !== PHASES.SPATIAL_GESTURE_MEMORY &&
+      spatialMemoryExperienceRef.current?.active
+    ) {
+      const stoppedExperience = reduceSpatialMemoryExperience(
+        spatialMemoryExperienceRef.current,
+        {
+          type: SPATIAL_MEMORY_ACTIONS.RESET,
+          round: spatialMemoryExperienceRef.current.round,
+        },
+      );
+      spatialMemoryExperienceRef.current = stoppedExperience;
+      setSpatialMemoryExperience(stoppedExperience);
+      const stoppedLegacy = toSpatialMemoryLegacyState(
+        stoppedExperience,
+        spatialMemoryRef.current,
+      );
+      spatialMemoryRef.current = stoppedLegacy;
+      setSpatialMemoryState(stoppedLegacy);
     }
     if (phase !== PHASES.GESTURE_ART_LAB) {
       setGestureArtHands([]);
@@ -3624,10 +3759,19 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame = createFlappyGame(
-      fullscreenCameraViewport.width,
-      fullscreenCameraViewport.height,
-    );
+    const templateGame =
+      activeLaunchContextRef.current.challenge === "daily"
+        ? createFlappyDailyChallengeGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
+            {
+              dayKey: activeLaunchContextRef.current.dayKey,
+            },
+          )
+        : createFlappyGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
+          );
     const nextGame = initializeOrResizeFullscreenGame(
       "flappy",
       fullscreenFlappyStateRef.current,
@@ -3653,10 +3797,19 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame = createMissileCommandGame(
-      fullscreenCameraViewport.width,
-      fullscreenCameraViewport.height,
-    );
+    const templateGame =
+      activeLaunchContextRef.current.challenge === "daily"
+        ? createMissileCommandDailyGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
+            {
+              dayKey: activeLaunchContextRef.current.dayKey,
+            },
+          )
+        : createMissileCommandGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
+          );
     const nextGame = initializeOrResizeFullscreenGame(
       "missile-command",
       fullscreenMissileCommandStateRef.current,
@@ -4079,6 +4232,10 @@ export default function App() {
   }, [spatialMemoryState]);
 
   useEffect(() => {
+    spatialMemoryExperienceRef.current = spatialMemoryExperience;
+  }, [spatialMemoryExperience]);
+
+  useEffect(() => {
     appLog.debug("Calibration transform state changed", {
       hasTransform: Boolean(transform),
       hasSavedCalibration,
@@ -4094,6 +4251,26 @@ export default function App() {
     const normalized = saveUserPreferences(preferences);
     applyPreferenceDocumentState(normalized);
   }, [preferences]);
+
+  useEffect(() => {
+    dynamicQualityBudgetRef.current = dynamicQualityBudget;
+    const root = document.documentElement;
+    root.dataset.qualityLevel = dynamicQualityBudget.level;
+    root.style.setProperty(
+      "--dynamic-effect-density",
+      dynamicQualityBudget.effectDensity,
+    );
+    root.style.setProperty(
+      "--dynamic-particle-limit",
+      dynamicQualityBudget.particleLimit,
+    );
+  }, [dynamicQualityBudget]);
+
+  useEffect(() => {
+    setDeviceCapabilities(
+      assessDeviceCapabilities(collectDeviceCapabilitySignals()),
+    );
+  }, [viewport.height, viewport.width]);
 
   useEffect(() => {
     trackingRequestedRef.current = trackingRequested;
@@ -4502,7 +4679,13 @@ export default function App() {
       let candidateStream = null;
 
       try {
-        appLog.info("Requesting webcam access", { reason });
+        const captureResolution =
+          dynamicQualityBudgetRef.current.captureResolution;
+        appLog.info("Requesting webcam access", {
+          reason,
+          captureResolution,
+          qualityLevel: dynamicQualityBudgetRef.current.level,
+        });
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error("This browser does not support webcam access.");
         }
@@ -4513,8 +4696,8 @@ export default function App() {
             ...(requestedCameraDeviceId
               ? { deviceId: { exact: requestedCameraDeviceId } }
               : { facingMode: "user" }),
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: captureResolution.width },
+            height: { ideal: captureResolution.height },
           },
         });
 
@@ -4689,13 +4872,19 @@ export default function App() {
           phaseRef.current,
           fullscreenGridModeRef.current,
         );
+        const requestedModelType =
+          dynamicQualityBudgetRef.current.modelPreference;
         const preferredConfig =
           INITIAL_TRACKING_RUNTIME === "mediapipe"
-            ? { runtime: "mediapipe", modelType: "full", maxHands: initialMaxHands }
+            ? {
+                runtime: "mediapipe",
+                modelType: requestedModelType,
+                maxHands: initialMaxHands,
+              }
             : {
                 runtime: "tfjs",
                 backend: "webgl",
-                modelType: "full",
+                modelType: requestedModelType,
                 maxHands: initialMaxHands,
               };
 
@@ -4718,7 +4907,7 @@ export default function App() {
           detector = await initHandTracking({
             runtime: "tfjs",
             backend: "webgl",
-            modelType: "full",
+            modelType: requestedModelType,
             maxHands: initialMaxHands,
           });
         }
@@ -4730,6 +4919,7 @@ export default function App() {
         }
         detectorRef.current = detector;
         detectorMaxHandsRef.current = preferredConfig.maxHands;
+        detectorModelTypeRef.current = preferredConfig.modelType;
         const runtime = getCurrentRuntime() || preferredConfig.runtime;
         const backend =
           getCurrentBackend() || (runtime === "mediapipe" ? "n/a" : preferredConfig.backend || "webgl");
@@ -4771,8 +4961,16 @@ export default function App() {
       return;
     }
 
-    const requestedMaxHands = getTrackingDetectorMaxHandsForContext(phase, fullscreenGridMode);
-    if (detectorMaxHandsRef.current === requestedMaxHands) {
+    const requestedMaxHands = getTrackingDetectorMaxHandsForContext(
+      phase,
+      fullscreenGridMode,
+    );
+    const requestedModelType =
+      dynamicQualityBudget.modelPreference;
+    if (
+      detectorMaxHandsRef.current === requestedMaxHands &&
+      detectorModelTypeRef.current === requestedModelType
+    ) {
       return;
     }
 
@@ -4785,11 +4983,15 @@ export default function App() {
       const currentBackend = getCurrentBackend() || activeBackend || "webgl";
       const requestedConfig =
         currentRuntime === "mediapipe"
-          ? { runtime: "mediapipe", modelType: "full", maxHands: requestedMaxHands }
+          ? {
+              runtime: "mediapipe",
+              modelType: requestedModelType,
+              maxHands: requestedMaxHands,
+            }
           : {
               runtime: "tfjs",
               backend: currentBackend === "cpu" ? "cpu" : "webgl",
-              modelType: "full",
+              modelType: requestedModelType,
               maxHands: requestedMaxHands,
             };
 
@@ -4798,7 +5000,9 @@ export default function App() {
         requestedRuntime: requestedConfig.runtime,
         requestedBackend: requestedConfig.backend ?? "n/a",
         previousMaxHands: detectorMaxHandsRef.current,
+        previousModelType: detectorModelTypeRef.current,
         requestedMaxHands,
+        requestedModelType,
         fullscreenGridMode,
       });
 
@@ -4813,6 +5017,7 @@ export default function App() {
 
         detectorRef.current = nextDetector;
         detectorMaxHandsRef.current = requestedMaxHands;
+        detectorModelTypeRef.current = requestedModelType;
         if (previousDetector && previousDetector !== nextDetector) {
           previousDetector.dispose?.();
         }
@@ -4827,6 +5032,7 @@ export default function App() {
           activeRuntime: getCurrentRuntime(),
           activeBackend: getCurrentBackend(),
           activeMaxHands: requestedMaxHands,
+          activeModelType: requestedModelType,
         });
       } catch (error) {
         if (!cancelled && detectorReconfigurationSeqRef.current === requestId) {
@@ -4854,7 +5060,15 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeBackend, activeRuntime, appLog, fullscreenGridMode, modelReady, phase]);
+  }, [
+    activeBackend,
+    activeRuntime,
+    appLog,
+    dynamicQualityBudget.modelPreference,
+    fullscreenGridMode,
+    modelReady,
+    phase,
+  ]);
 
   useEffect(() => {
     appLog.debug("Starting camera overlay canvas sync effect");
@@ -5316,6 +5530,8 @@ export default function App() {
   function getRecoveryConfig(attempt, reason) {
     const currentRuntime = getCurrentRuntime() || activeRuntime;
     const currentBackend = getCurrentBackend() || activeBackend;
+    const requestedModelType =
+      dynamicQualityBudgetRef.current.modelPreference;
     const requestedMaxHands = getTrackingDetectorMaxHandsForContext(
       phaseRef.current,
       fullscreenGridModeRef.current,
@@ -5328,32 +5544,49 @@ export default function App() {
         return {
           runtime: "tfjs",
           backend: "webgl",
-          modelType: "full",
+          modelType: requestedModelType,
           maxHands: requestedMaxHands,
         };
       }
-      return { runtime: "mediapipe", modelType: "full", maxHands: requestedMaxHands };
+      return {
+        runtime: "mediapipe",
+        modelType: requestedModelType,
+        maxHands: requestedMaxHands,
+      };
     }
 
     // TFJS invalid-keypoint corruption should switch straight to MediaPipe.
     if (reason === "continuous_invalid_landmarks") {
-      return { runtime: "mediapipe", modelType: "full", maxHands: requestedMaxHands };
+      return {
+        runtime: "mediapipe",
+        modelType: requestedModelType,
+        maxHands: requestedMaxHands,
+      };
     }
 
     if (attempt === 1) {
       return {
         runtime: "tfjs",
         backend: currentBackend === "cpu" ? "cpu" : "webgl",
-        modelType: "full",
+        modelType: requestedModelType,
         maxHands: requestedMaxHands,
       };
     }
 
     if (attempt === 2) {
-      return { runtime: "mediapipe", modelType: "full", maxHands: requestedMaxHands };
+      return {
+        runtime: "mediapipe",
+        modelType: requestedModelType,
+        maxHands: requestedMaxHands,
+      };
     }
 
-    return { runtime: "tfjs", backend: "cpu", modelType: "full", maxHands: requestedMaxHands };
+    return {
+      runtime: "tfjs",
+      backend: "cpu",
+      modelType: requestedModelType,
+      maxHands: requestedMaxHands,
+    };
   }
 
   async function recoverDetectorFromInvalidLandmarks(reason, details) {
@@ -5384,6 +5617,7 @@ export default function App() {
       const nextDetector = await initHandTracking(requestedConfig);
       detectorRef.current = nextDetector;
       detectorMaxHandsRef.current = requestedConfig.maxHands;
+      detectorModelTypeRef.current = requestedConfig.modelType;
       if (previousDetector && previousDetector !== nextDetector) {
         previousDetector.dispose?.();
       }
@@ -5655,6 +5889,8 @@ export default function App() {
     stopGameSession();
     replaceExperienceLifecycle(null, null);
     setPendingModeId(null);
+    pendingLaunchContextRef.current = null;
+    activeLaunchContextRef.current = {};
     setPhase(PHASES.HOME);
     phaseRef.current = PHASES.HOME;
     if (updateHistory) {
@@ -5686,13 +5922,21 @@ export default function App() {
     }
   }
 
-  function launchRegisteredModeNow(mode, { updateHistory = true } = {}) {
+  function launchRegisteredModeNow(
+    mode,
+    { updateHistory = true, launchContext = {} } = {},
+  ) {
     if (!mode) {
       navigateToProductHome({ updateHistory });
       return;
     }
 
     setPendingModeId(null);
+    pendingLaunchContextRef.current = null;
+    activeLaunchContextRef.current =
+      launchContext && typeof launchContext === "object"
+        ? { ...launchContext }
+        : {};
     if (
       !mode.hiddenFromLibrary &&
       [PRODUCT_AREAS.PLAY, PRODUCT_AREAS.CREATE, PRODUCT_AREAS.LABS].includes(mode.area)
@@ -5709,7 +5953,7 @@ export default function App() {
     }
 
     if (mode.entryKind === "fullscreen-mode" && mode.fullscreenMode) {
-      beginProgressionSession(mode);
+      beginProgressionSession(mode, activeLaunchContextRef.current);
       openFullscreenCameraScreen();
       fullscreenGridModeRef.current = mode.fullscreenMode;
       setFullscreenGridMode(mode.fullscreenMode);
@@ -5774,7 +6018,11 @@ export default function App() {
 
   function selectProductMode(
     modeOrId,
-    { updateHistory = true, allowWithoutTracking = false } = {},
+    {
+      updateHistory = true,
+      allowWithoutTracking = false,
+      launchContext = {},
+    } = {},
   ) {
     const mode =
       typeof modeOrId === "string" ? getModeById(modeOrId) : modeOrId;
@@ -5790,6 +6038,10 @@ export default function App() {
       (!cameraReady || !modelReady)
     ) {
       setPendingModeId(mode.id);
+      pendingLaunchContextRef.current =
+        launchContext && typeof launchContext === "object"
+          ? { ...launchContext }
+          : {};
       if (updateHistory) {
         updateProductPath(mode.path);
       }
@@ -5797,7 +6049,7 @@ export default function App() {
       return;
     }
 
-    launchRegisteredModeNow(mode, { updateHistory });
+    launchRegisteredModeNow(mode, { updateHistory, launchContext });
   }
 
   function beginProductTrackingSetup() {
@@ -5811,6 +6063,7 @@ export default function App() {
       selectProductMode(pendingModeId, {
         updateHistory: false,
         allowWithoutTracking: false,
+        launchContext: pendingLaunchContextRef.current ?? {},
       });
       return;
     }
@@ -5821,7 +6074,10 @@ export default function App() {
     const pendingMode = pendingModeId ? getModeById(pendingModeId) : null;
     setTrackingRequested(false);
     if (pendingMode?.supportsPointerFallback) {
-      launchRegisteredModeNow(pendingMode, { updateHistory: false });
+      launchRegisteredModeNow(pendingMode, {
+        updateHistory: false,
+        launchContext: pendingLaunchContextRef.current ?? {},
+      });
       return;
     }
     navigateToProductHome({
@@ -5856,9 +6112,11 @@ export default function App() {
     try {
       window.localStorage.removeItem(PERSONALIZATION_STORAGE_KEY);
       window.localStorage.removeItem(SGM_STORAGE_KEY);
+      window.localStorage.removeItem(CREATIVE_GALLERY_STORAGE_KEY);
     } catch (error) {
       appLog.warn("Could not remove all local product data", { error });
     }
+    void clearCreativeAssets();
     personalizationRef.current.clearSamples?.();
     activeProgressionSessionRef.current = null;
     progressionStoreRef.current.clear();
@@ -7719,8 +7977,23 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
-    beginRestartedProgressionSession(getModeByFullscreenId("missile-command"));
-    const nextGame = createMissileCommandGame(viewportMetrics.width, viewportMetrics.height);
+    beginRestartedProgressionSession(
+      getModeByFullscreenId("missile-command"),
+      activeLaunchContextRef.current,
+    );
+    const nextGame =
+      activeLaunchContextRef.current.challenge === "daily"
+        ? createMissileCommandDailyGame(
+            viewportMetrics.width,
+            viewportMetrics.height,
+            {
+              dayKey: activeLaunchContextRef.current.dayKey,
+            },
+          )
+        : createMissileCommandGame(
+            viewportMetrics.width,
+            viewportMetrics.height,
+          );
     fullscreenMissileCommandLastTickRef.current = 0;
     fullscreenMissileCommandStateRef.current = nextGame;
     setFullscreenMissileCommandState(nextGame);
@@ -7816,11 +8089,23 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
-    beginRestartedProgressionSession(getModeByFullscreenId("flappy"));
-    const nextGame = createFlappyGame(
-      viewportMetrics.width,
-      viewportMetrics.height,
+    beginRestartedProgressionSession(
+      getModeByFullscreenId("flappy"),
+      activeLaunchContextRef.current,
     );
+    const nextGame =
+      activeLaunchContextRef.current.challenge === "daily"
+        ? createFlappyDailyChallengeGame(
+            viewportMetrics.width,
+            viewportMetrics.height,
+            {
+              dayKey: activeLaunchContextRef.current.dayKey,
+            },
+          )
+        : createFlappyGame(
+            viewportMetrics.width,
+            viewportMetrics.height,
+          );
     fullscreenFlappyLastTickRef.current = 0;
     fullscreenFlappyStateRef.current = nextGame;
     setFullscreenFlappyState(nextGame);
@@ -7989,6 +8274,8 @@ export default function App() {
           status: fullscreenInvadersState?.message,
           items: [
             item("score", "Score", fullscreenInvadersState?.score ?? 0, "strong"),
+            item("wave", "Wave", fullscreenInvadersState?.wave ?? 1),
+            item("lives", "Lives", fullscreenInvadersState?.lives ?? 0),
             item(
               "remaining",
               "Remaining",
@@ -8001,6 +8288,16 @@ export default function App() {
           status: fullscreenFlappyState?.message,
           items: [
             item("score", "Gates", fullscreenFlappyState?.score ?? 0, "strong"),
+            item(
+              "center",
+              "Center streak",
+              fullscreenFlappyState?.stats?.centerStreak ?? 0,
+            ),
+            item(
+              "level",
+              "Level",
+              fullscreenFlappyState?.difficulty?.level ?? 1,
+            ),
           ],
         };
       case "tic-tac-toe":
@@ -10661,17 +10958,97 @@ export default function App() {
       if (phaseRef.current === PHASES.SPATIAL_GESTURE_MEMORY) {
         for (const event of output.events) {
           if (event?.confidence >= labConfidenceThresholdRef.current) {
-            handleSpatialMemoryEvent(event, timestamp);
+            dispatchSpatialMemoryExperience({
+              type: SPATIAL_MEMORY_ACTIONS.GESTURE_INPUT,
+              gestureId: event.gestureId,
+              confidence: event.confidence,
+              source: "camera",
+              now: timestamp,
+              frameId: output.frameId,
+            });
           }
         }
       }
     }
-    if (phaseRef.current === PHASES.SPATIAL_GESTURE_MEMORY) {
-      updateSpatialMemoryTimeout(timestamp);
-    }
     updateLabTrainingSession(timestamp, output);
   }
 
+
+  function dispatchSpatialMemoryExperience(action) {
+    const previousExperience =
+      spatialMemoryExperienceRef.current ??
+      createSpatialMemoryExperience();
+    const nextExperience = reduceSpatialMemoryExperience(
+      previousExperience,
+      action,
+    );
+    if (nextExperience === previousExperience) {
+      return previousExperience;
+    }
+
+    spatialMemoryExperienceRef.current = nextExperience;
+    setSpatialMemoryExperience(nextExperience);
+
+    const previousLegacy =
+      spatialMemoryRef.current ?? createInitialSpatialMemoryState();
+    let nextLegacy = toSpatialMemoryLegacyState(
+      nextExperience,
+      previousLegacy,
+    );
+    const enteredResult =
+      previousExperience.phase !== SPATIAL_MEMORY_PHASES.RESULT &&
+      nextExperience.phase === SPATIAL_MEMORY_PHASES.RESULT;
+    if (enteredResult) {
+      const succeeded =
+        nextExperience.result?.outcome === "success";
+      const totalRounds = (previousLegacy.totalRounds ?? 0) + 1;
+      const completedRounds =
+        (previousLegacy.completedRounds ?? 0) + (succeeded ? 1 : 0);
+      const score = nextExperience.scores?.combinedScore ?? 0;
+      const highScore = Math.max(previousLegacy.highScore ?? 0, score);
+      const bestRound = succeeded
+        ? Math.max(previousLegacy.bestRound ?? 1, nextExperience.round)
+        : previousLegacy.bestRound ?? 1;
+      const elapsedMs =
+        Number.isFinite(nextExperience.phaseStartedAt) &&
+        Number.isFinite(nextExperience.observeStartedAt)
+          ? Math.max(
+              0,
+              nextExperience.phaseStartedAt -
+                nextExperience.observeStartedAt,
+            )
+          : 0;
+      nextLegacy = {
+        ...nextLegacy,
+        totalRounds,
+        completedRounds,
+        highScore,
+        bestRound,
+        successRate: completedRounds / Math.max(1, totalRounds),
+        elapsedSeconds: elapsedMs / 1000,
+        smoothness:
+          1 -
+          Math.min(
+            1,
+            (nextExperience.mistakesUsed ?? 0) /
+              Math.max(
+                1,
+                (nextExperience.mistakeAllowance ?? 0) + 1,
+              ),
+          ),
+        difficultyLevel: previousLegacy.difficultyLevel ?? 1,
+      };
+      saveSpatialMemoryStats({
+        highScore,
+        bestRound,
+        totalRounds,
+        completedRounds,
+      });
+    }
+    spatialMemoryRef.current = nextLegacy;
+    setSpatialMemoryState(nextLegacy);
+    return nextExperience;
+  }
 
   function startSpatialGestureMemoryRound() {
     const previous = spatialMemoryRef.current ?? createInitialSpatialMemoryState();
@@ -10682,209 +11059,40 @@ export default function App() {
     const difficultyLevel = Math.max(1, Math.min(6, nextRound + adaptiveBoost + adaptivePenalty));
     const sequence = buildSpatialSequence(nextRound, difficultyLevel);
     const now = performance.now();
-    const expected = sequence[0] ?? null;
-    const globalTimeLimitMs = Math.max(4200, SGM_GLOBAL_BASE_TIME_MS - (difficultyLevel - 1) * 650);
 
     beginRestartedProgressionSession(getModeById("spatial-memory"), {
       round: nextRound,
       difficultyLevel,
     });
-    setSpatialMemoryState((prev) => ({
-      ...prev,
-      active: true,
-      status: "playing",
-      round: nextRound,
-      sequence,
-      sequenceLength: sequence.length,
-      currentStepIndex: 0,
-      stepProgressIds: [],
-      expectedStep: expected,
-      expectedLabel: formatSgmStepLabel(expected),
-      stepDeadline: now + SGM_STEP_TIMEOUT_MS,
-      roundStartAt: now,
-      elapsedSeconds: 0,
-      message: `Repeat ${sequence.length} gestures in order. Total time limit: ${(globalTimeLimitMs / 1000).toFixed(1)}s.`,
-      lastActionLabel: "—",
-      accuracy: 1,
-      smoothness: 0,
+    const preparedLegacy = {
+      ...previous,
       difficultyLevel,
-      globalTimeLimitMs,
-      recentStepDurations: [],
-      attempts: 0,
-      correctSteps: 0,
-    }));
+    };
+    spatialMemoryRef.current = preparedLegacy;
+    setSpatialMemoryState(preparedLegacy);
+    dispatchSpatialMemoryExperience({
+      type: SPATIAL_MEMORY_ACTIONS.START_ROUND,
+      sequence,
+      round: nextRound,
+      now,
+      teachingStepDurationMs: 1_500,
+      mistakeAllowance: difficultyLevel >= 5 ? 1 : 2,
+      minimumConfidence: labConfidenceThresholdRef.current,
+    });
   }
 
   function resetSpatialGestureMemory() {
     const nextStats = createInitialSpatialMemoryStats();
     saveSpatialMemoryStats(nextStats);
-    setSpatialMemoryState({
+    const nextExperience = createSpatialMemoryExperience();
+    const nextLegacy = {
       ...createInitialSpatialMemoryState(),
       ...nextStats,
-    });
-  }
-
-  function handleSpatialMemoryEvent(event, timestamp) {
-    setSpatialMemoryState((prev) => {
-      if (!prev.active || prev.status !== "playing") {
-        return prev;
-      }
-      const expected = prev.sequence[prev.currentStepIndex] ?? null;
-      const expectedIds = Array.isArray(expected) ? expected : [expected];
-      const isExpected = expectedIds.includes(event.gestureId);
-      const attempts = (prev.attempts ?? 0) + 1;
-      const elapsedFromRoundStart = Math.max(0, timestamp - prev.roundStartAt);
-      const stepDuration = prev.currentStepIndex === 0
-        ? elapsedFromRoundStart
-        : Math.max(0, elapsedFromRoundStart - prev.recentStepDurations.reduce((sum, value) => sum + value, 0));
-
-      if (!isExpected) {
-        const totalRounds = (prev.totalRounds ?? 0) + 1;
-        saveSpatialMemoryStats({
-          highScore: prev.highScore ?? 0,
-          bestRound: prev.bestRound ?? 1,
-          totalRounds,
-          completedRounds: prev.completedRounds ?? 0,
-        });
-        const accuracy = prev.correctSteps / attempts;
-        return {
-          ...prev,
-          status: "failed",
-          active: false,
-          attempts,
-          accuracy,
-          totalRounds,
-          successRate: (prev.completedRounds ?? 0) / Math.max(1, totalRounds),
-          elapsedSeconds: elapsedFromRoundStart / 1000,
-          lastActionLabel: `${GESTURE_LABEL_BY_ID[event.gestureId] ?? event.gestureId} (wrong)`,
-          message: `Wrong gesture. Expected ${formatSgmStepLabel(expected)}.`,
-        };
-      }
-
-      const currentProgress = Array.isArray(prev.stepProgressIds) ? prev.stepProgressIds : [];
-      const nextProgressIds = currentProgress.includes(event.gestureId)
-        ? currentProgress
-        : [...currentProgress, event.gestureId];
-      if (nextProgressIds.length < expectedIds.length) {
-        const remaining = expectedIds.filter((gestureId) => !nextProgressIds.includes(gestureId));
-        return {
-          ...prev,
-          attempts,
-          stepProgressIds: nextProgressIds,
-          lastActionLabel: `${GESTURE_LABEL_BY_ID[event.gestureId] ?? event.gestureId} (partial)`,
-          message: `Combo step in progress. Still need ${formatSgmStepLabel(remaining)}.`,
-        };
-      }
-
-      const nextStepIndex = prev.currentStepIndex + 1;
-      const nextDurations = [...prev.recentStepDurations, stepDuration];
-      const correctSteps = (prev.correctSteps ?? 0) + 1;
-      const accuracy = correctSteps / attempts;
-      const avgDuration = nextDurations.reduce((sum, value) => sum + value, 0) / Math.max(1, nextDurations.length);
-      const smoothness = 1 - Math.min(1, avgDuration / SGM_STEP_TIMEOUT_MS);
-
-      if (nextStepIndex >= prev.sequence.length) {
-        const elapsedSeconds = elapsedFromRoundStart / 1000;
-        const speedScore = Math.max(0.25, 1 - elapsedFromRoundStart / Math.max(1, prev.globalTimeLimitMs));
-        const score = prev.score + correctSteps * 100 + accuracy * 90 + smoothness * 70 + speedScore * 110;
-        const totalRounds = (prev.totalRounds ?? 0) + 1;
-        const completedRounds = (prev.completedRounds ?? 0) + 1;
-        const highScore = Math.max(prev.highScore ?? 0, score);
-        const bestRound = Math.max(prev.bestRound ?? 1, prev.round);
-        saveSpatialMemoryStats({ highScore, bestRound, totalRounds, completedRounds });
-        return {
-          ...prev,
-          active: false,
-          status: "completed",
-          attempts,
-          correctSteps,
-          accuracy,
-          smoothness,
-          elapsedSeconds,
-          score,
-          highScore,
-          bestRound,
-          totalRounds,
-          completedRounds,
-          successRate: completedRounds / Math.max(1, totalRounds),
-          lastActionLabel: GESTURE_LABEL_BY_ID[event.gestureId] ?? event.gestureId,
-          message: `Round complete! Great memory + control.`,
-          stepProgressIds: [],
-          expectedStep: null,
-          expectedLabel: "Round complete",
-        };
-      }
-
-      const nextExpected = prev.sequence[nextStepIndex] ?? null;
-      return {
-        ...prev,
-        attempts,
-        correctSteps,
-        accuracy,
-        smoothness,
-        currentStepIndex: nextStepIndex,
-        stepProgressIds: [],
-        expectedStep: nextExpected,
-        expectedLabel: formatSgmStepLabel(nextExpected),
-        lastActionLabel: GESTURE_LABEL_BY_ID[event.gestureId] ?? event.gestureId,
-        stepDeadline: timestamp + SGM_STEP_TIMEOUT_MS,
-        elapsedSeconds: elapsedFromRoundStart / 1000,
-        message: "Nice. Keep going.",
-        recentStepDurations: nextDurations,
-      };
-    });
-  }
-
-  function updateSpatialMemoryTimeout(timestamp) {
-    setSpatialMemoryState((prev) => {
-      if (!prev.active || prev.status !== "playing") {
-        return prev;
-      }
-      const elapsed = Math.max(0, timestamp - prev.roundStartAt);
-      if (elapsed > prev.globalTimeLimitMs) {
-        const totalRounds = (prev.totalRounds ?? 0) + 1;
-        saveSpatialMemoryStats({
-          highScore: prev.highScore ?? 0,
-          bestRound: prev.bestRound ?? 1,
-          totalRounds,
-          completedRounds: prev.completedRounds ?? 0,
-        });
-        return {
-          ...prev,
-          active: false,
-          status: "failed",
-          totalRounds,
-          successRate: (prev.completedRounds ?? 0) / Math.max(1, totalRounds),
-          message: "Round failed: global speed limit exceeded.",
-          elapsedSeconds: elapsed / 1000,
-        };
-      }
-      if (timestamp <= prev.stepDeadline) {
-        if (Math.abs(prev.elapsedSeconds - elapsed / 1000) < 0.02) {
-          return prev;
-        }
-        return {
-          ...prev,
-          elapsedSeconds: elapsed / 1000,
-        };
-      }
-      const totalRounds = (prev.totalRounds ?? 0) + 1;
-      saveSpatialMemoryStats({
-        highScore: prev.highScore ?? 0,
-        bestRound: prev.bestRound ?? 1,
-        totalRounds,
-        completedRounds: prev.completedRounds ?? 0,
-      });
-      return {
-        ...prev,
-        active: false,
-        status: "failed",
-        totalRounds,
-        successRate: (prev.completedRounds ?? 0) / Math.max(1, totalRounds),
-        elapsedSeconds: elapsed / 1000,
-        message: `Timeout on step ${prev.currentStepIndex + 1}.`,
-      };
-    });
+    };
+    spatialMemoryExperienceRef.current = nextExperience;
+    spatialMemoryRef.current = nextLegacy;
+    setSpatialMemoryExperience(nextExperience);
+    setSpatialMemoryState(nextLegacy);
   }
 
   function startLabGestureRecording(gestureId) {
@@ -10999,6 +11207,7 @@ export default function App() {
   useEffect(() => {
     let animationFrameId = 0;
     let cancelled = false;
+    let previousRenderTimestamp = null;
     simulationTimingRef.current.reset();
     simulationEpochRef.current = null;
     lifecycleLastTickRef.current = 0;
@@ -11007,6 +11216,25 @@ export default function App() {
       if (cancelled || !mountedRef.current) {
         return;
       }
+      if (previousRenderTimestamp !== null) {
+        const qualityUpdate = updateDynamicQuality(
+          dynamicQualityControllerRef.current,
+          {
+            frameTimeMs: timestamp - previousRenderTimestamp,
+            timestampMs: timestamp,
+          },
+        );
+        dynamicQualityControllerRef.current = qualityUpdate.state;
+        if (qualityUpdate.changed) {
+          setDynamicQualityLevel(qualityUpdate.level);
+          appLog.info("Adaptive visual quality changed", {
+            previousLevel: qualityUpdate.previousLevel,
+            level: qualityUpdate.level,
+            reason: qualityUpdate.reason,
+          });
+        }
+      }
+      previousRenderTimestamp = timestamp;
       runAppSimulationFrame(timestamp);
       animationFrameId = requestAnimationFrame(simulate);
     };
@@ -11018,7 +11246,7 @@ export default function App() {
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [phase]);
+  }, [appLog, phase]);
 
   useEffect(() => {
     const poseOnlyTrackingPhase =
@@ -11053,6 +11281,15 @@ export default function App() {
       const poseOnlyFrame =
         phaseRef.current === PHASES.BODY_POSE || phaseRef.current === PHASES.OFF_AXIS_LAB;
       runTrackingKeepAlive(timestamp, { allowDetectorRecovery: !poseOnlyFrame });
+      const inferenceIntervalMs =
+        dynamicQualityBudgetRef.current.inferenceIntervalMs;
+      if (
+        lastInferenceStartedAtRef.current > 0 &&
+        timestamp - lastInferenceStartedAtRef.current <
+          inferenceIntervalMs
+      ) {
+        return;
+      }
 
       if (poseOnlyFrame) {
         const video = videoRef.current;
@@ -11717,6 +11954,9 @@ export default function App() {
     return (
       <TrackingSetup
         readiness={trackingReadiness}
+        capabilities={deviceCapabilities}
+        recommendation={capabilityRecommendation}
+        qualityBudget={dynamicQualityBudget}
         videoRef={videoRef}
         devices={cameraDevices}
         onBack={() => navigateToProductHome()}
@@ -11746,12 +11986,30 @@ export default function App() {
     return (
       <SettingsPanel
         preferences={preferences}
+        capabilities={deviceCapabilities}
+        qualityBudget={dynamicQualityBudget}
+        trackingFps={fps}
         cameraActive={cameraReady}
         onChange={updateProductPreferences}
         onBack={() => navigateToProductHome()}
         onReset={() => setPreferences(normalizeUserPreferences())}
         onDeleteLocalData={deleteAllLocalProductData}
         onStopCamera={stopProductCamera}
+      />
+    );
+  }
+
+  if (phase === PHASES.GESTURE_ART_LAB) {
+    return (
+      <GestureArtLab
+        key={gestureArtSessionKey}
+        hands={gestureArtHands}
+        handDetected={handDetected}
+        onBack={navigateToProductHome}
+        onOpenSetup={() => {
+          setPendingModeId("gesture-art");
+          openProductTrackingSetup();
+        }}
       />
     );
   }
@@ -11910,6 +12168,22 @@ export default function App() {
                   }}
                 />
               ))}
+              {fullscreenBrickDodgerTelegraphs.map((telegraph) => (
+                <div
+                  aria-label={telegraph.label || undefined}
+                  className={`fullscreen-camera-brick-dodger-lane-signal ${telegraph.urgency}`}
+                  key={`brick-dodger-telegraph-${telegraph.laneIndex}`}
+                  style={{
+                    left: `${
+                      telegraph.centerX -
+                      (fullscreenBrickDodgerState?.layout?.laneWidth ?? 0) / 2
+                    }px`,
+                    width: `${fullscreenBrickDodgerState?.layout?.laneWidth ?? 0}px`,
+                  }}
+                >
+                  {telegraph.label ? <span>{telegraph.label}</span> : null}
+                </div>
+              ))}
               {fullscreenBrickDodgerState?.hazards?.map((hazard) => (
                 <div
                   key={hazard.id}
@@ -11922,18 +12196,24 @@ export default function App() {
                   }}
                 />
               ))}
-              {fullscreenBrickDodgerState?.bonuses?.map((bonus) => (
-                <div
-                  key={bonus.id}
-                  className="fullscreen-camera-brick-dodger-bonus"
-                  style={{
-                    left: `${bonus.x - bonus.size / 2}px`,
-                    top: `${bonus.y - bonus.size / 2}px`,
-                    width: `${bonus.size}px`,
-                    height: `${bonus.size}px`,
-                  }}
-                />
-              ))}
+              {fullscreenBrickDodgerState?.bonuses?.map((bonus) => {
+                const pickupUi = getBrickDodgerPickupUi(bonus);
+                return (
+                  <div
+                    aria-label={pickupUi.label}
+                    key={bonus.id}
+                    className={`fullscreen-camera-brick-dodger-bonus ${pickupUi.className}`}
+                    style={{
+                      left: `${bonus.x - bonus.size / 2}px`,
+                      top: `${bonus.y - bonus.size / 2}px`,
+                      width: `${bonus.size}px`,
+                      height: `${bonus.size}px`,
+                    }}
+                  >
+                    <span aria-hidden="true">{pickupUi.icon}</span>
+                  </div>
+                );
+              })}
               {fullscreenBrickDodgerState?.player ? (
                 <div
                   className={`fullscreen-camera-brick-dodger-player ${
@@ -11950,21 +12230,77 @@ export default function App() {
               <div className="fullscreen-camera-brick-dodger-scoreboard">
                 <span>Score {fullscreenBrickDodgerState?.score ?? 0}</span>
                 <span>Shields {fullscreenBrickDodgerState?.lives ?? 0}</span>
-                <span>Time {Math.floor((fullscreenBrickDodgerState?.survivalMs ?? 0) / 1000)}s</span>
-                <span>Streak {fullscreenBrickDodgerState?.bonusStreak ?? 0}</span>
+                <span>
+                  Stage {fullscreenBrickDodgerStageUi.stage}:{" "}
+                  {fullscreenBrickDodgerStageUi.name}
+                </span>
+                <span>Threat {fullscreenBrickDodgerStageUi.threatLabel}</span>
+                {fullscreenBrickDodgerMultiplierUi.visible ? (
+                  <span className={fullscreenBrickDodgerMultiplierUi.className}>
+                    {fullscreenBrickDodgerMultiplierUi.label}
+                  </span>
+                ) : null}
               </div>
+              <div className="fullscreen-camera-brick-dodger-stage-meter">
+                <span
+                  style={{
+                    width: `${Math.round(
+                      fullscreenBrickDodgerStageUi.progress * 100,
+                    )}%`,
+                  }}
+                />
+              </div>
+              {fullscreenBrickDodgerSlowTimeUi.active ? (
+                <div className="fullscreen-camera-brick-dodger-slow-time">
+                  <strong>Slow time</strong>
+                  <span>
+                    {Math.ceil(
+                      fullscreenBrickDodgerSlowTimeUi.remainingMs / 1000,
+                    )}
+                    s
+                  </span>
+                </div>
+              ) : null}
               <div className="fullscreen-camera-brick-dodger-legend">
                 <span>Bonus +{BRICK_DODGER_BONUS_SCORE}</span>
-                <span>Survive for score over time</span>
-                <span>Adjacent lanes hold the risky pickups</span>
+                <span>Skim hazards to build a near-miss multiplier</span>
+                <span>Collect shields and slow-time pickups</span>
               </div>
-              {isFullscreenBrickDodgerMode && fullscreenBrickDodgerState?.message ? (
+              {isFullscreenBrickDodgerMode &&
+              fullscreenBrickDodgerState?.message &&
+              !fullscreenBrickDodgerStageRecapUi.visible &&
+              !fullscreenBrickDodgerResultUi.visible ? (
                 <div
                   className={`fullscreen-camera-brick-dodger-banner ${
                     fullscreenBrickDodgerState.status === "gameover" ? "game-over" : ""
                   }`}
                 >
                   {fullscreenBrickDodgerState.message}
+                </div>
+              ) : null}
+              {fullscreenBrickDodgerStageRecapUi.visible ? (
+                <div className="fullscreen-camera-brick-dodger-recap">
+                  <strong>{fullscreenBrickDodgerStageRecapUi.title}</strong>
+                  <span>{fullscreenBrickDodgerStageRecapUi.subtitle}</span>
+                  <div>
+                    {fullscreenBrickDodgerStageRecapUi.stats.map((stat) => (
+                      <span key={stat.label}>
+                        {stat.label} {stat.value}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {fullscreenBrickDodgerResultUi.visible ? (
+                <div className="fullscreen-camera-brick-dodger-recap game-over">
+                  <strong>{fullscreenBrickDodgerResultUi.title}</strong>
+                  <div>
+                    {fullscreenBrickDodgerResultUi.stats.map((stat) => (
+                      <span key={stat.label}>
+                        {stat.label} {stat.value}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -12854,9 +13190,61 @@ export default function App() {
                   }}
                 />
               ))}
+              {fullscreenInvadersState?.shields?.map((shield) => (
+                <div
+                  aria-hidden="true"
+                  className="fullscreen-camera-invaders-shield"
+                  key={shield.id}
+                  style={{
+                    "--shield-health": Math.max(
+                      0,
+                      Math.min(1, shield.hp / Math.max(1, shield.maxHp)),
+                    ),
+                    left: `${shield.x}px`,
+                    top: `${shield.y}px`,
+                    width: `${shield.width}px`,
+                    height: `${shield.height}px`,
+                  }}
+                />
+              ))}
+              {fullscreenInvadersState?.ufo ? (
+                <div
+                  aria-hidden="true"
+                  className="fullscreen-camera-invaders-ufo"
+                  style={{
+                    left: `${fullscreenInvadersState.ufo.x}px`,
+                    top: `${fullscreenInvadersState.ufo.y}px`,
+                    width: `${fullscreenInvadersState.ufo.width}px`,
+                    height: `${fullscreenInvadersState.ufo.height}px`,
+                  }}
+                />
+              ) : null}
+              {fullscreenInvadersState?.powerUps?.map((powerUp) => (
+                <div
+                  aria-label={
+                    powerUp.type === "shield-repair"
+                      ? "Falling shield repair"
+                      : "Falling rapid-fire power-up"
+                  }
+                  className={`fullscreen-camera-invaders-power-up ${powerUp.type}`}
+                  key={powerUp.id}
+                  style={{
+                    left: `${powerUp.x}px`,
+                    top: `${powerUp.y}px`,
+                    width: `${powerUp.width}px`,
+                    height: `${powerUp.height}px`,
+                  }}
+                >
+                  {powerUp.type === "shield-repair" ? "＋" : "⚡"}
+                </div>
+              ))}
               {fullscreenInvadersState?.ship && (
                 <div
-                  className="fullscreen-camera-invaders-ship"
+                  className={`fullscreen-camera-invaders-ship ${
+                    (fullscreenInvadersState.shipInvulnerableMs ?? 0) > 0
+                      ? "invulnerable"
+                      : ""
+                  }`}
                   style={{
                     left: `${fullscreenInvadersState.ship.x - fullscreenInvadersState.ship.width / 2}px`,
                     top: `${fullscreenInvadersState.ship.y - fullscreenInvadersState.ship.height / 2}px`,
@@ -12867,15 +13255,21 @@ export default function App() {
               )}
               <div className="fullscreen-camera-invaders-scoreboard">
                 <span>Score {fullscreenInvadersState?.score ?? 0}</span>
+                <span>Wave {fullscreenInvadersState?.wave ?? 1}</span>
+                <span>Lives {fullscreenInvadersState?.lives ?? 0}</span>
                 <span>
                   Enemies {fullscreenInvadersState?.enemies?.filter((enemy) => enemy.alive).length ?? 0}
                 </span>
-                <span>Status {fullscreenInvadersState?.status ?? "idle"}</span>
+                <span>{fullscreenInvadersState?.formation?.name ?? "Classic Formation"}</span>
               </div>
               <div className="fullscreen-camera-invaders-legend">
                 <span>Enemy +{SPACE_INVADERS_ENEMY_SCORE}</span>
-                <span>Pinch fires</span>
-                <span>Pinch after loss restarts</span>
+                <span>Pinch fires · Shields absorb shots</span>
+                {fullscreenInvadersState?.activePowerUp ? (
+                  <span>Rapid fire active</span>
+                ) : (
+                  <span>Hit the UFO for a power-up</span>
+                )}
               </div>
               {isFullscreenInvadersMode &&
               shouldShowFullscreenInvadersBanner(fullscreenInvadersState) ? (
@@ -12916,7 +13310,10 @@ export default function App() {
                 </div>
               ))}
               <div
-                className="fullscreen-camera-flappy-bird"
+                className={`fullscreen-camera-flappy-bird ${
+                  fullscreenFlappyState?.inputFeedback?.active ? "pinch-pulse" : ""
+                }`}
+                key={`flappy-bird-${fullscreenFlappyState?.inputFeedback?.pulse ?? 0}`}
                 style={{
                   left: `${(fullscreenFlappyState?.bird?.x ?? 0) - (fullscreenFlappyState?.bird?.radius ?? 0)}px`,
                   top: `${(fullscreenFlappyState?.bird?.y ?? 0) - (fullscreenFlappyState?.bird?.radius ?? 0)}px`,
@@ -12930,12 +13327,18 @@ export default function App() {
                 style={{ height: `${fullscreenFlappyState?.layout?.groundHeight ?? 0}px` }}
               />
               <div className="fullscreen-camera-flappy-scoreboard">
-                <span>Score {fullscreenFlappyState?.score ?? 0}</span>
-                <span>Status {fullscreenFlappyState?.status ?? "ready"}</span>
+                <span>Gates {fullscreenFlappyState?.score ?? 0}</span>
+                <span>Level {fullscreenFlappyState?.difficulty?.level ?? 1}</span>
+                <span>
+                  Center streak {fullscreenFlappyState?.stats?.centerStreak ?? 0}
+                </span>
+                {fullscreenFlappyState?.challenge?.mode === "daily" ? (
+                  <span>Daily {fullscreenFlappyState.challenge.dayKey}</span>
+                ) : null}
               </div>
               <div className="fullscreen-camera-flappy-legend">
                 <span>Pinch = flap</span>
-                <span>Pass a gap = +1</span>
+                <span>Center the gap for a bonus</span>
               </div>
               {isFullscreenFlappyMode && fullscreenFlappyState?.message ? (
                 <div className="fullscreen-camera-flappy-banner">
@@ -13138,6 +13541,56 @@ export default function App() {
                   </span>
                 ))}
               </div>
+              <div className="fullscreen-camera-missile-wave-status">
+                <span>
+                  Wave {fullscreenMissileWaveUi.wave}/
+                  {fullscreenMissileWaveUi.totalWaves}
+                </span>
+                <strong>{fullscreenMissileWaveUi.name}</strong>
+                <span>
+                  {fullscreenMissileWaveUi.threatsRemaining} threats left
+                </span>
+                <div aria-label="Wave progress">
+                  <span
+                    style={{
+                      width: `${Math.round(
+                        fullscreenMissileWaveUi.progress * 100,
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+              <div
+                className={`fullscreen-camera-missile-resources ${fullscreenMissileResourceUi.state}`}
+              >
+                <div>
+                  <span>
+                    Ammo {fullscreenMissileResourceUi.ammo}/
+                    {fullscreenMissileResourceUi.maxAmmo}
+                  </span>
+                  <i>
+                    <span
+                      style={{
+                        width: `${Math.round(
+                          fullscreenMissileResourceUi.ammoRatio * 100,
+                        )}%`,
+                      }}
+                    />
+                  </i>
+                </div>
+                <div>
+                  <span>Energy {fullscreenMissileResourceUi.energy}%</span>
+                  <i>
+                    <span
+                      style={{
+                        width: `${Math.round(
+                          fullscreenMissileResourceUi.energyRatio * 100,
+                        )}%`,
+                      }}
+                    />
+                  </i>
+                </div>
+              </div>
               <div className="fullscreen-camera-missile-legend compact">
                 {fullscreenMissileLegendItems.map((item) => (
                   <span key={item.id} className="fullscreen-camera-missile-legend-chip">
@@ -13162,6 +13615,24 @@ export default function App() {
                   </span>
                 </div>
               ) : null}
+              {isFullscreenMissileCommandMode &&
+              fullscreenMissileIntermissionUi.visible ? (
+                <div className="fullscreen-camera-missile-banner intermission">
+                  <span className="fullscreen-camera-missile-banner-title">
+                    {fullscreenMissileIntermissionUi.title}
+                  </span>
+                  <span>
+                    Next: wave {fullscreenMissileIntermissionUi.nextWave}
+                  </span>
+                  <span className="fullscreen-camera-missile-game-over-stats">
+                    {fullscreenMissileIntermissionUi.stats.map((stat) => (
+                      <span key={stat.label}>
+                        {stat.label} {stat.value}
+                      </span>
+                    ))}
+                  </span>
+                </div>
+              ) : null}
               {isFullscreenMissileCommandMode && fullscreenMissileGameOverUi.visible ? (
                 <div className="fullscreen-camera-missile-banner game-over">
                   <span className="fullscreen-camera-missile-game-over-title">
@@ -13174,6 +13645,13 @@ export default function App() {
                       </span>
                     ))}
                   </span>
+                  {fullscreenMissileGameOverUi.medals?.length ? (
+                    <span className="fullscreen-camera-missile-medals">
+                      {fullscreenMissileGameOverUi.medals.map((medal) => (
+                        <span key={medal.id}>{medal.label}</span>
+                      ))}
+                    </span>
+                  ) : null}
                   <span className="fullscreen-camera-missile-game-over-restart">
                     {fullscreenMissileGameOverUi.restartText}
                   </span>
@@ -13445,7 +13923,9 @@ export default function App() {
 
   const contentGridClassName = `content-grid ${
     isCalibrationLayoutPhase && !isBodyPosePhase ? "calibration-layout" : ""
-  } ${isBodyPosePhase ? "body-layout" : ""} ${showLeftPaneResizer ? "resizable-layout" : ""}`;
+  } ${isBodyPosePhase ? "body-layout" : ""} ${
+    hideInactiveCameraPane ? "single-pane-layout" : ""
+  } ${showLeftPaneResizer ? "resizable-layout" : ""}`;
   const contentGridStyle = showLeftPaneResizer
     ? {
         "--left-pane-resizer-width": `${RESIZABLE_LEFT_PANE_HANDLE_WIDTH_PX}px`,
@@ -13616,7 +14096,8 @@ export default function App() {
       </header>
 
       <div className={contentGridClassName} ref={contentGridRef} style={contentGridStyle}>
-        <section className="card camera-card" ref={cameraPaneRef}>
+        {!hideInactiveCameraPane ? (
+          <section className="card camera-card" ref={cameraPaneRef}>
           <div className="camera-preview-panel">
             <h2>{cameraPanelTitle}</h2>
             {showInlineCameraPreview ? (
@@ -13728,7 +14209,8 @@ export default function App() {
               </button>
             </details>
           </div>
-        </section>
+          </section>
+        ) : null}
 
         {showLeftPaneResizer && (
           <div
@@ -13935,6 +14417,8 @@ export default function App() {
         ) : phase === PHASES.SPATIAL_GESTURE_MEMORY ? (
           <SpatialGestureMemory
             state={spatialMemoryState}
+            experienceState={spatialMemoryExperience}
+            onExperienceAction={dispatchSpatialMemoryExperience}
             onStart={startSpatialGestureMemoryRound}
             onReset={resetSpatialGestureMemory}
           />
@@ -13944,13 +14428,6 @@ export default function App() {
             liveHands={analyticsHands}
             liveTimestamp={analyticsTimestamp}
             fps={fps}
-          />
-        ) : phase === PHASES.GESTURE_ART_LAB ? (
-          <GestureArtLab
-            key={gestureArtSessionKey}
-            hands={gestureArtHands}
-            fps={fps}
-            handDetected={handDetected}
           />
         ) : phase === PHASES.GESTURE_CONTROL_OS ? (
           <GestureControlOS

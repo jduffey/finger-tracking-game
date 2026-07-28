@@ -72,6 +72,9 @@ function SetupError({ readiness, onRetry, onContinueWithoutCamera }) {
 
 export default function TrackingSetup({
   readiness,
+  capabilities,
+  recommendation,
+  qualityBudget,
   videoRef,
   devices = [],
   onBack,
@@ -107,6 +110,20 @@ export default function TrackingSetup({
             Motion Arcade uses your camera to estimate hand or body landmarks in real time.
             Camera frames are not uploaded by the application.
           </p>
+          <dl className="tracking-capability-summary">
+            <div>
+              <dt>Camera</dt>
+              <dd>{capabilities?.camera?.status ?? "checking"}</dd>
+            </div>
+            <div>
+              <dt>Graphics</dt>
+              <dd>{capabilities?.graphics?.preferredApi ?? "checking"}</dd>
+            </div>
+            <div>
+              <dt>Quality</dt>
+              <dd>{qualityBudget?.level ?? recommendation?.recommendedQualityLevel ?? "auto"}</dd>
+            </div>
+          </dl>
           <SetupProgress readiness={readiness} />
         </section>
 
@@ -158,7 +175,15 @@ export default function TrackingSetup({
             <div className="tracking-setup-card">
               {idle ? (
                 <>
-                  <h2>Before you start</h2>
+                  <h2>{recommendation?.title ?? "Before you start"}</h2>
+                  {recommendation?.message ? <p>{recommendation.message}</p> : null}
+                  {recommendation?.notices?.length ? (
+                    <ul className="tracking-capability-notices">
+                      {recommendation.notices.map((notice) => (
+                        <li key={notice.id}>{notice.message}</li>
+                      ))}
+                    </ul>
+                  ) : null}
                   <ul>
                     <li>Use a well-lit space with your face and hands visible.</li>
                     <li>Place the device on a stable surface about an arm’s length away.</li>

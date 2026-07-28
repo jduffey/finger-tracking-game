@@ -344,7 +344,14 @@ export default function ProductHome({
             {dailyMode ? (
               <button
                 className="product-shortcut-card daily"
-                onClick={() => onSelectMode(dailyMode)}
+                onClick={() =>
+                  onSelectMode(dailyMode, {
+                    launchContext: {
+                      challenge: "daily",
+                      dayKey: new Date().toISOString().slice(0, 10),
+                    },
+                  })
+                }
                 type="button"
               >
                 <span>Daily challenge</span>

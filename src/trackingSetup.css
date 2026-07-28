@@ -90,6 +90,51 @@
   max-width: 48ch;
 }
 
+.tracking-capability-summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 30px;
+}
+
+.tracking-capability-summary > div {
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.tracking-capability-summary dt {
+  color: #8794aa;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tracking-capability-summary dd {
+  color: #f7f9ff;
+  font-size: 0.86rem;
+  font-weight: 800;
+  margin: 4px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+}
+
+.tracking-capability-notices {
+  background: rgba(255, 205, 104, 0.08);
+  border: 1px solid rgba(255, 205, 104, 0.18);
+  border-radius: 12px;
+  margin: 12px 0 16px;
+  padding: 10px 12px 10px 30px;
+}
+
+.tracking-capability-notices li {
+  color: #f0dcae;
+}
+
 .tracking-setup-steps {
   display: grid;
   gap: 17px;
@@ -316,6 +361,12 @@
   font: inherit;
   min-height: 44px;
   padding: 8px 10px;
+}
+
+@media (max-width: 560px) {
+  .tracking-capability-summary {
+    grid-template-columns: 1fr;
+  }
 }
 
 .tracking-setup-page button:focus-visible,

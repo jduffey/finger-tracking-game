@@ -1,5 +1,9 @@
 import { BEST_METRIC_COMPARISONS } from "./gameProgression.js";
 import { getModeByFullscreenId } from "./modeRegistry.js";
+import { getFlappyResultStats } from "./flappyGame.js";
+import { getSpaceInvadersResultStats } from "./spaceInvadersGame.js";
+import { getBrickDodgerResultStats } from "./brickDodgerGame.js";
+import { getMissileCommandResultStats } from "./missileCommandGame.js";
 
 const RESULT_IDENTIFIER_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,79}$/i;
 const RESERVED_RESULT_IDENTIFIERS = new Set([
@@ -125,11 +129,26 @@ function adaptMissileCommand(state, input) {
     return null;
   }
   const durationMs = resolveDurationMs(state, input.durationMs);
+  const result =
+    state.result ??
+    getMissileCommandResultStats(state) ?? {
+      outcome: state.outcome ?? "defeat",
+      score: state.score,
+      threatsStopped: state.threatsStopped,
+      wavesCleared: state.wavesCleared,
+      citiesSurviving: state.citiesSurviving,
+      accuracy: state.accuracy,
+      perfectWaves: state.perfectWaves,
+    };
   return scoreDescriptor({
-    outcome: "lost",
-    score: state.score,
+    outcome: result.outcome === "victory" ? "won" : "lost",
+    score: result.score,
     metrics: {
-      threatsStopped: nonNegativeInteger(state.threatsStopped),
+      threatsStopped: nonNegativeInteger(result.threatsStopped),
+      wavesCleared: nonNegativeInteger(result.wavesCleared),
+      citiesSurviving: nonNegativeInteger(result.citiesSurviving),
+      accuracyPercent: nonNegative(result.accuracy),
+      perfectWaves: nonNegativeInteger(result.perfectWaves),
       ...(durationMs === null ? {} : { survivalMs: durationMs }),
     },
     durationMs,
@@ -144,11 +163,25 @@ function adaptBrickDodger(state, input) {
     { elapsedMs: finite(state.survivalMs, state.elapsedMs) },
     input.durationMs,
   );
+  const result =
+    state.result ??
+    getBrickDodgerResultStats(state) ?? {
+      score: state.score,
+      stageReached: state.stage,
+      stagesCleared: state.stagesCleared,
+      nearMisses: state.nearMisses,
+      bestMultiplier: state.bestMultiplier,
+      pickupsCollected: state.pickupsCollected,
+    };
   return scoreDescriptor({
     outcome: "completed",
-    score: state.score,
+    score: result.score,
     metrics: {
-      bonusStreak: nonNegativeInteger(state.bonusStreak),
+      stage: nonNegativeInteger(result.stageReached, 1),
+      stagesCleared: nonNegativeInteger(result.stagesCleared),
+      nearMisses: nonNegativeInteger(result.nearMisses),
+      bestMultiplier: nonNegative(result.bestMultiplier, 1),
+      pickups: nonNegativeInteger(result.pickupsCollected),
       ...(durationMs === null ? {} : { survivalMs: durationMs }),
     },
     durationMs,
@@ -266,36 +299,41 @@ function adaptTicTacToe(state, input) {
 }
 
 function adaptInvaders(state, input) {
-  if (state?.status !== "cleared" && state?.status !== "gameover") {
+  if (state?.status !== "gameover") {
     return null;
   }
   const durationMs = resolveDurationMs(state, input.durationMs);
-  const enemiesDestroyed = countWhere(state.enemies, (enemy) => enemy?.alive === false);
-  const enemiesRemaining = countWhere(state.enemies, (enemy) => enemy?.alive !== false);
-  const descriptor = scoreDescriptor({
-    outcome: state.status === "cleared" ? "won" : "lost",
-    score: state.score,
+  const stats = getSpaceInvadersResultStats(state) ?? {};
+  return scoreDescriptor({
+    outcome: "lost",
+    score: stats.score ?? state.score,
     metrics: {
-      enemiesDestroyed,
-      enemiesRemaining,
-    },
-    metricComparisons: {
-      enemiesRemaining: BEST_METRIC_COMPARISONS.LOWER,
+      wave: nonNegativeInteger(stats.wave, 1),
+      wavesCleared: nonNegativeInteger(stats.wavesCleared),
+      enemiesDestroyed: nonNegativeInteger(stats.enemiesDestroyed),
+      accuracyPercent: nonNegative(stats.accuracy),
+      ufoHits: nonNegativeInteger(stats.ufoHits),
+      powerUpsCollected: nonNegativeInteger(stats.powerUpsCollected),
+      livesRemaining: nonNegativeInteger(stats.livesRemaining),
     },
     durationMs,
   });
-  return addClearTimeMetric(descriptor, durationMs);
 }
 
 function adaptFlappy(state, input) {
   if (state?.status !== "gameover") {
     return null;
   }
+  const stats = getFlappyResultStats(state) ?? {};
   return scoreDescriptor({
     outcome: "completed",
-    score: state.score,
+    score: stats.score ?? state.score,
     metrics: {
-      pipesCleared: nonNegativeInteger(state.score),
+      pipesCleared: nonNegativeInteger(stats.pipesCleared, state.score),
+      centerBonuses: nonNegativeInteger(stats.centerBonuses),
+      bestCenterStreak: nonNegativeInteger(stats.bestCenterStreak),
+      flaps: nonNegativeInteger(stats.flaps),
+      difficultyLevel: nonNegativeInteger(stats.difficultyLevel, 1),
     },
     durationMs: resolveDurationMs(state, input.durationMs),
   });

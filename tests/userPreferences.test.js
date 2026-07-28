@@ -36,6 +36,8 @@ test("normalizes invalid preference values and clamps numeric comfort settings",
     uiScale: 8,
     masterVolume: -4,
     musicVolume: 4,
+    effectsVolume: 0.3,
+    performanceMode: "turbo",
   });
 
   assert.equal(normalized.dominantHand, "auto");
@@ -46,6 +48,8 @@ test("normalizes invalid preference values and clamps numeric comfort settings",
   assert.equal(normalized.uiScale, 1.35);
   assert.equal(normalized.masterVolume, 0);
   assert.equal(normalized.musicVolume, 1);
+  assert.equal(normalized.effectsVolume, 0.3);
+  assert.equal(normalized.performanceMode, "auto");
 });
 
 test("loads safely from malformed storage and saves a normalized schema", () => {
