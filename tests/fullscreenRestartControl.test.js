@@ -112,6 +112,29 @@ test("stepFullscreenRestartControl clears the hold when the pointer leaves the b
   assert.equal(cleared.shouldRestart, false);
 });
 
+test("stepFullscreenRestartControl honors the player's dwell duration", () => {
+  const base = createFullscreenRestartControlState(1280, 720);
+  const pointer = getBoxCenter(base.layout);
+  const input = {
+    handVerified: true,
+    holdDurationMs: 250,
+    pointerActive: true,
+    pointerX: pointer.x,
+    pointerY: pointer.y,
+  };
+
+  const started = stepFullscreenRestartControl(base, 1 / 60, input);
+  let progressed = started;
+  for (let step = 0; step < 4; step += 1) {
+    progressed = stepFullscreenRestartControl(progressed, 0.05, input);
+  }
+  const completed = stepFullscreenRestartControl(progressed, 0.05, input);
+
+  assert.equal(progressed.shouldRestart, false);
+  assert.equal(completed.holdMs, 250);
+  assert.equal(completed.shouldRestart, true);
+});
+
 test("stepFullscreenRestartControl does not count points that are outside the visible box", () => {
   const base = createFullscreenRestartControlState(1280, 720);
   const outsidePointer = {

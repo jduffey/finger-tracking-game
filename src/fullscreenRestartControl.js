@@ -1,5 +1,5 @@
 import { createTicTacToeLayout } from "./ticTacToeGame.js";
-import { FULLSCREEN_HOLD_CONTROL_MS } from "./fullscreenHoldControl.js";
+import { normalizeFullscreenHoldDurationMs } from "./fullscreenHoldControl.js";
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -51,6 +51,9 @@ export function createFullscreenRestartControlState(width, height) {
 
 export function stepFullscreenRestartControl(state, dtSeconds, input) {
   const safeState = state ?? createFullscreenRestartControlState(1280, 720);
+  const holdDurationMs = normalizeFullscreenHoldDurationMs(
+    input?.holdDurationMs,
+  );
   const handVerified = Boolean(input?.handVerified);
   const pointer = {
     active:
@@ -65,7 +68,7 @@ export function stepFullscreenRestartControl(state, dtSeconds, input) {
   const elapsedMs = Math.max(0, Math.min(0.05, Number.isFinite(dtSeconds) ? dtSeconds : 0)) * 1000;
   const holdMs = holdActive
     ? safeState.holdActive
-      ? Math.min(FULLSCREEN_HOLD_CONTROL_MS, safeState.holdMs + elapsedMs)
+      ? Math.min(holdDurationMs, safeState.holdMs + elapsedMs)
       : 0
     : 0;
 
@@ -74,6 +77,6 @@ export function stepFullscreenRestartControl(state, dtSeconds, input) {
     handVerified,
     holdActive,
     holdMs,
-    shouldRestart: holdActive && holdMs >= FULLSCREEN_HOLD_CONTROL_MS,
+    shouldRestart: holdActive && holdMs >= holdDurationMs,
   };
 }

@@ -107,7 +107,6 @@ import {
   getTipRippleStrokeWidth,
   getTouchingTipRippleStrokeWidth,
 } from "./tipRipples.js";
-import { FULLSCREEN_HOLD_CONTROL_MS } from "./fullscreenHoldControl.js";
 import { getVerifiedFullscreenHandPointerInput } from "./fullscreenHandPointer.js";
 import {
   areFullscreenExitControlStatesEqual,
@@ -2323,13 +2322,15 @@ export default function App() {
   const fullscreenExitControlCountdown = (
     Math.max(
       0,
-      FULLSCREEN_HOLD_CONTROL_MS - (fullscreenExitControlState?.holdMs ?? 0),
+      preferences.dwellDurationMs -
+        (fullscreenExitControlState?.holdMs ?? 0),
     ) / 1000
   ).toFixed(2);
   const fullscreenRestartControlCountdown = (
     Math.max(
       0,
-      FULLSCREEN_HOLD_CONTROL_MS - (fullscreenRestartControlState?.holdMs ?? 0),
+      preferences.dwellDurationMs -
+        (fullscreenRestartControlState?.holdMs ?? 0),
     ) / 1000
   ).toFixed(2);
   const isSandboxPhase = phase === PHASES.SANDBOX;
@@ -10592,6 +10593,7 @@ export default function App() {
     const previousState = fullscreenExitControlStateRef.current;
     const nextState = stepFullscreenExitControl(previousState, deltaSeconds, {
       handVerified: holdInput.handVerified,
+      holdDurationMs: preferencesRef.current.dwellDurationMs,
       pointerActive,
       pointerX: pointerActive ? holdInput.pointerX : 0,
       pointerY: pointerActive ? holdInput.pointerY : 0,
@@ -10636,6 +10638,7 @@ export default function App() {
       deltaSeconds,
       {
         handVerified: holdInput.handVerified,
+        holdDurationMs: preferencesRef.current.dwellDurationMs,
         pointerActive,
         pointerX: pointerActive ? holdInput.pointerX : 0,
         pointerY: pointerActive ? holdInput.pointerY : 0,
@@ -15341,7 +15344,7 @@ export default function App() {
                 {fullscreenRestartControlState.handVerified &&
                 fullscreenRestartControlState.holdActive
                   ? fullscreenRestartControlCountdown
-                  : (FULLSCREEN_HOLD_CONTROL_MS / 1000).toFixed(2)}
+                  : (preferences.dwellDurationMs / 1000).toFixed(2)}
               </span>
               <span className="fullscreen-camera-restart-hint">
                 {!fullscreenRestartControlState.handVerified
@@ -15376,7 +15379,7 @@ export default function App() {
               <span className="fullscreen-camera-exit-countdown">
                 {fullscreenExitControlState.handVerified && fullscreenExitControlState.holdActive
                   ? fullscreenExitControlCountdown
-                  : (FULLSCREEN_HOLD_CONTROL_MS / 1000).toFixed(2)}
+                  : (preferences.dwellDurationMs / 1000).toFixed(2)}
               </span>
               <span className="fullscreen-camera-exit-hint">
                 {!fullscreenExitControlState.handVerified

@@ -95,6 +95,29 @@ test("stepFullscreenExitControl clears the hold when the pointer leaves the box"
   assert.equal(cleared.shouldExit, false);
 });
 
+test("stepFullscreenExitControl honors the player's dwell duration", () => {
+  const base = createFullscreenExitControlState(1280, 720);
+  const pointer = getBoxCenter(base.layout);
+  const input = {
+    handVerified: true,
+    holdDurationMs: 250,
+    pointerActive: true,
+    pointerX: pointer.x,
+    pointerY: pointer.y,
+  };
+
+  const started = stepFullscreenExitControl(base, 1 / 60, input);
+  let progressed = started;
+  for (let step = 0; step < 4; step += 1) {
+    progressed = stepFullscreenExitControl(progressed, 0.05, input);
+  }
+  const completed = stepFullscreenExitControl(progressed, 0.05, input);
+
+  assert.equal(progressed.shouldExit, false);
+  assert.equal(completed.holdMs, 250);
+  assert.equal(completed.shouldExit, true);
+});
+
 test("stepFullscreenExitControl does not count points that are outside the visible exit box", () => {
   const base = createFullscreenExitControlState(1280, 720);
   const outsidePointer = {
