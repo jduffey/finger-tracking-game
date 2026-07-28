@@ -60,6 +60,38 @@ test("fullscreen variants resolve to their consolidated library experience", () 
   assert.equal(getModeByFullscreenId("missing"), null);
 });
 
+test("player-facing capability claims match the experiences that exist", () => {
+  const twoHandBreakout = getModeById("breakout-coop");
+  assert.equal(twoHandBreakout.label, "Two-Hand Breakout");
+  assert.equal(twoHandBreakout.trackingProfile, "two-hands");
+  assert.equal(twoHandBreakout.players, 1);
+
+  const ticTacToe = getModeById("tic-tac-toe");
+  assert.equal(ticTacToe.players, 1);
+  assert.equal(ticTacToe.difficulty, "Medium");
+  assert.doesNotMatch(ticTacToe.objective, /another player|best-of/i);
+
+  const visualizer = getModeById("visualizer");
+  assert.equal(visualizer.maturity, MODE_MATURITY.PREVIEW);
+  assert.equal(visualizer.featured, undefined);
+  assert.doesNotMatch(visualizer.objective, /capture|mix/i);
+
+  for (const trackingOnlyLabId of [
+    "track-runner",
+    "star-flight",
+    "conveyor-toss",
+    "pinch-sandbox",
+  ]) {
+    assert.equal(
+      getModeById(trackingOnlyLabId).supportsPointerFallback,
+      false,
+    );
+  }
+  const probabilityTable = getModeById("probability-table");
+  assert.equal(probabilityTable.trackingProfile, "none");
+  assert.equal(probabilityTable.supportsPointerFallback, true);
+});
+
 test("mode registry supports stable ids and paths", () => {
   assert.equal(getModeById("tracking-setup")?.phase, APP_PHASES.TRACKING_SETUP);
   assert.equal(getModeByPath("/create/jam-studio")?.href, "/circle-of-fifths.html");
