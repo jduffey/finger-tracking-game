@@ -22,6 +22,16 @@ import {
   getDrumBpmFromSliderPosition,
   getSliderRatioFromDrumBpm,
 } from "./circleOfFifthsDrums.js";
+import {
+  JAM_LOOP_DRUM_INSTRUMENTS,
+  JAM_LOOP_MAX_DURATION_MS,
+  JAM_LOOP_MAX_EVENTS,
+  createJamLoop,
+  exportJamLoopJson,
+  getJamLoopSummary,
+  loadSavedJamLoop,
+  saveJamLoop,
+} from "./circleOfFifthsLoops.js";
 import { loadUserPreferences } from "./userPreferences.js";
 import {
   adaptHandsForCamera,
@@ -36,6 +46,12 @@ const DEFAULT_POINTER_ALPHA = 0.26;
 const DEFAULT_APP_POINTER_ALPHA = 0.35;
 const AUTOSTART_SESSION_KEY = "circle-of-fifths-autostart";
 const DEFAULT_DRUM_BPM = 112;
+const LOOP_NAME_MAX_LENGTH = 48;
+const LOOP_DRUM_LABELS = {
+  kick: "Kick",
+  snare: "Snare",
+  hat: "Hi-hat",
+};
 
 export default function CircleOfFifthsPage() {
   const preferences = useMemo(() => loadUserPreferences(), []);
@@ -60,6 +76,22 @@ export default function CircleOfFifthsPage() {
     nextNoteTime: 0,
     stepIndex: 0,
   });
+  const loopRecordingRef = useRef({
+    active: false,
+    startedAt: 0,
+    events: [],
+    bpm: DEFAULT_DRUM_BPM,
+    beatId: DRUM_BEAT_PRESETS[0]?.id ?? "motorik",
+  });
+  const loopPlaybackRef = useRef({
+    active: false,
+    cycleStartedAt: 0,
+    loop: null,
+    timerIds: [],
+  });
+  const loopClockIntervalRef = useRef(0);
+  const loopAutoStopTimerRef = useRef(0);
+  const loopNameRef = useRef("Untitled loop");
 
   const [viewport, setViewport] = useState(() => ({
     width: typeof window === "undefined" ? 1280 : window.innerWidth,
@@ -80,6 +112,15 @@ export default function CircleOfFifthsPage() {
   const [selectedBeatId, setSelectedBeatId] = useState(DRUM_BEAT_PRESETS[0]?.id ?? "motorik");
   const [drumBpm, setDrumBpm] = useState(DEFAULT_DRUM_BPM);
   const [mobilePanel, setMobilePanel] = useState("setup");
+  const [loopDraft, setLoopDraft] = useState(null);
+  const [savedLoop, setSavedLoop] = useState(() => loadSavedJamLoop().loop);
+  const [loopName, setLoopName] = useState("Untitled loop");
+  const [loopMode, setLoopMode] = useState("idle");
+  const [loopElapsedMs, setLoopElapsedMs] = useState(0);
+  const [recordedEventCount, setRecordedEventCount] = useState(0);
+  const [loopStatus, setLoopStatus] = useState(
+    "Record chord changes and drum-pad hits, then replay them as a repeating loop.",
+  );
 
   const wheelLayout = useMemo(
     () => createCircleOfFifthsLayout(viewport.width, viewport.height),
@@ -91,6 +132,7 @@ export default function CircleOfFifthsPage() {
   );
   const selectedBeat = useMemo(() => getDrumBeatPreset(selectedBeatId), [selectedBeatId]);
   const sliderRatio = useMemo(() => getSliderRatioFromDrumBpm(drumBpm), [drumBpm]);
+  const loopSummary = useMemo(() => getJamLoopSummary(loopDraft), [loopDraft]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -120,11 +162,45 @@ export default function CircleOfFifthsPage() {
   }, [viewport.width]);
 
   useEffect(() => {
+    const handleDrumShortcut = (event) => {
+      if (
+        sessionState !== "active" ||
+        event.repeat ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        isTextEntryElement(event.target)
+      ) {
+        return;
+      }
+
+      const instrument = {
+        1: "kick",
+        2: "snare",
+        3: "hat",
+      }[event.key];
+      if (!instrument) {
+        return;
+      }
+
+      event.preventDefault();
+      triggerLoopDrum(instrument);
+    };
+
+    window.addEventListener("keydown", handleDrumShortcut);
+    return () => {
+      window.removeEventListener("keydown", handleDrumShortcut);
+    };
+  }, [sessionState]);
+
+  useEffect(() => {
     mountedRef.current = true;
 
     return () => {
       mountedRef.current = false;
       sessionOperationRef.current += 1;
+      stopLoopPlayback({ updateUi: false });
+      stopLoopRecording({ updateUi: false });
       resetTrackingInteraction({ updateUi: false });
       void sessionControllerRef.current?.stop();
       void closeAudioContextRef(audioContextRef);
@@ -160,7 +236,7 @@ export default function CircleOfFifthsPage() {
         const videoElement = videoRef.current;
         const detector = detectorRef.current;
         const detectedHands = await detectHands(detector, videoElement);
-        if (cancelled) {
+        if (cancelled || directInputActiveRef.current) {
           return;
         }
 
@@ -173,8 +249,7 @@ export default function CircleOfFifthsPage() {
           smoothedPointRef.current = null;
           pinchActiveRef.current = false;
           bpmDragActiveRef.current = false;
-          releaseActiveChord(activeChordRef.current, audioContextRef.current?.currentTime);
-          activeChordRef.current = null;
+          syncInteractiveChord(null);
           setFingerPoint(null);
           setHoveredSegmentId(null);
           setDetectedHand(null);
@@ -214,7 +289,7 @@ export default function CircleOfFifthsPage() {
         pinchActiveRef.current = isPinching;
 
         const nextSegment = getSegmentAtPoint(nextPoint, wheelLayout);
-        syncContinuousChord(audioContextRef.current, activeChordRef, nextSegment);
+        syncInteractiveChord(nextSegment);
 
         const nextHoveredBeatId = getHoveredBeatId(nextPoint, beatButtonRefs.current);
         const nextSliderHovered = isPointInsideElement(nextPoint, bpmSliderTrackRef.current);
@@ -262,6 +337,8 @@ export default function CircleOfFifthsPage() {
       } catch (error) {
         cancelled = true;
         sessionOperationRef.current += 1;
+        stopLoopPlayback();
+        stopLoopRecording();
         resetTrackingInteraction();
         void getSessionController().stop();
         void closeAudioContextRef(audioContextRef);
@@ -338,6 +415,8 @@ export default function CircleOfFifthsPage() {
     setSessionState("starting");
     setErrorMessage("");
     setStatusMessage("Requesting camera access and warming up the hand tracker...");
+    stopLoopPlayback();
+    stopLoopRecording();
     resetTrackingInteraction();
     stopDrumScheduler(drumSchedulerIntervalRef);
 
@@ -472,6 +551,398 @@ export default function CircleOfFifthsPage() {
     }
   }
 
+  function syncInteractiveChord(segment, { record = true } = {}) {
+    const previousSegmentId = activeChordRef.current?.segmentId ?? null;
+    syncContinuousChord(audioContextRef.current, activeChordRef, segment);
+    const nextSegmentId = activeChordRef.current?.segmentId ?? null;
+    if (!record || previousSegmentId === nextSegmentId) {
+      return;
+    }
+
+    if (nextSegmentId) {
+      recordLoopEvent({
+        type: "chord-on",
+        segmentId: nextSegmentId,
+      });
+      return;
+    }
+
+    recordLoopEvent({
+      type: "chord-off",
+    });
+  }
+
+  function recordLoopEvent(event) {
+    const recording = loopRecordingRef.current;
+    if (!recording.active) {
+      return false;
+    }
+    if (recording.events.length >= JAM_LOOP_MAX_EVENTS - 1) {
+      setLoopStatus(
+        "This take reached the 256-event limit. Stop to keep it, or clear it and record again.",
+      );
+      return false;
+    }
+
+    const atMs = Math.min(
+      JAM_LOOP_MAX_DURATION_MS,
+      Math.max(0, Math.round(getClockTime() - recording.startedAt)),
+    );
+    const nextEvent = {
+      ...event,
+      atMs,
+    };
+    recording.events.push(nextEvent);
+    setRecordedEventCount(recording.events.length);
+    return true;
+  }
+
+  function startLoopRecording() {
+    const audioContext = audioContextRef.current;
+    if (sessionState !== "active" || !audioContext || audioContext.state !== "running") {
+      setLoopStatus("Enable Camera + Audio before recording a loop.");
+      if (viewport.width <= 900) {
+        setMobilePanel("setup");
+      }
+      return;
+    }
+
+    stopLoopPlayback({ updateUi: false });
+    clearLoopClock();
+    const startedAt = getClockTime();
+    const initialEvents = activeChordRef.current?.segmentId
+      ? [
+          {
+            type: "chord-on",
+            atMs: 0,
+            segmentId: activeChordRef.current.segmentId,
+          },
+        ]
+      : [];
+    loopRecordingRef.current = {
+      active: true,
+      startedAt,
+      createdAt: Date.now(),
+      events: initialEvents,
+      bpm: drumBpm,
+      beatId: selectedBeatId,
+    };
+    setLoopDraft(null);
+    setRecordedEventCount(initialEvents.length);
+    setLoopElapsedMs(0);
+    setLoopMode("recording");
+    setLoopStatus("Recording. Play chords or use the three drum pads; Stop closes the loop.");
+    loopClockIntervalRef.current = window.setInterval(() => {
+      const elapsed = Math.min(
+        JAM_LOOP_MAX_DURATION_MS,
+        Math.max(0, getClockTime() - loopRecordingRef.current.startedAt),
+      );
+      setLoopElapsedMs(elapsed);
+    }, 100);
+    loopAutoStopTimerRef.current = window.setTimeout(() => {
+      loopAutoStopTimerRef.current = 0;
+      stopLoopRecording();
+    }, JAM_LOOP_MAX_DURATION_MS);
+  }
+
+  function stopLoopRecording({ updateUi = true } = {}) {
+    const recording = loopRecordingRef.current;
+    if (!recording.active) {
+      return null;
+    }
+
+    const durationMs = Math.min(
+      JAM_LOOP_MAX_DURATION_MS,
+      Math.max(0, Math.round(getClockTime() - recording.startedAt)),
+    );
+    if (activeChordRef.current?.segmentId) {
+      if (recording.events.length < JAM_LOOP_MAX_EVENTS) {
+        recording.events.push({
+          type: "chord-off",
+          atMs: durationMs,
+        });
+      }
+    }
+    recording.active = false;
+    clearLoopClock();
+
+    const loop = createJamLoop({
+      name: loopNameRef.current,
+      durationMs,
+      bpm: recording.bpm,
+      beatId: recording.beatId,
+      events: recording.events,
+      createdAt: recording.createdAt,
+      updatedAt: Date.now(),
+    });
+    if (updateUi && loop) {
+      const summary = getJamLoopSummary(loop);
+      loopNameRef.current = loop.name;
+      setLoopName(loop.name);
+      setLoopDraft(loop);
+      setRecordedEventCount(summary.eventCount);
+      setLoopElapsedMs(loop.durationMs);
+      setLoopMode("idle");
+      setLoopStatus(
+        summary.eventCount > 0
+          ? `Captured ${summary.chordCount} chord changes and ${summary.drumHitCount} drum hits in ${summary.durationLabel}.`
+          : "Nothing was captured. Record again and play a chord or drum pad before stopping.",
+      );
+    }
+    return loop;
+  }
+
+  function clearLoopClock() {
+    if (loopClockIntervalRef.current) {
+      window.clearInterval(loopClockIntervalRef.current);
+      loopClockIntervalRef.current = 0;
+    }
+    if (loopAutoStopTimerRef.current) {
+      window.clearTimeout(loopAutoStopTimerRef.current);
+      loopAutoStopTimerRef.current = 0;
+    }
+  }
+
+  function startLoopPlayback() {
+    const audioContext = audioContextRef.current;
+    if (
+      !loopDraft ||
+      loopSummary.eventCount === 0 ||
+      sessionState !== "active" ||
+      !audioContext ||
+      audioContext.state !== "running"
+    ) {
+      setLoopStatus(
+        sessionState === "active"
+          ? "Record or load a loop with at least one event before pressing Play."
+          : "Enable Camera + Audio before playing a saved loop.",
+      );
+      return;
+    }
+
+    stopLoopRecording();
+    stopLoopPlayback({ updateUi: false });
+    releaseActiveChord(activeChordRef.current, audioContext.currentTime);
+    activeChordRef.current = null;
+    directInputActiveRef.current = true;
+    loopPlaybackRef.current = {
+      active: true,
+      cycleStartedAt: getClockTime(),
+      loop: loopDraft,
+      timerIds: [],
+    };
+    setSelectedBeatId(loopDraft.beatId);
+    setDrumBpm(loopDraft.bpm);
+    setLoopMode("playing");
+    setLoopElapsedMs(0);
+    setLoopStatus(`Playing ${loopDraft.name} on repeat. Press Stop to return to live play.`);
+    scheduleLoopPlaybackCycle();
+    loopClockIntervalRef.current = window.setInterval(() => {
+      const playback = loopPlaybackRef.current;
+      if (!playback.active || !playback.loop) {
+        return;
+      }
+      setLoopElapsedMs(
+        Math.min(
+          playback.loop.durationMs,
+          Math.max(0, getClockTime() - playback.cycleStartedAt),
+        ),
+      );
+    }, 100);
+  }
+
+  function scheduleLoopPlaybackCycle() {
+    const playback = loopPlaybackRef.current;
+    if (!playback.active || !playback.loop) {
+      return;
+    }
+
+    releaseActiveChord(activeChordRef.current, audioContextRef.current?.currentTime);
+    activeChordRef.current = null;
+    setHoveredSegmentId(null);
+    playback.timerIds = [];
+    playback.cycleStartedAt = getClockTime();
+    setLoopElapsedMs(0);
+
+    playback.loop.events.forEach((event) => {
+      const timerId = window.setTimeout(() => {
+        if (loopPlaybackRef.current.active) {
+          playLoopEvent(event);
+        }
+      }, event.atMs);
+      playback.timerIds.push(timerId);
+    });
+
+    const nextCycleTimerId = window.setTimeout(() => {
+      if (!loopPlaybackRef.current.active) {
+        return;
+      }
+      scheduleLoopPlaybackCycle();
+    }, playback.loop.durationMs);
+    playback.timerIds.push(nextCycleTimerId);
+  }
+
+  function playLoopEvent(event) {
+    if (event.type === "chord-on") {
+      const segment =
+        CIRCLE_OF_FIFTHS_SEGMENTS.find((candidate) => candidate.id === event.segmentId) ?? null;
+      if (!segment) {
+        return;
+      }
+      syncInteractiveChord(segment, { record: false });
+      setHoveredSegmentId(segment.id);
+      setLastChordTitle(segment.title);
+      return;
+    }
+
+    if (event.type === "chord-off") {
+      syncInteractiveChord(null, { record: false });
+      setHoveredSegmentId(null);
+      return;
+    }
+
+    if (event.type === "drum-hit") {
+      playDrumInstrument(audioContextRef.current, event.instrument);
+    }
+  }
+
+  function stopLoopPlayback({ updateUi = true } = {}) {
+    const playback = loopPlaybackRef.current;
+    if (!playback.active) {
+      return;
+    }
+
+    playback.active = false;
+    playback.timerIds.forEach((timerId) => window.clearTimeout(timerId));
+    playback.timerIds = [];
+    playback.loop = null;
+    clearLoopClock();
+    releaseActiveChord(activeChordRef.current, audioContextRef.current?.currentTime);
+    activeChordRef.current = null;
+    directInputActiveRef.current = false;
+
+    if (updateUi) {
+      setHoveredSegmentId(null);
+      setLoopElapsedMs(0);
+      setLoopMode("idle");
+      setLoopStatus("Loop stopped. Live hand, pointer, and keyboard play are ready.");
+    }
+  }
+
+  function clearLoopDraft() {
+    stopLoopPlayback({ updateUi: false });
+    stopLoopRecording({ updateUi: false });
+    setLoopDraft(null);
+    setHoveredSegmentId(null);
+    setRecordedEventCount(0);
+    setLoopElapsedMs(0);
+    setLoopMode("idle");
+    setLoopStatus("Loop cleared. Your locally saved loop is still available to load.");
+  }
+
+  function saveLoopDraft() {
+    if (!loopDraft || loopSummary.eventCount === 0) {
+      setLoopStatus("Record a chord or drum event before saving.");
+      return;
+    }
+
+    const result = saveJamLoop({
+      ...loopDraft,
+      name: loopNameRef.current,
+    });
+    if (!result.ok) {
+      setLoopStatus(
+        result.status === "unavailable"
+          ? "Local saving is unavailable in this browser."
+          : "This loop could not be saved locally. You can still export its JSON file.",
+      );
+      return;
+    }
+
+    loopNameRef.current = result.loop.name;
+    setLoopName(result.loop.name);
+    setLoopDraft(result.loop);
+    setSavedLoop(result.loop);
+    setLoopStatus(`Saved ${result.loop.name} locally on this device.`);
+  }
+
+  function loadLoopDraft() {
+    stopLoopPlayback({ updateUi: false });
+    stopLoopRecording({ updateUi: false });
+    const result = loadSavedJamLoop();
+    setHoveredSegmentId(null);
+    setLoopElapsedMs(0);
+    setLoopMode("idle");
+    if (!result.ok || !result.loop) {
+      setSavedLoop(null);
+      setLoopStatus(
+        result.status === "empty"
+          ? "There is no locally saved loop yet."
+          : "The locally saved loop could not be read.",
+      );
+      return;
+    }
+
+    loopNameRef.current = result.loop.name;
+    setLoopName(result.loop.name);
+    setLoopDraft(result.loop);
+    setSavedLoop(result.loop);
+    setSelectedBeatId(result.loop.beatId);
+    setDrumBpm(result.loop.bpm);
+    setRecordedEventCount(result.loop.events.length);
+    setLoopElapsedMs(result.loop.durationMs);
+    setLoopMode("idle");
+    setLoopStatus(`Loaded ${result.loop.name}. Press Play to hear it on repeat.`);
+  }
+
+  function exportLoopDraft() {
+    if (!loopDraft || loopSummary.eventCount === 0) {
+      setLoopStatus("Record or load a loop before exporting.");
+      return;
+    }
+
+    const exported = exportJamLoopJson({
+      ...loopDraft,
+      name: loopNameRef.current,
+    });
+    if (!exported) {
+      setLoopStatus("This loop could not be prepared for export.");
+      return;
+    }
+
+    const downloaded = downloadTextFile(exported.json, exported.filename, "application/json");
+    setLoopStatus(
+      downloaded
+        ? `Exported ${exported.filename}.`
+        : "File downloads are unavailable here. Your loop remains ready to save locally.",
+    );
+  }
+
+  function triggerLoopDrum(instrument) {
+    const audioContext = audioContextRef.current;
+    if (
+      sessionState !== "active" ||
+      !audioContext ||
+      audioContext.state !== "running" ||
+      !JAM_LOOP_DRUM_INSTRUMENTS.includes(instrument)
+    ) {
+      setLoopStatus("Enable Camera + Audio before playing the drum pads.");
+      if (viewport.width <= 900) {
+        setMobilePanel("setup");
+      }
+      return;
+    }
+
+    if (loopPlaybackRef.current.active) {
+      stopLoopPlayback();
+    }
+    playDrumInstrument(audioContext, instrument);
+    recordLoopEvent({
+      type: "drum-hit",
+      instrument,
+    });
+  }
+
   function beginDirectChord(segment) {
     const audioContext = audioContextRef.current;
     if (!segment || !audioContext || audioContext.state !== "running") {
@@ -482,24 +953,29 @@ export default function CircleOfFifthsPage() {
       return;
     }
 
+    if (loopPlaybackRef.current.active) {
+      stopLoopPlayback();
+    }
     if (directChordReleaseTimerRef.current) {
       window.clearTimeout(directChordReleaseTimerRef.current);
       directChordReleaseTimerRef.current = 0;
     }
     directInputActiveRef.current = true;
-    syncContinuousChord(audioContext, activeChordRef, segment);
+    syncInteractiveChord(segment);
     setHoveredSegmentId(segment.id);
     setLastChordTitle(segment.title);
     setStatusMessage(`Playing ${segment.title} with pointer or keyboard control.`);
   }
 
   function endDirectChord() {
+    if (loopPlaybackRef.current.active) {
+      return;
+    }
     if (!directInputActiveRef.current) {
       return;
     }
 
-    releaseActiveChord(activeChordRef.current, audioContextRef.current?.currentTime);
-    activeChordRef.current = null;
+    syncInteractiveChord(null);
     directInputActiveRef.current = false;
     setHoveredSegmentId(null);
     setStatusMessage("Chord released. Point, click, or use the keyboard to play another.");
@@ -560,11 +1036,11 @@ export default function CircleOfFifthsPage() {
         >
           ×
         </button>
-        <p className="circle-fifths-kicker">Standalone music page</p>
-        <h1 id="circle-fifths-title">Finger Circle of Fifths</h1>
+        <p className="circle-fifths-kicker">Motion Arcade · Create</p>
+        <h1 id="circle-fifths-title">Jam Studio</h1>
         <p className="circle-fifths-copy">
-          Track one hand, hover your index finger over the wheel, and each major or minor slice
-          answers with a sustained synthesized chord.
+          Trace the circle with one hand, or play its major and minor chords with a pointer,
+          keyboard, or touch. Record a short idea when one clicks.
         </p>
         <div className="circle-fifths-actions">
           <button
@@ -640,8 +1116,8 @@ export default function CircleOfFifthsPage() {
         </p>
         <p className="circle-fifths-current-chord">{selectedBeat.label}</p>
         <p className="circle-fifths-copy compact">
-          Pinch a beat button to switch patterns, then pinch the BPM rail and slide to change the
-          tempo.
+          Pinch or press a beat to switch the backing groove. Pinch and slide the BPM rail, or use
+          its keyboard controls, to change tempo.
         </p>
         <div className="circle-fifths-beat-buttons">
           {DRUM_BEAT_PRESETS.map((beat) => {
@@ -689,6 +1165,165 @@ export default function CircleOfFifthsPage() {
             value={drumBpm}
           />
         </div>
+        <section
+          aria-labelledby="circle-fifths-loop-title"
+          className="circle-fifths-loop-studio"
+        >
+          <div className="circle-fifths-loop-heading">
+            <div>
+              <p className="circle-fifths-panel-label" id="circle-fifths-loop-title">
+                Loop recorder
+              </p>
+              <p className="circle-fifths-loop-state" data-mode={loopMode}>
+                {loopMode === "recording"
+                  ? "Recording"
+                  : loopMode === "playing"
+                    ? "Playing"
+                    : loopDraft
+                      ? "Take ready"
+                      : "Ready"}
+              </p>
+            </div>
+            <span className="circle-fifths-loop-time">
+              {(loopElapsedMs / 1000).toFixed(1)}s
+            </span>
+          </div>
+          <label className="circle-fifths-loop-name">
+            <span>Loop name</span>
+            <input
+              maxLength={LOOP_NAME_MAX_LENGTH}
+              onChange={(event) => {
+                loopNameRef.current = event.target.value;
+                setLoopName(event.target.value);
+              }}
+              placeholder="Untitled loop"
+              type="text"
+              value={loopName}
+            />
+          </label>
+          <p className="circle-fifths-copy compact">
+            Record up to 32 seconds of chord changes and live drum hits. Playback repeats the
+            timing exactly over the saved groove and tempo.
+          </p>
+          <div aria-label="Live drum pads" className="circle-fifths-loop-pads" role="group">
+            {JAM_LOOP_DRUM_INSTRUMENTS.map((instrument, index) => (
+              <button
+                aria-keyshortcuts={`${index + 1}`}
+                disabled={sessionState !== "active"}
+                key={instrument}
+                onClick={() => triggerLoopDrum(instrument)}
+                type="button"
+              >
+                <span>{LOOP_DRUM_LABELS[instrument]}</span>
+                <small>Key {index + 1}</small>
+              </button>
+            ))}
+          </div>
+          <div aria-label="Loop transport" className="circle-fifths-loop-transport" role="group">
+            <button
+              disabled={sessionState !== "active" || loopMode !== "idle"}
+              onClick={startLoopRecording}
+              type="button"
+            >
+              <span aria-hidden="true">●</span> Record
+            </button>
+            <button
+              className="secondary"
+              disabled={loopMode === "idle"}
+              onClick={() => {
+                if (loopMode === "recording") {
+                  stopLoopRecording();
+                } else {
+                  stopLoopPlayback();
+                }
+              }}
+              type="button"
+            >
+              Stop
+            </button>
+            <button
+              disabled={
+                sessionState !== "active" ||
+                loopMode !== "idle" ||
+                loopSummary.eventCount === 0
+              }
+              onClick={startLoopPlayback}
+              type="button"
+            >
+              Play loop
+            </button>
+            <button
+              className="secondary"
+              disabled={!loopDraft && recordedEventCount === 0}
+              onClick={clearLoopDraft}
+              type="button"
+            >
+              Clear
+            </button>
+          </div>
+          <div
+            aria-label={
+              loopDraft
+                ? `${loopSummary.chordCount} chord changes and ${loopSummary.drumHitCount} drum hits across ${loopSummary.durationLabel}`
+                : "No recorded events yet"
+            }
+            className="circle-fifths-loop-timeline"
+            role="img"
+          >
+            <span aria-hidden="true" className="circle-fifths-loop-timeline-line" />
+            {loopDraft?.events.map((event, index) => (
+              <span
+                aria-hidden="true"
+                className={`circle-fifths-loop-event ${event.type}`}
+                key={`${event.type}-${event.atMs}-${index}`}
+                style={{
+                  left: `${Math.min(100, (event.atMs / loopDraft.durationMs) * 100)}%`,
+                }}
+              />
+            ))}
+          </div>
+          <div className="circle-fifths-loop-summary">
+            <span>
+              {loopMode === "recording" ? recordedEventCount : loopSummary.eventCount} events
+            </span>
+            <span>
+              {loopDraft
+                ? `${loopSummary.chordCount} chords · ${loopSummary.drumHitCount} drums`
+                : "Play something to fill the timeline"}
+            </span>
+          </div>
+          <div aria-label="Loop file actions" className="circle-fifths-loop-files" role="group">
+            <button
+              disabled={loopSummary.eventCount === 0 || loopMode !== "idle"}
+              onClick={saveLoopDraft}
+              type="button"
+            >
+              Save local
+            </button>
+            <button
+              className="secondary"
+              disabled={!savedLoop || loopMode === "recording"}
+              onClick={loadLoopDraft}
+              type="button"
+            >
+              Load saved
+            </button>
+            <button
+              className="secondary"
+              disabled={loopSummary.eventCount === 0 || loopMode === "recording"}
+              onClick={exportLoopDraft}
+              type="button"
+            >
+              Export JSON
+            </button>
+          </div>
+          <p aria-live="polite" className="circle-fifths-loop-status" role="status">
+            {loopStatus}
+          </p>
+          <p className="circle-fifths-loop-privacy">
+            Local save stores symbolic note timing only—never camera frames or recorded audio.
+          </p>
+        </section>
       </section>
 
       <nav aria-label="Circle controls" className="circle-fifths-mobile-toolbar">
@@ -708,7 +1343,7 @@ export default function CircleOfFifthsPage() {
           onClick={() => setMobilePanel(mobilePanel === "drums" ? null : "drums")}
           type="button"
         >
-          Drums
+          Jam
         </button>
       </nav>
 
@@ -950,6 +1585,35 @@ function getElementRect(element) {
   return element?.getBoundingClientRect?.() ?? null;
 }
 
+function getClockTime() {
+  return typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
+}
+
+function isTextEntryElement(element) {
+  const tagName = element?.tagName?.toLowerCase?.();
+  return tagName === "input" || tagName === "textarea" || Boolean(element?.isContentEditable);
+}
+
+function downloadTextFile(content, filename, type) {
+  if (
+    typeof document === "undefined" ||
+    typeof URL === "undefined" ||
+    typeof URL.createObjectURL !== "function"
+  ) {
+    return false;
+  }
+
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  return true;
+}
+
 function syncContinuousChord(audioContext, activeChordRef, segment) {
   if (!audioContext) {
     return;
@@ -1138,6 +1802,20 @@ function scheduleDrumStep(audioContext, beat, stepIndex, time) {
     playSnare(audioContext, time);
   }
   if (beat.steps.hat[stepIndex]) {
+    playHat(audioContext, time);
+  }
+}
+
+function playDrumInstrument(audioContext, instrument, time = audioContext?.currentTime) {
+  if (!audioContext || !Number.isFinite(time)) {
+    return;
+  }
+
+  if (instrument === "kick") {
+    playKick(audioContext, time);
+  } else if (instrument === "snare") {
+    playSnare(audioContext, time);
+  } else if (instrument === "hat") {
     playHat(audioContext, time);
   }
 }
