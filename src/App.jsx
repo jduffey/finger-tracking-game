@@ -346,6 +346,7 @@ import {
 import { formatExperienceDuration } from "./experienceResult.js";
 import { clearCreativeAssets } from "./creativeAssetStorage.js";
 import { clearLocalProductStorage } from "./localDataCleanup.js";
+import { beginMeasuredProductExperience } from "./productExperienceMetricsIntegration.js";
 import {
   assessDeviceCapabilities,
   collectDeviceCapabilitySignals,
@@ -4932,7 +4933,12 @@ export default function App() {
   ]);
 
   useEffect(() => {
+    const metricsSession =
+      activeProgressionSessionRef.current?.productMetricsSession;
+    const metricsTimestamp =
+      globalThis.performance?.now?.() ?? Date.now();
     if (!experienceModeId || !trackingRecoveryRequired) {
+      void metricsSession?.endTrackingLoss(metricsTimestamp);
       const transition = dispatchExperienceLifecycle({
         type: EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
         reason: EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS,
@@ -4962,6 +4968,11 @@ export default function App() {
         type: WHACK_A_MOLE_ACTIONS.PAUSE,
         now: performance.now(),
       });
+    }
+    if (trackingRecoveryStatus.shouldPause) {
+      void metricsSession?.beginTrackingLoss(metricsTimestamp);
+    } else {
+      void metricsSession?.endTrackingLoss(metricsTimestamp);
     }
     const transition = dispatchExperienceLifecycle({
       type: trackingRecoveryStatus.shouldPause
@@ -6362,6 +6373,7 @@ export default function App() {
     }
 
     activeProgressionSessionRef.current = null;
+    void activeSession.productMetricsSession?.abandon(performance.now());
     try {
       return progressionStoreRef.current.abandonSession({
         sessionId: activeSession.sessionId,
@@ -6392,11 +6404,20 @@ export default function App() {
     }
 
     abandonActiveProgressionSession("started_another_experience");
+    const previousModeProgress =
+      progressionStoreRef.current.getState().modes?.[mode.id];
+    const productMetricsSession = beginMeasuredProductExperience({
+      modeId: mode.id,
+      tutorial:
+        mode.id === "whack-a-mole" &&
+        (previousModeProgress?.sessionsPlayed ?? 0) === 0,
+    });
     const startedAt = new Date().toISOString();
     const session = {
       sessionId: createProgressionSessionId(),
       modeId: mode.id,
       fullscreenMode: mode.fullscreenMode ?? null,
+      productMetricsSession,
       startedAt,
       startedAtMs: performance.now(),
     };
@@ -6474,8 +6495,9 @@ export default function App() {
   }
 
   function recordActiveProgressionResult() {
+    const activeSession = activeProgressionSessionRef.current;
     const result = getActiveProgressionResult();
-    if (!result) {
+    if (!activeSession || !result) {
       return null;
     }
 
@@ -6501,6 +6523,7 @@ export default function App() {
         });
     }
     activeProgressionSessionRef.current = null;
+    void activeSession.productMetricsSession?.complete(performance.now());
     setLatestGameResult(recorded.result);
     dispatchExperienceLifecycle({
       type: EXPERIENCE_LIFECYCLE_EVENTS.FINISH,
@@ -6518,6 +6541,7 @@ export default function App() {
   }
 
   function beginRestartedProgressionSession(mode, context = {}) {
+    void activeProgressionSessionRef.current?.productMetricsSession?.recordRetry();
     if (!recordActiveProgressionResult()) {
       abandonActiveProgressionSession("restarted");
     }
@@ -8624,6 +8648,29 @@ export default function App() {
     }
 
     const nextState = applyWhackAMoleAction(action);
+    if (
+      action?.type === WHACK_A_MOLE_ACTIONS.HIT_HOLE &&
+      nextState !== previousState &&
+      nextState.lastAction
+    ) {
+      const succeeded = nextState.lastAction.kind === "hit";
+      const inputMethod =
+        action.source === "keyboard"
+          ? "keyboard"
+          : trackingRequestedRef.current
+            ? "gesture"
+            : "pointer";
+      const metricsSession =
+        activeProgressionSessionRef.current?.productMetricsSession;
+      void metricsSession?.recordSelection({
+        inputMethod,
+        succeeded,
+      });
+      if (succeeded) {
+        void metricsSession?.recordFirstSuccess(action.now);
+        void metricsSession?.finishTutorial("completed");
+      }
+    }
     if (action?.type === WHACK_A_MOLE_ACTIONS.PAUSE) {
       dispatchExperienceLifecycle({
         type: EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
