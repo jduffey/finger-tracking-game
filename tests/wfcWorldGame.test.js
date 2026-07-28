@@ -8,10 +8,15 @@ import {
   createWfcWorldStepInput,
   getWfcWorldCellCenter,
   getWfcWorldControlAtPoint,
+  getWfcWorldGoalModel,
+  getWfcWorldProgress,
+  getWfcWorldQualitySummary,
+  getWfcWorldResult,
   mapPointerToWfcCell,
   selectWfcWorldTile,
   startWfcWorldCollapse,
   stepWfcWorldGame,
+  WFC_WORLD_PALETTE_ACCESSIBILITY,
 } from "../src/wfc/wfcWorldGame.js";
 import { getWfcGrid, isWfcGridValid } from "../src/wfc/wfcSolver.js";
 import { FINGERPRINT_WORLD_ADJACENCY } from "../src/wfc/wfcTiles.js";
@@ -40,6 +45,19 @@ test("createWfcWorldGame creates a 39 by 24 finger-controlled world layout", () 
   assert.deepEqual(game.layout.controls.map((control) => control.id), ["generate", "clear"]);
   assert.ok(game.layout.controls.every((control) => control.height >= 88));
   assert.ok(game.layout.controls.every((control) => control.top + control.height <= game.layout.height));
+});
+
+test("terrain palette metadata communicates meaning without relying on color", () => {
+  const game = createWfcWorldGame(1280, 720);
+
+  assert.equal(Object.keys(WFC_WORLD_PALETTE_ACCESSIBILITY).length, 6);
+  for (const [index, tile] of game.layout.palette.entries()) {
+    assert.match(tile.ariaLabel, /\S/);
+    assert.match(tile.accessibility.description, /\S/);
+    assert.match(tile.accessibility.pattern, /\S/);
+    assert.equal(tile.accessibility.symbol, tile.icon);
+    assert.equal(tile.accessibility.shortcut, String(index + 1));
+  }
 });
 
 test("createWfcWorldGame lets terrain cells render underneath the exit box", () => {
@@ -276,6 +294,41 @@ test("stepWfcWorldGame animates collapse into a valid complete world", () => {
   assert.equal(complete.phase, "complete");
   assert.equal(grid[2][2], "castle");
   assert.equal(isWfcGridValid(grid, FINGERPRINT_WORLD_ADJACENCY), true);
+});
+
+test("goal, progress, quality, and result models make world completion finite", () => {
+  const game = createWfcWorldGame(1280, 720);
+  const seeded = selectWfcWorldTile(game, "castle");
+  const withCastle = stepWfcWorldGame(
+    seeded,
+    1 / 60,
+    { pointerActive: true, ...cellCenter(seeded, 2, 2), pinchActive: true },
+    constantRng(0.5),
+  );
+  const collapsing = startWfcWorldCollapse(withCastle);
+  const complete = stepWfcWorldGame(collapsing, 5, {}, constantRng(0.37));
+
+  assert.equal(getWfcWorldProgress(game).stage, "seed");
+  assert.equal(getWfcWorldProgress(collapsing).stage, "grow");
+  assert.equal(getWfcWorldResult(collapsing), null);
+
+  const progress = getWfcWorldProgress(complete);
+  const goal = getWfcWorldGoalModel(complete);
+  const quality = getWfcWorldQualitySummary(complete);
+  const result = getWfcWorldResult(complete);
+
+  assert.equal(progress.stage, "complete");
+  assert.equal(progress.overallPercent, 100);
+  assert.equal(goal.status, "complete");
+  assert.equal(goal.milestones.find((milestone) => milestone.id === "grow").complete, true);
+  assert.equal(quality.complete, true);
+  assert.equal(quality.valid, true);
+  assert.equal(quality.resolvedCells, 39 * 24);
+  assert.ok(quality.score >= 40 && quality.score <= 100);
+  assert.equal(result.outcome, "complete");
+  assert.equal(result.score, quality.score);
+  assert.equal(result.metrics.length, 4);
+  assert.match(result.summary, /terrain type/);
 });
 
 test("clear and control hit testing support booth-friendly fallback buttons", () => {

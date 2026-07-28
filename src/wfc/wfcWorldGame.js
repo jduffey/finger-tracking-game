@@ -2,6 +2,7 @@ import { FINGERPRINT_WORLD_TILES } from "./wfcTiles.js";
 import {
   createWfcState,
   getWfcGrid,
+  isWfcGridValid,
   runWfc,
   setWfcConstraint,
   stepWfc,
@@ -14,6 +15,55 @@ export const WFC_WORLD_COLLAPSE_STEP_MS = 5;
 const WFC_WORLD_CONFLICT_MS = 900;
 const WFC_HEX_WIDTH_RATIO = Math.sqrt(3) / 2;
 const WFC_HEX_ROW_STEP_RATIO = 0.75;
+
+export const WFC_WORLD_GOAL = Object.freeze({
+  id: "shape-a-living-world",
+  title: "Shape a living world",
+  description:
+    "Place a few terrain rules, grow the world, and discover how much variety your choices create.",
+  completionCondition: "Generate a valid, fully resolved world.",
+  suggestedRuleCount: 3,
+  suggestedTerrainCount: 4,
+});
+
+export const WFC_WORLD_PALETTE_ACCESSIBILITY = Object.freeze({
+  grass: Object.freeze({
+    ariaLabel: "Grass terrain",
+    symbol: "G",
+    pattern: "open dots",
+    description: "Flexible meadow terrain that can border every terrain type.",
+  }),
+  water: Object.freeze({
+    ariaLabel: "Water terrain",
+    symbol: "W",
+    pattern: "horizontal waves",
+    description: "Water that joins grass, more water, or a bridge.",
+  }),
+  forest: Object.freeze({
+    ariaLabel: "Forest terrain",
+    symbol: "F",
+    pattern: "dense chevrons",
+    description: "Woodland that grows beside grass, forest, or mountain.",
+  }),
+  mountain: Object.freeze({
+    ariaLabel: "Peak terrain",
+    symbol: "M",
+    pattern: "triangular ridges",
+    description: "High ground that borders grass, forest, or other peaks.",
+  }),
+  castle: Object.freeze({
+    ariaLabel: "Castle landmark",
+    symbol: "C",
+    pattern: "square battlements",
+    description: "A rare landmark that needs grass on every side.",
+  }),
+  bridge: Object.freeze({
+    ariaLabel: "Bridge landmark",
+    symbol: "B",
+    pattern: "crossed planks",
+    description: "A rare crossing that connects water between grassy banks.",
+  }),
+});
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -119,8 +169,15 @@ export function createWfcWorldLayout(width, height) {
   const palette = FINGERPRINT_WORLD_TILES.map((tile, index) => {
     const col = index % paletteColumns;
     const row = Math.floor(index / paletteColumns);
+    const accessibility = WFC_WORLD_PALETTE_ACCESSIBILITY[tile.id];
     return {
       ...tile,
+      ariaLabel: accessibility?.ariaLabel ?? `${tile.label} terrain`,
+      accessibility: {
+        ...accessibility,
+        shortcut: String(index + 1),
+        selectedAnnouncement: `${tile.label} selected`,
+      },
       left: panelLeft + col * (paletteTileWidth + tileGap),
       top: paletteTop + row * (paletteTileHeight + tileGap),
       width: paletteTileWidth,
@@ -474,5 +531,216 @@ export function completeWfcWorldNow(game, rng = Math.random) {
     wfc: completeWfc,
     phase: completeWfc.status === "complete" ? "complete" : "conflict",
     message: completeWfc.status === "complete" ? "World complete." : "The rules conflict.",
+  };
+}
+
+function getWfcWorldTileCounts(grid) {
+  const counts = Object.fromEntries(FINGERPRINT_WORLD_TILES.map((tile) => [tile.id, 0]));
+  let resolvedCells = 0;
+  for (const row of grid) {
+    for (const tileId of row ?? []) {
+      if (Object.hasOwn(counts, tileId)) {
+        counts[tileId] += 1;
+        resolvedCells += 1;
+      }
+    }
+  }
+  return { counts, resolvedCells };
+}
+
+function getWfcWorldQualityTier(score) {
+  if (score >= 90) {
+    return { id: "masterpiece", label: "World masterpiece" };
+  }
+  if (score >= 75) {
+    return { id: "thriving", label: "Thriving world" };
+  }
+  if (score >= 55) {
+    return { id: "distinctive", label: "Distinctive world" };
+  }
+  if (score >= 30) {
+    return { id: "emerging", label: "Emerging world" };
+  }
+  return { id: "sketch", label: "World sketch" };
+}
+
+export function getWfcWorldQualitySummary(game) {
+  const grid = getWfcWorldGrid(game);
+  const totalCells = Math.max(1, (game?.layout?.cols ?? 0) * (game?.layout?.rows ?? 0));
+  const { counts, resolvedCells } = getWfcWorldTileCounts(grid);
+  const terrainTypes = FINGERPRINT_WORLD_TILES.filter((tile) => counts[tile.id] > 0).length;
+  const landmarkCount = counts.castle + counts.bridge;
+  const constraintCount = Array.isArray(game?.constraints) ? game.constraints.length : 0;
+  const coverage = clamp(resolvedCells / totalCells, 0, 1);
+  const diversity = terrainTypes / FINGERPRINT_WORLD_TILES.length;
+  const landmarkRichness = clamp(landmarkCount / 5, 0, 1);
+  const authorship = clamp(constraintCount / 6, 0, 1);
+  const complete = game?.phase === "complete" && resolvedCells === totalCells;
+  const valid = complete && isWfcGridValid(grid);
+  const score = Math.round(
+    coverage * 40 +
+      diversity * 30 +
+      landmarkRichness * 15 +
+      authorship * 15,
+  );
+  const tier = getWfcWorldQualityTier(score);
+  const dominantTile =
+    resolvedCells > 0
+      ? FINGERPRINT_WORLD_TILES.reduce(
+          (best, tile) =>
+            counts[tile.id] > (counts[best?.id] ?? -1) ? tile : best,
+          null,
+        )
+      : null;
+
+  return {
+    complete,
+    valid,
+    score,
+    tier: tier.id,
+    tierLabel: tier.label,
+    totalCells,
+    resolvedCells,
+    coverage,
+    terrainTypes,
+    landmarkCount,
+    constraintCount,
+    dominantTerrainId: dominantTile?.id ?? null,
+    dominantTerrainLabel: dominantTile?.label ?? null,
+    tileCounts: counts,
+  };
+}
+
+export function getWfcWorldProgress(game) {
+  const quality = getWfcWorldQualitySummary(game);
+  const phase = game?.phase ?? "seeding";
+  let stage = "seed";
+  let stageLabel = "Place terrain rules";
+  let instruction = "Choose a terrain, then paint a few anchor cells.";
+  let overallPercent = Math.min(
+    24,
+    Math.round((quality.constraintCount / WFC_WORLD_GOAL.suggestedRuleCount) * 24),
+  );
+
+  if (phase === "collapsing") {
+    stage = "grow";
+    stageLabel = "Grow the world";
+    instruction = "The world is resolving your rules into a complete landscape.";
+    overallPercent = 25 + Math.round(quality.coverage * 74);
+  } else if (phase === "complete") {
+    stage = "complete";
+    stageLabel = "World complete";
+    instruction = "Save this world, share it, or generate another variation.";
+    overallPercent = 100;
+  } else if (phase === "conflict") {
+    stage = "repair";
+    stageLabel = "Repair a conflict";
+    instruction = "Move or clear one rule so neighboring terrain can agree.";
+  } else if (quality.constraintCount > 0) {
+    stageLabel = "Ready to grow";
+    instruction = "Add another anchor or choose Generate to grow the world.";
+  }
+
+  return {
+    goalId: WFC_WORLD_GOAL.id,
+    phase,
+    stage,
+    stageLabel,
+    instruction,
+    overallPercent: clamp(overallPercent, 0, 100),
+    resolvedPercent: Math.round(quality.coverage * 100),
+    resolvedCells: quality.resolvedCells,
+    totalCells: quality.totalCells,
+    constraintCount: quality.constraintCount,
+    suggestedRuleCount: WFC_WORLD_GOAL.suggestedRuleCount,
+    terrainTypes: quality.terrainTypes,
+    suggestedTerrainCount: WFC_WORLD_GOAL.suggestedTerrainCount,
+    generation: Math.max(0, Math.floor(game?.generation ?? 0)),
+    complete: quality.complete,
+    needsAttention: phase === "conflict",
+  };
+}
+
+export function getWfcWorldGoalModel(game) {
+  const progress = getWfcWorldProgress(game);
+  return {
+    ...WFC_WORLD_GOAL,
+    status: progress.complete
+      ? "complete"
+      : progress.needsAttention
+        ? "needs-attention"
+        : "in-progress",
+    progress,
+    milestones: [
+      {
+        id: "seed",
+        label: "Place 3 terrain rules",
+        current: Math.min(progress.constraintCount, WFC_WORLD_GOAL.suggestedRuleCount),
+        target: WFC_WORLD_GOAL.suggestedRuleCount,
+        complete: progress.constraintCount >= WFC_WORLD_GOAL.suggestedRuleCount,
+      },
+      {
+        id: "grow",
+        label: "Resolve the whole map",
+        current: progress.resolvedCells,
+        target: progress.totalCells,
+        complete: progress.complete,
+      },
+      {
+        id: "discover",
+        label: "Discover 4 terrain types",
+        current: Math.min(progress.terrainTypes, WFC_WORLD_GOAL.suggestedTerrainCount),
+        target: WFC_WORLD_GOAL.suggestedTerrainCount,
+        complete: progress.terrainTypes >= WFC_WORLD_GOAL.suggestedTerrainCount,
+      },
+    ],
+  };
+}
+
+export function getWfcWorldResult(game) {
+  const quality = getWfcWorldQualitySummary(game);
+  if (!quality.complete) {
+    return null;
+  }
+
+  const terrainLabel =
+    quality.terrainTypes === 1 ? "1 terrain type" : `${quality.terrainTypes} terrain types`;
+  const landmarkLabel =
+    quality.landmarkCount === 1 ? "1 landmark" : `${quality.landmarkCount} landmarks`;
+
+  return {
+    modeId: WFC_WORLD_MODE_ID,
+    outcome: quality.valid ? "complete" : "invalid",
+    score: quality.score,
+    title: quality.tierLabel,
+    summary: `${terrainLabel}, ${landmarkLabel}, and ${quality.constraintCount} placed rules shaped this world.`,
+    generation: Math.max(0, Math.floor(game?.generation ?? 0)),
+    quality,
+    metrics: [
+      {
+        id: "quality",
+        label: "World quality",
+        value: quality.score,
+        displayValue: `${quality.score}/100`,
+      },
+      {
+        id: "terrain-variety",
+        label: "Terrain variety",
+        value: quality.terrainTypes,
+        displayValue: `${quality.terrainTypes}/${FINGERPRINT_WORLD_TILES.length}`,
+      },
+      {
+        id: "landmarks",
+        label: "Landmarks",
+        value: quality.landmarkCount,
+        displayValue: String(quality.landmarkCount),
+      },
+      {
+        id: "rules",
+        label: "Your rules",
+        value: quality.constraintCount,
+        displayValue: String(quality.constraintCount),
+      },
+    ],
   };
 }
