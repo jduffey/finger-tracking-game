@@ -257,6 +257,7 @@ export default function ExperienceOverlay({
   instructions,
   hud,
   resultOptions,
+  exitLabel,
   onStart,
   onPause,
   onResume,
@@ -272,8 +273,10 @@ export default function ExperienceOverlay({
         instructions,
         hud,
         resultOptions,
+        exitLabel,
       }),
     [
+      exitLabel,
       hud,
       instructions,
       lifecycle,

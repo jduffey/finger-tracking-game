@@ -307,6 +307,7 @@ import {
   getModeById,
   getModeByPhase,
   getModeByPath,
+  listModes,
 } from "./modeRegistry.js";
 import {
   TRACKING_READINESS_STATES,
@@ -402,6 +403,9 @@ const WhackAMoleExperience = lazy(
 const SpatialGestureMemory = lazy(
   () => import("./components/SpatialGestureMemory.jsx"),
 );
+const ArcadeRunExperience = lazy(
+  () => import("./components/ArcadeRunExperience.jsx"),
+);
 const WfcWorldRenderer = lazy(() =>
   import("./wfc/WfcWorldRenderer.jsx").then((module) => ({
     default: module.WfcWorldRenderer,
@@ -423,6 +427,7 @@ function LazyExperienceFallback({ label = "Loading experience…" }) {
 }
 
 const PHASES = APP_PHASES;
+const ARCADE_RUN_STORAGE_KEY = "motionArcade.arcadeRun";
 
 const PINCH_START_THRESHOLD = 0.045;
 const PINCH_END_THRESHOLD = 0.06;
@@ -1700,6 +1705,8 @@ export default function App() {
     progressionStoreRef.current.getState(),
   );
   const [latestGameResult, setLatestGameResult] = useState(null);
+  const [arcadeRunIncomingResult, setArcadeRunIncomingResult] =
+    useState(null);
   const [experienceLifecycle, setExperienceLifecycle] = useState(null);
   const [experienceModeId, setExperienceModeId] = useState(null);
   const previousAudioLifecycleRef = useRef({
@@ -1877,6 +1884,7 @@ export default function App() {
   const routeInitializedRef = useRef(false);
   const pendingLaunchContextRef = useRef(null);
   const activeLaunchContextRef = useRef({});
+  const arcadeRunLaunchRequestRef = useRef(null);
   const activeProgressionSessionRef = useRef(null);
   const experienceLifecycleRef = useRef(null);
   const experienceModeIdRef = useRef(null);
@@ -2070,6 +2078,20 @@ export default function App() {
   const isProductHomePhase = phase === PHASES.HOME;
   const isProductTrackingSetupPhase = phase === PHASES.TRACKING_SETUP;
   const isProductSettingsPhase = phase === PHASES.SETTINGS;
+  const arcadeRunModes = useMemo(() => listModes(), []);
+  const arcadeRunCapabilityOptions = useMemo(
+    () => ({
+      playerCount: 1,
+      pointerAvailable: true,
+      preferredInput: cameraReady && modelReady ? "tracking" : "pointer",
+      availableTrackingProfiles:
+        cameraReady && modelReady
+          ? Object.values(TRACKING_PROFILES)
+          : [],
+      excludeModeIds: ["arcade-run"],
+    }),
+    [cameraReady, modelReady],
+  );
   const productTrackingStatus =
     trackingReadiness.status === TRACKING_READINESS_STATES.READY
       ? "ready"
@@ -6248,6 +6270,26 @@ export default function App() {
     }
 
     const recorded = progressionStoreRef.current.recordResult(result);
+    const arcadeRunRequest =
+      activeLaunchContextRef.current?.arcadeRunRequest ??
+      arcadeRunLaunchRequestRef.current;
+    if (arcadeRunRequest) {
+      void import("./arcadeRunIntegration.js")
+        .then(({ createArcadeRunResultEnvelope }) => {
+          setArcadeRunIncomingResult(
+            createArcadeRunResultEnvelope(
+              arcadeRunRequest,
+              recorded.result,
+            ),
+          );
+        })
+        .catch((error) => {
+          appLog.warn("Could not attach this result to Arcade Run", {
+            error,
+            modeId: result.modeId,
+          });
+        });
+    }
     activeProgressionSessionRef.current = null;
     setLatestGameResult(recorded.result);
     dispatchExperienceLifecycle({
@@ -6272,6 +6314,97 @@ export default function App() {
     return beginProgressionSession(mode, { restart: true, ...context });
   }
 
+  function handleArcadeRunSessionChange(session, event = {}) {
+    try {
+      if (!session || session.status === "complete") {
+        window.localStorage.removeItem(ARCADE_RUN_STORAGE_KEY);
+      } else {
+        window.localStorage.setItem(
+          ARCADE_RUN_STORAGE_KEY,
+          JSON.stringify(session),
+        );
+      }
+    } catch (error) {
+      appLog.warn("Could not save Arcade Run progress", { error });
+    }
+
+    if (
+      event.type === "run-returned-from-game" ||
+      event.type === "run-returned-without-result"
+    ) {
+      arcadeRunLaunchRequestRef.current = null;
+    }
+  }
+
+  function handleArcadeRunLaunch(request) {
+    const mode = getModeById(request?.modeId);
+    if (!mode) {
+      appLog.warn("Arcade Run requested an unknown mode", {
+        modeId: request?.modeId,
+      });
+      return;
+    }
+
+    arcadeRunLaunchRequestRef.current = request;
+    const launchContext = {
+      arcadeRunRequest: request,
+      ...(request.dailyChallenge && mode.dailyChallenge
+        ? {
+            challenge: "daily",
+            dayKey: request.dailyChallenge.dayKey,
+          }
+        : {}),
+    };
+    selectProductMode(mode, {
+      allowWithoutTracking: request.inputMethod !== "tracking",
+      launchContext,
+    });
+  }
+
+  function handleArcadeRunComplete({ session }) {
+    void import("./arcadeRunIntegration.js")
+      .then(({ createArcadeRunProgressionResult }) => {
+        const result = createArcadeRunProgressionResult(session);
+        if (!result) {
+          return;
+        }
+        const recorded = progressionStoreRef.current.recordResult(result);
+        setLatestGameResult(recorded.result);
+        arcadeRunLaunchRequestRef.current = null;
+        setArcadeRunIncomingResult(null);
+      })
+      .catch((error) => {
+        appLog.warn("Could not record Arcade Run results", { error });
+      });
+  }
+
+  function returnToArcadeRun({ updateHistory = true } = {}) {
+    if (!recordActiveProgressionResult()) {
+      abandonActiveProgressionSession("returned_to_arcade_run");
+    }
+    stopGameSession();
+    replaceExperienceLifecycle(null, null);
+    setPendingModeId(null);
+    pendingLaunchContextRef.current = null;
+    activeLaunchContextRef.current = {};
+    setPhase(PHASES.ARCADE_RUN);
+    phaseRef.current = PHASES.ARCADE_RUN;
+    if (updateHistory) {
+      updateProductPath("/play/arcade-run");
+    }
+  }
+
+  function exitCurrentExperience() {
+    if (
+      activeLaunchContextRef.current?.arcadeRunRequest ||
+      arcadeRunLaunchRequestRef.current
+    ) {
+      returnToArcadeRun();
+      return;
+    }
+    navigateToProductHome();
+  }
+
   function navigateToProductHome({ updateHistory = true } = {}) {
     if (!recordActiveProgressionResult()) {
       abandonActiveProgressionSession("returned_home");
@@ -6281,6 +6414,7 @@ export default function App() {
     setPendingModeId(null);
     pendingLaunchContextRef.current = null;
     activeLaunchContextRef.current = {};
+    arcadeRunLaunchRequestRef.current = null;
     setPhase(PHASES.HOME);
     phaseRef.current = PHASES.HOME;
     if (updateHistory) {
@@ -6503,13 +6637,19 @@ export default function App() {
       window.localStorage.removeItem(PERSONALIZATION_STORAGE_KEY);
       window.localStorage.removeItem(SGM_STORAGE_KEY);
       window.localStorage.removeItem(CREATIVE_GALLERY_STORAGE_KEY);
+      window.localStorage.removeItem(ARCADE_RUN_STORAGE_KEY);
+      window.localStorage.removeItem(
+        "motion-arcade.fingerprint-worlds.v1",
+      );
     } catch (error) {
       appLog.warn("Could not remove all local product data", { error });
     }
     void clearCreativeAssets();
     personalizationRef.current.clearSamples?.();
     activeProgressionSessionRef.current = null;
+    arcadeRunLaunchRequestRef.current = null;
     progressionStoreRef.current.clear();
+    setArcadeRunIncomingResult(null);
     setLatestGameResult(null);
     setTransform(null);
     transformRef.current = null;
@@ -12457,15 +12597,22 @@ export default function App() {
   const activeExperienceMode = experienceModeId
     ? getModeById(experienceModeId)
     : null;
+  const isArcadeRunLeg = Boolean(
+    activeLaunchContextRef.current?.arcadeRunRequest ||
+      arcadeRunLaunchRequestRef.current,
+  );
   const experienceOverlay = experienceLifecycle && activeExperienceMode ? (
     <ExperienceOverlay
+      exitLabel={
+        isArcadeRunLeg ? "Return to Arcade Run" : undefined
+      }
       hud={getCurrentExperienceHud()}
       instructions={`${activeExperienceMode.objective ?? activeExperienceMode.summary} ${
         activeExperienceMode.controlHint ?? ""
       }`.trim()}
       lifecycle={experienceLifecycle}
       modeLabel={activeExperienceMode.label}
-      onExit={() => navigateToProductHome()}
+      onExit={exitCurrentExperience}
       onPause={(reason) => {
         if (experienceModeIdRef.current === "whack-a-mole") {
           applyWhackAMoleAction({
@@ -12502,6 +12649,10 @@ export default function App() {
         }
       }}
       resultOptions={{
+        allowRestart: !isArcadeRunLeg,
+        exitLabel: isArcadeRunLeg
+          ? "Continue Arcade Run"
+          : undefined,
         metricDefinitions: {
           accuracyPercent: {
             label: "Accuracy",
@@ -12613,6 +12764,36 @@ export default function App() {
           audioFeedbackRef.current.play(cue);
         }}
       />
+    );
+  }
+
+  if (phase === PHASES.ARCADE_RUN) {
+    return (
+      <Suspense
+        fallback={<LazyExperienceFallback label="Building your Arcade Run…" />}
+      >
+        <ArcadeRunExperience
+          capabilityOptions={arcadeRunCapabilityOptions}
+          dailyDate={activeLaunchContextRef.current?.dayKey}
+          incomingLegResult={arcadeRunIncomingResult}
+          initialRunKind={
+            activeLaunchContextRef.current?.challenge === "daily"
+              ? "daily"
+              : "mix"
+          }
+          modes={arcadeRunModes}
+          onExit={() => navigateToProductHome()}
+          onLaunchMode={handleArcadeRunLaunch}
+          onLegResultConsumed={() => {
+            setArcadeRunIncomingResult(null);
+            arcadeRunLaunchRequestRef.current = null;
+          }}
+          onRunComplete={handleArcadeRunComplete}
+          onSessionChange={handleArcadeRunSessionChange}
+          returningLegRequest={arcadeRunLaunchRequestRef.current}
+          storage={window.localStorage}
+        />
+      </Suspense>
     );
   }
 
@@ -15462,8 +15643,14 @@ export default function App() {
           <WhackAMoleExperience
             daily={activeLaunchContextRef.current?.challenge === "daily"}
             dailyDate={activeLaunchContextRef.current?.dayKey}
+            exitLabel={
+              isArcadeRunLeg ? "Return to Arcade Run" : "Exit"
+            }
             onAction={handleWhackAMoleAction}
-            onExit={navigateToProductHome}
+            onExit={exitCurrentExperience}
+            resultExitLabel={
+              isArcadeRunLeg ? "Continue Arcade Run" : "Back to games"
+            }
             seed={whackAMoleState.seed}
             state={whackAMoleState}
           />

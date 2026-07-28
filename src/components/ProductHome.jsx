@@ -220,6 +220,7 @@ export default function ProductHome({
     () => selectQuickPlayMode({ recentModeIds, randomValue: 0 }),
     [recentModeIds],
   );
+  const arcadeRunMode = useMemo(() => getModeById("arcade-run"), []);
   const leadMode = featuredModes.find((mode) => mode.id === "sky-patrol") ?? featuredModes[0];
   const dailyMode = useMemo(() => selectDailyChallengeMode(), []);
   const continueMode = selectContinueMode(recentModeIds);
@@ -280,6 +281,14 @@ export default function ProductHome({
             <div className="product-home-hero-actions">
               <button
                 className="product-primary-action"
+                disabled={!arcadeRunMode}
+                onClick={() => arcadeRunMode && onSelectMode(arcadeRunMode)}
+                type="button"
+              >
+                Start an Arcade Run
+              </button>
+              <button
+                className="product-secondary-action"
                 disabled={!quickPlayMode}
                 onClick={() => quickPlayMode && onSelectMode(quickPlayMode)}
                 type="button"

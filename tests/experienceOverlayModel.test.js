@@ -153,6 +153,38 @@ test("manual pause has a resumable dialog and preserves restart and exit", () =>
   );
 });
 
+test("a custom exit label follows a routed experience through every phase", () => {
+  const exitLabel = "Return to Arcade Run";
+  let lifecycle = createExperienceLifecycle({
+    countdownMs: 1_000,
+  });
+  let view = createExperienceOverlayViewModel({
+    lifecycle,
+    exitLabel,
+  });
+  assert.equal(view.actions.at(-1).label, exitLabel);
+
+  lifecycle = reduceExperienceLifecycle(lifecycle, {
+    type: EXPERIENCE_LIFECYCLE_EVENTS.START,
+  });
+  view = createExperienceOverlayViewModel({ lifecycle, exitLabel });
+  assert.equal(view.actions.at(-1).label, exitLabel);
+
+  lifecycle = reduceExperienceLifecycle(lifecycle, {
+    type: EXPERIENCE_LIFECYCLE_EVENTS.TICK,
+    deltaMs: 1_000,
+  });
+  view = createExperienceOverlayViewModel({ lifecycle, exitLabel });
+  assert.equal(view.actions.at(-1).label, exitLabel);
+
+  lifecycle = reduceExperienceLifecycle(lifecycle, {
+    type: EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
+    reason: EXPERIENCE_PAUSE_REASONS.MANUAL,
+  });
+  view = createExperienceOverlayViewModel({ lifecycle, exitLabel });
+  assert.equal(view.actions.at(-1).label, exitLabel);
+});
+
 test("tracking loss takes presentation priority over other pause reasons", () => {
   let lifecycle = createExperienceLifecycle({
     countdownMs: 0,

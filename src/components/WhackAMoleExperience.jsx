@@ -228,6 +228,8 @@ export function WhackAMoleExperience({
   autoStart = false,
   onComplete,
   onExit,
+  exitLabel = "Exit",
+  resultExitLabel = "Back to games",
   className = "",
 }) {
   const controlsId = useId();
@@ -468,7 +470,7 @@ export function WhackAMoleExperience({
               onClick={onExit}
               type="button"
             >
-              Exit
+              {exitLabel}
             </button>
           ) : null}
         </div>
@@ -743,7 +745,7 @@ export function WhackAMoleExperience({
                 onClick={onExit}
                 type="button"
               >
-                Exit
+                {exitLabel}
               </button>
             ) : null}
           </div>
@@ -830,7 +832,7 @@ export function WhackAMoleExperience({
                 onClick={onExit}
                 type="button"
               >
-                Back to games
+                {resultExitLabel}
               </button>
             ) : null}
           </div>

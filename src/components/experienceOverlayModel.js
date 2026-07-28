@@ -139,7 +139,7 @@ function createHiddenView() {
   };
 }
 
-function createPauseView(lifecycle, modeLabel) {
+function createPauseView(lifecycle, modeLabel, exitLabel) {
   const primaryReason =
     getPrimaryExperiencePauseReason(lifecycle) ??
     EXPERIENCE_PAUSE_REASONS.MANUAL;
@@ -183,7 +183,7 @@ function createPauseView(lifecycle, modeLabel) {
       ),
       createAction(
         EXPERIENCE_OVERLAY_ACTIONS.EXIT,
-        "Back to home",
+        exitLabel,
         "quiet",
       ),
     ],
@@ -196,12 +196,14 @@ export function createExperienceOverlayViewModel({
   instructions,
   hud,
   resultOptions,
+  exitLabel,
 } = {}) {
   if (!isExperienceLifecycleState(lifecycle)) {
     return createHiddenView();
   }
 
   const mode = normalizeCopy(modeLabel, "Experience");
+  const normalizedExitLabel = normalizeCopy(exitLabel);
   switch (lifecycle.phase) {
     case EXPERIENCE_PHASES.READY: {
       const title = `Ready for ${mode}?`;
@@ -227,7 +229,7 @@ export function createExperienceOverlayViewModel({
           ),
           createAction(
             EXPERIENCE_OVERLAY_ACTIONS.EXIT,
-            "Back to home",
+            normalizedExitLabel || "Back to home",
             "quiet",
           ),
         ],
@@ -257,7 +259,7 @@ export function createExperienceOverlayViewModel({
         actions: [
           createAction(
             EXPERIENCE_OVERLAY_ACTIONS.EXIT,
-            "Leave experience",
+            normalizedExitLabel || "Leave experience",
             "quiet",
           ),
         ],
@@ -282,14 +284,18 @@ export function createExperienceOverlayViewModel({
           ),
           createAction(
             EXPERIENCE_OVERLAY_ACTIONS.EXIT,
-            "Exit",
+            normalizedExitLabel || "Exit",
             "quiet",
           ),
         ],
       };
 
     case EXPERIENCE_PHASES.PAUSED:
-      return createPauseView(lifecycle, mode);
+      return createPauseView(
+        lifecycle,
+        mode,
+        normalizedExitLabel || "Back to home",
+      );
 
     case EXPERIENCE_PHASES.RESULTS: {
       const normalizedResultView = createExperienceResultViewModel(
