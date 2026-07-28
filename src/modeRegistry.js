@@ -497,7 +497,7 @@ const catalog = [
     path: "/labs/pose-quest",
     area: PRODUCT_AREAS.LABS,
     maturity: MODE_MATURITY.EXPERIMENTAL,
-    summary: "Complete three stable whole-body framing challenges, then inspect diagnostics.",
+    summary: "Match and hold three playful body silhouettes, then inspect diagnostics.",
     phase: APP_PHASES.BODY_POSE,
     entryKind: "phase",
     trackingProfile: TRACKING_PROFILES.POSE,

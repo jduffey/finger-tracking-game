@@ -5,6 +5,7 @@ import {
   POSE_QUEST_PHASES,
   POSE_QUEST_STEPS,
   createPoseQuestState,
+  evaluatePoseQuestStep,
   getPoseQuestProgress,
   reducePoseQuest,
 } from "../poseQuest.js";
@@ -20,6 +21,92 @@ const PART_LABELS = Object.freeze({
   fingertips: "fingertips",
 });
 
+const POSE_SILHOUETTES = Object.freeze({
+  reach: Object.freeze({
+    segments: Object.freeze([
+      Object.freeze([50, 29, 50, 66]),
+      Object.freeze([50, 38, 28, 38]),
+      Object.freeze([28, 38, 10, 38]),
+      Object.freeze([50, 38, 72, 38]),
+      Object.freeze([72, 38, 90, 38]),
+      Object.freeze([50, 66, 35, 91]),
+      Object.freeze([50, 66, 65, 91]),
+    ]),
+    joints: Object.freeze([
+      Object.freeze([28, 38]),
+      Object.freeze([10, 38]),
+      Object.freeze([72, 38]),
+      Object.freeze([90, 38]),
+    ]),
+  }),
+  statue: Object.freeze({
+    segments: Object.freeze([
+      Object.freeze([50, 29, 50, 66]),
+      Object.freeze([50, 38, 35, 29]),
+      Object.freeze([35, 29, 22, 8]),
+      Object.freeze([50, 38, 65, 29]),
+      Object.freeze([65, 29, 78, 8]),
+      Object.freeze([50, 66, 35, 91]),
+      Object.freeze([50, 66, 65, 91]),
+    ]),
+    joints: Object.freeze([
+      Object.freeze([35, 29]),
+      Object.freeze([22, 8]),
+      Object.freeze([65, 29]),
+      Object.freeze([78, 8]),
+    ]),
+  }),
+  stance: Object.freeze({
+    segments: Object.freeze([
+      Object.freeze([50, 29, 50, 66]),
+      Object.freeze([50, 38, 27, 48]),
+      Object.freeze([27, 48, 40, 65]),
+      Object.freeze([50, 38, 73, 48]),
+      Object.freeze([73, 48, 60, 65]),
+      Object.freeze([50, 66, 35, 91]),
+      Object.freeze([50, 66, 65, 91]),
+    ]),
+    joints: Object.freeze([
+      Object.freeze([27, 48]),
+      Object.freeze([40, 65]),
+      Object.freeze([73, 48]),
+      Object.freeze([60, 65]),
+    ]),
+  }),
+});
+
+function PoseSilhouette({ stepId }) {
+  const silhouette = POSE_SILHOUETTES[stepId] ?? POSE_SILHOUETTES.reach;
+  return (
+    <svg
+      aria-hidden="true"
+      className="pose-quest-silhouette"
+      focusable="false"
+      viewBox="0 0 100 100"
+    >
+      <circle cx="50" cy="19" r="9" />
+      {silhouette.segments.map(([x1, y1, x2, y2], index) => (
+        <line
+          key={`${x1}-${y1}-${x2}-${y2}-${index}`}
+          x1={x1}
+          x2={x2}
+          y1={y1}
+          y2={y2}
+        />
+      ))}
+      {silhouette.joints.map(([cx, cy], index) => (
+        <circle
+          className="pose-quest-silhouette-joint"
+          cx={cx}
+          cy={cy}
+          key={`${cx}-${cy}-${index}`}
+          r="2.8"
+        />
+      ))}
+    </svg>
+  );
+}
+
 export default function BodyPoseLab({ poseStatus }) {
   const [quest, dispatch] = useReducer(
     reducePoseQuest,
@@ -30,8 +117,14 @@ export default function BodyPoseLab({ poseStatus }) {
   poseStatusRef.current = poseStatus;
   const progress = getPoseQuestProgress(quest);
   const currentStep = POSE_QUEST_STEPS[quest.stepIndex];
+  const stepEvaluation = evaluatePoseQuestStep(currentStep, poseStatus);
   const detected = Boolean(poseStatus?.detected);
   const parts = poseStatus?.parts ?? {};
+  const detectionCopy = !detected
+    ? "Step into frame"
+    : stepEvaluation.satisfied
+      ? "Pose matched · hold steady"
+      : `Next: ${stepEvaluation.nextRequirement?.label ?? "Match the silhouette"}`;
 
   useEffect(() => {
     if (quest.phase !== POSE_QUEST_PHASES.RUNNING) {
@@ -57,25 +150,27 @@ export default function BodyPoseLab({ poseStatus }) {
           <span className="pose-quest-kicker">Experimental body lab</span>
           <h2 id="pose-quest-title">Pose Quest</h2>
           <p>
-            Clear three short visibility checks to learn where body tracking
-            works best. Nothing is recorded or uploaded.
+            Match three playful silhouettes and hold each pose steady. Nothing
+            is recorded or uploaded.
           </p>
         </div>
         <span
-          className={`pose-quest-detection ${detected ? "ready" : ""}`}
+          className={`pose-quest-detection ${
+            stepEvaluation.satisfied ? "ready" : ""
+          }`}
           role="status"
         >
-          {detected ? "Pose visible" : "Step into frame"}
+          {detectionCopy}
         </span>
       </header>
 
       {quest.phase === POSE_QUEST_PHASES.READY ? (
         <div className="pose-quest-intro">
           <span aria-hidden="true">◇</span>
-          <h3>Three checks. About 20 seconds.</h3>
+          <h3>Three poses. About 20 seconds.</h3>
           <p>
-            Use the camera challenge, or skip any check with the keyboard,
-            pointer, or touch if body tracking is not comfortable for you.
+            Copy each silhouette, or skip any pose with the keyboard, pointer,
+            or touch if body tracking is not comfortable for you.
           </p>
           <button
             onClick={() =>
@@ -93,15 +188,15 @@ export default function BodyPoseLab({ poseStatus }) {
           role="status"
         >
           <span aria-hidden="true">✓</span>
-          <h3>Your tracking space is mapped.</h3>
+          <h3>Pose Quest complete.</h3>
           <p>
             {progress.skipped === 0
-              ? "All three camera checks stayed clear."
-              : `${progress.completed - progress.skipped} camera ${
+              ? "You matched and held all three silhouettes."
+              : `${progress.completed - progress.skipped} ${
                   progress.completed - progress.skipped === 1
-                    ? "check"
-                    : "checks"
-                } cleared · ${progress.skipped} skipped.`}
+                    ? "pose"
+                    : "poses"
+                } held · ${progress.skipped} skipped.`}
           </p>
           <button
             onClick={() =>
@@ -143,30 +238,31 @@ export default function BodyPoseLab({ poseStatus }) {
               role="progressbar"
               style={{ "--pose-hold": quest.holdProgress }}
             >
-              <span
-                style={{
-                  transform: `scale(${0.72 + quest.holdProgress * 0.28})`,
-                }}
-              >
+              <PoseSilhouette stepId={currentStep.silhouette} />
+              <span className="pose-quest-hold-value">
                 {Math.round(quest.holdProgress * 100)}%
               </span>
             </div>
             <div>
               <h3>{currentStep.instruction}</h3>
-              <p>
-                Hold the required areas in view until the ring completes.
-                Moving out of frame safely resets this check.
-              </p>
-              <ul aria-label="Required visible areas">
-                {currentStep.requiredParts.map((part) => (
-                  <li className={parts[part] ? "visible" : ""} key={part}>
+              <p>{currentStep.coaching}</p>
+              <ul aria-label="Pose clues">
+                {stepEvaluation.requirements.map((requirement) => (
+                  <li
+                    className={requirement.met ? "visible" : ""}
+                    key={requirement.id}
+                  >
                     <span aria-hidden="true">
-                      {parts[part] ? "✓" : "○"}
+                      {requirement.met ? "✓" : "○"}
                     </span>
-                    {PART_LABELS[part]}
+                    {requirement.label}
                   </li>
                 ))}
               </ul>
+              <p className="pose-quest-hold-note">
+                Match the clues, then stay steady until the ring completes.
+                Moving out of frame safely resets the hold.
+              </p>
             </div>
           </div>
 
@@ -178,7 +274,7 @@ export default function BodyPoseLab({ poseStatus }) {
               }
               type="button"
             >
-              Skip this tracking check
+              Skip this pose
             </button>
             <button
               className="quiet"
@@ -211,6 +307,14 @@ export default function BodyPoseLab({ poseStatus }) {
           <div>
             <strong>Keypoints</strong>
             <span>{poseStatus?.keypointsCount ?? 0}</span>
+          </div>
+          <div>
+            <strong>Current silhouette</strong>
+            <span>
+              {stepEvaluation.satisfied
+                ? "matched"
+                : stepEvaluation.nextRequirement?.id ?? "not detected"}
+            </span>
           </div>
         </div>
         <div className="body-part-list">

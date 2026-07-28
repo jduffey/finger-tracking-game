@@ -56,7 +56,9 @@
   flex: 0 0 auto;
   font-size: 0.76rem;
   font-weight: 850;
+  max-inline-size: min(280px, 42vw);
   padding: 9px 12px;
+  text-align: center;
 }
 
 .pose-quest-detection.ready {
@@ -189,15 +191,42 @@
   border: 1px solid rgba(145, 244, 206, 0.22);
   border-radius: 50%;
   display: flex;
+  flex-direction: column;
   height: clamp(112px, 16vw, 164px);
   justify-content: center;
+  overflow: hidden;
+  position: relative;
   width: clamp(112px, 16vw, 164px);
 }
 
-.pose-quest-hold > span {
-  font-size: 1.35rem;
+.pose-quest-silhouette {
+  fill: rgba(145, 244, 206, 0.14);
+  height: 70%;
+  stroke: #baffdf;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 5;
+  width: 70%;
+}
+
+.pose-quest-silhouette-joint {
+  fill: #ffe082;
+  stroke: none;
+}
+
+.pose-quest-hold-value {
+  background: #121c2d;
+  border-radius: 999px;
+  bottom: 9px;
+  color: #f7f8ff;
+  font-size: 0.72rem;
   font-weight: 900;
-  transition: transform 100ms linear;
+  left: 50%;
+  min-inline-size: 42px;
+  padding: 3px 6px;
+  position: absolute;
+  text-align: center;
+  transform: translateX(-50%);
 }
 
 .pose-quest-challenge h3 {
@@ -232,6 +261,10 @@
 
 .pose-quest-challenge li > span {
   margin-right: 5px;
+}
+
+.pose-quest-hold-note {
+  font-size: 0.78rem;
 }
 
 .pose-quest-actions {
