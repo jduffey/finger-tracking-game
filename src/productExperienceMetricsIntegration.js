@@ -36,6 +36,7 @@ export function createLazyProductExperienceMetrics({
   }
 
   let storePromise = null;
+  let generation = 0;
 
   function getStore() {
     if (!storePromise) {
@@ -63,14 +64,20 @@ export function createLazyProductExperienceMetrics({
     tutorial = false,
     timestampMs = now(),
   } = {}) {
+    const sessionGeneration = generation;
     const sessionPromise = getStore()
-      .then((store) =>
-        store?.beginExperience({
-          modeId,
-          tutorial,
-          timestampMs,
-        }) ?? null,
-      )
+      .then((store) => {
+        if (sessionGeneration !== generation) {
+          return null;
+        }
+        return (
+          store?.beginExperience({
+            modeId,
+            tutorial,
+            timestampMs,
+          }) ?? null
+        );
+      })
       .catch((error) => {
         reportSafely(onError, error);
         return null;
@@ -78,7 +85,11 @@ export function createLazyProductExperienceMetrics({
 
     const invoke = (method, ...args) =>
       sessionPromise
-        .then((session) => session?.[method]?.(...args) ?? false)
+        .then((session) =>
+          sessionGeneration === generation
+            ? session?.[method]?.(...args) ?? false
+            : false,
+        )
         .catch((error) => {
           reportSafely(onError, error);
           return false;
@@ -113,9 +124,26 @@ export function createLazyProductExperienceMetrics({
     });
   }
 
+  function reset() {
+    generation += 1;
+    if (!storePromise) {
+      return Promise.resolve(false);
+    }
+    return storePromise
+      .then((store) => {
+        store?.reset?.();
+        return Boolean(store);
+      })
+      .catch((error) => {
+        reportSafely(onError, error);
+        return false;
+      });
+  }
+
   return Object.freeze({
     beginExperience,
     getStore,
+    reset,
   });
 }
 
@@ -124,4 +152,8 @@ const defaultProductExperienceMetrics =
 
 export function beginMeasuredProductExperience(options) {
   return defaultProductExperienceMetrics.beginExperience(options);
+}
+
+export function resetMeasuredProductExperiences() {
+  return defaultProductExperienceMetrics.reset();
 }

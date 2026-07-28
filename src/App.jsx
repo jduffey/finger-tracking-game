@@ -346,7 +346,10 @@ import {
 import { formatExperienceDuration } from "./experienceResult.js";
 import { clearCreativeAssets } from "./creativeAssetStorage.js";
 import { clearLocalProductStorage } from "./localDataCleanup.js";
-import { beginMeasuredProductExperience } from "./productExperienceMetricsIntegration.js";
+import {
+  beginMeasuredProductExperience,
+  resetMeasuredProductExperiences,
+} from "./productExperienceMetricsIntegration.js";
 import {
   assessDeviceCapabilities,
   collectDeviceCapabilitySignals,
@@ -7030,6 +7033,7 @@ export default function App() {
         failedKeyCount: localStorageCleanup.failed.length,
       });
     }
+    void resetMeasuredProductExperiences();
     void clearCreativeAssets();
     personalizationRef.current.clearSamples?.();
     setLabSampleCounts(personalizationRef.current.getSampleCounts());

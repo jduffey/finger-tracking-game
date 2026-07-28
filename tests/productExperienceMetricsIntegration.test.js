@@ -107,6 +107,47 @@ test("one lazy store is shared across measured experiences", async () => {
   assert.deepEqual(startedModes, ["breakout", "flappy"]);
 });
 
+test("reset invalidates pending sessions before clearing the in-memory store", async () => {
+  let resolveMetricsModule;
+  const calls = [];
+  const integration = createLazyProductExperienceMetrics({
+    loadMetricsModule: () =>
+      new Promise((resolve) => {
+        resolveMetricsModule = resolve;
+      }),
+    now: () => 10,
+  });
+  const staleSession = integration.beginExperience({
+    modeId: "finger-pong",
+  });
+  const staleCompletion = staleSession.complete(100);
+  const reset = integration.reset();
+  await Promise.resolve();
+
+  resolveMetricsModule({
+    createProductExperienceMetricsStore() {
+      return {
+        beginExperience() {
+          calls.push("begin");
+          return {
+            complete() {
+              calls.push("complete");
+              return true;
+            },
+          };
+        },
+        reset() {
+          calls.push("reset");
+        },
+      };
+    },
+  });
+
+  assert.equal(await staleCompletion, false);
+  assert.equal(await reset, true);
+  assert.deepEqual(calls, ["reset"]);
+});
+
 test("instrumentation load and callback failures remain non-blocking", async () => {
   const reported = [];
   const integration = createLazyProductExperienceMetrics({
