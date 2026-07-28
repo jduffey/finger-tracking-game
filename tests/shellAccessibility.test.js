@@ -38,6 +38,15 @@ test("tracking setup uses valid progress markup and a single mobile scroller", (
   );
 });
 
+test("the advanced calibration workspace stacks at the mobile breakpoint", () => {
+  const shellStyles = readSource("src/styles.css");
+
+  assert.match(
+    shellStyles,
+    /@media \(max-width: 980px\)[\s\S]*?\.content-grid\.calibration-layout,[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/,
+  );
+});
+
 test("settings labels controls and confirms destructive local-data deletion", () => {
   const settings = readSource("src/components/SettingsPanel.jsx");
   const settingsStyles = readSource("src/settingsPanel.css");

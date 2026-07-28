@@ -6651,6 +6651,11 @@ button:disabled {
     overflow: visible;
   }
 
+  .content-grid.calibration-layout,
+  .content-grid.calibration-layout.resizable-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .content-grid.camera-preview-expanded:not(.calibration-layout):not(.body-layout) {
     grid-template-columns: 1fr;
   }
