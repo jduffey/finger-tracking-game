@@ -9,6 +9,8 @@ import {
 import {
   filterLibraryModes,
   formatModeMetadata,
+  getProductHomeAreaFromPath,
+  getProductHomePathForArea,
   getHomeSections,
   getLibraryModes,
   hasReturningHomeActivity,
@@ -28,6 +30,20 @@ test("home model exposes Play, Create, and Labs in a stable order", () => {
   );
   assert.ok(sections.every((section) => section.label && section.summary));
   assert.ok(sections.every((section) => section.modes.length > 0));
+});
+
+test("top-level home destinations round-trip through stable routes", () => {
+  assert.equal(getProductHomeAreaFromPath("/"), "all");
+  assert.equal(getProductHomeAreaFromPath("/play/"), PRODUCT_AREAS.PLAY);
+  assert.equal(getProductHomeAreaFromPath("/create"), PRODUCT_AREAS.CREATE);
+  assert.equal(getProductHomeAreaFromPath("/labs"), PRODUCT_AREAS.LABS);
+  assert.equal(getProductHomeAreaFromPath("/play/sky-patrol"), null);
+  assert.equal(getProductHomeAreaFromPath("/unknown"), null);
+
+  assert.equal(getProductHomePathForArea(PRODUCT_AREAS.PLAY), "/play");
+  assert.equal(getProductHomePathForArea(PRODUCT_AREAS.CREATE), "/create");
+  assert.equal(getProductHomePathForArea(PRODUCT_AREAS.LABS), "/labs");
+  assert.equal(getProductHomePathForArea("unknown"), "/");
 });
 
 test("the public library omits developer-only diagnostics by default", () => {

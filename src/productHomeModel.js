@@ -12,6 +12,29 @@ export const HOME_AREA_ORDER = Object.freeze([
   PRODUCT_AREAS.LABS,
 ]);
 
+export const PRODUCT_HOME_AREA_PATHS = Object.freeze({
+  all: "/",
+  [PRODUCT_AREAS.PLAY]: "/play",
+  [PRODUCT_AREAS.CREATE]: "/create",
+  [PRODUCT_AREAS.LABS]: "/labs",
+});
+
+export function getProductHomeAreaFromPath(pathname) {
+  const normalizedPath =
+    typeof pathname === "string"
+      ? pathname.replace(/\/+$/, "") || "/"
+      : "/";
+  return (
+    Object.entries(PRODUCT_HOME_AREA_PATHS).find(
+      ([, path]) => path === normalizedPath,
+    )?.[0] ?? null
+  );
+}
+
+export function getProductHomePathForArea(area) {
+  return PRODUCT_HOME_AREA_PATHS[area] ?? PRODUCT_HOME_AREA_PATHS.all;
+}
+
 export const HOME_AREA_COPY = Object.freeze({
   [PRODUCT_AREAS.PLAY]: Object.freeze({
     label: "Play",

@@ -100,6 +100,24 @@ test("Camera-free deep links survive direct navigation and browser Back", async 
   await expect(page.getByRole("region", { name: /choose your next move/i })).toBeVisible();
 });
 
+test("Play, Create, and Labs are bookmarkable Home destinations", async ({
+  page,
+}) => {
+  for (const destination of ["play", "create", "labs"]) {
+    await page.goto(`/${destination}`);
+    await expect(page).toHaveURL(new RegExp(`/${destination}$`));
+    await expect(
+      page.getByRole("button", {
+        name: destination[0].toUpperCase() + destination.slice(1),
+        exact: true,
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
+  }
+
+  await page.getByRole("button", { name: "All", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test("Home catalog remains browseable at a phone-sized viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
@@ -107,7 +125,7 @@ test("Home catalog remains browseable at a phone-sized viewport", async ({ page 
   await page.getByRole("button", { name: "Labs", exact: true }).click();
   const experienceList = page.getByRole("list", { name: /available experiences/i });
   await expect(
-    experienceList.getByRole("button", { name: /^Pose Diagnostics /i }),
+    experienceList.getByRole("button", { name: /^Pose Quest /i }),
   ).toBeVisible();
   await expect(
     experienceList.getByRole("button", { name: /^Sky Patrol /i }),

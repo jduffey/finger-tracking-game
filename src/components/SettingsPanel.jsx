@@ -390,7 +390,8 @@ export default function SettingsPanel({
             <h2 id="settings-privacy">Camera & local data</h2>
             <p>
               Camera frames stay on this device. Preferences, calibration, personalized gesture
-              samples, and records may be stored locally in this browser.
+              samples, records, creative projects, saved looks, music loops, and selected lab
+              sessions may be stored locally in this browser.
             </p>
           </div>
           <div className="settings-card settings-data-actions">
@@ -433,7 +434,8 @@ export default function SettingsPanel({
                 role="alertdialog"
               >
                 <strong id="delete-local-data-confirmation">
-                  Delete preferences, calibration, samples, and local records?
+                  Delete all locally saved Motion Arcade settings, records, creations, loops,
+                  presets, and lab sessions?
                 </strong>
                 <div>
                   <button autoFocus onClick={cancelDelete} type="button">

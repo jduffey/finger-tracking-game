@@ -1,4 +1,11 @@
-import { Suspense, lazy, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   MODE_MATURITY,
@@ -187,6 +194,7 @@ function FeaturedMode({ mode, onSelect }) {
 
 export default function ProductHome({
   readiness,
+  capabilities,
   progression,
   latestResult,
   recentModeIds = [],
@@ -194,10 +202,12 @@ export default function ProductHome({
   onSelectMode,
   onOpenSetup,
   onOpenSettings,
+  onSelectArea,
   onToggleFavorite,
+  initialArea = "all",
 }) {
   const [query, setQuery] = useState("");
-  const [activeArea, setActiveArea] = useState("all");
+  const [activeArea, setActiveArea] = useState(initialArea);
   const [maxMinutes, setMaxMinutes] = useState("all");
   const [trackingFilter, setTrackingFilter] = useState("all");
   const [playersFilter, setPlayersFilter] = useState("all");
@@ -267,6 +277,12 @@ export default function ProductHome({
     () => getHomeAchievementSummary(progression),
     [progression],
   );
+  const isMobileDevice =
+    capabilities?.device?.formFactor === "mobile";
+
+  useEffect(() => {
+    setActiveArea(initialArea);
+  }, [initialArea]);
 
   function launchQuickPlay() {
     const quickPlayMode = selectQuickPlayMode({
@@ -339,6 +355,15 @@ export default function ProductHome({
       <main
         className={`product-home-main${isReturningUser ? " is-returning" : ""}`}
       >
+        {isMobileDevice ? (
+          <aside className="product-home-device-tip" role="note">
+            <strong>Playing on a phone?</strong>
+            <span>
+              Touch controls work now. For camera play, turn the phone sideways,
+              place it on a stable surface, and leave room to move comfortably.
+            </span>
+          </aside>
+        ) : null}
         {isReturningUser ? (
           <section
             className="product-home-hero is-returning"
@@ -599,7 +624,10 @@ export default function ProductHome({
                 aria-pressed={activeArea === filter.id}
                 className={activeArea === filter.id ? "active" : ""}
                 key={filter.id}
-                onClick={() => setActiveArea(filter.id)}
+                onClick={() => {
+                  setActiveArea(filter.id);
+                  onSelectArea?.(filter.id);
+                }}
                 type="button"
               >
                 {filter.label}

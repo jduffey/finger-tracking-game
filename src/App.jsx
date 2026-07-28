@@ -108,7 +108,6 @@ import {
   getTouchingTipRippleStrokeWidth,
 } from "./tipRipples.js";
 import {
-  FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
   FULLSCREEN_LANDING_MODE,
   FULLSCREEN_MODE_LANDING_HOLD_MS,
   createFullscreenLandingHandSkeleton,
@@ -295,7 +294,6 @@ import FullscreenLandingPage, {
   WebcamBackground,
 } from "./components/FullscreenLandingPage.jsx";
 import ProductHome from "./components/ProductHome.jsx";
-import ExperienceOverlay from "./components/ExperienceOverlay.jsx";
 import { createGestureEngine } from "./gestures/gestureEngine.js";
 import {
   APP_PHASES,
@@ -307,6 +305,10 @@ import {
   getModeByPath,
   listModes,
 } from "./modeRegistry.js";
+import {
+  getProductHomeAreaFromPath,
+  getProductHomePathForArea,
+} from "./productHomeModel.js";
 import {
   TRACKING_READINESS_STATES,
   createTrackingInteractionCheck,
@@ -354,8 +356,8 @@ import {
   createWhackAMoleResult,
 } from "./gameResultAdapters.js";
 import { formatExperienceDuration } from "./experienceResult.js";
-import { CREATIVE_GALLERY_STORAGE_KEY } from "./creativeGallery.js";
 import { clearCreativeAssets } from "./creativeAssetStorage.js";
+import { clearLocalProductStorage } from "./localDataCleanup.js";
 import {
   assessDeviceCapabilities,
   collectDeviceCapabilitySignals,
@@ -376,7 +378,6 @@ import { resizeFullscreenGameState } from "./viewportStateTransform.js";
 import { createFixedStepSessionTiming } from "./sessionTiming.js";
 import {
   MOTION_VISUALIZER_EFFECTS,
-  MOTION_VISUALIZER_STORAGE_KEY,
   applyMotionVisualizerPreset,
   createMotionVisualizerPreset,
   deleteMotionVisualizerPreset,
@@ -393,7 +394,6 @@ import {
   ALL_GESTURE_IDS,
   GESTURE_DEFINITIONS,
   GESTURE_IDS,
-  PERSONALIZATION_STORAGE_KEY,
   isTwoHandGesture,
 } from "./gestures/constants.js";
 import { createGesturePersonalization } from "./gestures/personalization.js";
@@ -406,6 +406,9 @@ import {
 } from "./spatialMemoryExperience.js";
 
 const BodyPoseLab = lazy(() => import("./components/BodyPoseLab.jsx"));
+const ExperienceOverlay = lazy(
+  () => import("./components/ExperienceOverlay.jsx"),
+);
 const SettingsPanel = lazy(
   () => import("./components/SettingsPanel.jsx"),
 );
@@ -1694,6 +1697,9 @@ export default function App() {
     height: window.innerHeight,
   }));
   const [phase, setPhase] = useState(PHASES.HOME);
+  const [productHomeArea, setProductHomeArea] = useState(
+    () => getProductHomeAreaFromPath(window.location.pathname) ?? "all",
+  );
   const [trackingRequested, setTrackingRequested] = useState(false);
   const [pendingModeId, setPendingModeId] = useState(null);
   const [preferences, setPreferences] = useState(() => loadUserPreferences());
@@ -5118,6 +5124,14 @@ export default function App() {
         openProductSettings({ updateHistory: false });
         return;
       }
+      const homeArea = getProductHomeAreaFromPath(path);
+      if (homeArea) {
+        navigateToProductHome({
+          area: homeArea,
+          updateHistory: false,
+        });
+        return;
+      }
       const mode = getModeByPath(path);
       if (mode) {
         selectProductMode(mode, { updateHistory: false });
@@ -6722,7 +6736,10 @@ export default function App() {
     navigateToProductHome();
   }
 
-  function navigateToProductHome({ updateHistory = true } = {}) {
+  function navigateToProductHome({
+    updateHistory = true,
+    area = "all",
+  } = {}) {
     if (!recordActiveProgressionResult()) {
       abandonActiveProgressionSession("returned_home");
     }
@@ -6732,10 +6749,11 @@ export default function App() {
     pendingLaunchContextRef.current = null;
     activeLaunchContextRef.current = {};
     arcadeRunLaunchRequestRef.current = null;
+    setProductHomeArea(area);
     setPhase(PHASES.HOME);
     phaseRef.current = PHASES.HOME;
     if (updateHistory) {
-      updateProductPath("/");
+      updateProductPath(getProductHomePathForArea(area));
     }
   }
 
@@ -7080,29 +7098,17 @@ export default function App() {
   }
 
   function deleteAllLocalProductData() {
-    const confirmed = window.confirm(
-      "Delete saved settings, calibration, gesture personalization, and local records?",
-    );
-    if (!confirmed) {
-      return;
-    }
-
     clearCalibration();
     clearUserPreferences();
-    try {
-      window.localStorage.removeItem(PERSONALIZATION_STORAGE_KEY);
-      window.localStorage.removeItem(SGM_STORAGE_KEY);
-      window.localStorage.removeItem(CREATIVE_GALLERY_STORAGE_KEY);
-      window.localStorage.removeItem(ARCADE_RUN_STORAGE_KEY);
-      window.localStorage.removeItem(MOTION_VISUALIZER_STORAGE_KEY);
-      window.localStorage.removeItem(
-        "motion-arcade.fingerprint-worlds.v1",
-      );
-    } catch (error) {
-      appLog.warn("Could not remove all local product data", { error });
+    const localStorageCleanup = clearLocalProductStorage();
+    if (localStorageCleanup.failed.length > 0) {
+      appLog.warn("Could not remove every local product record", {
+        failedKeyCount: localStorageCleanup.failed.length,
+      });
     }
     void clearCreativeAssets();
     personalizationRef.current.clearSamples?.();
+    setLabSampleCounts(personalizationRef.current.getSampleCounts());
     activeProgressionSessionRef.current = null;
     arcadeRunLaunchRequestRef.current = null;
     progressionStoreRef.current.clear();
@@ -7111,6 +7117,10 @@ export default function App() {
     setTransform(null);
     transformRef.current = null;
     setHasSavedCalibration(false);
+    setSpatialMemoryState(createInitialSpatialMemoryState());
+    setSpatialMemoryExperience(createSpatialMemoryExperience());
+    setGestureAnalyticsLabSessionKey((current) => current + 1);
+    setGestureArtSessionKey((current) => current + 1);
     setPreferences(normalizeUserPreferences());
     const resetVisualizer = normalizeMotionVisualizerState();
     motionVisualizerStateRef.current = resetVisualizer;
@@ -10742,11 +10752,6 @@ export default function App() {
     fullscreenModeLandingStateRef.current = nextStateWithSkeleton;
     setFullscreenModeLandingState(nextStateWithSkeleton);
 
-    if (nextStateWithSkeleton.selectedModeId === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID) {
-      returnFromFullscreenCameraScreen();
-      return;
-    }
-
     if (
       nextStateWithSkeleton.selectedModeId &&
       nextStateWithSkeleton.selectedModeId !== fullscreenGridModeRef.current
@@ -10761,11 +10766,6 @@ export default function App() {
     const nextState = selectFullscreenModeLandingMode(fullscreenModeLandingStateRef.current, modeId);
     fullscreenModeLandingStateRef.current = nextState;
     setFullscreenModeLandingState(nextState);
-
-    if (nextState.selectedModeId === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID) {
-      returnFromFullscreenCameraScreen();
-      return;
-    }
 
     if (nextState.selectedModeId && nextState.selectedModeId !== fullscreenGridModeRef.current) {
       setFullscreenGridMode(nextState.selectedModeId);
@@ -13131,103 +13131,107 @@ export default function App() {
       arcadeRunLaunchRequestRef.current,
   );
   const experienceOverlay = experienceLifecycle && activeExperienceMode ? (
-    <ExperienceOverlay
-      exitLabel={
-        isArcadeRunLeg ? "Return to Arcade Run" : undefined
-      }
-      hud={getCurrentExperienceHud()}
-      instructions={`${activeExperienceMode.objective ?? activeExperienceMode.summary} ${
-        activeExperienceMode.controlHint ?? ""
-      }`.trim()}
-      lifecycle={experienceLifecycle}
-      modeLabel={activeExperienceMode.label}
-      onExit={exitCurrentExperience}
-      onPause={(reason) => {
-        if (experienceModeIdRef.current === "whack-a-mole") {
-          applyWhackAMoleAction({
-            type: WHACK_A_MOLE_ACTIONS.PAUSE,
-            now: performance.now(),
+    <Suspense fallback={null}>
+      <ExperienceOverlay
+        exitLabel={
+          isArcadeRunLeg ? "Return to Arcade Run" : undefined
+        }
+        hud={getCurrentExperienceHud()}
+        instructions={`${activeExperienceMode.objective ?? activeExperienceMode.summary} ${
+          activeExperienceMode.controlHint ?? ""
+        }`.trim()}
+        lifecycle={experienceLifecycle}
+        modeLabel={activeExperienceMode.label}
+        onExit={exitCurrentExperience}
+        onPause={(reason) => {
+          if (experienceModeIdRef.current === "whack-a-mole") {
+            applyWhackAMoleAction({
+              type: WHACK_A_MOLE_ACTIONS.PAUSE,
+              now: performance.now(),
+            });
+          }
+          dispatchExperienceLifecycle({
+            type: EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
+            reason,
           });
-        }
-        dispatchExperienceLifecycle({
-          type: EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
-          reason,
-        });
-      }}
-      onRestart={restartCurrentExperience}
-      onResume={(reason) => {
-        if (
-          reason === EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS &&
-          trackingRecoveryStatus.shouldPause
-        ) {
-          return;
-        }
-        const transition = dispatchExperienceLifecycle({
-          type: EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
-          reason,
-        });
-        if (
-          experienceModeIdRef.current === "whack-a-mole" &&
-          transition?.state?.phase !== EXPERIENCE_PHASES.PAUSED
-        ) {
-          applyWhackAMoleAction({
-            type: WHACK_A_MOLE_ACTIONS.RESUME,
-            now: performance.now(),
+        }}
+        onRestart={restartCurrentExperience}
+        onResume={(reason) => {
+          if (
+            reason === EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS &&
+            trackingRecoveryStatus.shouldPause
+          ) {
+            return;
+          }
+          const transition = dispatchExperienceLifecycle({
+            type: EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
+            reason,
           });
-        }
-      }}
-      trackingRecovery={trackingRecoveryStatus}
-      resultOptions={{
-        allowRestart: !isArcadeRunLeg,
-        exitLabel: isArcadeRunLeg
-          ? "Continue Arcade Run"
-          : undefined,
-        metricDefinitions: {
-          accuracyPercent: {
-            label: "Accuracy",
-            format: (value) => `${Math.round(value)}%`,
+          if (
+            experienceModeIdRef.current === "whack-a-mole" &&
+            transition?.state?.phase !== EXPERIENCE_PHASES.PAUSED
+          ) {
+            applyWhackAMoleAction({
+              type: WHACK_A_MOLE_ACTIONS.RESUME,
+              now: performance.now(),
+            });
+          }
+        }}
+        trackingRecovery={trackingRecoveryStatus}
+        resultOptions={{
+          allowRestart: !isArcadeRunLeg,
+          exitLabel: isArcadeRunLeg
+            ? "Continue Arcade Run"
+            : undefined,
+          metricDefinitions: {
+            accuracyPercent: {
+              label: "Accuracy",
+              format: (value) => `${Math.round(value)}%`,
+            },
+            smoothnessPercent: {
+              label: "Smoothness",
+              format: (value) => `${Math.round(value)}%`,
+            },
+            clearTimeMs: {
+              label: "Clear time",
+              format: (value) => `${(value / 1000).toFixed(1)}s`,
+            },
+            survivalMs: {
+              label: "Survival",
+              format: formatExperienceDuration,
+            },
+            averageHitTimeMs: {
+              label: "Average reaction",
+              format: (value) => `${Math.round(value)} ms`,
+            },
+            fastestHitMs: {
+              label: "Fastest hit",
+              format: (value) => `${Math.round(value)} ms`,
+            },
+            bestStreak: {
+              label: "Best streak",
+              format: (value) => `×${Math.round(value)}`,
+            },
+            goldHits: {
+              label: "Gold hits",
+            },
+            decoyHits: {
+              label: "Decoys hit",
+            },
+            decoysAvoided: {
+              label: "Decoys avoided",
+            },
           },
-          smoothnessPercent: {
-            label: "Smoothness",
-            format: (value) => `${Math.round(value)}%`,
-          },
-          clearTimeMs: {
-            label: "Clear time",
-            format: (value) => `${(value / 1000).toFixed(1)}s`,
-          },
-          survivalMs: {
-            label: "Survival",
-            format: formatExperienceDuration,
-          },
-          averageHitTimeMs: {
-            label: "Average reaction",
-            format: (value) => `${Math.round(value)} ms`,
-          },
-          fastestHitMs: {
-            label: "Fastest hit",
-            format: (value) => `${Math.round(value)} ms`,
-          },
-          bestStreak: {
-            label: "Best streak",
-            format: (value) => `×${Math.round(value)}`,
-          },
-          goldHits: {
-            label: "Gold hits",
-          },
-          decoyHits: {
-            label: "Decoys hit",
-          },
-          decoysAvoided: {
-            label: "Decoys avoided",
-          },
-        },
-      }}
-    />
+        }}
+      />
+    </Suspense>
   ) : null;
 
   if (isProductHomePhase) {
     return (
       <ProductHome
+        capabilities={deviceCapabilities}
+        initialArea={productHomeArea}
         readiness={{ status: productTrackingStatus }}
         progression={gameProgression}
         latestResult={latestGameResult}
@@ -13236,6 +13240,10 @@ export default function App() {
         onSelectMode={selectProductMode}
         onOpenSetup={() => openProductTrackingSetup()}
         onOpenSettings={() => openProductSettings()}
+        onSelectArea={(area) => {
+          setProductHomeArea(area);
+          updateProductPath(getProductHomePathForArea(area));
+        }}
         onToggleFavorite={(modeId) =>
           setPreferences((current) => toggleFavoriteMode(current, modeId))
         }
