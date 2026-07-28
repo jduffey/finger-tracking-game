@@ -48,6 +48,7 @@ const sharedFullscreenGame = {
   phase: APP_PHASES.FULLSCREEN_CAMERA,
   entryKind: "fullscreen-mode",
   trackingProfile: TRACKING_PROFILES.ONE_HAND,
+  seatedFriendly: true,
   supportsPointerFallback: true,
   supportsPause: true,
   supportsResults: true,
@@ -64,6 +65,7 @@ const catalog = [
     phase: APP_PHASES.HOME,
     entryKind: "home",
     trackingProfile: TRACKING_PROFILES.NONE,
+    seatedFriendly: true,
     hiddenFromLibrary: true,
   },
   {
@@ -76,6 +78,7 @@ const catalog = [
     phase: APP_PHASES.TRACKING_SETUP,
     entryKind: "phase",
     trackingProfile: TRACKING_PROFILES.ONE_HAND,
+    seatedFriendly: true,
     typicalMinutes: 1,
     supportsPointerFallback: true,
   },
@@ -94,6 +97,7 @@ const catalog = [
     typicalMinutes: 5,
     difficulty: "Adaptive",
     players: 1,
+    seatedFriendly: true,
     supportsPointerFallback: true,
     supportsResults: true,
     dailyChallenge: true,
@@ -113,6 +117,7 @@ const catalog = [
     typicalMinutes: 1,
     difficulty: "Easy",
     players: 1,
+    seatedFriendly: true,
     supportsPointerFallback: true,
     supportsPause: true,
     supportsResults: true,
@@ -204,6 +209,7 @@ const catalog = [
     typicalMinutes: 3,
     difficulty: "Adaptive",
     players: 1,
+    seatedFriendly: true,
     featured: true,
     supportsPointerFallback: true,
     supportsPause: true,
@@ -342,6 +348,7 @@ const catalog = [
     typicalMinutes: 5,
     difficulty: "Open play",
     players: 4,
+    seatedFriendly: true,
     featured: true,
     supportsPointerFallback: true,
     variants: ["square", "hex", "voronoi", "rings", "pulse", "tip-ripples", "static"],
@@ -361,6 +368,7 @@ const catalog = [
     typicalMinutes: 8,
     difficulty: "Open play",
     players: 1,
+    seatedFriendly: true,
     featured: true,
     supportsPointerFallback: true,
   },
@@ -379,6 +387,7 @@ const catalog = [
     typicalMinutes: 8,
     difficulty: "Open play",
     players: 1,
+    seatedFriendly: true,
     featured: true,
     supportsPointerFallback: true,
   },
@@ -399,6 +408,7 @@ const catalog = [
     typicalMinutes: 8,
     difficulty: "Open play",
     players: 1,
+    seatedFriendly: true,
     supportsPointerFallback: true,
   },
   {
@@ -414,6 +424,7 @@ const catalog = [
     controlHint: "Move between lanes",
     typicalMinutes: 3,
     players: 1,
+    seatedFriendly: true,
     supportsPointerFallback: false,
   },
   {
@@ -429,6 +440,7 @@ const catalog = [
     controlHint: "Move to steer",
     typicalMinutes: 5,
     players: 1,
+    seatedFriendly: true,
     supportsPointerFallback: false,
   },
   {
@@ -444,6 +456,7 @@ const catalog = [
     controlHint: "Pinch to grab · Move to throw",
     typicalMinutes: 5,
     players: 1,
+    seatedFriendly: true,
     supportsPointerFallback: false,
   },
   {
@@ -459,6 +472,7 @@ const catalog = [
     controlHint: "Pinch and drag",
     typicalMinutes: 5,
     players: 1,
+    seatedFriendly: true,
     supportsPointerFallback: false,
   },
   {
@@ -474,6 +488,7 @@ const catalog = [
     controlHint: "Choose an event · Predict · Run trials",
     typicalMinutes: 5,
     players: 1,
+    seatedFriendly: true,
     supportsPointerFallback: true,
   },
   {
@@ -489,6 +504,7 @@ const catalog = [
     controlHint: "Match each framing clue · Hold steady",
     typicalMinutes: 5,
     players: 1,
+    seatedFriendly: false,
   },
   {
     id: "forest-discovery",
@@ -503,6 +519,7 @@ const catalog = [
     controlHint: "Lean, point, or use arrow keys",
     typicalMinutes: 5,
     players: 1,
+    seatedFriendly: true,
     supportsPointerFallback: true,
   },
   {
@@ -518,6 +535,7 @@ const catalog = [
     controlHint: "Point, pinch, and move",
     typicalMinutes: 5,
     players: 1,
+    seatedFriendly: true,
   },
   {
     id: "spatial-investigation",
@@ -532,6 +550,7 @@ const catalog = [
     controlHint: "Point and pinch",
     typicalMinutes: 5,
     players: 1,
+    seatedFriendly: true,
   },
   {
     id: "gesture-analytics",
@@ -546,6 +565,7 @@ const catalog = [
     controlHint: "Developer instrumentation",
     typicalMinutes: 10,
     players: 1,
+    seatedFriendly: true,
   },
 ];
 

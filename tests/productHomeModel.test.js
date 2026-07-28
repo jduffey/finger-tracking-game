@@ -93,6 +93,19 @@ test("library filtering supports practical duration, movement, and player facets
   );
 });
 
+test("library filtering supports difficulty and seated-friendly facets", () => {
+  const modes = getLibraryModes();
+  const easyModes = filterLibraryModes(modes, { difficulty: "easy" });
+  const seatedModes = filterLibraryModes(modes, { seatedOnly: true });
+
+  assert.ok(easyModes.length > 0);
+  assert.ok(easyModes.every((mode) => mode.difficulty === "Easy"));
+  assert.ok(seatedModes.length > 0);
+  assert.ok(seatedModes.every((mode) => mode.seatedFriendly === true));
+  assert.ok(seatedModes.some((mode) => mode.id === "sky-patrol"));
+  assert.ok(seatedModes.every((mode) => mode.id !== "pose-quest"));
+});
+
 test("quick play favors unplayed featured games and is deterministic when seeded", () => {
   const first = selectQuickPlayMode({ randomValue: 0 });
   const afterFirst = selectQuickPlayMode({
@@ -195,8 +208,9 @@ test("mode metadata is concise and omits unavailable fields", () => {
       typicalMinutes: 3,
       players: 1,
       difficulty: "Easy",
+      seatedFriendly: true,
     }),
-    ["Point to steer", "3 min", "1 player", "Easy"],
+    ["Point to steer", "3 min", "1 player", "Easy", "Seated-friendly"],
   );
   assert.deepEqual(formatModeMetadata({ players: 2 }), ["2 players"]);
 });

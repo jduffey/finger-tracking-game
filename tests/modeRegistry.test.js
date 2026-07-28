@@ -40,6 +40,19 @@ test("mode registry defines one coherent Play, Create, Labs, and Setup taxonomy"
   assert.ok(listModes({ area: PRODUCT_AREAS.LABS }).length >= 8);
 });
 
+test("public experiences explicitly declare honest seated-play support", () => {
+  const publicModes = MODE_REGISTRY.filter(
+    (mode) =>
+      !mode.hiddenFromLibrary &&
+      mode.maturity !== MODE_MATURITY.INTERNAL,
+  );
+
+  assert.ok(publicModes.every((mode) => typeof mode.seatedFriendly === "boolean"));
+  assert.equal(getModeById("sky-patrol").seatedFriendly, true);
+  assert.equal(getModeById("jam-studio").seatedFriendly, true);
+  assert.equal(getModeById("pose-quest").seatedFriendly, false);
+});
+
 test("featured library is curated and excludes internal experiments", () => {
   const featured = getFeaturedModes();
 

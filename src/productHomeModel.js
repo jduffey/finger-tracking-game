@@ -67,6 +67,7 @@ export function filterLibraryModes(
     difficulty = "all",
     trackingProfile = "all",
     players = null,
+    seatedOnly = false,
   } = {},
 ) {
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -101,6 +102,9 @@ export function filterLibraryModes(
     ) {
       return false;
     }
+    if (seatedOnly && mode.seatedFriendly !== true) {
+      return false;
+    }
     if (!normalizedQuery) {
       return true;
     }
@@ -112,6 +116,7 @@ export function filterLibraryModes(
       mode.controlHint,
       mode.difficulty,
       mode.area,
+      mode.seatedFriendly ? "seated friendly" : null,
     ]
       .filter(Boolean)
       .some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
@@ -282,5 +287,6 @@ export function formatModeMetadata(mode) {
     mode.typicalMinutes ? `${mode.typicalMinutes} min` : null,
     mode.players ? `${mode.players} ${mode.players === 1 ? "player" : "players"}` : null,
     mode.difficulty,
+    mode.seatedFriendly ? "Seated-friendly" : null,
   ].filter(Boolean);
 }

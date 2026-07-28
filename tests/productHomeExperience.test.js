@@ -53,3 +53,16 @@ test("Quick Play chooses on click and remembers its last in-session pick", () =>
     /useMemo\(\s*\(\) => selectQuickPlayMode/,
   );
 });
+
+test("the library exposes difficulty and seated-friendly browse controls", () => {
+  const source = readSource("src/components/ProductHome.jsx");
+
+  assert.match(source, /<span>Difficulty<\/span>/);
+  assert.match(source, /label: "Any difficulty"/);
+  assert.match(source, /difficulty: difficultyFilter/);
+  assert.match(source, /<span>Play position<\/span>/);
+  assert.match(source, />Seated-friendly</);
+  assert.match(source, /seatedOnly,/);
+  assert.match(source, /setDifficultyFilter\("all"\)/);
+  assert.match(source, /setSeatedOnly\(false\)/);
+});

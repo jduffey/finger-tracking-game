@@ -39,6 +39,15 @@ const AREA_FILTERS = [
   { id: PRODUCT_AREAS.LABS, label: "Labs" },
 ];
 
+const DIFFICULTY_FILTERS = [
+  { id: "all", label: "Any difficulty" },
+  { id: "Easy", label: "Easy" },
+  { id: "Medium", label: "Medium" },
+  { id: "Hard", label: "Hard" },
+  { id: "Adaptive", label: "Adaptive" },
+  { id: "Open play", label: "Open play" },
+];
+
 function formatPlayTime(durationMs = 0) {
   const minutes = Math.round(Math.max(0, durationMs) / 60_000);
   if (minutes < 60) {
@@ -209,8 +218,10 @@ export default function ProductHome({
   const [query, setQuery] = useState("");
   const [activeArea, setActiveArea] = useState(initialArea);
   const [maxMinutes, setMaxMinutes] = useState("all");
+  const [difficultyFilter, setDifficultyFilter] = useState("all");
   const [trackingFilter, setTrackingFilter] = useState("all");
   const [playersFilter, setPlayersFilter] = useState("all");
+  const [seatedOnly, setSeatedOnly] = useState(false);
   const lastQuickPlayModeIdRef = useRef(null);
   const libraryModes = useMemo(() => getLibraryModes(), []);
   const featuredModes = useMemo(() => getFeaturedModes(), []);
@@ -221,15 +232,19 @@ export default function ProductHome({
         query,
         area: activeArea,
         maxMinutes: maxMinutes === "all" ? null : Number(maxMinutes),
+        difficulty: difficultyFilter,
         trackingProfile: trackingFilter,
         players: playersFilter === "all" ? null : Number(playersFilter),
+        seatedOnly,
       }),
     [
       activeArea,
+      difficultyFilter,
       libraryModes,
       maxMinutes,
       playersFilter,
       query,
+      seatedOnly,
       trackingFilter,
     ],
   );
@@ -649,6 +664,19 @@ export default function ProductHome({
               </select>
             </label>
             <label>
+              <span>Difficulty</span>
+              <select
+                onChange={(event) => setDifficultyFilter(event.target.value)}
+                value={difficultyFilter}
+              >
+                {DIFFICULTY_FILTERS.map((filter) => (
+                  <option key={filter.id} value={filter.id}>
+                    {filter.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
               <span>Movement</span>
               <select
                 onChange={(event) => setTrackingFilter(event.target.value)}
@@ -671,6 +699,16 @@ export default function ProductHome({
                 <option value="1">Solo</option>
                 <option value="2">Two players / hands</option>
                 <option value="4">Group</option>
+              </select>
+            </label>
+            <label>
+              <span>Play position</span>
+              <select
+                onChange={(event) => setSeatedOnly(event.target.value === "seated")}
+                value={seatedOnly ? "seated" : "all"}
+              >
+                <option value="all">Any position</option>
+                <option value="seated">Seated-friendly</option>
               </select>
             </label>
           </div>
@@ -716,8 +754,10 @@ export default function ProductHome({
                   setQuery("");
                   setActiveArea("all");
                   setMaxMinutes("all");
+                  setDifficultyFilter("all");
                   setTrackingFilter("all");
                   setPlayersFilter("all");
+                  setSeatedOnly(false);
                 }}
                 type="button"
               >
