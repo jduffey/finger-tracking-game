@@ -64,7 +64,11 @@ test("the package exposes one local and CI quality command", () => {
   assert.equal(packageJson.scripts["test:ci"], "node --test --test-reporter=spec");
   assert.equal(
     packageJson.scripts.check,
-    "npm run test:ci && npm run build && npm run audit",
+    "npm run test:ci && npm run build && npm run check:bundle-budget && npm run audit",
+  );
+  assert.equal(
+    packageJson.scripts["check:bundle-budget"],
+    "node scripts/check-bundle-budget.js",
   );
   assert.equal(packageJson.scripts.audit, "npm audit --audit-level=high");
 });

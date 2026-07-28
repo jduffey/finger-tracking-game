@@ -13,7 +13,8 @@
     "test": "node --test",
     "test:ci": "node --test --test-reporter=spec",
     "audit": "npm audit --audit-level=high",
-    "check": "npm run test:ci && npm run build && npm run audit",
+    "check:bundle-budget": "node scripts/check-bundle-budget.js",
+    "check": "npm run test:ci && npm run build && npm run check:bundle-budget && npm run audit",
     "symphony": "bash scripts/run-symphony-local.sh",
     "preview": "vite preview"
   },

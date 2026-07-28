@@ -88,11 +88,30 @@ npm run preview
 - `npm test`: runs the Node test suite
 - `npm run test:ci`: runs the same suite with the explicit CI reporter
 - `npm run audit`: checks installed dependencies for high-severity advisories
-- `npm run check`: runs the complete test suite, creates a production build, and audits dependencies
+- `npm run check:bundle-budget`: checks the built main page's eager JS and CSS against the startup budgets
+- `npm run check`: runs the complete test suite, creates a production build, checks the startup bundle budget, and audits dependencies
 - `npm run symphony`: launches the optional Symphony workflow wrapper
 
 Pull requests and pushes to `main` run `npm run check` on Node.js 22 through the
 repository's GitHub Actions quality workflow.
+
+### Production bundle budgets
+
+The startup budget is based on the assets referenced directly by `dist/index.html`:
+module scripts, module preloads, and stylesheets. Lazy activity and camera-tracking
+chunks are intentionally excluded because they are not downloaded during the first
+visit to Home.
+
+| Asset | Raw budget | Gzip budget |
+| --- | ---: | ---: |
+| Initial JavaScript | 800 KiB | 250 KiB |
+| Initial CSS | 210 KiB | 42 KiB |
+
+These limits leave modest headroom above the current production baseline while still
+catching accidental eager imports or unbounded shared styles. Run `npm run build`
+followed by `npm run check:bundle-budget` after changing entry-point imports, shared
+dependencies, or global CSS. An intentional budget increase should include a measured
+explanation in the pull request rather than changing the thresholds as a routine fix.
 
 ## Camera, Privacy, And Local Data
 
