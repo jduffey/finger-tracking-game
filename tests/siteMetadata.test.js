@@ -62,9 +62,10 @@ test("the package exposes one local and CI quality command", () => {
 
   assert.equal(packageJson.engines.node, "^20.19.0 || >=22.12.0");
   assert.equal(packageJson.scripts["test:ci"], "node --test --test-reporter=spec");
+  assert.equal(packageJson.scripts["test:e2e"], "playwright test");
   assert.equal(
     packageJson.scripts.check,
-    "npm run test:ci && npm run build && npm run check:bundle-budget && npm run audit",
+    "npm run test:ci && npm run build && npm run check:bundle-budget && npm run audit && npm run test:e2e",
   );
   assert.equal(
     packageJson.scripts["check:bundle-budget"],
