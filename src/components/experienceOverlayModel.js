@@ -9,6 +9,7 @@ import {
   EXPERIENCE_RESULT_ACTIONS,
   createExperienceResultViewModel,
 } from "../experienceResult.js";
+import { TRACKING_RECOVERY_PHASES } from "../trackingRecoveryGate.js";
 
 export const EXPERIENCE_OVERLAY_KINDS = Object.freeze({
   HIDDEN: "hidden",
@@ -139,15 +140,35 @@ function createHiddenView() {
   };
 }
 
-function createPauseView(lifecycle, modeLabel, exitLabel) {
+function createPauseView(
+  lifecycle,
+  modeLabel,
+  exitLabel,
+  trackingRecovery,
+) {
   const primaryReason =
     getPrimaryExperiencePauseReason(lifecycle) ??
     EXPERIENCE_PAUSE_REASONS.MANUAL;
-  const presentation =
+  let presentation =
     PAUSE_PRESENTATIONS[primaryReason] ??
     PAUSE_PRESENTATIONS[EXPERIENCE_PAUSE_REASONS.MANUAL];
   const isTrackingLost =
     primaryReason === EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS;
+  const isReacquiring =
+    isTrackingLost &&
+    trackingRecovery?.phase === TRACKING_RECOVERY_PHASES.REACQUIRING;
+  const recoverySeconds = isReacquiring
+    ? Math.max(1, Math.ceil((trackingRecovery.remainingMs ?? 0) / 1_000))
+    : null;
+  if (isReacquiring) {
+    presentation = {
+      eyebrow: "Tracking found",
+      title: "Hold steady",
+      message: `Stay inside the frame for ${recoverySeconds} more ${
+        recoverySeconds === 1 ? "second" : "seconds"
+      }. Play will resume automatically.`,
+    };
+  }
   const pauseReasons = lifecycle.pauseReasons.map((reason) => ({
     id: reason,
     label: PAUSE_REASON_LABELS[reason] ?? "Experience paused",
@@ -163,6 +184,11 @@ function createPauseView(lifecycle, modeLabel, exitLabel) {
     blocking: true,
     livePriority: isTrackingLost ? "assertive" : "polite",
     isTrackingLost,
+    isReacquiring,
+    recoveryProgress: isReacquiring
+      ? Math.min(1, Math.max(0, trackingRecovery?.progress ?? 0))
+      : 0,
+    recoverySeconds,
     eyebrow: presentation.eyebrow,
     title: presentation.title,
     message: presentation.message,
@@ -170,12 +196,16 @@ function createPauseView(lifecycle, modeLabel, exitLabel) {
     primaryPauseReason: primaryReason,
     announcement: `${mode}. ${presentation.title}. ${presentation.message}`,
     actions: [
-      createAction(
-        EXPERIENCE_OVERLAY_ACTIONS.RESUME,
-        presentation.resumeLabel,
-        "primary",
-        { reason: primaryReason },
-      ),
+      ...(isTrackingLost
+        ? []
+        : [
+            createAction(
+              EXPERIENCE_OVERLAY_ACTIONS.RESUME,
+              presentation.resumeLabel,
+              "primary",
+              { reason: primaryReason },
+            ),
+          ]),
       createAction(
         EXPERIENCE_OVERLAY_ACTIONS.RESTART,
         "Restart",
@@ -197,6 +227,7 @@ export function createExperienceOverlayViewModel({
   hud,
   resultOptions,
   exitLabel,
+  trackingRecovery,
 } = {}) {
   if (!isExperienceLifecycleState(lifecycle)) {
     return createHiddenView();
@@ -295,6 +326,7 @@ export function createExperienceOverlayViewModel({
         lifecycle,
         mode,
         normalizedExitLabel || "Back to home",
+        trackingRecovery,
       );
 
     case EXPERIENCE_PHASES.RESULTS: {

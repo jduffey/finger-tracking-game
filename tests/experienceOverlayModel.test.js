@@ -209,12 +209,44 @@ test("tracking loss takes presentation priority over other pause reasons", () =>
   assert.equal(view.kind, EXPERIENCE_OVERLAY_KINDS.TRACKING_LOST);
   assert.equal(view.livePriority, "assertive");
   assert.equal(view.title, "Tracking lost");
-  assert.equal(view.actions[0].label, "Try tracking again");
-  assert.equal(
-    view.actions[0].reason,
-    EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS,
+  assert.deepEqual(
+    view.actions.map(({ id }) => id),
+    [
+      EXPERIENCE_OVERLAY_ACTIONS.RESTART,
+      EXPERIENCE_OVERLAY_ACTIONS.EXIT,
+    ],
   );
   assert.equal(view.pauseReasons.length, 3);
+});
+
+test("stable reacquisition is explained and resumes automatically", () => {
+  let lifecycle = createExperienceLifecycle({
+    countdownMs: 0,
+    autoStart: true,
+  });
+  lifecycle = reduceExperienceLifecycle(lifecycle, {
+    type: EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
+    reason: EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS,
+  });
+  const view = createExperienceOverlayViewModel({
+    lifecycle,
+    modeLabel: "Sky Patrol",
+    trackingRecovery: {
+      phase: "reacquiring",
+      progress: 0.5,
+      remainingMs: 1_500,
+    },
+  });
+
+  assert.equal(view.title, "Hold steady");
+  assert.equal(view.isReacquiring, true);
+  assert.equal(view.recoveryProgress, 0.5);
+  assert.equal(view.recoverySeconds, 2);
+  assert.match(view.message, /resume automatically/);
+  assert.equal(
+    view.actions.some(({ id }) => id === EXPERIENCE_OVERLAY_ACTIONS.RESUME),
+    false,
+  );
 });
 
 test("results presentation reuses normalized outcome, metrics, and actions", () => {

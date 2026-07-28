@@ -216,6 +216,27 @@ function OverlayDialog({
         <h2 id={headingId}>{view.title}</h2>
         <p id={descriptionId}>{view.message}</p>
 
+        {view.isTrackingLost ? (
+          <div
+            aria-label={
+              view.isReacquiring
+                ? `${Math.round(view.recoveryProgress * 100)}% stable`
+                : "Waiting for tracking"
+            }
+            aria-valuemax={100}
+            aria-valuemin={0}
+            aria-valuenow={Math.round(view.recoveryProgress * 100)}
+            className="experience-overlay-tracking-progress"
+            role="progressbar"
+          >
+            <span
+              style={{
+                transform: `scaleX(${view.recoveryProgress})`,
+              }}
+            />
+          </div>
+        ) : null}
+
         {view.pauseReasons?.length > 1 ? (
           <ul
             aria-label="Reasons the experience remains paused"
@@ -258,6 +279,7 @@ export default function ExperienceOverlay({
   hud,
   resultOptions,
   exitLabel,
+  trackingRecovery,
   onStart,
   onPause,
   onResume,
@@ -274,6 +296,7 @@ export default function ExperienceOverlay({
         hud,
         resultOptions,
         exitLabel,
+        trackingRecovery,
       }),
     [
       exitLabel,
@@ -282,6 +305,7 @@ export default function ExperienceOverlay({
       lifecycle,
       modeLabel,
       resultOptions,
+      trackingRecovery,
     ],
   );
   const id = useId().replaceAll(":", "");

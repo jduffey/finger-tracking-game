@@ -295,8 +295,6 @@ import FullscreenLandingPage, {
   WebcamBackground,
 } from "./components/FullscreenLandingPage.jsx";
 import ProductHome from "./components/ProductHome.jsx";
-import SettingsPanel from "./components/SettingsPanel.jsx";
-import TrackingSetup from "./components/TrackingSetup.jsx";
 import ExperienceOverlay from "./components/ExperienceOverlay.jsx";
 import { createGestureEngine } from "./gestures/gestureEngine.js";
 import {
@@ -316,6 +314,12 @@ import {
   reduceTrackingReadiness,
   updateTrackingInteractionCheck,
 } from "./trackingReadiness.js";
+import {
+  TRACKING_RECOVERY_PHASES,
+  advanceTrackingRecoveryGate,
+  createTrackingRecoveryGate,
+  getTrackingRecoveryStatus,
+} from "./trackingRecoveryGate.js";
 import {
   EXPERIENCE_LIFECYCLE_EVENTS,
   EXPERIENCE_PAUSE_REASONS,
@@ -387,6 +391,12 @@ import {
 } from "./spatialMemoryExperience.js";
 
 const BodyPoseLab = lazy(() => import("./components/BodyPoseLab.jsx"));
+const SettingsPanel = lazy(
+  () => import("./components/SettingsPanel.jsx"),
+);
+const TrackingSetup = lazy(
+  () => import("./components/TrackingSetup.jsx"),
+);
 const ConveyorSphereGame = lazy(
   () => import("./components/ConveyorSphereGame.jsx"),
 );
@@ -1719,6 +1729,9 @@ export default function App() {
     useState(null);
   const [experienceLifecycle, setExperienceLifecycle] = useState(null);
   const [experienceModeId, setExperienceModeId] = useState(null);
+  const [trackingRecoveryGate, setTrackingRecoveryGate] = useState(() =>
+    createTrackingRecoveryGate(),
+  );
   const previousAudioLifecycleRef = useRef({
     attempt: null,
     modeId: null,
@@ -2123,6 +2136,15 @@ export default function App() {
         : trackingRequested
           ? "loading"
           : "idle";
+  const trackingRecoveryRequired = Boolean(
+    experienceModeId &&
+      trackingRequested &&
+      getModeById(experienceModeId)?.trackingProfile !==
+        TRACKING_PROFILES.NONE,
+  );
+  const trackingRecoveryStatus = getTrackingRecoveryStatus(
+    trackingRecoveryGate,
+  );
   const isMinorityReportLabPhase = phase === PHASES.MINORITY_REPORT_LAB;
   const isImmersiveAppPhase = shouldUseImmersiveAppLayout(phase);
   const isFullscreenModeLanding =
@@ -4803,7 +4825,42 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!experienceModeId || !trackingRequested) {
+    setTrackingRecoveryGate((current) =>
+      advanceTrackingRecoveryGate(current, {
+        required: trackingRecoveryRequired,
+        detected: handDetected,
+        now: globalThis.performance?.now?.() ?? Date.now(),
+      }),
+    );
+  }, [handDetected, trackingRecoveryRequired]);
+
+  useEffect(() => {
+    if (
+      ![
+        TRACKING_RECOVERY_PHASES.LOSS_GRACE,
+        TRACKING_RECOVERY_PHASES.REACQUIRING,
+      ].includes(trackingRecoveryGate.phase)
+    ) {
+      return undefined;
+    }
+    const interval = window.setInterval(() => {
+      setTrackingRecoveryGate((current) =>
+        advanceTrackingRecoveryGate(current, {
+          required: trackingRecoveryRequired,
+          detected: handDetected,
+          now: globalThis.performance?.now?.() ?? Date.now(),
+        }),
+      );
+    }, 100);
+    return () => window.clearInterval(interval);
+  }, [
+    handDetected,
+    trackingRecoveryGate.phase,
+    trackingRecoveryRequired,
+  ]);
+
+  useEffect(() => {
+    if (!experienceModeId || !trackingRecoveryRequired) {
       const transition = dispatchExperienceLifecycle({
         type: EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
         reason: EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS,
@@ -4819,21 +4876,30 @@ export default function App() {
       }
       return;
     }
-    if (experienceModeId === "whack-a-mole" && !handDetected) {
+    if (
+      trackingRecoveryGate.phase ===
+      TRACKING_RECOVERY_PHASES.LOSS_GRACE
+    ) {
+      return;
+    }
+    if (
+      experienceModeId === "whack-a-mole" &&
+      trackingRecoveryStatus.shouldPause
+    ) {
       applyWhackAMoleAction({
         type: WHACK_A_MOLE_ACTIONS.PAUSE,
         now: performance.now(),
       });
     }
     const transition = dispatchExperienceLifecycle({
-      type: handDetected
-        ? EXPERIENCE_LIFECYCLE_EVENTS.RESUME
-        : EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
+      type: trackingRecoveryStatus.shouldPause
+        ? EXPERIENCE_LIFECYCLE_EVENTS.PAUSE
+        : EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
       reason: EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS,
     });
     if (
       experienceModeId === "whack-a-mole" &&
-      handDetected &&
+      !trackingRecoveryStatus.shouldPause &&
       transition?.state?.phase !== EXPERIENCE_PHASES.PAUSED
     ) {
       applyWhackAMoleAction({
@@ -4841,7 +4907,12 @@ export default function App() {
         now: performance.now(),
       });
     }
-  }, [experienceModeId, handDetected, trackingRequested]);
+  }, [
+    experienceLifecycle?.attempt,
+    experienceModeId,
+    trackingRecoveryGate.phase,
+    trackingRecoveryRequired,
+  ]);
 
   useEffect(
     () =>
@@ -12760,8 +12831,7 @@ export default function App() {
       onResume={(reason) => {
         if (
           reason === EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS &&
-          trackingRequestedRef.current &&
-          !handDetectedRef.current
+          trackingRecoveryStatus.shouldPause
         ) {
           return;
         }
@@ -12779,6 +12849,7 @@ export default function App() {
           });
         }
       }}
+      trackingRecovery={trackingRecoveryStatus}
       resultOptions={{
         allowRestart: !isArcadeRunLeg,
         exitLabel: isArcadeRunLeg
@@ -12847,56 +12918,64 @@ export default function App() {
 
   if (isProductTrackingSetupPhase) {
     return (
-      <TrackingSetup
-        readiness={trackingReadiness}
-        interactionCheck={trackingInteractionCheck}
-        capabilities={deviceCapabilities}
-        recommendation={capabilityRecommendation}
-        qualityBudget={dynamicQualityBudget}
-        mirrorCamera={preferences.mirrorCamera}
-        videoRef={videoRef}
-        devices={cameraDevices}
-        onBack={() => navigateToProductHome()}
-        onStart={beginProductTrackingSetup}
-        onRetry={() => {
-          if (!trackingRequested) {
-            beginProductTrackingSetup();
-          } else {
-            retryCamera("manual_retry");
-          }
-        }}
-        onStop={stopProductCamera}
-        onDeviceChange={(deviceId) => {
-          setRequestedCameraDeviceId(deviceId);
-          setTrackingReadiness((current) => ({
-            ...current,
-            selectedDeviceId: deviceId,
-          }));
-        }}
-        onContinueWithoutCamera={continueWithoutProductTracking}
-        onContinue={continueFromProductTrackingSetup}
-      />
+      <Suspense
+        fallback={<LazyExperienceFallback label="Opening tracking setup…" />}
+      >
+        <TrackingSetup
+          readiness={trackingReadiness}
+          interactionCheck={trackingInteractionCheck}
+          capabilities={deviceCapabilities}
+          recommendation={capabilityRecommendation}
+          qualityBudget={dynamicQualityBudget}
+          mirrorCamera={preferences.mirrorCamera}
+          videoRef={videoRef}
+          devices={cameraDevices}
+          onBack={() => navigateToProductHome()}
+          onStart={beginProductTrackingSetup}
+          onRetry={() => {
+            if (!trackingRequested) {
+              beginProductTrackingSetup();
+            } else {
+              retryCamera("manual_retry");
+            }
+          }}
+          onStop={stopProductCamera}
+          onDeviceChange={(deviceId) => {
+            setRequestedCameraDeviceId(deviceId);
+            setTrackingReadiness((current) => ({
+              ...current,
+              selectedDeviceId: deviceId,
+            }));
+          }}
+          onContinueWithoutCamera={continueWithoutProductTracking}
+          onContinue={continueFromProductTrackingSetup}
+        />
+      </Suspense>
     );
   }
 
   if (isProductSettingsPhase) {
     return (
-      <SettingsPanel
-        preferences={preferences}
-        capabilities={deviceCapabilities}
-        qualityBudget={dynamicQualityBudget}
-        trackingFps={fps}
-        cameraActive={cameraReady}
-        onChange={updateProductPreferences}
-        onBack={() => navigateToProductHome()}
-        onReset={() => setPreferences(normalizeUserPreferences())}
-        onDeleteLocalData={deleteAllLocalProductData}
-        onStopCamera={stopProductCamera}
-        onPreviewSound={(cue) => {
-          audioFeedbackRef.current.unlock();
-          audioFeedbackRef.current.play(cue);
-        }}
-      />
+      <Suspense
+        fallback={<LazyExperienceFallback label="Opening settings…" />}
+      >
+        <SettingsPanel
+          preferences={preferences}
+          capabilities={deviceCapabilities}
+          qualityBudget={dynamicQualityBudget}
+          trackingFps={fps}
+          cameraActive={cameraReady}
+          onChange={updateProductPreferences}
+          onBack={() => navigateToProductHome()}
+          onReset={() => setPreferences(normalizeUserPreferences())}
+          onDeleteLocalData={deleteAllLocalProductData}
+          onStopCamera={stopProductCamera}
+          onPreviewSound={(cue) => {
+            audioFeedbackRef.current.unlock();
+            audioFeedbackRef.current.play(cue);
+          }}
+        />
+      </Suspense>
     );
   }
 

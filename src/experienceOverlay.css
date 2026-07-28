@@ -133,6 +133,24 @@
   max-width: 52ch;
 }
 
+.experience-overlay-tracking-progress {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 195, 107, 0.22);
+  border-radius: 999px;
+  height: 10px;
+  margin-top: 24px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.experience-overlay-tracking-progress > span {
+  background: linear-gradient(90deg, #ffc36b, #fff1b5);
+  display: block;
+  height: 100%;
+  transform-origin: left center;
+  transition: transform 120ms linear;
+}
+
 .experience-overlay-pause-reasons {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.09);
