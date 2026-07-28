@@ -54,8 +54,9 @@ aggregate scoring, circuit medals, and local resume for an unfinished run.
   freeze/replay, image export, privacy-safe ten-second WebM capture, and local
   gallery saves. Video export records the artwork canvas, never the camera
   image.
-- **World Painter** creates rule-grown landscapes with named projects,
-  revisions, local saves, and restorable JSON export.
+- **World Painter** creates rule-grown landscapes from reproducible seeds and
+  Blank, River, Highland, or Island starters, with named projects, revisions,
+  local saves, and restorable JSON export.
 - **Jam Studio** (`/create/jam-studio`, served by
   `/circle-of-fifths.html`) combines a Circle of Fifths instrument with drum
   grooves. It accepts hand tracking, pointer, touch, and keyboard input and can
@@ -74,13 +75,17 @@ IndexedDB. There is no cloud library or cross-device sync.
 
 Labs deliberately expose less-settled interaction work:
 
-- **Track Runner**, **Star Flight**, **Conveyor Toss**, and **Pinch Sandbox**
-  are camera-driven control and physics previews.
+- **Track Runner**, **Conveyor Toss**, and **Pinch Sandbox** are camera-driven
+  control and physics previews.
+- **Star Flight** offers three finite gate courses with precision scoring,
+  streaks, misses, time-and-accuracy medals, pinch boost, and an endless Free
+  Flight option.
 - **Probability Table** is a camera-free probability experiment that compares
   predictions with finite trial results.
 - **Pose Quest** (`/labs/pose-quest`) turns whole-body visibility diagnostics
-  into three short, skippable framing checks, with raw keypoint details kept
-  under an advanced disclosure.
+  into three short, skippable silhouette challenges—a wide reach, victory
+  statue, and hands-on-hips stance—with raw keypoint details kept under an
+  advanced disclosure.
 - **Parallax Forest: Guardian Trail** (`/labs/forest-discovery`) is a
   three-clue depth survey. It can use on-device head pose or an explicit
   pointer-and-arrow-key mode, and clearly identifies the scene as a simulated

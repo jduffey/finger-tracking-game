@@ -66,6 +66,19 @@ import {
 } from "./fingerPongGame.js";
 import { getFingerPongMatchUi } from "./fingerPongUi.js";
 import {
+  STAR_FLIGHT_COURSES,
+  STAR_FLIGHT_COURSE_IDS,
+  advanceStarFlightCourseClock,
+  createStarFlightCourseProgress,
+  createStarFlightGate,
+  didStarFlightGateCrossPassPlane,
+  evaluateStarFlightGate,
+  getStarFlightCourse,
+  getStarFlightCourseResult,
+  recordStarFlightGate,
+  updateStarFlightGateDrift,
+} from "./starFlightCourse.js";
+import {
   createFullscreenHandBounceDailyGame,
   createFullscreenHandBounceGame,
   restartFullscreenHandBounceGame as restartFullscreenHandBounceCampaign,
@@ -739,13 +752,13 @@ const SANDBOX_MATERIAL_COLORS = {
 };
 const FLIGHT_FINGER_ORDER = ["thumb", "index", "middle", "ring", "pinky"];
 const FLIGHT_BASELINE_SAMPLE_TARGET = 34;
-const FLIGHT_FORWARD_SPEED = 310;
 const FLIGHT_STEER_ACCEL = 560;
 const FLIGHT_DRAG_PER_60FPS = 0.9;
 const FLIGHT_MAX_SHIP_OFFSET_X = 170;
 const FLIGHT_MAX_SHIP_OFFSET_Y = 120;
 const FLIGHT_STAR_COUNT = 170;
 const FLIGHT_RING_COUNT = 7;
+const FLIGHT_BOOST_SPEED_MULTIPLIER = 1.38;
 const FLIGHT_NEAR_Z = 26;
 const FLIGHT_FAR_Z = 1480;
 const FLIGHT_WORLD_HALF_WIDTH = 520;
@@ -1542,16 +1555,18 @@ function createFlightStars() {
   return stars;
 }
 
-function createFlightRings() {
+function createFlightRings(
+  courseId = STAR_FLIGHT_COURSE_IDS.CADET,
+) {
   const rings = [];
   const spacing = (FLIGHT_FAR_Z - 280) / Math.max(1, FLIGHT_RING_COUNT);
   for (let index = 0; index < FLIGHT_RING_COUNT; index += 1) {
-    rings.push({
-      x: randomBetween(-170, 170),
-      y: randomBetween(-108, 108),
-      z: 280 + index * spacing + randomBetween(-90, 90),
-      radius: randomBetween(34, 66),
-    });
+    rings.push(
+      createStarFlightGate(courseId, {
+        id: `flight-gate-${index + 1}`,
+        z: 280 + index * spacing + randomBetween(-90, 90),
+      }),
+    );
   }
   return rings;
 }
@@ -1889,6 +1904,8 @@ export default function App() {
   const [sandboxBlocks, setSandboxBlocks] = useState([]);
   const [sandboxGrabbedBlockId, setSandboxGrabbedBlockId] = useState(null);
   const [flightHud, setFlightHud] = useState({
+    courseId: STAR_FLIGHT_COURSE_IDS.CADET,
+    courseStatus: "active",
     yaw: 0,
     pitch: 0,
     roll: 0,
@@ -1896,6 +1913,16 @@ export default function App() {
     baselineReady: false,
     baselineSamples: 0,
     distance: 0,
+    boostActive: false,
+    gatesAttempted: 0,
+    gatesHit: 0,
+    gatesMissed: 0,
+    score: 0,
+    streak: 0,
+    bestStreak: 0,
+    elapsedMs: 0,
+    lastGateRating: "",
+    lastGateMessage: "Line up the first gate",
   });
   const [runnerHud, setRunnerHud] = useState({
     coins: 0,
@@ -2095,6 +2122,10 @@ export default function App() {
     distance: 0,
     stars: [],
     rings: [],
+    gateSerial: FLIGHT_RING_COUNT,
+    courseProgress: createStarFlightCourseProgress(
+      STAR_FLIGHT_COURSE_IDS.CADET,
+    ),
   });
   const flightControlRef = useRef({
     yaw: 0,
@@ -3423,6 +3454,8 @@ export default function App() {
       flightBaselineSamplesRef.current = [];
       flightHudLastUpdateRef.current = 0;
       setFlightHud({
+        courseId: STAR_FLIGHT_COURSE_IDS.CADET,
+        courseStatus: "active",
         yaw: 0,
         pitch: 0,
         roll: 0,
@@ -3430,6 +3463,16 @@ export default function App() {
         baselineReady: false,
         baselineSamples: 0,
         distance: 0,
+        boostActive: false,
+        gatesAttempted: 0,
+        gatesHit: 0,
+        gatesMissed: 0,
+        score: 0,
+        streak: 0,
+        bestStreak: 0,
+        elapsedMs: 0,
+        lastGateRating: "",
+        lastGateMessage: "Line up the first gate",
       });
     }
     if (phase !== PHASES.RUNNER) {
@@ -7532,7 +7575,17 @@ export default function App() {
     const baseline = flightBaselineRef.current;
     const control = flightControlRef.current;
     const state = flightStateRef.current;
+    const courseProgress =
+      state.courseProgress ??
+      createStarFlightCourseProgress(STAR_FLIGHT_COURSE_IDS.CADET);
+    const boostActive =
+      Boolean(pinchStateRef.current) &&
+      baseline.ready &&
+      control.hasControl &&
+      courseProgress.status === "active";
     const nextHud = {
+      courseId: courseProgress.courseId,
+      courseStatus: courseProgress.status,
       yaw: roundMetric(control.yaw, 3) ?? 0,
       pitch: roundMetric(control.pitch, 3) ?? 0,
       roll: roundMetric(control.roll, 3) ?? 0,
@@ -7540,16 +7593,38 @@ export default function App() {
       baselineReady: baseline.ready,
       baselineSamples: baseline.sampleCount,
       distance: roundMetric(state.distance, 1) ?? 0,
+      boostActive,
+      gatesAttempted: courseProgress.gatesAttempted,
+      gatesHit: courseProgress.gatesHit,
+      gatesMissed: courseProgress.gatesMissed,
+      score: courseProgress.score,
+      streak: courseProgress.streak,
+      bestStreak: courseProgress.bestStreak,
+      elapsedMs: Math.round(courseProgress.elapsedMs),
+      lastGateRating: courseProgress.lastGateRating,
+      lastGateMessage: courseProgress.lastGateMessage,
     };
     setFlightHud((previous) => {
       if (
+        previous.courseId === nextHud.courseId &&
+        previous.courseStatus === nextHud.courseStatus &&
         previous.yaw === nextHud.yaw &&
         previous.pitch === nextHud.pitch &&
         previous.roll === nextHud.roll &&
         previous.confidence === nextHud.confidence &&
         previous.baselineReady === nextHud.baselineReady &&
         previous.baselineSamples === nextHud.baselineSamples &&
-        previous.distance === nextHud.distance
+        previous.distance === nextHud.distance &&
+        previous.boostActive === nextHud.boostActive &&
+        previous.gatesAttempted === nextHud.gatesAttempted &&
+        previous.gatesHit === nextHud.gatesHit &&
+        previous.gatesMissed === nextHud.gatesMissed &&
+        previous.score === nextHud.score &&
+        previous.streak === nextHud.streak &&
+        previous.bestStreak === nextHud.bestStreak &&
+        previous.elapsedMs === nextHud.elapsedMs &&
+        previous.lastGateRating === nextHud.lastGateRating &&
+        previous.lastGateMessage === nextHud.lastGateMessage
       ) {
         return previous;
       }
@@ -7557,7 +7632,18 @@ export default function App() {
     });
   }
 
-  function resetFlightSession(reason = "manual_reset") {
+  function resetFlightSession(
+    reason = "manual_reset",
+    courseId =
+      flightStateRef.current?.courseProgress?.courseId ??
+      STAR_FLIGHT_COURSE_IDS.CADET,
+  ) {
+    const course = getStarFlightCourse(courseId);
+    const startedAtMs = performance.now();
+    const courseProgress = createStarFlightCourseProgress(
+      course.id,
+      startedAtMs,
+    );
     flightStateRef.current = {
       initialized: true,
       lastTimestamp: 0,
@@ -7570,7 +7656,9 @@ export default function App() {
       yaw: 0,
       distance: 0,
       stars: createFlightStars(),
-      rings: createFlightRings(),
+      rings: createFlightRings(course.id),
+      gateSerial: FLIGHT_RING_COUNT,
+      courseProgress,
     };
     flightControlRef.current = {
       yaw: 0,
@@ -7584,6 +7672,8 @@ export default function App() {
     flightBaselineSamplesRef.current = [];
     flightHudLastUpdateRef.current = 0;
     setFlightHud({
+      courseId: course.id,
+      courseStatus: courseProgress.status,
       yaw: 0,
       pitch: 0,
       roll: 0,
@@ -7591,9 +7681,20 @@ export default function App() {
       baselineReady: false,
       baselineSamples: 0,
       distance: 0,
+      boostActive: false,
+      gatesAttempted: 0,
+      gatesHit: 0,
+      gatesMissed: 0,
+      score: 0,
+      streak: 0,
+      bestStreak: 0,
+      elapsedMs: 0,
+      lastGateRating: "",
+      lastGateMessage: courseProgress.lastGateMessage,
     });
     appLog.info("Flight session reset", {
       reason,
+      courseId: course.id,
       starCount: flightStateRef.current.stars.length,
       ringCount: flightStateRef.current.rings.length,
     });
@@ -7871,6 +7972,14 @@ export default function App() {
       ctx.fillRect(projectedX - size * 0.5, projectedY - size * 0.5, size, size);
     }
 
+    const nearestRing = state.rings.reduce(
+      (nearest, ring) =>
+        ring.z > FLIGHT_NEAR_Z &&
+        (!nearest || ring.z < nearest.z)
+          ? ring
+          : nearest,
+      null,
+    );
     const sortedRings = [...state.rings].sort((a, b) => b.z - a.z);
     for (const ring of sortedRings) {
       const depth = Math.max(FLIGHT_NEAR_Z, ring.z);
@@ -7881,11 +7990,22 @@ export default function App() {
         continue;
       }
       const alpha = clampValue(1 - depth / FLIGHT_FAR_Z, 0.18, 0.84);
-      ctx.lineWidth = clampValue((ring.radius / depth) * 150, 1.2, 5.4);
-      ctx.strokeStyle = `rgba(80, 221, 255, ${alpha})`;
+      const isNextGate = ring === nearestRing;
+      ctx.lineWidth = clampValue(
+        (ring.radius / depth) * (isNextGate ? 190 : 150),
+        isNextGate ? 2 : 1.2,
+        isNextGate ? 7.2 : 5.4,
+      );
+      ctx.strokeStyle = isNextGate
+        ? `rgba(255, 218, 111, ${Math.min(1, alpha + 0.16)})`
+        : `rgba(80, 221, 255, ${alpha})`;
       ctx.beginPath();
       ctx.arc(projectedX, projectedY, projectedRadius, 0, Math.PI * 2);
       ctx.stroke();
+      if (isNextGate && projectedRadius >= 8) {
+        ctx.fillStyle = `rgba(255, 218, 111, ${alpha * 0.08})`;
+        ctx.fill();
+      }
     }
 
     ctx.strokeStyle = "rgba(170, 225, 255, 0.48)";
@@ -7905,7 +8025,10 @@ export default function App() {
     ctx.rotate(state.roll * 0.9);
     ctx.scale(shipScale, shipScale);
 
-    const thrusterLength = 22 + Math.abs(control.pitch) * 16;
+    const thrusterLength =
+      22 +
+      Math.abs(control.pitch) * 16 +
+      (pinchStateRef.current && control.hasControl ? 20 : 0);
     ctx.strokeStyle = "rgba(125, 219, 255, 0.74)";
     ctx.lineWidth = 4;
     ctx.beginPath();
@@ -7969,7 +8092,42 @@ export default function App() {
     );
     state.lastTimestamp = timestamp;
     const control = flightControlRef.current;
+    const courseProgress =
+      state.courseProgress ??
+      createStarFlightCourseProgress(
+        STAR_FLIGHT_COURSE_IDS.CADET,
+        timestamp,
+      );
+    if (!flightBaselineRef.current.ready || !control.hasControl) {
+      state.courseProgress = courseProgress;
+      drawFlightScene();
+      publishFlightHud(timestamp);
+      return;
+    }
+
+    const courseTimestamp =
+      courseProgress.startedAtMs +
+      courseProgress.elapsedMs +
+      dtSeconds * 1_000;
+    state.courseProgress = advanceStarFlightCourseClock(
+      courseProgress,
+      courseTimestamp,
+    );
+    const course = getStarFlightCourse(state.courseProgress.courseId);
+    if (state.courseProgress.status === "complete") {
+      drawFlightScene();
+      publishFlightHud(timestamp);
+      return;
+    }
+
     const drag = Math.pow(FLIGHT_DRAG_PER_60FPS, dtSeconds * 60);
+    const boostActive =
+      Boolean(pinchStateRef.current) &&
+      flightBaselineRef.current.ready &&
+      control.hasControl;
+    const forwardSpeed =
+      course.forwardSpeed *
+      (boostActive ? FLIGHT_BOOST_SPEED_MULTIPLIER : 1);
 
     state.shipVx = (state.shipVx + control.yaw * FLIGHT_STEER_ACCEL * dtSeconds) * drag;
     state.shipVy = (state.shipVy + control.pitch * FLIGHT_STEER_ACCEL * dtSeconds) * drag;
@@ -7989,10 +8147,13 @@ export default function App() {
     state.roll = lerpValue(state.roll, targetRoll, 0.13);
     state.pitch = lerpValue(state.pitch, targetPitch, 0.13);
     state.yaw = lerpValue(state.yaw, targetYaw, 0.13);
-    state.distance += FLIGHT_FORWARD_SPEED * dtSeconds;
+    state.distance += forwardSpeed * dtSeconds;
 
     for (const star of state.stars) {
-      star.z -= FLIGHT_FORWARD_SPEED * dtSeconds * (1 + Math.abs(control.pitch) * 0.14);
+      star.z -=
+        forwardSpeed *
+        dtSeconds *
+        (1 + Math.abs(control.pitch) * 0.14);
       if (star.z < FLIGHT_NEAR_Z) {
         star.z = FLIGHT_FAR_Z;
         star.x = randomBetween(-FLIGHT_WORLD_HALF_WIDTH, FLIGHT_WORLD_HALF_WIDTH);
@@ -8001,12 +8162,42 @@ export default function App() {
     }
 
     for (const ring of state.rings) {
-      ring.z -= FLIGHT_FORWARD_SPEED * dtSeconds;
+      const previousZ = ring.z;
+      ring.z -= forwardSpeed * dtSeconds;
+      const driftedGate = updateStarFlightGateDrift(
+        ring,
+        course.id,
+        state.courseProgress.elapsedMs,
+      );
+      ring.x = driftedGate.x;
+      ring.y = driftedGate.y;
+
+      if (
+        didStarFlightGateCrossPassPlane(previousZ, ring.z) &&
+        state.courseProgress.status === "active"
+      ) {
+        const evaluation = evaluateStarFlightGate({
+          courseId: course.id,
+          gate: ring,
+          shipX: state.shipX,
+          shipY: state.shipY,
+        });
+        state.courseProgress = recordStarFlightGate(
+          state.courseProgress,
+          evaluation,
+          state.courseProgress.startedAtMs +
+            state.courseProgress.elapsedMs,
+        );
+        ring.lastOutcome = evaluation.rating;
+      }
+
       if (ring.z < FLIGHT_NEAR_Z) {
-        ring.z = FLIGHT_FAR_Z + randomBetween(120, 380);
-        ring.x = randomBetween(-180, 180);
-        ring.y = randomBetween(-116, 116);
-        ring.radius = randomBetween(34, 66);
+        state.gateSerial += 1;
+        const nextGate = createStarFlightGate(course.id, {
+          id: `flight-gate-${state.gateSerial}`,
+          z: FLIGHT_FAR_Z + randomBetween(120, 380),
+        });
+        Object.assign(ring, nextGate);
       }
     }
 
@@ -13042,6 +13233,8 @@ export default function App() {
   const activeExperienceMode = experienceModeId
     ? getModeById(experienceModeId)
     : null;
+  const activeFlightCourse = getStarFlightCourse(flightHud.courseId);
+  const flightCourseResult = getStarFlightCourseResult(flightHud);
   const isArcadeRunLeg = Boolean(
     activeLaunchContextRef.current?.arcadeRunRequest ||
       arcadeRunLaunchRequestRef.current,
@@ -16057,31 +16250,165 @@ export default function App() {
           </section>
         ) : phase === PHASES.FLIGHT ? (
           <section className="card panel flight-panel">
-            <h2>Star Flight</h2>
-            <p className="small-text">
-              Third-person flight at constant speed. Move all five fingertips to steer.
-            </p>
-            <p className="small-text">
-              Shift hand left/right for yaw, up/down for pitch, and rotate hand for roll.
-            </p>
-
-            <div className="flight-stage" ref={flightStageRef}>
-              <canvas className="flight-canvas" ref={flightCanvasRef} />
-              <div className="flight-hud">
-                <span>Yaw: {(flightHud.yaw * 100).toFixed(0)}%</span>
-                <span>Pitch: {(flightHud.pitch * 100).toFixed(0)}%</span>
-                <span>Roll: {(flightHud.roll * 100).toFixed(0)}%</span>
-                <span>Control: {(flightHud.confidence * 100).toFixed(0)}%</span>
-                <span>
-                  Neutral:{" "}
-                  {flightHud.baselineReady
-                    ? "locked"
-                    : `${flightHud.baselineSamples}/${FLIGHT_BASELINE_SAMPLE_TARGET}`}
-                </span>
-                <span>Distance: {flightHud.distance.toFixed(0)} u</span>
+            <div className="flight-heading">
+              <div>
+                <span className="flight-eyebrow">Flight Lab</span>
+                <h2>Star Flight</h2>
+                <p>
+                  Thread the gates with small hand movements. Pinch to boost
+                  once your neutral pose is locked.
+                </p>
+              </div>
+              <div
+                aria-label="Choose a flight course"
+                className="flight-course-picker"
+                role="group"
+              >
+                {STAR_FLIGHT_COURSES.map((course) => (
+                  <button
+                    aria-pressed={course.id === activeFlightCourse.id}
+                    className={
+                      course.id === activeFlightCourse.id ? "active" : ""
+                    }
+                    key={course.id}
+                    onClick={() =>
+                      resetFlightSession("course_selected", course.id)
+                    }
+                    type="button"
+                  >
+                    <strong>{course.label}</strong>
+                    <span>{course.description}</span>
+                  </button>
+                ))}
               </div>
             </div>
 
+            <div
+              className={`flight-stage flight-course-${flightHud.courseStatus}`}
+              ref={flightStageRef}
+            >
+              <canvas className="flight-canvas" ref={flightCanvasRef} />
+              <div
+                aria-label={`${activeFlightCourse.label} flight status`}
+                className="flight-hud"
+              >
+                <strong>{activeFlightCourse.label}</strong>
+                <span>
+                  {activeFlightCourse.gateCount
+                    ? `Gate ${Math.min(
+                        activeFlightCourse.gateCount,
+                        flightHud.gatesAttempted + 1,
+                      )}/${activeFlightCourse.gateCount}`
+                    : `${flightHud.gatesHit} gates hit`}
+                </span>
+                <span>Score {flightHud.score}</span>
+                <span>
+                  Streak {flightHud.streak > 0 ? `×${flightHud.streak}` : "—"}
+                </span>
+                <span>{(flightHud.elapsedMs / 1_000).toFixed(1)}s</span>
+                <span className={flightHud.boostActive ? "boost-active" : ""}>
+                  {flightHud.boostActive ? "Boosting" : "Pinch to boost"}
+                </span>
+              </div>
+
+              {!flightHud.baselineReady &&
+              flightHud.courseStatus === "active" ? (
+                <div
+                  aria-live="polite"
+                  className="flight-neutral-prompt"
+                  role="status"
+                >
+                  <strong>Set your neutral pose</strong>
+                  <span>
+                    Hold all five fingertips steady ·{" "}
+                    {flightHud.baselineSamples}/{FLIGHT_BASELINE_SAMPLE_TARGET}
+                  </span>
+                </div>
+              ) : null}
+
+              {flightHud.gatesAttempted > 0 &&
+              flightHud.courseStatus === "active" ? (
+                <div
+                  aria-live="polite"
+                  className={`flight-gate-feedback ${flightHud.lastGateRating}`}
+                  role="status"
+                >
+                  {flightHud.lastGateMessage}
+                </div>
+              ) : null}
+
+              {flightHud.courseStatus === "complete" ? (
+                <aside
+                  aria-label={`${activeFlightCourse.label} results`}
+                  className="flight-results"
+                >
+                  <span className="flight-results-eyebrow">Course complete</span>
+                  <h3>{flightCourseResult?.medal}</h3>
+                  <p>
+                    {flightHud.gatesHit} of {flightHud.gatesAttempted} gates ·{" "}
+                    {flightCourseResult?.accuracyPercent ?? 0}% accuracy
+                  </p>
+                  <dl>
+                    <div>
+                      <dt>Score</dt>
+                      <dd>{flightHud.score}</dd>
+                    </div>
+                    <div>
+                      <dt>Time</dt>
+                      <dd>{(flightHud.elapsedMs / 1_000).toFixed(1)}s</dd>
+                    </div>
+                    <div>
+                      <dt>Best streak</dt>
+                      <dd>×{flightHud.bestStreak}</dd>
+                    </div>
+                    <div>
+                      <dt>Missed</dt>
+                      <dd>{flightHud.gatesMissed}</dd>
+                    </div>
+                  </dl>
+                  <div className="flight-results-actions">
+                    <button
+                      onClick={() =>
+                        resetFlightSession(
+                          "course_restarted",
+                          activeFlightCourse.id,
+                        )
+                      }
+                      type="button"
+                    >
+                      Fly again
+                    </button>
+                    <button
+                      onClick={() =>
+                        resetFlightSession(
+                          "free_flight_selected",
+                          STAR_FLIGHT_COURSE_IDS.FREE,
+                        )
+                      }
+                      type="button"
+                    >
+                      Free Flight
+                    </button>
+                  </div>
+                </aside>
+              ) : null}
+            </div>
+
+            <details className="flight-control-details">
+              <summary>Live steering details</summary>
+              <div>
+                <span>Yaw {(flightHud.yaw * 100).toFixed(0)}%</span>
+                <span>Pitch {(flightHud.pitch * 100).toFixed(0)}%</span>
+                <span>Roll {(flightHud.roll * 100).toFixed(0)}%</span>
+                <span>Tracking {(flightHud.confidence * 100).toFixed(0)}%</span>
+                <span>Distance {flightHud.distance.toFixed(0)} u</span>
+              </div>
+              <p>
+                Shift left or right to yaw, move up or down to pitch, and
+                rotate your hand to roll. Resetting or changing courses
+                recaptures a comfortable neutral pose.
+              </p>
+            </details>
           </section>
         ) : phase === PHASES.RUNNER ? (
           <section className="card panel runner-panel">
