@@ -22,6 +22,164 @@ export const READINESS_STEPS = Object.freeze([
   Object.freeze({ id: "gesture", label: "First gesture" }),
 ]);
 
+export const TRACKING_INTERACTION_TARGET = Object.freeze({
+  u: 0.7,
+  v: 0.48,
+  radius: 0.13,
+  aspectRatio: 16 / 10,
+});
+
+export const TRACKING_INTERACTION_HOLD_MS = 600;
+const TRACKING_INTERACTION_MAX_SAMPLE_GAP_MS = 240;
+const TRACKING_INTERACTION_MAX_DELTA_MS = 100;
+
+export function createTrackingInteractionCheck(overrides = {}) {
+  return {
+    target: TRACKING_INTERACTION_TARGET,
+    pointerActive: false,
+    pointerU: 0.5,
+    pointerV: 0.5,
+    inTarget: false,
+    holdMs: 0,
+    pointerReady: false,
+    pinchArmed: false,
+    pinchReady: false,
+    complete: false,
+    lastSampleAt: null,
+    ...overrides,
+  };
+}
+
+function isFiniteCoordinate(value) {
+  return Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+/**
+ * Advances the setup interaction check using normalized, display-space pointer
+ * coordinates. A pinch that was already held while acquiring the target does
+ * not count: the player must release and pinch deliberately.
+ */
+export function updateTrackingInteractionCheck(state, sample = {}) {
+  const current = state ?? createTrackingInteractionCheck();
+  const pointerActive =
+    sample.handDetected !== false &&
+    isFiniteCoordinate(sample.pointerU) &&
+    isFiniteCoordinate(sample.pointerV);
+
+  if (!pointerActive) {
+    return {
+      ...current,
+      pointerActive: false,
+      inTarget: false,
+      holdMs: current.pointerReady ? current.holdMs : 0,
+      lastSampleAt: null,
+    };
+  }
+
+  const pointerU = sample.pointerU;
+  const pointerV = sample.pointerV;
+  const target = current.target ?? TRACKING_INTERACTION_TARGET;
+  const distance = Math.hypot(
+    (pointerU - target.u) * (target.aspectRatio ?? 1),
+    pointerV - target.v,
+  );
+  const inTarget = distance <= target.radius;
+  const timestamp = Number.isFinite(sample.timestamp)
+    ? sample.timestamp
+    : current.lastSampleAt ?? 0;
+  const elapsed =
+    Number.isFinite(current.lastSampleAt) && timestamp >= current.lastSampleAt
+      ? timestamp - current.lastSampleAt
+      : 0;
+  const continuous =
+    current.pointerActive &&
+    current.inTarget &&
+    inTarget &&
+    elapsed <= TRACKING_INTERACTION_MAX_SAMPLE_GAP_MS;
+  const holdMs = current.pointerReady
+    ? current.holdMs
+    : inTarget
+      ? continuous
+        ? Math.min(
+            TRACKING_INTERACTION_HOLD_MS,
+            current.holdMs + Math.min(elapsed, TRACKING_INTERACTION_MAX_DELTA_MS),
+          )
+        : 0
+      : 0;
+  const pointerReady =
+    current.pointerReady || holdMs >= TRACKING_INTERACTION_HOLD_MS;
+  const pinchActive = Boolean(sample.pinchActive);
+  const pinchArmed = pointerReady
+    ? current.pinchArmed || !pinchActive
+    : false;
+  const pinchReady =
+    current.pinchReady ||
+    (pointerReady && pinchArmed && pinchActive && inTarget);
+
+  return {
+    ...current,
+    pointerActive: true,
+    pointerU,
+    pointerV,
+    inTarget,
+    holdMs,
+    pointerReady,
+    pinchArmed,
+    pinchReady,
+    complete: pinchReady,
+    lastSampleAt: timestamp,
+  };
+}
+
+export function getTrackingInteractionPresentation(check) {
+  const current = check ?? createTrackingInteractionCheck();
+  const holdProgress = Math.min(
+    1,
+    Math.max(0, current.holdMs / TRACKING_INTERACTION_HOLD_MS),
+  );
+
+  if (current.complete) {
+    return {
+      phase: "complete",
+      title: "Point and pinch confirmed",
+      message: "Your hand control looks steady and your pinch registered.",
+      holdProgress: 1,
+    };
+  }
+  if (current.pointerReady) {
+    return {
+      phase: "pinch",
+      title: current.inTarget ? "Pinch once" : "Return to the target",
+      message: current.inTarget
+        ? "Touch your thumb and index finger together, then release."
+        : "Move the pointer back onto the target before pinching.",
+      holdProgress: 1,
+    };
+  }
+  if (!current.pointerActive) {
+    return {
+      phase: "find-hand",
+      title: "Show one hand",
+      message: "Hold one hand where the camera can see it.",
+      holdProgress,
+    };
+  }
+  if (current.inTarget) {
+    return {
+      phase: "hold",
+      title: "Hold steady",
+      message: "Keep the pointer inside the target for a moment.",
+      holdProgress,
+    };
+  }
+  return {
+    phase: "point",
+    title: "Point at the target",
+    message: "Move your index-finger pointer onto the glowing target.",
+    holdProgress,
+  };
+}
+
 export function classifyCameraError(error) {
   const name = error?.name ?? "";
   const message = `${error?.message ?? ""}`.toLocaleLowerCase();
@@ -62,6 +220,7 @@ export function createTrackingReadinessState(overrides = {}) {
     modelReady: false,
     handDetected: false,
     pointerReady: false,
+    pinchReady: false,
     activeStep: 0,
     error: null,
     selectedDeviceId: "",
@@ -75,6 +234,9 @@ function getActiveStep(state) {
   }
   if (!state.modelReady) {
     return 1;
+  }
+  if (state.pointerReady && state.pinchReady) {
+    return 3;
   }
   if (!state.handDetected) {
     return 2;
@@ -93,6 +255,7 @@ export function reduceTrackingReadiness(state, event) {
         modelReady: false,
         handDetected: false,
         pointerReady: false,
+        pinchReady: false,
         activeStep: 0,
         error: null,
       };
@@ -124,12 +287,16 @@ export function reduceTrackingReadiness(state, event) {
     }
     case "HAND_DETECTED": {
       const handDetected = Boolean(event.detected);
+      const interactionComplete = current.pointerReady && current.pinchReady;
       const next = {
         ...current,
         handDetected,
-        pointerReady: handDetected ? current.pointerReady : false,
-        status: handDetected
-          ? TRACKING_READINESS_STATES.POSITIONING
+        pointerReady:
+          handDetected || interactionComplete ? current.pointerReady : false,
+        pinchReady:
+          handDetected || interactionComplete ? current.pinchReady : false,
+        status: interactionComplete
+          ? TRACKING_READINESS_STATES.READY
           : TRACKING_READINESS_STATES.POSITIONING,
       };
       return { ...next, activeStep: getActiveStep(next) };
@@ -139,10 +306,37 @@ export function reduceTrackingReadiness(state, event) {
       const next = {
         ...current,
         pointerReady,
-        handDetected: pointerReady ? true : current.handDetected,
-        status: pointerReady
+        pinchReady: pointerReady ? current.pinchReady : false,
+        status: pointerReady && current.pinchReady
           ? TRACKING_READINESS_STATES.READY
           : TRACKING_READINESS_STATES.POSITIONING,
+        error: null,
+      };
+      return { ...next, activeStep: getActiveStep(next) };
+    }
+    case "PINCH_READY": {
+      const pinchReady = Boolean(event.ready) && current.pointerReady;
+      const next = {
+        ...current,
+        pinchReady,
+        status:
+          current.pointerReady && pinchReady
+            ? TRACKING_READINESS_STATES.READY
+            : TRACKING_READINESS_STATES.POSITIONING,
+        error: null,
+      };
+      return { ...next, activeStep: getActiveStep(next) };
+    }
+    case "RESET_INTERACTION": {
+      const next = {
+        ...current,
+        status:
+          current.cameraReady && current.modelReady
+            ? TRACKING_READINESS_STATES.POSITIONING
+            : current.status,
+        handDetected: false,
+        pointerReady: false,
+        pinchReady: false,
         error: null,
       };
       return { ...next, activeStep: getActiveStep(next) };
@@ -156,6 +350,7 @@ export function reduceTrackingReadiness(state, event) {
         modelReady: false,
         handDetected: false,
         pointerReady: false,
+        pinchReady: false,
         activeStep: 0,
         error: event.error ?? null,
       };
@@ -167,6 +362,7 @@ export function reduceTrackingReadiness(state, event) {
         modelReady: false,
         handDetected: false,
         pointerReady: false,
+        pinchReady: false,
         activeStep: 1,
         error: event.error ?? null,
       };
@@ -177,6 +373,7 @@ export function reduceTrackingReadiness(state, event) {
         cameraReady: false,
         handDetected: false,
         pointerReady: false,
+        pinchReady: false,
         activeStep: 0,
         error: event.error ?? null,
       };
@@ -193,6 +390,9 @@ export function getReadinessProgress(state) {
   const current = state ?? createTrackingReadinessState();
   if (current.status === TRACKING_READINESS_STATES.READY) {
     return 1;
+  }
+  if (current.pointerReady) {
+    return 0.875;
   }
 
   return Math.min(0.75, Math.max(0, current.activeStep / READINESS_STEPS.length));

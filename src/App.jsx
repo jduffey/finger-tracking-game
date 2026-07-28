@@ -311,8 +311,10 @@ import {
 } from "./modeRegistry.js";
 import {
   TRACKING_READINESS_STATES,
+  createTrackingInteractionCheck,
   createTrackingReadinessState,
   reduceTrackingReadiness,
+  updateTrackingInteractionCheck,
 } from "./trackingReadiness.js";
 import {
   EXPERIENCE_LIFECYCLE_EVENTS,
@@ -1725,6 +1727,9 @@ export default function App() {
   const [trackingReadiness, setTrackingReadiness] = useState(() =>
     createTrackingReadinessState(),
   );
+  const [trackingInteractionCheck, setTrackingInteractionCheck] = useState(() =>
+    createTrackingInteractionCheck(),
+  );
   const [cameraDevices, setCameraDevices] = useState([]);
   const [requestedCameraDeviceId, setRequestedCameraDeviceId] = useState("");
   const [leftPaneWidth, setLeftPaneWidth] = useState(null);
@@ -1897,6 +1902,7 @@ export default function App() {
   const experienceLifecycleRef = useRef(null);
   const experienceModeIdRef = useRef(null);
   const trackingRequestedRef = useRef(trackingRequested);
+  const trackingInteractionCheckRef = useRef(trackingInteractionCheck);
   const simulationTimingRef = useRef(null);
   if (!simulationTimingRef.current) {
     simulationTimingRef.current = createFixedStepSessionTiming();
@@ -2960,6 +2966,24 @@ export default function App() {
     return true;
   }
 
+  function resetTrackingInteractionCheck() {
+    const next = createTrackingInteractionCheck();
+    trackingInteractionCheckRef.current = next;
+    setTrackingInteractionCheck(next);
+  }
+
+  function publishTrackingInteractionSample(sample) {
+    if (phaseRef.current !== PHASES.TRACKING_SETUP) {
+      return;
+    }
+    const next = updateTrackingInteractionCheck(
+      trackingInteractionCheckRef.current,
+      sample,
+    );
+    trackingInteractionCheckRef.current = next;
+    setTrackingInteractionCheck(next);
+  }
+
   function clearCameraTrackingReadiness() {
     activeInferenceTokenRef.current += 1;
     inferenceBusyRef.current = false;
@@ -2977,6 +3001,7 @@ export default function App() {
     fullscreenBodyPosesRef.current = [];
     handDetectedRef.current = false;
     pinchStateRef.current = false;
+    resetTrackingInteractionCheck();
     poseStatusRef.current = createEmptyPoseStatus();
     setCameraReady(false);
     setHandDetected(false);
@@ -4846,11 +4871,12 @@ export default function App() {
     return () => {
       window.removeEventListener("popstate", navigateFromLocation);
     };
-  }, [cameraReady, modelReady]);
+  }, [cameraReady, modelReady, trackingReadiness.status]);
 
   useEffect(() => {
     if (!trackingRequested) {
       setTrackingReadiness(createTrackingReadinessState());
+      resetTrackingInteractionCheck();
       return;
     }
     if (!cameraReady || !modelReady) {
@@ -4858,16 +4884,27 @@ export default function App() {
     }
 
     setTrackingReadiness((current) => {
-      const withHand = reduceTrackingReadiness(current, {
+      let next = reduceTrackingReadiness(current, {
         type: "HAND_DETECTED",
         detected: handDetected,
       });
-      return reduceTrackingReadiness(withHand, {
+      next = reduceTrackingReadiness(next, {
         type: "POINTER_READY",
-        ready: handDetected,
+        ready: trackingInteractionCheck.pointerReady,
+      });
+      return reduceTrackingReadiness(next, {
+        type: "PINCH_READY",
+        ready: trackingInteractionCheck.pinchReady,
       });
     });
-  }, [cameraReady, handDetected, modelReady, trackingRequested]);
+  }, [
+    cameraReady,
+    handDetected,
+    modelReady,
+    trackingInteractionCheck.pinchReady,
+    trackingInteractionCheck.pointerReady,
+    trackingRequested,
+  ]);
 
   useEffect(() => {
     poseStatusRef.current = poseStatus;
@@ -6444,6 +6481,10 @@ export default function App() {
       abandonActiveProgressionSession("opened_tracking_setup");
     }
     replaceExperienceLifecycle(null, null);
+    resetTrackingInteractionCheck();
+    setTrackingReadiness((current) =>
+      reduceTrackingReadiness(current, { type: "RESET_INTERACTION" }),
+    );
     setPhase(PHASES.TRACKING_SETUP);
     phaseRef.current = PHASES.TRACKING_SETUP;
     if (updateHistory) {
@@ -6576,7 +6617,11 @@ export default function App() {
     if (
       needsTracking &&
       !allowWithoutTracking &&
-      (!cameraReady || !modelReady)
+      (
+        !cameraReady ||
+        !modelReady ||
+        trackingReadiness.status !== TRACKING_READINESS_STATES.READY
+      )
     ) {
       setPendingModeId(mode.id);
       pendingLaunchContextRef.current =
@@ -6596,10 +6641,14 @@ export default function App() {
   function beginProductTrackingSetup() {
     setCameraError("");
     setModelError("");
+    resetTrackingInteractionCheck();
     setTrackingRequested(true);
   }
 
   function continueFromProductTrackingSetup() {
+    if (trackingReadiness.status !== TRACKING_READINESS_STATES.READY) {
+      return;
+    }
     if (pendingModeId) {
       selectProductMode(pendingModeId, {
         updateHistory: false,
@@ -6631,6 +6680,7 @@ export default function App() {
     setCameraError("");
     setModelError("");
     setCameraDevices([]);
+    resetTrackingInteractionCheck();
     setTrackingReadiness((current) =>
       reduceTrackingReadiness(current, { type: "STOP" }),
     );
@@ -11243,6 +11293,11 @@ export default function App() {
           "Lazy arc capture paused: all five fingertips are not visible. Return your hand to continue capture.",
         );
       }
+      publishTrackingInteractionSample({
+        handDetected: false,
+        pinchActive: false,
+        timestamp,
+      });
       updateCalibrationInputTestHoverState(cursorRef.current, false, frameId);
       drawCameraOverlay(null);
       updateFlightControlFromTips(null, timestamp, frameId);
@@ -11294,7 +11349,9 @@ export default function App() {
             ? { u: hand.indexTip.u, v: hand.indexTip.v }
             : null;
     const usesIndexPointer =
-      phaseRef.current === PHASES.RUNNER || phaseRef.current === PHASES.FULLSCREEN_CAMERA;
+      phaseRef.current === PHASES.RUNNER ||
+      phaseRef.current === PHASES.FULLSCREEN_CAMERA ||
+      phaseRef.current === PHASES.TRACKING_SETUP;
     const baseMappedPointerTip =
       usesIndexPointer && mappedIndexTip
         ? mappedIndexTip
@@ -11526,6 +11583,13 @@ export default function App() {
       }
     }
 
+    publishTrackingInteractionSample({
+      handDetected: true,
+      pinchActive: nextPinch,
+      pointerU: smoothed.x / Math.max(1, viewportRef.current.width),
+      pointerV: smoothed.y / Math.max(1, viewportRef.current.height),
+      timestamp,
+    });
     drawCameraOverlay(hand);
   }
 
@@ -12782,6 +12846,7 @@ export default function App() {
     return (
       <TrackingSetup
         readiness={trackingReadiness}
+        interactionCheck={trackingInteractionCheck}
         capabilities={deviceCapabilities}
         recommendation={capabilityRecommendation}
         qualityBudget={dynamicQualityBudget}

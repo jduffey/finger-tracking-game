@@ -1,8 +1,10 @@
 import {
   READINESS_STEPS,
+  TRACKING_INTERACTION_TARGET,
   TRACKING_READINESS_STATES,
   getCameraErrorPresentation,
   getReadinessProgress,
+  getTrackingInteractionPresentation,
 } from "../trackingReadiness.js";
 import "../trackingSetup.css";
 
@@ -70,8 +72,97 @@ function SetupError({ readiness, onRetry, onContinueWithoutCamera }) {
   );
 }
 
+function TrackingInteractionOverlay({ check }) {
+  const presentation = getTrackingInteractionPresentation(check);
+  const target = check?.target ?? TRACKING_INTERACTION_TARGET;
+  const pointerActive = Boolean(check?.pointerActive);
+  const targetState = check?.complete
+    ? "complete"
+    : check?.pointerReady
+      ? "pinch"
+      : check?.inTarget
+        ? "holding"
+        : "";
+
+  return (
+    <div className="tracking-interaction-overlay" aria-hidden="true">
+      <div
+        className={`tracking-interaction-target ${targetState}`}
+        style={{
+          "--tracking-target-x": `${target.u * 100}%`,
+          "--tracking-target-y": `${target.v * 100}%`,
+          "--tracking-target-width": `${
+            (target.radius * 200) / (target.aspectRatio ?? 1)
+          }%`,
+          "--tracking-target-height": `${target.radius * 200}%`,
+          "--tracking-target-progress": `${presentation.holdProgress * 360}deg`,
+        }}
+      >
+        <span className="tracking-interaction-target-core">
+          {check?.complete ? "✓" : check?.pointerReady ? "PINCH" : "HOLD"}
+        </span>
+      </div>
+      {pointerActive ? (
+        <span
+          className={`tracking-interaction-pointer ${check?.inTarget ? "in-target" : ""}`}
+          style={{
+            left: `${check.pointerU * 100}%`,
+            top: `${check.pointerV * 100}%`,
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function TrackingInteractionInstructions({ check }) {
+  const presentation = getTrackingInteractionPresentation(check);
+  const progress = Math.round(presentation.holdProgress * 100);
+
+  return (
+    <>
+      <div className="tracking-interaction-status" aria-live="polite" role="status">
+        <span className={`tracking-interaction-status-icon ${presentation.phase}`} aria-hidden="true">
+          {check?.complete ? "✓" : check?.pointerActive ? "●" : "✋"}
+        </span>
+        <div>
+          <h2>{presentation.title}</h2>
+          <p>{presentation.message}</p>
+        </div>
+      </div>
+      <ol className="tracking-interaction-steps">
+        <li className={check?.pointerReady ? "completed" : "active"}>
+          <span aria-hidden="true">{check?.pointerReady ? "✓" : "1"}</span>
+          Point at the target and hold steady
+        </li>
+        <li
+          className={
+            check?.pinchReady ? "completed" : check?.pointerReady ? "active" : ""
+          }
+        >
+          <span aria-hidden="true">{check?.pinchReady ? "✓" : "2"}</span>
+          Pinch once while over the target
+        </li>
+      </ol>
+      {!check?.pointerReady ? (
+        <div
+          aria-label="Steady pointer progress"
+          aria-valuemax="100"
+          aria-valuemin="0"
+          aria-valuenow={progress}
+          className="tracking-interaction-progress"
+          role="progressbar"
+        >
+          <span style={{ width: `${progress}%` }} />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 export default function TrackingSetup({
   readiness,
+  interactionCheck,
   capabilities,
   recommendation,
   qualityBudget,
@@ -93,6 +184,11 @@ export default function TrackingSetup({
     status === TRACKING_READINESS_STATES.REQUESTING_CAMERA ||
     status === TRACKING_READINESS_STATES.LOADING_MODEL;
   const hasError = Boolean(getCameraErrorPresentation(status));
+  const interactionAvailable =
+    !idle &&
+    !loading &&
+    !hasError &&
+    Boolean(readiness?.cameraReady && readiness?.modelReady);
 
   return (
     <div className="tracking-setup-page">
@@ -136,7 +232,11 @@ export default function TrackingSetup({
           <h2 className="sr-only" id="tracking-preview-title">
             Camera preview and setup status
           </h2>
-          <div className={`tracking-camera-frame ${ready ? "ready" : ""}`}>
+          <div
+            className={`tracking-camera-frame ${ready ? "ready" : ""} ${
+              mirrorCamera ? "mirrored" : "direct"
+            }`}
+          >
             <video
               aria-label={`Live ${mirrorCamera ? "mirrored" : "direct"} camera preview`}
               autoPlay
@@ -144,10 +244,14 @@ export default function TrackingSetup({
               playsInline
               ref={videoRef}
             />
-            <div className="tracking-camera-guide" aria-hidden="true">
-              <span className="tracking-camera-guide-hand">✋</span>
-              <span>Keep your hand inside this area</span>
-            </div>
+            {interactionAvailable ? (
+              <TrackingInteractionOverlay check={interactionCheck} />
+            ) : (
+              <div className="tracking-camera-guide" aria-hidden="true">
+                <span className="tracking-camera-guide-hand">✋</span>
+                <span>Keep your hand inside this area</span>
+              </div>
+            )}
             {loading ? (
               <div aria-live="polite" className="tracking-camera-loading" role="status">
                 <span className="tracking-camera-spinner" aria-hidden="true" />
@@ -211,21 +315,22 @@ export default function TrackingSetup({
                     pinch.
                   </p>
                   <div className="tracking-setup-actions">
-                    <button className="tracking-primary-action" onClick={onContinue} type="button">
-                      Continue to Home
+                    <button
+                      className="tracking-primary-action"
+                      disabled={!ready}
+                      onClick={onContinue}
+                      type="button"
+                    >
+                      Continue
                     </button>
                     <button className="tracking-secondary-action" onClick={onStop} type="button">
                       Stop camera
                     </button>
                   </div>
                 </>
-              ) : (
+              ) : interactionAvailable ? (
                 <>
-                  <h2>Make tracking comfortable</h2>
-                  <p>
-                    Keep movements relaxed and inside the frame. You can adjust dwell time,
-                    smoothing, dominant hand, mirror mode, and seated play in Settings.
-                  </p>
+                  <TrackingInteractionInstructions check={interactionCheck} />
                   {devices.length > 1 ? (
                     <label className="tracking-device-select" htmlFor="tracking-camera-device">
                       <span>Camera</span>
@@ -242,6 +347,30 @@ export default function TrackingSetup({
                       </select>
                     </label>
                   ) : null}
+                  <div className="tracking-setup-actions tracking-interaction-actions">
+                    <button
+                      aria-describedby="tracking-readiness-requirement"
+                      className="tracking-primary-action"
+                      disabled
+                      type="button"
+                    >
+                      Continue
+                    </button>
+                    <button className="tracking-secondary-action" onClick={onStop} type="button">
+                      Stop camera
+                    </button>
+                  </div>
+                  <span className="sr-only" id="tracking-readiness-requirement">
+                    Complete the steady pointer and pinch check to continue.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <h2>Preparing your controls</h2>
+                  <p>
+                    Keep movements relaxed and inside the frame. The pointer check will begin
+                    when the camera and tracking model are ready.
+                  </p>
                 </>
               )}
             </div>

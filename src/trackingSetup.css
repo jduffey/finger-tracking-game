@@ -220,8 +220,12 @@
 .tracking-camera-frame video {
   height: 100%;
   object-fit: cover;
-  transform: scaleX(-1);
+  transform: none;
   width: 100%;
+}
+
+.tracking-camera-frame.mirrored video {
+  transform: scaleX(-1);
 }
 
 .tracking-camera-guide {
@@ -244,6 +248,98 @@
 
 .tracking-camera-guide-hand {
   font-size: clamp(2.4rem, 6vw, 5.2rem);
+}
+
+.tracking-interaction-overlay {
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+}
+
+.tracking-interaction-target {
+  align-items: center;
+  background:
+    radial-gradient(circle, rgba(8, 12, 23, 0.18) 48%, transparent 50%),
+    conic-gradient(
+      #7cf7c8 0 var(--tracking-target-progress),
+      rgba(255, 255, 255, 0.2) var(--tracking-target-progress) 360deg
+    );
+  border-radius: 50%;
+  box-sizing: border-box;
+  display: flex;
+  height: var(--tracking-target-height);
+  justify-content: center;
+  left: var(--tracking-target-x);
+  padding: 5px;
+  position: absolute;
+  top: var(--tracking-target-y);
+  transform: translate(-50%, -50%);
+  transition:
+    filter 160ms ease,
+    transform 160ms ease;
+  width: var(--tracking-target-width);
+}
+
+.tracking-interaction-target::before {
+  background: rgba(8, 12, 23, 0.72);
+  border: 2px solid rgba(255, 255, 255, 0.84);
+  border-radius: inherit;
+  content: "";
+  inset: 7px;
+  position: absolute;
+}
+
+.tracking-interaction-target.holding {
+  filter: drop-shadow(0 0 18px rgba(124, 247, 200, 0.9));
+  transform: translate(-50%, -50%) scale(1.06);
+}
+
+.tracking-interaction-target.pinch {
+  filter: drop-shadow(0 0 22px rgba(255, 224, 149, 0.92));
+}
+
+.tracking-interaction-target.complete {
+  background: #7cf7c8;
+  filter: drop-shadow(0 0 22px rgba(124, 247, 200, 0.72));
+}
+
+.tracking-interaction-target-core {
+  color: #f7f9ff;
+  font-size: clamp(0.58rem, 1vw, 0.82rem);
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  position: relative;
+  text-align: center;
+  z-index: 1;
+}
+
+.tracking-interaction-target.complete .tracking-interaction-target-core {
+  color: #07120f;
+  font-size: clamp(1.15rem, 3vw, 2.2rem);
+}
+
+.tracking-interaction-pointer {
+  background: #ffe095;
+  border: 3px solid #07120f;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 4px rgba(255, 224, 149, 0.28),
+    0 5px 16px rgba(0, 0, 0, 0.38);
+  height: 22px;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  transition:
+    background 100ms linear,
+    box-shadow 100ms linear;
+  width: 22px;
+}
+
+.tracking-interaction-pointer.in-target {
+  background: #7cf7c8;
+  box-shadow:
+    0 0 0 6px rgba(124, 247, 200, 0.3),
+    0 5px 16px rgba(0, 0, 0, 0.38);
 }
 
 .tracking-camera-loading {
@@ -308,6 +404,110 @@
   padding-left: 20px;
 }
 
+.tracking-interaction-status {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+}
+
+.tracking-interaction-status h2 {
+  margin-bottom: 4px;
+}
+
+.tracking-interaction-status p {
+  margin: 0;
+}
+
+.tracking-interaction-status-icon {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  color: #ffe095;
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.tracking-interaction-status-icon.complete {
+  background: #7cf7c8;
+  border-color: #7cf7c8;
+  color: #07120f;
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.tracking-interaction-steps {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 16px 0 12px;
+  padding: 0;
+}
+
+.tracking-setup-card .tracking-interaction-steps li {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  display: flex;
+  font-size: 0.9rem;
+  gap: 9px;
+  padding: 8px 10px;
+}
+
+.tracking-interaction-steps li > span {
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 900;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.tracking-interaction-steps li.active {
+  border-color: rgba(255, 224, 149, 0.42);
+  color: #f7f9ff;
+}
+
+.tracking-interaction-steps li.completed {
+  border-color: rgba(124, 247, 200, 0.26);
+  color: #c8fae7;
+}
+
+.tracking-interaction-steps li.completed > span {
+  background: #7cf7c8;
+  border-color: #7cf7c8;
+  color: #07120f;
+}
+
+.tracking-interaction-progress {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  height: 7px;
+  margin: 0 0 14px;
+  overflow: hidden;
+}
+
+.tracking-interaction-progress > span {
+  background: #7cf7c8;
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 80ms linear;
+}
+
+.tracking-interaction-actions {
+  margin-top: 14px;
+}
+
 .tracking-setup-actions {
   display: flex;
   flex-wrap: wrap;
@@ -319,6 +519,11 @@
   border: 0;
   color: #07120f;
   font-weight: 900;
+}
+
+.tracking-primary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .tracking-secondary-action {
@@ -567,13 +772,21 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tracking-camera-spinner {
+  .tracking-camera-spinner,
+  .tracking-interaction-progress > span,
+  .tracking-interaction-target,
+  .tracking-interaction-pointer {
     animation: none;
+    transition: none;
   }
 }
 
-:root[data-reduced-motion="true"] .tracking-camera-spinner {
+:root[data-reduced-motion="true"] .tracking-camera-spinner,
+:root[data-reduced-motion="true"] .tracking-interaction-progress > span,
+:root[data-reduced-motion="true"] .tracking-interaction-target,
+:root[data-reduced-motion="true"] .tracking-interaction-pointer {
   animation: none;
+  transition: none;
 }
 
 :root[data-low-sensory="true"] .tracking-setup-page {
@@ -588,6 +801,7 @@
   .tracking-setup-card,
   .tracking-setup-error,
   .tracking-camera-frame,
+  .tracking-interaction-target::before,
   .tracking-back-button,
   .tracking-secondary-action,
   .tracking-device-select select {
@@ -609,6 +823,7 @@
 :root[data-high-contrast="true"] .tracking-setup-card,
 :root[data-high-contrast="true"] .tracking-setup-error,
 :root[data-high-contrast="true"] .tracking-camera-frame,
+:root[data-high-contrast="true"] .tracking-interaction-target::before,
 :root[data-high-contrast="true"] .tracking-back-button,
 :root[data-high-contrast="true"] .tracking-secondary-action,
 :root[data-high-contrast="true"] .tracking-device-select select {
