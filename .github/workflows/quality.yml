@@ -32,5 +32,20 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Review dependency changes
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+
       - name: Run quality checks
         run: npm run check
+
+      - name: Generate CycloneDX SBOM
+        run: npm sbom --sbom-format cyclonedx > sbom.cdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-arcade-sbom
+          path: sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 30

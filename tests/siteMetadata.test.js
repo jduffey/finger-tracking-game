@@ -52,7 +52,7 @@ test("public privacy page documents the app's meaningful data boundaries", () =>
   assert.match(privacyPage, /processed locally in your browser/i);
   assert.match(privacyPage, /not uploaded or saved/i);
   assert.match(privacyPage, /does not request\s+microphone\s+access/i);
-  assert.match(privacyPage, /jsDelivr/);
+  assert.match(privacyPage, /same site as the app/i);
   assert.match(privacyPage, /localStorage/);
   assert.match(privacyPage, /production builds do not send\s+those logs/i);
 });
@@ -60,7 +60,11 @@ test("public privacy page documents the app's meaningful data boundaries", () =>
 test("the package exposes one local and CI quality command", () => {
   const packageJson = readJson("package.json");
 
-  assert.equal(packageJson.engines.node, ">=20");
+  assert.equal(packageJson.engines.node, "^20.19.0 || >=22.12.0");
   assert.equal(packageJson.scripts["test:ci"], "node --test --test-reporter=spec");
-  assert.equal(packageJson.scripts.check, "npm run test:ci && npm run build");
+  assert.equal(
+    packageJson.scripts.check,
+    "npm run test:ci && npm run build && npm run audit",
+  );
+  assert.equal(packageJson.scripts.audit, "npm audit --audit-level=high");
 });

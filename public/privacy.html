@@ -133,10 +133,10 @@
 
       <h2>Network access</h2>
       <p>
-        The tracking model runs on your device. When tracking initializes, the default
-        MediaPipe Hands runtime downloads model assets from the jsDelivr content delivery
-        network. That request may expose ordinary connection details, such as your IP address
-        and browser headers, to the CDN. Camera images are not part of that request.
+        The tracking model runs on your device. Motion Arcade serves its pinned MediaPipe
+        Hands model files from the same site as the app; it does not send model requests or
+        camera images to a third-party tracking service. Your browser may still contact the
+        site host to download application and model files when they are not already cached.
       </p>
 
       <h2>Information saved on this device</h2>

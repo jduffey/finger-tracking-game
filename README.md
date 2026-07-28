@@ -37,11 +37,12 @@ every fingertip is not required.
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 20.19 or newer (or Node.js 22.12+)
 - npm
 - Webcam access
 - A modern desktop Chromium browser is recommended
-- Internet access when hand tracking starts, because the default MediaPipe Hands runtime loads assets from `https://cdn.jsdelivr.net/npm/@mediapipe/hands`
+- No third-party model CDN is required; pinned MediaPipe Hands assets are served
+  from the same origin as the app
 
 Camera access requires a
 [secure context](https://developer.mozilla.org/docs/Web/Security/Secure_Contexts).
@@ -81,12 +82,13 @@ npm run preview
 
 ## Scripts
 
-- `npm run dev`: starts the Vite dev server and writes verbose logs to `logs/`
+- `npm run dev`: starts the Vite development server
 - `npm run build`: builds both `index.html` and `circle-of-fifths.html` into `dist/`
 - `npm run preview`: serves the built output locally
 - `npm test`: runs the Node test suite
 - `npm run test:ci`: runs the same suite with the explicit CI reporter
-- `npm run check`: runs the complete test suite, then creates a production build
+- `npm run audit`: checks installed dependencies for high-severity advisories
+- `npm run check`: runs the complete test suite, creates a production build, and audits dependencies
 - `npm run symphony`: launches the optional Symphony workflow wrapper
 
 Pull requests and pushes to `main` run `npm run check` on Node.js 22 through the
@@ -100,14 +102,13 @@ repository's GitHub Actions quality workflow.
   or save video frames and does not request microphone access.
 - Hand tracking starts with the MediaPipe Hands runtime and can probe or fall back to
   TFJS backends when needed.
-- The MediaPipe runtime downloads model assets from jsDelivr when tracking initializes;
-  that CDN request does not include camera images.
+- Pinned MediaPipe Hands model assets are served by the app from the same origin.
 - Body Pose Lab and Off-Axis Forest Walk use pose detection rather than the hand-tracking flow.
 - Calibration, preferences, favorites, recent activity, gesture personalization, and
   selected game or lab progress can be stored in the browser's `localStorage`.
 - Local data can be cleared from Settings or through the browser's site-data controls.
-- Verbose browser/runtime events are written to timestamped files in `logs/` only while
-  running `npm run dev`; production builds do not send those logs.
+- Verbose browser/runtime events are disabled by default. Developers can opt in with
+  `VITE_VERBOSE_LOGS=true` or `?debugLogs=1`; production builds do not send those logs.
 - The codebase contains no account system, advertising SDK, or third-party analytics.
 
 The user-facing policy is available at [`/privacy.html`](./public/privacy.html).
@@ -127,7 +128,7 @@ To use `npm run symphony`:
 ## Troubleshooting
 
 - **No camera prompt appears**: check browser and OS camera permissions, and make sure another app is not exclusively holding the webcam.
-- **The page loads but hand tracking does not start**: keep internet access available for the MediaPipe asset load, and retry in Chrome or another Chromium browser with WebGL enabled.
+- **The page loads but hand tracking does not start**: retry in Chrome or another Chromium browser with WebGL enabled and confirm the host serves the bundled `/vendor/mediapipe/hands/` assets.
 - **The cursor feels off**: rerun calibration and keep your hand fully visible while capturing.
 - **Tracking is noisy or slow**: improve lighting, reduce background clutter, and close other GPU-heavy browser tabs.
 - **The Circle of Fifths page is silent**: confirm the browser allows audio playback and interact with the page so the `AudioContext` can start.
