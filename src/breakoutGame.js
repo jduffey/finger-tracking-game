@@ -5,6 +5,7 @@ const breakoutLog = createScopedLogger("breakoutGame");
 export const BREAKOUT_COUNTDOWN_MS = 3_000;
 export const BREAKOUT_BRICK_SCORE = 100;
 export const BREAKOUT_CAPSULE_SCORE = 200;
+export const BREAKOUT_STARTING_LIVES = 3;
 export const BREAKOUT_BRICK_COLORS = ["#ff0000", "#ff8d00", "#ffdb00", "#00d619", "#009fff"];
 export const FIND_YOUR_GRIND_BREAKOUT_MODE_ID = "find-your-grind-breakout";
 export const FIND_YOUR_GRIND_LOGO_COLORS = {
@@ -467,6 +468,9 @@ function createBreakoutState(layout, bricks, variant = "classic") {
     capsules: [],
     bricks,
     score: 0,
+    lives: BREAKOUT_STARTING_LIVES,
+    level: 1,
+    variant,
     status: "countdown",
     countdownMs: BREAKOUT_COUNTDOWN_MS,
     nextBallId: 2,
@@ -494,6 +498,41 @@ export function createFindYourGrindBreakoutGame(width, height, rng = Math.random
     createFindYourGrindBreakoutBricks(layout, rng),
     FIND_YOUR_GRIND_BREAKOUT_MODE_ID,
   );
+}
+
+function createBreakoutBricksForVariant(layout, variant, rng) {
+  return variant === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
+    ? createFindYourGrindBreakoutBricks(layout, rng)
+    : createBreakoutBricks(layout, rng);
+}
+
+export function restartBreakoutGame(state, rng = Math.random) {
+  if (!state?.layout) {
+    return state;
+  }
+
+  const variant =
+    state.variant === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
+      ? FIND_YOUR_GRIND_BREAKOUT_MODE_ID
+      : "classic";
+  const restarted = createBreakoutState(
+    state.layout,
+    createBreakoutBricksForVariant(state.layout, variant, rng),
+    variant,
+  );
+
+  if (state.status !== "cleared") {
+    return restarted;
+  }
+
+  return {
+    ...restarted,
+    score: Number.isFinite(state.score) ? state.score : 0,
+    lives: Number.isFinite(state.lives)
+      ? Math.max(1, state.lives)
+      : BREAKOUT_STARTING_LIVES,
+    level: (Number.isFinite(state.level) ? state.level : 1) + 1,
+  };
 }
 
 export function stepBreakoutGame(state, dtSeconds, paddleTargetX, rng = Math.random) {
@@ -538,6 +577,15 @@ export function stepBreakoutGame(state, dtSeconds, paddleTargetX, rng = Math.ran
           : ball,
       ),
       message: "Cleared",
+    };
+  }
+
+  if (nextState.status === "gameover") {
+    return {
+      ...nextState,
+      balls: [],
+      capsules: [],
+      message: "Round over",
     };
   }
 
@@ -703,12 +751,33 @@ export function stepBreakoutGame(state, dtSeconds, paddleTargetX, rng = Math.ran
   }
 
   if (activeBalls.length === 0) {
+    const lives = Math.max(
+      0,
+      (Number.isFinite(nextState.lives) ? nextState.lives : BREAKOUT_STARTING_LIVES) - 1,
+    );
+    if (lives === 0) {
+      return {
+        ...nextState,
+        bricks: nextBricks,
+        balls: [],
+        capsules: [],
+        score,
+        lives,
+        nextBallId,
+        nextCapsuleId,
+        status: "gameover",
+        countdownMs: 0,
+        message: "Round over",
+      };
+    }
+
     return createRoundReset({
       ...nextState,
       bricks: nextBricks,
       balls: [],
       capsules: [],
       score,
+      lives,
       nextBallId,
       nextCapsuleId,
       status: "playing",

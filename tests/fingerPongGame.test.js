@@ -168,3 +168,66 @@ test("stepFingerPongGame awards points on top exit and resets on player miss", (
   assert.equal(afterMiss.status, "countdown");
   assert.equal(afterMiss.rallyCount, 0);
 });
+
+test("stepFingerPongGame ends the match when the player reaches the target score", () => {
+  const layout = createFingerPongLayout(960, 720);
+  const state = {
+    layout,
+    player: { x: layout.width * 0.5, y: layout.playerPaddleY },
+    opponent: { x: layout.width * 0.5, y: layout.opponentPaddleY },
+    ball: {
+      x: layout.width * 0.5,
+      y: -layout.ballRadius - 2,
+      vx: 0,
+      vy: -180,
+      radius: layout.ballRadius,
+    },
+    score: FINGER_PONG_MAX_SCORE - 1,
+    opponentScore: 2,
+    rallyCount: 4,
+    bestRally: 4,
+    status: "playing",
+    countdownMs: 0,
+    message: "",
+  };
+
+  const won = stepFingerPongGame(state, 1 / 60, state.player.x);
+  assert.equal(won.score, FINGER_PONG_MAX_SCORE);
+  assert.equal(won.status, "won");
+  assert.equal(won.countdownMs, 0);
+  assert.equal(won.message, "Perfect rally");
+});
+
+test("stepFingerPongGame ends the match when the opponent reaches the target score", () => {
+  const layout = createFingerPongLayout(960, 720);
+  const state = {
+    layout,
+    player: { x: layout.width * 0.5, y: layout.playerPaddleY },
+    opponent: { x: layout.width * 0.5, y: layout.opponentPaddleY },
+    ball: {
+      x: layout.width * 0.5,
+      y: layout.height + layout.ballRadius + 2,
+      vx: 0,
+      vy: 180,
+      radius: layout.ballRadius,
+    },
+    score: 2,
+    opponentScore: FINGER_PONG_MAX_SCORE - 1,
+    rallyCount: 3,
+    bestRally: 3,
+    status: "playing",
+    countdownMs: 0,
+    message: "",
+  };
+
+  const lost = stepFingerPongGame(state, 1 / 60, state.player.x);
+  assert.equal(lost.opponentScore, FINGER_PONG_MAX_SCORE);
+  assert.equal(lost.status, "lost");
+  assert.equal(lost.countdownMs, 0);
+  assert.equal(lost.message, "Opponent wins");
+
+  const frozen = stepFingerPongGame(lost, 0.05, layout.width);
+  assert.equal(frozen.status, "lost");
+  assert.equal(frozen.opponentScore, lost.opponentScore);
+  assert.deepEqual(frozen.ball, lost.ball);
+});

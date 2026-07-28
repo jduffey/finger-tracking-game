@@ -81,6 +81,9 @@ function createRoundState(layout, direction = -1) {
 
 function resetRound(state, reason, direction = -1) {
   const nextBall = createBall(state.layout, direction);
+  const playerWon = state.score >= FINGER_PONG_MAX_SCORE;
+  const opponentWon = state.opponentScore >= FINGER_PONG_MAX_SCORE;
+  const roundFinished = playerWon || opponentWon;
   return {
     ...state,
     player: {
@@ -93,11 +96,13 @@ function resetRound(state, reason, direction = -1) {
     },
     ball: nextBall,
     rallyCount: 0,
-    status: state.score >= FINGER_PONG_MAX_SCORE ? "won" : "countdown",
-    countdownMs: state.score >= FINGER_PONG_MAX_SCORE ? 0 : FINGER_PONG_COUNTDOWN_MS,
+    status: playerWon ? "won" : opponentWon ? "lost" : "countdown",
+    countdownMs: roundFinished ? 0 : FINGER_PONG_COUNTDOWN_MS,
     message:
-      state.score >= FINGER_PONG_MAX_SCORE
+      playerWon
         ? "Perfect rally"
+        : opponentWon
+          ? "Opponent wins"
         : reason === "player_miss"
           ? "Reset"
           : "Point",
@@ -182,7 +187,7 @@ function stepFingerPongGameSubstep(state, dtSeconds, paddleTargetX) {
     },
   };
 
-  if (nextState.status === "won") {
+  if (nextState.status === "won" || nextState.status === "lost") {
     return nextState;
   }
 
