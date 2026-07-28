@@ -51,15 +51,19 @@ aggregate scoring, circuit medals, and local resume for an unfinished run.
   trails, camera opacity, favorite effects, and saved looks. It can export an
   SVG composition without including the camera image.
 - **Light Painting** supports pointer or tracked painting, tool controls,
-  freeze/replay, image export, and local gallery saves.
+  freeze/replay, image export, privacy-safe ten-second WebM capture, and local
+  gallery saves. Video export records the artwork canvas, never the camera
+  image.
 - **World Painter** creates rule-grown landscapes with named projects,
   revisions, local saves, and restorable JSON export.
 - **Jam Studio** (`/create/jam-studio`, served by
   `/circle-of-fifths.html`) combines a Circle of Fifths instrument with drum
   grooves. It accepts hand tracking, pointer, touch, and keyboard input and can
-  record a repeating loop of chord changes and live drum hits. A loop is capped
-  at 32 seconds and 256 symbolic events; it can be kept in one local save slot
-  or exported as JSON. No audio or camera frames are recorded.
+  lock to a key, play progression presets, switch timbres, arpeggiate chords,
+  mix or mute individual drums, and record a repeating loop of chord changes
+  and live drum hits. A loop is capped at 32 seconds and 256 symbolic events;
+  it can be kept in one local save slot or exported as JSON. No audio or camera
+  frames are recorded.
 
 **My Creations** is the local shelf for Light Paintings and World Painter
 projects. It can search, filter, reopen, rename, export, and delete saved work.
@@ -129,6 +133,12 @@ camera stop, reset, privacy, and local-data deletion controls.
   origin as the app. Runtime tracking does not depend on a third-party model
   CDN.
 - There is no account system, advertising SDK, or third-party analytics.
+- The app keeps bounded, aggregate-only experience-health counters on the
+  device for scored games: starts/completions, retry and abandonment counts,
+  time-to-first-success buckets, selection failures, tutorial outcomes, and
+  tracking-loss durations. It stores no raw event stream, timestamps, session
+  identifiers, camera data, or landmarks, and Settings deletes these counters
+  with the rest of local product data.
 - Preferences, calibration, favorites, recent activity, progression, unfinished
   Arcade Runs, gesture personalization, saved visualizer looks, Jam Studio
   loops, and selected lab sessions may be stored in `localStorage`. Creative
@@ -176,8 +186,9 @@ npm run preview
 
 - `npm test` — Node unit and source-contract tests.
 - `npm run test:ci` — the same suite with the CI reporter.
-- `npm run test:e2e` — camera-free Chromium journeys, deep-link checks,
-  accessibility gates, and responsive-layout checks.
+- `npm run test:e2e` — Chromium journeys, deterministic synthetic-camera
+  permission/model recovery checks, deep-link checks, accessibility gates, and
+  responsive-layout checks.
 - `npm run build` — builds `index.html` and `circle-of-fifths.html` into
   `dist/`.
 - `npm run check:bundle-budget` — checks eager main-page assets after a build.
