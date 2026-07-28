@@ -1779,6 +1779,7 @@ export default function App() {
   const [cameraAspectRatio, setCameraAspectRatio] = useState(4 / 3);
   const [modelReady, setModelReady] = useState(false);
   const [modelError, setModelError] = useState("");
+  const [modelRetryAttempt, setModelRetryAttempt] = useState(0);
   const [activeBackend, setActiveBackend] = useState("n/a");
   const [activeRuntime, setActiveRuntime] = useState(INITIAL_TRACKING_RUNTIME);
 
@@ -5550,6 +5551,8 @@ export default function App() {
 
     let cancelled = false;
     appLog.info("Hand-tracking model initialization effect started");
+    setModelReady(false);
+    setModelError("");
     setTrackingReadiness((current) =>
       reduceTrackingReadiness(current, { type: "MODEL_LOADING" }),
     );
@@ -5642,7 +5645,7 @@ export default function App() {
         detectorRef.current = null;
       }
     };
-  }, [appLog, trackingRequested]);
+  }, [appLog, modelRetryAttempt, trackingRequested]);
 
   useEffect(() => {
     if (!modelReady || !detectorRef.current) {
@@ -6803,6 +6806,27 @@ export default function App() {
     setModelError("");
     resetTrackingInteractionCheck();
     setTrackingRequested(true);
+  }
+
+  function retryProductTrackingSetup() {
+    setCameraError("");
+    setModelError("");
+    resetTrackingInteractionCheck();
+
+    if (!trackingRequested) {
+      setTrackingRequested(true);
+      return;
+    }
+
+    if (
+      trackingReadiness.status === TRACKING_READINESS_STATES.MODEL_ERROR
+    ) {
+      setModelReady(false);
+      setModelRetryAttempt((attempt) => attempt + 1);
+      return;
+    }
+
+    retryCamera("manual_retry");
   }
 
   function continueFromProductTrackingSetup() {
@@ -13029,13 +13053,7 @@ export default function App() {
           devices={cameraDevices}
           onBack={() => navigateToProductHome()}
           onStart={beginProductTrackingSetup}
-          onRetry={() => {
-            if (!trackingRequested) {
-              beginProductTrackingSetup();
-            } else {
-              retryCamera("manual_retry");
-            }
-          }}
+          onRetry={retryProductTrackingSetup}
           onStop={stopProductCamera}
           onDeviceChange={(deviceId) => {
             setRequestedCameraDeviceId(deviceId);
