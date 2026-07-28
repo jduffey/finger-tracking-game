@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 
 import {
   TRACKING_INTERACTION_TARGET,
+  TRACKING_ENVIRONMENT_STATUSES,
   TRACKING_READINESS_STATES,
+  assessTrackingFrameLighting,
+  assessTrackingHandFraming,
   classifyCameraError,
   createTrackingInteractionCheck,
   createTrackingReadinessState,
@@ -13,6 +16,24 @@ import {
   reduceTrackingReadiness,
   updateTrackingInteractionCheck,
 } from "../src/trackingReadiness.js";
+
+function solidRgba(value, pixelCount = 16) {
+  return Uint8ClampedArray.from(
+    Array.from({ length: pixelCount }, () => [value, value, value, 255]).flat(),
+  );
+}
+
+function handAcrossBounds(uMin, uMax, vMin, vMax) {
+  return {
+    landmarks: Array.from({ length: 21 }, (_, index) => {
+      const ratio = index / 20;
+      return {
+        u: uMin + (uMax - uMin) * ratio,
+        v: vMin + (vMax - vMin) * ((index * 7) % 21) / 20,
+      };
+    }),
+  };
+}
 
 test("classifies common camera failures into actionable states", () => {
   assert.equal(
@@ -34,6 +55,50 @@ test("classifies common camera failures into actionable states", () => {
   assert.equal(
     classifyCameraError({ name: "UnknownError" }),
     TRACKING_READINESS_STATES.ERROR,
+  );
+});
+
+test("disposable luminance samples produce plain-language lighting guidance", () => {
+  assert.equal(
+    assessTrackingFrameLighting(solidRgba(28)).status,
+    TRACKING_ENVIRONMENT_STATUSES.DIM,
+  );
+  assert.equal(
+    assessTrackingFrameLighting(solidRgba(250)).status,
+    TRACKING_ENVIRONMENT_STATUSES.BRIGHT,
+  );
+  assert.deepEqual(
+    assessTrackingFrameLighting(solidRgba(132)).status,
+    TRACKING_ENVIRONMENT_STATUSES.GOOD,
+  );
+  assert.equal(
+    assessTrackingFrameLighting(null).status,
+    TRACKING_ENVIRONMENT_STATUSES.UNKNOWN,
+  );
+});
+
+test("normalized hand bounds guide framing and approximate distance without blocking", () => {
+  assert.equal(
+    assessTrackingHandFraming(null).status,
+    TRACKING_ENVIRONMENT_STATUSES.MISSING,
+  );
+  assert.equal(
+    assessTrackingHandFraming(handAcrossBounds(0.45, 0.53, 0.44, 0.52))
+      .status,
+    TRACKING_ENVIRONMENT_STATUSES.FAR,
+  );
+  assert.equal(
+    assessTrackingHandFraming(handAcrossBounds(0.1, 0.9, 0.1, 0.9)).status,
+    TRACKING_ENVIRONMENT_STATUSES.CLOSE,
+  );
+  assert.equal(
+    assessTrackingHandFraming(handAcrossBounds(0.01, 0.42, 0.2, 0.7)).status,
+    TRACKING_ENVIRONMENT_STATUSES.EDGE,
+  );
+  assert.equal(
+    assessTrackingHandFraming(handAcrossBounds(0.3, 0.68, 0.25, 0.72))
+      .status,
+    TRACKING_ENVIRONMENT_STATUSES.GOOD,
   );
 });
 
@@ -118,6 +183,25 @@ test("interaction check requires a stable hold before accepting a pinch", () => 
   assert.equal(check.complete, true);
   assert.equal(check.pinchReady, true);
   assert.equal(getTrackingInteractionPresentation(check).phase, "complete");
+});
+
+test("interaction readiness carries the latest advisory framing assessment", () => {
+  const framing = assessTrackingHandFraming(
+    handAcrossBounds(0.3, 0.68, 0.25, 0.72),
+  );
+  const check = updateTrackingInteractionCheck(
+    createTrackingInteractionCheck(),
+    {
+      framing,
+      handDetected: true,
+      pinchActive: false,
+      pointerU: TRACKING_INTERACTION_TARGET.u,
+      pointerV: TRACKING_INTERACTION_TARGET.v,
+      timestamp: 0,
+    },
+  );
+
+  assert.equal(check.framing.status, TRACKING_ENVIRONMENT_STATUSES.GOOD);
 });
 
 test("leaving the target or pausing samples resets an unfinished steady hold", () => {

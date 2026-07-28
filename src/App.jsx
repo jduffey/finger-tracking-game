@@ -299,6 +299,7 @@ import {
 } from "./productHomeModel.js";
 import {
   TRACKING_READINESS_STATES,
+  assessTrackingHandFraming,
   createTrackingInteractionCheck,
   createTrackingReadinessState,
   getCameraErrorPresentation,
@@ -11581,6 +11582,7 @@ export default function App() {
       }
       publishTrackingInteractionSample({
         handDetected: false,
+        framing: assessTrackingHandFraming(null),
         pinchActive: false,
         timestamp,
       });
@@ -11871,6 +11873,7 @@ export default function App() {
 
     publishTrackingInteractionSample({
       handDetected: true,
+      framing: assessTrackingHandFraming(hand),
       pinchActive: nextPinch,
       pointerU: smoothed.x / Math.max(1, viewportRef.current.width),
       pointerV: smoothed.y / Math.max(1, viewportRef.current.height),

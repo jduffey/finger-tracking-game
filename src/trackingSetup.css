@@ -203,6 +203,10 @@
   align-self: center;
 }
 
+.tracking-camera-preview-stack {
+  min-width: 0;
+}
+
 .tracking-camera-frame {
   aspect-ratio: 16 / 10;
   background: #02040a;
@@ -215,6 +219,95 @@
 
 .tracking-camera-frame.ready {
   border-color: rgba(124, 247, 200, 0.56);
+}
+
+.tracking-environment {
+  background: rgba(12, 18, 33, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.tracking-environment-items {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tracking-environment-item {
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  display: flex;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.tracking-environment-item.good {
+  background: rgba(124, 247, 200, 0.07);
+  border-color: rgba(124, 247, 200, 0.24);
+}
+
+.tracking-environment-item.dim,
+.tracking-environment-item.bright,
+.tracking-environment-item.edge,
+.tracking-environment-item.far,
+.tracking-environment-item.close {
+  background: rgba(255, 205, 104, 0.07);
+  border-color: rgba(255, 205, 104, 0.24);
+}
+
+.tracking-environment-icon {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  display: flex;
+  flex: 0 0 auto;
+  font-weight: 900;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.tracking-environment-item.good .tracking-environment-icon {
+  background: #7cf7c8;
+  color: #07120f;
+}
+
+.tracking-environment-item > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tracking-environment-item small {
+  color: #8794aa;
+  font-size: 0.63rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tracking-environment-item strong {
+  color: #f7f9ff;
+  font-size: 0.82rem;
+}
+
+.tracking-environment-item > span:last-child > span {
+  color: #aeb8cb;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.tracking-environment-privacy {
+  color: #7f8ba1;
+  display: block;
+  font-size: 0.66rem;
+  line-height: 1.4;
+  margin-top: 9px;
 }
 
 .tracking-camera-frame video {
@@ -697,6 +790,11 @@
     width: 100%;
   }
 
+  .tracking-camera-preview-stack {
+    order: 2;
+    width: 100%;
+  }
+
   .tracking-setup-card,
   .tracking-setup-error {
     margin: 0 0 16px;
@@ -769,6 +867,10 @@
   .tracking-camera-guide {
     left: 22%;
     right: 22%;
+  }
+
+  .tracking-environment-items {
+    grid-template-columns: 1fr;
   }
 
   .tracking-setup-actions {

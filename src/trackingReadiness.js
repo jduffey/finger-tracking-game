@@ -32,6 +32,162 @@ export const TRACKING_INTERACTION_TARGET = Object.freeze({
 export const TRACKING_INTERACTION_HOLD_MS = 600;
 const TRACKING_INTERACTION_MAX_SAMPLE_GAP_MS = 240;
 const TRACKING_INTERACTION_MAX_DELTA_MS = 100;
+const TRACKING_LIGHTING_DIM_LUMA = 58;
+const TRACKING_LIGHTING_BRIGHT_LUMA = 218;
+const TRACKING_LIGHTING_BRIGHT_PIXEL_RATIO = 0.55;
+const TRACKING_FRAMING_EDGE_MARGIN = 0.035;
+const TRACKING_FRAMING_MIN_SPAN = 0.14;
+const TRACKING_FRAMING_MAX_SPAN = 0.7;
+
+export const TRACKING_ENVIRONMENT_STATUSES = Object.freeze({
+  UNKNOWN: "unknown",
+  GOOD: "good",
+  DIM: "dim",
+  BRIGHT: "bright",
+  MISSING: "missing",
+  EDGE: "edge",
+  FAR: "far",
+  CLOSE: "close",
+});
+
+export const TRACKING_LIGHTING_UNKNOWN = Object.freeze({
+  status: TRACKING_ENVIRONMENT_STATUSES.UNKNOWN,
+  label: "Checking light",
+  message: "Lighting will be checked after the camera starts.",
+});
+
+export const TRACKING_FRAMING_UNKNOWN = Object.freeze({
+  status: TRACKING_ENVIRONMENT_STATUSES.UNKNOWN,
+  label: "Find your hand",
+  message: "Show one relaxed hand inside the guide.",
+});
+
+function finiteCoordinate(point, key) {
+  const rawKey = `${key}Raw`;
+  if (Number.isFinite(point?.[rawKey])) {
+    return point[rawKey];
+  }
+  return Number.isFinite(point?.[key]) ? point[key] : null;
+}
+
+/**
+ * Summarizes a disposable RGBA sample. Callers can draw a tiny camera frame to
+ * an offscreen canvas, pass only its pixels here, and immediately discard it.
+ */
+export function assessTrackingFrameLighting(pixelData) {
+  if (!pixelData || pixelData.length < 4) {
+    return TRACKING_LIGHTING_UNKNOWN;
+  }
+
+  let lumaTotal = 0;
+  let brightPixels = 0;
+  let pixelCount = 0;
+  for (let index = 0; index + 2 < pixelData.length; index += 4) {
+    const luma =
+      pixelData[index] * 0.2126 +
+      pixelData[index + 1] * 0.7152 +
+      pixelData[index + 2] * 0.0722;
+    lumaTotal += luma;
+    brightPixels += luma >= 245 ? 1 : 0;
+    pixelCount += 1;
+  }
+  if (pixelCount === 0) {
+    return TRACKING_LIGHTING_UNKNOWN;
+  }
+
+  const averageLuma = lumaTotal / pixelCount;
+  const brightPixelRatio = brightPixels / pixelCount;
+  if (averageLuma < TRACKING_LIGHTING_DIM_LUMA) {
+    return {
+      status: TRACKING_ENVIRONMENT_STATUSES.DIM,
+      label: "Add a little light",
+      message: "Face a lamp or window without putting it directly behind you.",
+      averageLuma,
+    };
+  }
+  if (
+    averageLuma > TRACKING_LIGHTING_BRIGHT_LUMA ||
+    brightPixelRatio > TRACKING_LIGHTING_BRIGHT_PIXEL_RATIO
+  ) {
+    return {
+      status: TRACKING_ENVIRONMENT_STATUSES.BRIGHT,
+      label: "Reduce glare",
+      message: "Angle away from strong direct light so your hand keeps its detail.",
+      averageLuma,
+    };
+  }
+  return {
+    status: TRACKING_ENVIRONMENT_STATUSES.GOOD,
+    label: "Lighting looks good",
+    message: "Your hand has enough visible contrast for setup.",
+    averageLuma,
+  };
+}
+
+/**
+ * Uses normalized hand bounds as a forgiving distance/framing proxy. It never
+ * stores landmark vectors and deliberately does not block readiness.
+ */
+export function assessTrackingHandFraming(hand) {
+  const points = Array.isArray(hand?.landmarks)
+    ? hand.landmarks
+        .map((point) => ({
+          u: finiteCoordinate(point, "u"),
+          v: finiteCoordinate(point, "v"),
+        }))
+        .filter(({ u, v }) => Number.isFinite(u) && Number.isFinite(v))
+    : [];
+  if (points.length < 8) {
+    return {
+      status: TRACKING_ENVIRONMENT_STATUSES.MISSING,
+      label: "Show one full hand",
+      message: "Keep your wrist and fingertips visible inside the guide.",
+    };
+  }
+
+  const uValues = points.map(({ u }) => u);
+  const vValues = points.map(({ v }) => v);
+  const uMin = Math.min(...uValues);
+  const uMax = Math.max(...uValues);
+  const vMin = Math.min(...vValues);
+  const vMax = Math.max(...vValues);
+  const span = Math.max(uMax - uMin, vMax - vMin);
+  if (
+    uMin < TRACKING_FRAMING_EDGE_MARGIN ||
+    uMax > 1 - TRACKING_FRAMING_EDGE_MARGIN ||
+    vMin < TRACKING_FRAMING_EDGE_MARGIN ||
+    vMax > 1 - TRACKING_FRAMING_EDGE_MARGIN
+  ) {
+    return {
+      status: TRACKING_ENVIRONMENT_STATUSES.EDGE,
+      label: "Recenter your hand",
+      message: "Bring every fingertip and your wrist away from the frame edge.",
+      span,
+    };
+  }
+  if (span < TRACKING_FRAMING_MIN_SPAN) {
+    return {
+      status: TRACKING_ENVIRONMENT_STATUSES.FAR,
+      label: "Move a little closer",
+      message: "Bring your hand closer until the guide can see its shape clearly.",
+      span,
+    };
+  }
+  if (span > TRACKING_FRAMING_MAX_SPAN) {
+    return {
+      status: TRACKING_ENVIRONMENT_STATUSES.CLOSE,
+      label: "Move a little farther back",
+      message: "Leave enough space for relaxed pointing and pinching.",
+      span,
+    };
+  }
+  return {
+    status: TRACKING_ENVIRONMENT_STATUSES.GOOD,
+    label: "Hand distance looks good",
+    message: "Your hand is centered with comfortable room to move.",
+    span,
+  };
+}
 
 export function createTrackingInteractionCheck(overrides = {}) {
   return {
@@ -46,6 +202,7 @@ export function createTrackingInteractionCheck(overrides = {}) {
     pinchReady: false,
     complete: false,
     lastSampleAt: null,
+    framing: TRACKING_FRAMING_UNKNOWN,
     ...overrides,
   };
 }
@@ -73,6 +230,11 @@ export function updateTrackingInteractionCheck(state, sample = {}) {
       inTarget: false,
       holdMs: current.pointerReady ? current.holdMs : 0,
       lastSampleAt: null,
+      framing:
+        sample.framing ??
+        (sample.handDetected === false
+          ? assessTrackingHandFraming(null)
+          : current.framing),
     };
   }
 
@@ -128,6 +290,7 @@ export function updateTrackingInteractionCheck(state, sample = {}) {
     pinchReady,
     complete: pinchReady,
     lastSampleAt: timestamp,
+    framing: sample.framing ?? current.framing,
   };
 }
 

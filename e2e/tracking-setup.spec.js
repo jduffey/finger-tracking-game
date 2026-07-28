@@ -157,6 +157,10 @@ test("an active camera stays visible after setup and can be stopped from Home", 
   await expect(
     page.getByRole("button", { name: "Stop camera" }),
   ).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Distance & frame")).toBeVisible();
+  await expect(
+    page.getByText(/No image or landmark history is saved/i),
+  ).toBeVisible();
   await expect.poll(() => getCameraRequestCount(page)).toBe(1);
 
   await page.getByRole("button", { name: "Home" }).click();

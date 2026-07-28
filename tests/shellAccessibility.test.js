@@ -43,6 +43,9 @@ test("tracking setup uses valid progress markup and a single mobile scroller", (
   assert.match(setup, /aria-busy=\{loading\}/);
   assert.match(setup, /aria-label=\{`Live \$\{mirrorCamera \? "mirrored" : "direct"\} camera preview`\}/);
   assert.match(setup, /id="tracking-error-camera-device"/);
+  assert.match(setup, /Distance & frame/);
+  assert.match(setup, /No[\s\S]*image or landmark history is saved/);
+  assert.match(setup, /className="tracking-camera-preview-stack"/);
   assert.match(setup, /<CameraDeviceSelect[\s\S]*?devices=\{devices\}[\s\S]*?onDeviceChange=\{onDeviceChange\}/);
   assert.match(
     setupStyles,

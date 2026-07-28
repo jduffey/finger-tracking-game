@@ -1,12 +1,128 @@
+import { useEffect, useState } from "react";
 import {
   READINESS_STEPS,
+  TRACKING_ENVIRONMENT_STATUSES,
   TRACKING_INTERACTION_TARGET,
+  TRACKING_LIGHTING_UNKNOWN,
   TRACKING_READINESS_STATES,
+  assessTrackingFrameLighting,
   getCameraErrorPresentation,
   getReadinessProgress,
   getTrackingInteractionPresentation,
 } from "../trackingReadiness.js";
 import "../trackingSetup.css";
+
+const LIGHTING_SAMPLE_WIDTH = 24;
+const LIGHTING_SAMPLE_HEIGHT = 18;
+const LIGHTING_SAMPLE_INTERVAL_MS = 1_400;
+
+function useTrackingLightingAssessment(videoRef, enabled) {
+  const [assessment, setAssessment] = useState(TRACKING_LIGHTING_UNKNOWN);
+
+  useEffect(() => {
+    if (!enabled) {
+      setAssessment(TRACKING_LIGHTING_UNKNOWN);
+      return undefined;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = LIGHTING_SAMPLE_WIDTH;
+    canvas.height = LIGHTING_SAMPLE_HEIGHT;
+    const context = canvas.getContext("2d", {
+      alpha: false,
+      willReadFrequently: true,
+    });
+    if (!context) {
+      return undefined;
+    }
+
+    const sample = () => {
+      const video = videoRef?.current;
+      if (
+        !video ||
+        video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+        video.videoWidth <= 0 ||
+        video.videoHeight <= 0
+      ) {
+        return;
+      }
+      try {
+        context.drawImage(
+          video,
+          0,
+          0,
+          LIGHTING_SAMPLE_WIDTH,
+          LIGHTING_SAMPLE_HEIGHT,
+        );
+        const next = assessTrackingFrameLighting(
+          context.getImageData(
+            0,
+            0,
+            LIGHTING_SAMPLE_WIDTH,
+            LIGHTING_SAMPLE_HEIGHT,
+          ).data,
+        );
+        setAssessment((current) =>
+          current.status === next.status ? current : next,
+        );
+      } catch {
+        // A failed advisory sample must never interrupt camera setup.
+      }
+    };
+
+    sample();
+    const intervalId = window.setInterval(
+      sample,
+      LIGHTING_SAMPLE_INTERVAL_MS,
+    );
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [enabled, videoRef]);
+
+  return assessment;
+}
+
+function TrackingEnvironmentStatus({ framing, lighting }) {
+  const items = [
+    { id: "lighting", title: "Light", assessment: lighting },
+    { id: "framing", title: "Distance & frame", assessment: framing },
+  ];
+
+  return (
+    <div
+      aria-atomic="true"
+      aria-live="polite"
+      className="tracking-environment"
+      role="status"
+    >
+      <div className="tracking-environment-items">
+        {items.map(({ id, title, assessment }) => (
+          <div
+            className={`tracking-environment-item ${
+              assessment?.status ?? TRACKING_ENVIRONMENT_STATUSES.UNKNOWN
+            }`}
+            key={id}
+          >
+            <span aria-hidden="true" className="tracking-environment-icon">
+              {assessment?.status === TRACKING_ENVIRONMENT_STATUSES.GOOD
+                ? "✓"
+                : "•"}
+            </span>
+            <span>
+              <small>{title}</small>
+              <strong>{assessment?.label ?? "Checking"}</strong>
+              <span>{assessment?.message}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+      <small className="tracking-environment-privacy">
+        These advisory checks run on disposable samples on this device. No
+        image or landmark history is saved.
+      </small>
+    </div>
+  );
+}
 
 function SetupProgress({ readiness }) {
   const progress = getReadinessProgress(readiness);
@@ -229,6 +345,10 @@ export default function TrackingSetup({
     !loading &&
     !hasError &&
     Boolean(readiness?.cameraReady && readiness?.modelReady);
+  const lightingAssessment = useTrackingLightingAssessment(
+    videoRef,
+    Boolean(readiness?.cameraReady && !hasError),
+  );
 
   return (
     <div className="tracking-setup-page">
@@ -272,41 +392,50 @@ export default function TrackingSetup({
           <h2 className="sr-only" id="tracking-preview-title">
             Camera preview and setup status
           </h2>
-          <div
-            className={`tracking-camera-frame ${ready ? "ready" : ""} ${
-              mirrorCamera ? "mirrored" : "direct"
-            }`}
-          >
-            <video
-              aria-label={`Live ${mirrorCamera ? "mirrored" : "direct"} camera preview`}
-              autoPlay
-              muted
-              playsInline
-              ref={videoRef}
-            />
-            {interactionAvailable ? (
-              <TrackingInteractionOverlay check={interactionCheck} />
-            ) : (
-              <div className="tracking-camera-guide" aria-hidden="true">
-                <span className="tracking-camera-guide-hand">✋</span>
-                <span>Keep your hand inside this area</span>
-              </div>
-            )}
-            {loading ? (
-              <div aria-live="polite" className="tracking-camera-loading" role="status">
-                <span className="tracking-camera-spinner" aria-hidden="true" />
-                <strong>
-                  {status === TRACKING_READINESS_STATES.REQUESTING_CAMERA
-                    ? "Waiting for camera permission…"
-                    : "Preparing hand tracking…"}
-                </strong>
-              </div>
-            ) : null}
-            {ready ? (
-              <div className="tracking-camera-success" role="status">
-                <span aria-hidden="true">✓</span>
-                <strong>Tracking ready</strong>
-              </div>
+          <div className="tracking-camera-preview-stack">
+            <div
+              className={`tracking-camera-frame ${ready ? "ready" : ""} ${
+                mirrorCamera ? "mirrored" : "direct"
+              }`}
+            >
+              <video
+                aria-label={`Live ${mirrorCamera ? "mirrored" : "direct"} camera preview`}
+                autoPlay
+                muted
+                playsInline
+                ref={videoRef}
+              />
+              {interactionAvailable ? (
+                <TrackingInteractionOverlay check={interactionCheck} />
+              ) : (
+                <div className="tracking-camera-guide" aria-hidden="true">
+                  <span className="tracking-camera-guide-hand">✋</span>
+                  <span>Keep your hand inside this area</span>
+                </div>
+              )}
+              {loading ? (
+                <div aria-live="polite" className="tracking-camera-loading" role="status">
+                  <span className="tracking-camera-spinner" aria-hidden="true" />
+                  <strong>
+                    {status === TRACKING_READINESS_STATES.REQUESTING_CAMERA
+                      ? "Waiting for camera permission…"
+                      : "Preparing hand tracking…"}
+                  </strong>
+                </div>
+              ) : null}
+              {ready ? (
+                <div className="tracking-camera-success" role="status">
+                  <span aria-hidden="true">✓</span>
+                  <strong>Tracking ready</strong>
+                </div>
+              ) : null}
+            </div>
+
+            {readiness?.cameraReady && !hasError ? (
+              <TrackingEnvironmentStatus
+                framing={interactionCheck?.framing}
+                lighting={lightingAssessment}
+              />
             ) : null}
           </div>
 
