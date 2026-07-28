@@ -17,6 +17,7 @@ test("local-data cleanup owns every durable product save family", () => {
       "spatial_gesture_memory_stats_v1",
       "motionArcade.creativeGallery",
       "motionArcade.gameProgression",
+      "motionArcade.productExperienceMetrics.v1",
       "motionArcade.arcadeRun",
       "motion-arcade.motion-visualizer.v1",
       "motion_arcade_gesture_analytics_v1",

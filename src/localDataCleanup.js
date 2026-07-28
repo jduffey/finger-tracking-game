@@ -6,6 +6,7 @@ export const LOCAL_PRODUCT_STORAGE_KEYS = Object.freeze([
   "spatial_gesture_memory_stats_v1",
   "motionArcade.creativeGallery",
   "motionArcade.gameProgression",
+  "motionArcade.productExperienceMetrics.v1",
   "motionArcade.arcadeRun",
   "motion-arcade.motion-visualizer.v1",
   "motion_arcade_gesture_analytics_v1",
