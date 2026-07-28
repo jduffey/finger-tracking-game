@@ -35,7 +35,7 @@ test("catalog metadata and definitions are stable, unique, and player-facing", (
   const ids = ACHIEVEMENT_CATALOG.map(({ id }) => id);
   const definitionIds = ACHIEVEMENT_DEFINITIONS.map(({ id }) => id);
 
-  assert.equal(ACHIEVEMENT_CATALOG.length, 9);
+  assert.equal(ACHIEVEMENT_CATALOG.length, 10);
   assert.equal(new Set(ids).size, ids.length);
   assert.deepEqual(definitionIds, ids);
   assert.ok(ACHIEVEMENT_CATALOG.every((medal) => Object.isFrozen(medal)));
@@ -151,6 +151,13 @@ test("first victory and Finger Pong win streak unlock independently", () => {
 test("flagship mastery medals evaluate their normalized skill metrics", () => {
   const cases = [
     {
+      expectedId: "arcade-run-finisher",
+      modeId: "arcade-run",
+      outcome: "completed",
+      score: 2_400,
+      metrics: { gamesCompleted: 3 },
+    },
+    {
       expectedId: "sky-patrol-ace",
       modeId: "sky-patrol",
       outcome: "lost",
@@ -264,8 +271,8 @@ test("Home and result helpers merge metadata with durable unlock records", () =>
 
   const home = getHomeAchievementSummary(progress, { limit: 2 });
   assert.equal(home.unlockedCount, 3);
-  assert.equal(home.totalCount, 9);
-  assert.equal(home.completionPercent, 33);
+  assert.equal(home.totalCount, 10);
+  assert.equal(home.completionPercent, 30);
   assert.equal(home.recent[0].id, "first-win");
   assert.equal(home.recent.length, 2);
   assert.equal(home.next.id, "five-sessions");

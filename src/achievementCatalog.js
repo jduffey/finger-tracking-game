@@ -133,6 +133,31 @@ const entries = [
   ),
   createCatalogEntry(
     {
+      id: "arcade-run-finisher",
+      title: "Circuit Finisher",
+      description: "Complete three games in one Arcade Run.",
+      requirement: "Complete 3 games in a run",
+      icon: "circuit",
+      tier: ACHIEVEMENT_TIERS.SILVER,
+      category: ACHIEVEMENT_CATEGORIES.MASTERY,
+      modeId: "arcade-run",
+      modeLabel: "Arcade Run",
+      progress: {
+        source: "bestMetric",
+        field: "gamesCompleted",
+        target: 3,
+        unit: "games",
+      },
+    },
+    createMetricAchievement({
+      id: "arcade-run-finisher",
+      modeId: "arcade-run",
+      metricId: "gamesCompleted",
+      threshold: 3,
+    }),
+  ),
+  createCatalogEntry(
+    {
       id: "sky-patrol-ace",
       title: "Sky Ace",
       description: "Destroy twelve targets in one Sky Patrol sortie.",
