@@ -2153,6 +2153,7 @@ export default function App() {
       ? "ready"
       : [
             TRACKING_READINESS_STATES.DENIED,
+            TRACKING_READINESS_STATES.DISMISSED,
             TRACKING_READINESS_STATES.NO_DEVICE,
             TRACKING_READINESS_STATES.DEVICE_BUSY,
             TRACKING_READINESS_STATES.UNSUPPORTED,
@@ -5507,8 +5508,27 @@ export default function App() {
               ? error.message
               : "Camera access failed. Check browser permissions.";
           appLog.error("Camera initialization failed", { reason, error });
+          let permissionState = null;
+          if (
+            (error?.name === "NotAllowedError" ||
+              error?.name === "PermissionDeniedError") &&
+            navigator.permissions?.query
+          ) {
+            try {
+              const permission = await navigator.permissions.query({
+                name: "camera",
+              });
+              permissionState = permission?.state ?? null;
+            } catch {
+              // Some browsers expose Permissions API without camera queries.
+            }
+          }
           setTrackingReadiness((current) =>
-            reduceTrackingReadiness(current, { type: "CAMERA_ERROR", error }),
+            reduceTrackingReadiness(current, {
+              type: "CAMERA_ERROR",
+              error,
+              permissionState,
+            }),
           );
           setCameraError(
             reason === "camera_init"

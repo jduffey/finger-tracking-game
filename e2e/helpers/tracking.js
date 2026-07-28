@@ -1,4 +1,9 @@
 export const CAMERA_FAILURE_SCENARIOS = Object.freeze({
+  dismissed: Object.freeze({
+    errorName: "NotAllowedError",
+    errorMessage: "The camera prompt was dismissed by the test player.",
+    permissionState: "prompt",
+  }),
   denied: Object.freeze({
     errorName: "NotAllowedError",
     errorMessage: "Camera permission was denied by the test browser.",
@@ -33,10 +38,11 @@ export async function installCameraFailureStub(
     errorName,
     errorMessage,
     deviceLabels = ["Built-in test camera"],
+    permissionState,
   },
 ) {
   await page.addInitScript(
-    ({ devices, failureName, failureMessage }) => {
+    ({ devices, failureName, failureMessage, permission }) => {
       const state = {
         mediaRequestCount: 0,
       };
@@ -58,11 +64,29 @@ export async function installCameraFailureStub(
         configurable: true,
         value: mediaDevices,
       });
+      if (permission) {
+        Object.defineProperty(navigator, "permissions", {
+          configurable: true,
+          value: {
+            async query({ name }) {
+              if (name !== "camera") {
+                throw new TypeError("Unsupported synthetic permission.");
+              }
+              return {
+                addEventListener() {},
+                removeEventListener() {},
+                state: permission,
+              };
+            },
+          },
+        });
+      }
     },
     {
       devices: createFakeVideoDevices(deviceLabels),
       failureName: errorName,
       failureMessage: errorMessage,
+      permission: permissionState,
     },
   );
 }

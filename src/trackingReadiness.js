@@ -7,6 +7,7 @@ export const TRACKING_READINESS_STATES = Object.freeze({
   READY: "ready",
   INTERRUPTED: "interrupted",
   DENIED: "denied",
+  DISMISSED: "dismissed",
   NO_DEVICE: "no-device",
   DEVICE_BUSY: "device-busy",
   UNSUPPORTED: "unsupported",
@@ -343,11 +344,14 @@ export function getTrackingInteractionPresentation(check) {
   };
 }
 
-export function classifyCameraError(error) {
+export function classifyCameraError(error, { permissionState } = {}) {
   const name = error?.name ?? "";
   const message = `${error?.message ?? ""}`.toLocaleLowerCase();
 
   if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+    if (permissionState === "prompt") {
+      return TRACKING_READINESS_STATES.DISMISSED;
+    }
     return TRACKING_READINESS_STATES.DENIED;
   }
   if (name === "NotFoundError" || name === "DevicesNotFoundError") {
@@ -505,7 +509,9 @@ export function reduceTrackingReadiness(state, event) {
       return { ...next, activeStep: getActiveStep(next) };
     }
     case "CAMERA_ERROR": {
-      const status = classifyCameraError(event.error);
+      const status = classifyCameraError(event.error, {
+        permissionState: event.permissionState,
+      });
       return {
         ...current,
         status,
@@ -563,6 +569,13 @@ export function getReadinessProgress(state) {
 
 export function getCameraErrorPresentation(status) {
   const presentations = {
+    [TRACKING_READINESS_STATES.DISMISSED]: {
+      title: "Camera request was dismissed",
+      message:
+        "Nothing was changed. Ask again when you are ready, or keep exploring with mouse and touch.",
+      primaryAction: "Ask again",
+      secondaryAction: "Continue with mouse or touch",
+    },
     [TRACKING_READINESS_STATES.DENIED]: {
       title: "Camera access is blocked",
       message:

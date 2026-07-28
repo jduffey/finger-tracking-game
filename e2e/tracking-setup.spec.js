@@ -14,6 +14,13 @@ import {
 
 const CAMERA_ERROR_CASES = [
   {
+    id: "permission dismissal",
+    scenario: CAMERA_FAILURE_SCENARIOS.dismissed,
+    title: "Camera request was dismissed",
+    primaryAction: "Ask again",
+    secondaryAction: "Continue with mouse or touch",
+  },
+  {
     id: "permission denial",
     scenario: CAMERA_FAILURE_SCENARIOS.denied,
     title: "Camera access is blocked",

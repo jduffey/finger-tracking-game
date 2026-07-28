@@ -41,6 +41,13 @@ test("classifies common camera failures into actionable states", () => {
     TRACKING_READINESS_STATES.DENIED,
   );
   assert.equal(
+    classifyCameraError(
+      { name: "NotAllowedError" },
+      { permissionState: "prompt" },
+    ),
+    TRACKING_READINESS_STATES.DISMISSED,
+  );
+  assert.equal(
     classifyCameraError({ name: "NotFoundError" }),
     TRACKING_READINESS_STATES.NO_DEVICE,
   );
