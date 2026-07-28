@@ -64,8 +64,12 @@ test("the package exposes one local and CI quality command", () => {
   assert.equal(packageJson.scripts["test:ci"], "node --test --test-reporter=spec");
   assert.equal(packageJson.scripts["test:e2e"], "playwright test");
   assert.equal(
+    packageJson.scripts["check:mode-registry"],
+    "node scripts/validate-mode-registry.js",
+  );
+  assert.equal(
     packageJson.scripts.check,
-    "npm run test:ci && npm run build && npm run check:bundle-budget && npm run audit && npm run test:e2e",
+    "npm run check:mode-registry && npm run test:ci && npm run build && npm run check:bundle-budget && npm run audit && npm run test:e2e",
   );
   assert.equal(
     packageJson.scripts["check:bundle-budget"],

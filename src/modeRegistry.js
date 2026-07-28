@@ -22,6 +22,36 @@ export const TRACKING_PROFILES = Object.freeze({
   HANDS_AND_POSE: "hands-and-pose",
 });
 
+export const PLAY_START_KINDS = Object.freeze({
+  AUTOMATIC: "automatic",
+  EXPLICIT: "explicit",
+});
+
+export const PLAY_FALLBACK_KINDS = Object.freeze({
+  POINTER: "pointer",
+});
+
+export const PLAY_PERSISTENCE_KINDS = Object.freeze({
+  PROGRESSION: "progression",
+  RESUMABLE_RUN: "resumable-run",
+});
+
+export const PLAY_RELEASE_BAR = Object.freeze({
+  maturities: Object.freeze([
+    MODE_MATURITY.FLAGSHIP,
+    MODE_MATURITY.SUPPORTED,
+  ]),
+  requiredBooleanCapabilities: Object.freeze([
+    "pause",
+    "results",
+    "retry",
+    "home",
+  ]),
+  startKinds: Object.freeze(Object.values(PLAY_START_KINDS)),
+  fallbackKinds: Object.freeze(Object.values(PLAY_FALLBACK_KINDS)),
+  persistenceKinds: Object.freeze(Object.values(PLAY_PERSISTENCE_KINDS)),
+});
+
 export const APP_PHASES = Object.freeze({
   HOME: "HOME",
   TRACKING_SETUP: "TRACKING_SETUP",
@@ -44,6 +74,21 @@ export const APP_PHASES = Object.freeze({
   GAME: "GAME",
 });
 
+const sharedAutomaticPlayReleaseCapabilities = {
+  start: PLAY_START_KINDS.AUTOMATIC,
+  pause: true,
+  results: true,
+  retry: true,
+  home: true,
+  fallback: PLAY_FALLBACK_KINDS.POINTER,
+  persistence: PLAY_PERSISTENCE_KINDS.PROGRESSION,
+};
+
+const sharedExplicitPlayReleaseCapabilities = {
+  ...sharedAutomaticPlayReleaseCapabilities,
+  start: PLAY_START_KINDS.EXPLICIT,
+};
+
 const sharedFullscreenGame = {
   phase: APP_PHASES.FULLSCREEN_CAMERA,
   entryKind: "fullscreen-mode",
@@ -52,6 +97,7 @@ const sharedFullscreenGame = {
   supportsPointerFallback: true,
   supportsPause: true,
   supportsResults: true,
+  releaseCapabilities: sharedAutomaticPlayReleaseCapabilities,
 };
 
 const catalog = [
@@ -99,8 +145,13 @@ const catalog = [
     players: 1,
     seatedFriendly: true,
     supportsPointerFallback: true,
+    supportsPause: true,
     supportsResults: true,
     dailyChallenge: true,
+    releaseCapabilities: {
+      ...sharedExplicitPlayReleaseCapabilities,
+      persistence: PLAY_PERSISTENCE_KINDS.RESUMABLE_RUN,
+    },
   },
   {
     id: "whack-a-mole",
@@ -122,6 +173,7 @@ const catalog = [
     supportsPause: true,
     supportsResults: true,
     dailyChallenge: true,
+    releaseCapabilities: sharedExplicitPlayReleaseCapabilities,
   },
   {
     id: "sky-patrol",
@@ -214,6 +266,7 @@ const catalog = [
     supportsPointerFallback: true,
     supportsPause: true,
     supportsResults: true,
+    releaseCapabilities: sharedExplicitPlayReleaseCapabilities,
   },
   {
     id: "hand-bounce",
@@ -433,11 +486,12 @@ const catalog = [
     path: "/labs/star-flight",
     area: PRODUCT_AREAS.LABS,
     maturity: MODE_MATURITY.PREVIEW,
-    summary: "A free-flight steering and depth-control prototype.",
+    summary: "Hand-steer through scored gate courses or roam in Free Flight.",
+    objective: "Thread each gate, build a precision streak, and finish the course on time.",
     phase: APP_PHASES.FLIGHT,
     entryKind: "phase",
     trackingProfile: TRACKING_PROFILES.ONE_HAND,
-    controlHint: "Move to steer",
+    controlHint: "Move to steer · Pinch to boost",
     typicalMinutes: 5,
     players: 1,
     seatedFriendly: true,
@@ -505,6 +559,7 @@ const catalog = [
     typicalMinutes: 5,
     players: 1,
     seatedFriendly: false,
+    supportsPointerFallback: false,
   },
   {
     id: "forest-discovery",
@@ -536,6 +591,7 @@ const catalog = [
     typicalMinutes: 5,
     players: 1,
     seatedFriendly: true,
+    supportsPointerFallback: false,
   },
   {
     id: "spatial-investigation",
@@ -551,6 +607,7 @@ const catalog = [
     typicalMinutes: 5,
     players: 1,
     seatedFriendly: true,
+    supportsPointerFallback: false,
   },
   {
     id: "gesture-analytics",
@@ -573,6 +630,9 @@ function freezeMode(mode) {
   return Object.freeze({
     ...mode,
     variants: mode.variants ? Object.freeze([...mode.variants]) : undefined,
+    releaseCapabilities: mode.releaseCapabilities
+      ? Object.freeze({ ...mode.releaseCapabilities })
+      : undefined,
   });
 }
 
@@ -631,31 +691,293 @@ export function getFeaturedModes() {
   return MODE_REGISTRY.filter((mode) => mode.featured);
 }
 
-export function validateModeRegistry(modes = MODE_REGISTRY) {
-  const errors = [];
-  const ids = new Set();
-  const paths = new Set();
-  const fullscreenIds = new Set();
+export function isPlayReleaseCandidate(mode) {
+  return Boolean(
+    mode &&
+      mode.area === PRODUCT_AREAS.PLAY &&
+      PLAY_RELEASE_BAR.maturities.includes(mode.maturity),
+  );
+}
 
-  for (const mode of modes) {
-    if (!mode.id || !mode.label || !mode.path || !mode.area || !mode.maturity) {
-      errors.push(`Mode ${mode.id || "<unknown>"} is missing required metadata.`);
-    }
-    if (ids.has(mode.id)) {
-      errors.push(`Duplicate mode id: ${mode.id}`);
-    }
-    if (paths.has(mode.path)) {
-      errors.push(`Duplicate mode path: ${mode.path}`);
-    }
-    if (mode.fullscreenMode && fullscreenIds.has(mode.fullscreenMode)) {
-      errors.push(`Duplicate fullscreen mode: ${mode.fullscreenMode}`);
-    }
-    ids.add(mode.id);
-    paths.add(mode.path);
-    if (mode.fullscreenMode) {
-      fullscreenIds.add(mode.fullscreenMode);
-    }
+export function validateModeRegistry(modes = MODE_REGISTRY) {
+  if (!Array.isArray(modes)) {
+    return ["Mode registry must be an array."];
   }
 
+  const errors = [];
+  const idOwners = new Map();
+  const routeOwners = new Map();
+  const fullscreenOwners = new Map();
+  const validAreas = new Set(Object.values(PRODUCT_AREAS));
+  const validMaturities = new Set(Object.values(MODE_MATURITY));
+  const validTrackingProfiles = new Set(Object.values(TRACKING_PROFILES));
+  const validPhases = new Set(Object.values(APP_PHASES));
+  const validEntryKinds = new Set([
+    "fullscreen-mode",
+    "home",
+    "page",
+    "phase",
+  ]);
+  const libraryAreas = new Set([
+    PRODUCT_AREAS.PLAY,
+    PRODUCT_AREAS.CREATE,
+    PRODUCT_AREAS.LABS,
+  ]);
+  const booleanMetadataFields = [
+    "dailyChallenge",
+    "featured",
+    "hiddenFromLibrary",
+    "seatedFriendly",
+    "supportsPause",
+    "supportsPointerFallback",
+    "supportsResults",
+  ];
+
+  const registerRoute = (route, kind, modeId, modeIndex) => {
+    const previous = routeOwners.get(route);
+    if (!previous) {
+      routeOwners.set(route, { kind, modeId, modeIndex });
+      return;
+    }
+    if (kind === "path" && previous.kind === "path") {
+      errors.push(`Duplicate mode path: ${route}`);
+      return;
+    }
+    if (kind === "href" && previous.kind === "href") {
+      errors.push(`Duplicate mode href: ${route}`);
+      return;
+    }
+    errors.push(
+      `Route collision: ${route} is used as ${previous.kind} by ${previous.modeId} and as ${kind} by ${modeId}.`,
+    );
+  };
+
+  modes.forEach((mode, modeIndex) => {
+    if (!mode || typeof mode !== "object" || Array.isArray(mode)) {
+      errors.push(`Mode at index ${modeIndex} must be an object.`);
+      return;
+    }
+
+    const modeId = isNonEmptyString(mode.id) ? mode.id : "<unknown>";
+    const requiredFields = [
+      "id",
+      "label",
+      "path",
+      "area",
+      "maturity",
+      "summary",
+      "entryKind",
+      "trackingProfile",
+    ];
+    const missingFields = requiredFields.filter(
+      (field) => !isNonEmptyString(mode[field]),
+    );
+    if (missingFields.length > 0) {
+      errors.push(
+        `Mode ${modeId} is missing required metadata: ${missingFields.join(", ")}.`,
+      );
+    }
+
+    if (isNonEmptyString(mode.id)) {
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(mode.id)) {
+        errors.push(`Mode ${mode.id} has an invalid id.`);
+      }
+      if (idOwners.has(mode.id)) {
+        errors.push(`Duplicate mode id: ${mode.id}`);
+      } else {
+        idOwners.set(mode.id, modeIndex);
+      }
+    }
+
+    if (isNonEmptyString(mode.path)) {
+      if (!isCanonicalProductRoute(mode.path)) {
+        errors.push(`Mode ${modeId} has an invalid path: ${mode.path}`);
+      }
+      registerRoute(mode.path, "path", modeId, modeIndex);
+    }
+    if (mode.href !== undefined) {
+      if (!isNonEmptyString(mode.href) || !isCanonicalProductRoute(mode.href, {
+        allowFileExtension: true,
+      })) {
+        errors.push(`Mode ${modeId} has an invalid href.`);
+      } else {
+        registerRoute(mode.href, "href", modeId, modeIndex);
+      }
+    }
+
+    if (isNonEmptyString(mode.area) && !validAreas.has(mode.area)) {
+      errors.push(`Mode ${modeId} has an invalid area: ${mode.area}`);
+    }
+    if (
+      isNonEmptyString(mode.maturity) &&
+      !validMaturities.has(mode.maturity)
+    ) {
+      errors.push(`Mode ${modeId} has an invalid maturity: ${mode.maturity}`);
+    }
+    if (
+      isNonEmptyString(mode.trackingProfile) &&
+      !validTrackingProfiles.has(mode.trackingProfile)
+    ) {
+      errors.push(
+        `Mode ${modeId} has an invalid tracking profile: ${mode.trackingProfile}`,
+      );
+    }
+    if (
+      isNonEmptyString(mode.entryKind) &&
+      !validEntryKinds.has(mode.entryKind)
+    ) {
+      errors.push(`Mode ${modeId} has an invalid entry kind: ${mode.entryKind}`);
+    }
+
+    if (mode.entryKind === "page") {
+      if (!isNonEmptyString(mode.href)) {
+        errors.push(`Page mode ${modeId} must declare an href.`);
+      }
+    } else if (
+      isNonEmptyString(mode.entryKind) &&
+      (!isNonEmptyString(mode.phase) || !validPhases.has(mode.phase))
+    ) {
+      errors.push(`Mode ${modeId} must declare a valid app phase.`);
+    }
+    if (
+      mode.entryKind === "fullscreen-mode" &&
+      !isNonEmptyString(mode.fullscreenMode)
+    ) {
+      errors.push(`Fullscreen mode ${modeId} must declare fullscreenMode.`);
+    }
+
+    if (mode.variants !== undefined && !Array.isArray(mode.variants)) {
+      errors.push(`Mode ${modeId} variants must be an array.`);
+    }
+    const seenVariants = new Set();
+    for (const variant of Array.isArray(mode.variants) ? mode.variants : []) {
+      if (!isNonEmptyString(variant)) {
+        errors.push(`Mode ${modeId} has an invalid fullscreen variant.`);
+        continue;
+      }
+      if (seenVariants.has(variant)) {
+        errors.push(`Mode ${modeId} repeats fullscreen variant: ${variant}`);
+        continue;
+      }
+      seenVariants.add(variant);
+    }
+
+    const fullscreenIds = [
+      isNonEmptyString(mode.fullscreenMode) ? mode.fullscreenMode : null,
+      ...(Array.isArray(mode.variants) ? mode.variants : []),
+    ].filter(isNonEmptyString);
+    for (const fullscreenId of fullscreenIds) {
+      const previousOwner = fullscreenOwners.get(fullscreenId);
+      if (previousOwner !== undefined && previousOwner !== modeIndex) {
+        errors.push(`Duplicate fullscreen mode: ${fullscreenId}`);
+      } else {
+        fullscreenOwners.set(fullscreenId, modeIndex);
+      }
+    }
+
+    for (const field of booleanMetadataFields) {
+      if (mode[field] !== undefined && typeof mode[field] !== "boolean") {
+        errors.push(`Mode ${modeId} metadata ${field} must be boolean.`);
+      }
+    }
+
+    if (libraryAreas.has(mode.area)) {
+      if (!isNonEmptyString(mode.controlHint)) {
+        errors.push(`Library mode ${modeId} must declare a control hint.`);
+      }
+      if (!Number.isInteger(mode.players) || mode.players < 1) {
+        errors.push(`Library mode ${modeId} must declare a positive player count.`);
+      }
+      if (!Number.isFinite(mode.typicalMinutes) || mode.typicalMinutes <= 0) {
+        errors.push(`Library mode ${modeId} must declare a positive duration.`);
+      }
+      if (typeof mode.seatedFriendly !== "boolean") {
+        errors.push(`Library mode ${modeId} must declare seated support.`);
+      }
+      if (
+        mode.maturity !== MODE_MATURITY.INTERNAL &&
+        typeof mode.supportsPointerFallback !== "boolean"
+      ) {
+        errors.push(`Public mode ${modeId} must declare pointer fallback support.`);
+      }
+      if (mode.difficulty !== undefined && !isNonEmptyString(mode.difficulty)) {
+        errors.push(`Library mode ${modeId} has invalid difficulty metadata.`);
+      }
+    }
+
+    if (mode.dailyChallenge === true && mode.area !== PRODUCT_AREAS.PLAY) {
+      errors.push(`Daily challenge mode ${modeId} must belong to Play.`);
+    }
+
+    if (isPlayReleaseCandidate(mode)) {
+      validatePlayReleaseCapabilities(mode, errors);
+    }
+  });
+
   return errors;
+}
+
+function validatePlayReleaseCapabilities(mode, errors) {
+  const modeId = mode.id || "<unknown>";
+  if (!isNonEmptyString(mode.objective)) {
+    errors.push(`Play release mode ${modeId} must declare an objective.`);
+  }
+
+  const capabilities = mode.releaseCapabilities;
+  if (
+    !capabilities ||
+    typeof capabilities !== "object" ||
+    Array.isArray(capabilities)
+  ) {
+    errors.push(`Play release mode ${modeId} must declare releaseCapabilities.`);
+    return;
+  }
+
+  if (!PLAY_RELEASE_BAR.startKinds.includes(capabilities.start)) {
+    errors.push(`Play release mode ${modeId} must declare a valid start capability.`);
+  }
+  for (const capability of PLAY_RELEASE_BAR.requiredBooleanCapabilities) {
+    if (capabilities[capability] !== true) {
+      errors.push(
+        `Play release mode ${modeId} must support ${capability}.`,
+      );
+    }
+  }
+  if (!PLAY_RELEASE_BAR.fallbackKinds.includes(capabilities.fallback)) {
+    errors.push(`Play release mode ${modeId} must declare a valid fallback.`);
+  }
+  if (!PLAY_RELEASE_BAR.persistenceKinds.includes(capabilities.persistence)) {
+    errors.push(`Play release mode ${modeId} must declare valid persistence.`);
+  }
+  if (mode.supportsPointerFallback !== true) {
+    errors.push(`Play release mode ${modeId} must expose pointer fallback.`);
+  }
+  if (mode.supportsPause !== true) {
+    errors.push(`Play release mode ${modeId} must expose pause support.`);
+  }
+  if (mode.supportsResults !== true) {
+    errors.push(`Play release mode ${modeId} must expose result support.`);
+  }
+}
+
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isCanonicalProductRoute(route, { allowFileExtension = false } = {}) {
+  if (
+    !isNonEmptyString(route) ||
+    !route.startsWith("/") ||
+    route.includes("//") ||
+    /[?#\s]/.test(route)
+  ) {
+    return false;
+  }
+  if (route !== "/" && route.endsWith("/")) {
+    return false;
+  }
+  if (!allowFileExtension && route.split("/").at(-1)?.includes(".")) {
+    return false;
+  }
+  return true;
 }

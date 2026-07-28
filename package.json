@@ -15,7 +15,8 @@
     "test:e2e": "playwright test",
     "audit": "npm audit --audit-level=high",
     "check:bundle-budget": "node scripts/check-bundle-budget.js",
-    "check": "npm run test:ci && npm run build && npm run check:bundle-budget && npm run audit && npm run test:e2e",
+    "check:mode-registry": "node scripts/validate-mode-registry.js",
+    "check": "npm run check:mode-registry && npm run test:ci && npm run build && npm run check:bundle-budget && npm run audit && npm run test:e2e",
     "symphony": "bash scripts/run-symphony-local.sh",
     "preview": "vite preview"
   },
