@@ -38,3 +38,37 @@ test("sound and drum controls feed the Web Audio scheduling path", () => {
   assert.match(page, /getDrumMixOptions: \(\) => \(\{/);
   assert.match(page, /getJamDrumMixScale\(instrument, volumePercent, mutedInstruments\)/);
 });
+
+test("Jam Studio keeps the wheel primary and collapses ready setup into a reopenable status", () => {
+  const page = readSource("src/CircleOfFifthsPage.jsx");
+  const styles = readSource("src/circleOfFifthsPage.css");
+
+  assert.match(page, /const \[setupExpanded, setSetupExpanded\] = useState\(true\)/);
+  assert.match(
+    page,
+    /setSessionState\("active"\);[\s\S]*?setSetupExpanded\(false\);/,
+  );
+  assert.match(page, /data-collapsed=\{setupCollapsed\}/);
+  assert.match(page, /className="circle-fifths-session-summary"/);
+  assert.match(page, /aria-controls="circle-fifths-setup-content"/);
+  assert.match(page, /<summary>Tracking details<\/summary>/);
+  assert.match(page, /ref=\{wheelRef\}/);
+  assert.match(page, /getWheelPointFromClientPoint\(/);
+
+  assert.match(
+    styles,
+    /grid-template-areas:\s*"back wheel chord"\s*"setup wheel controls";/,
+  );
+  assert.match(
+    styles,
+    /\.circle-fifths-page \.circle-fifths-wheel \{[\s\S]*?aspect-ratio: 1;[\s\S]*?position: relative;/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 1080px\)[\s\S]*?body \{[\s\S]*?overflow-y: auto;[\s\S]*?\.circle-fifths-page,[\s\S]*?height: auto;[\s\S]*?overflow: visible;/,
+  );
+  assert.match(
+    styles,
+    /\.circle-fifths-panel-bottom-right\[data-mobile-open="true"\] \{[\s\S]*?display: block;/,
+  );
+});

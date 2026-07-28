@@ -64,6 +64,8 @@ const DEFAULT_APP_POINTER_ALPHA = 0.35;
 const AUTOSTART_SESSION_KEY = "circle-of-fifths-autostart";
 const DEFAULT_DRUM_BPM = 112;
 const LOOP_NAME_MAX_LENGTH = 48;
+const STACKED_LAYOUT_MAX_WIDTH = 1080;
+const WHEEL_VIEWBOX_SIZE = 1000;
 const LOOP_DRUM_LABELS = {
   kick: "Kick",
   snare: "Snare",
@@ -73,6 +75,7 @@ const LOOP_DRUM_LABELS = {
 export default function CircleOfFifthsPage() {
   const preferences = useMemo(() => loadUserPreferences(), []);
   const videoRef = useRef(null);
+  const wheelRef = useRef(null);
   const detectorRef = useRef(null);
   const sessionControllerRef = useRef(null);
   const sessionOperationRef = useRef(0);
@@ -130,6 +133,7 @@ export default function CircleOfFifthsPage() {
   const [selectedBeatId, setSelectedBeatId] = useState(DRUM_BEAT_PRESETS[0]?.id ?? "motorik");
   const [drumBpm, setDrumBpm] = useState(DEFAULT_DRUM_BPM);
   const [mobilePanel, setMobilePanel] = useState("setup");
+  const [setupExpanded, setSetupExpanded] = useState(true);
   const [loopDraft, setLoopDraft] = useState(null);
   const [savedLoop, setSavedLoop] = useState(() => loadSavedJamLoop().loop);
   const [loopName, setLoopName] = useState("Untitled loop");
@@ -155,8 +159,8 @@ export default function CircleOfFifthsPage() {
   });
 
   const wheelLayout = useMemo(
-    () => createCircleOfFifthsLayout(viewport.width, viewport.height),
-    [viewport.height, viewport.width],
+    () => createCircleOfFifthsLayout(WHEEL_VIEWBOX_SIZE, WHEEL_VIEWBOX_SIZE),
+    [],
   );
   const hoveredSegment = useMemo(
     () => CIRCLE_OF_FIFTHS_SEGMENTS.find((segment) => segment.id === hoveredSegmentId) ?? null,
@@ -206,8 +210,11 @@ export default function CircleOfFifthsPage() {
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.key === "Escape" && viewport.width <= 900) {
+      if (event.key === "Escape" && viewport.width <= STACKED_LAYOUT_MAX_WIDTH) {
         setMobilePanel(null);
+        if (sessionState === "active") {
+          setSetupExpanded(false);
+        }
       }
     };
 
@@ -215,7 +222,7 @@ export default function CircleOfFifthsPage() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [viewport.width]);
+  }, [sessionState, viewport.width]);
 
   useEffect(() => {
     const handleDrumShortcut = (event) => {
@@ -344,7 +351,12 @@ export default function CircleOfFifthsPage() {
         );
         pinchActiveRef.current = isPinching;
 
-        const nextSegment = getSegmentAtPoint(nextPoint, wheelLayout);
+        const wheelPoint = getWheelPointFromClientPoint(
+          nextPoint,
+          wheelRef.current,
+          wheelLayout,
+        );
+        const nextSegment = getSegmentAtPoint(wheelPoint, wheelLayout);
         const playableSegment = syncInteractiveChord(nextSegment);
         const keyLockedOut = Boolean(nextSegment && !playableSegment);
 
@@ -406,6 +418,10 @@ export default function CircleOfFifthsPage() {
         setErrorMessage(error instanceof Error ? error.message : "Tracking failed.");
         setStatusMessage("Tracking paused because a frame failed.");
         setSessionState("error");
+        setSetupExpanded(true);
+        if (viewport.width <= STACKED_LAYOUT_MAX_WIDTH) {
+          setMobilePanel("setup");
+        }
       } finally {
         processingFrameRef.current = false;
         if (!cancelled) {
@@ -489,6 +505,7 @@ export default function CircleOfFifthsPage() {
     const operationId = sessionOperationRef.current + 1;
     sessionOperationRef.current = operationId;
     setSessionState("starting");
+    setSetupExpanded(true);
     setErrorMessage("");
     setStatusMessage("Requesting camera access and warming up the hand tracker...");
     stopLoopPlayback();
@@ -527,7 +544,8 @@ export default function CircleOfFifthsPage() {
 
       setSessionState("active");
       setStatusMessage("Circle ready. Move one index finger into the wheel to play.");
-      if (viewport.width <= 900) {
+      setSetupExpanded(false);
+      if (viewport.width <= STACKED_LAYOUT_MAX_WIDTH) {
         setMobilePanel(null);
       }
       pageLog.info("Circle of fifths session started", { source });
@@ -558,6 +576,10 @@ export default function CircleOfFifthsPage() {
           : "The session could not start.",
       );
       setSessionState("error");
+      setSetupExpanded(true);
+      if (viewport.width <= STACKED_LAYOUT_MAX_WIDTH) {
+        setMobilePanel("setup");
+      }
       if (preserveIntentOnFailure) {
         persistAutostartIntent();
       }
@@ -710,9 +732,7 @@ export default function CircleOfFifthsPage() {
     const audioContext = audioContextRef.current;
     if (sessionState !== "active" || !audioContext || audioContext.state !== "running") {
       setLoopStatus("Enable Camera + Audio before recording a loop.");
-      if (viewport.width <= 900) {
-        setMobilePanel("setup");
-      }
+      openSetupPanel();
       return;
     }
 
@@ -1047,9 +1067,7 @@ export default function CircleOfFifthsPage() {
       !JAM_LOOP_DRUM_INSTRUMENTS.includes(instrument)
     ) {
       setLoopStatus("Enable Camera + Audio before playing the drum pads.");
-      if (viewport.width <= 900) {
-        setMobilePanel("setup");
-      }
+      openSetupPanel();
       return;
     }
 
@@ -1075,9 +1093,7 @@ export default function CircleOfFifthsPage() {
     const audioContext = audioContextRef.current;
     if (!segment || !audioContext || audioContext.state !== "running") {
       setStatusMessage("Enable the camera and audio before playing a chord.");
-      if (viewport.width <= 900) {
-        setMobilePanel("setup");
-      }
+      openSetupPanel();
       return;
     }
 
@@ -1171,6 +1187,29 @@ export default function CircleOfFifthsPage() {
     }));
   }
 
+  function openSetupPanel() {
+    setSetupExpanded(true);
+    if (viewport.width <= STACKED_LAYOUT_MAX_WIDTH) {
+      setMobilePanel("setup");
+    }
+  }
+
+  function closeSetupPanel() {
+    if (sessionState === "active") {
+      setSetupExpanded(false);
+    }
+    setMobilePanel(null);
+  }
+
+  function toggleSetupPanel() {
+    if (setupExpanded && mobilePanel === "setup") {
+      closeSetupPanel();
+      return;
+    }
+    openSetupPanel();
+  }
+
+  const setupCollapsed = sessionState === "active" && !setupExpanded;
   const sessionAnnouncement =
     sessionState === "active"
       ? "Camera, hand tracking, and audio are ready."
@@ -1181,7 +1220,12 @@ export default function CircleOfFifthsPage() {
           : "Camera and audio are off.";
 
   return (
-    <main aria-busy={sessionState === "starting"} className="circle-fifths-page">
+    <main
+      aria-busy={sessionState === "starting"}
+      className="circle-fifths-page"
+      data-session-state={sessionState}
+      data-setup-collapsed={setupCollapsed}
+    >
       <video
         aria-hidden="true"
         ref={videoRef}
@@ -1201,62 +1245,107 @@ export default function CircleOfFifthsPage() {
       </a>
 
       <section
-        aria-labelledby="circle-fifths-title"
+        aria-labelledby={
+          setupCollapsed ? "circle-fifths-summary-title" : "circle-fifths-title"
+        }
         className="circle-fifths-panel circle-fifths-panel-left"
+        data-collapsed={setupCollapsed}
         data-mobile-open={mobilePanel === "setup"}
         id="circle-fifths-setup-panel"
       >
-        <button
-          aria-label="Close setup panel"
-          className="circle-fifths-mobile-close"
-          onClick={() => setMobilePanel(null)}
-          type="button"
-        >
-          ×
-        </button>
-        <p className="circle-fifths-kicker">Motion Arcade · Create</p>
-        <h1 id="circle-fifths-title">Jam Studio</h1>
-        <p className="circle-fifths-copy">
-          Trace the circle with one hand, or play its major and minor chords with a pointer,
-          keyboard, or touch. Record a short idea when one clicks.
-        </p>
-        <div className="circle-fifths-actions">
+        <div className="circle-fifths-session-summary" hidden={!setupCollapsed}>
+          <span aria-hidden="true" className="circle-fifths-ready-dot" />
+          <div>
+            <p className="circle-fifths-kicker">Session ready</p>
+            <h1 id="circle-fifths-summary-title">Jam Studio</h1>
+            <p>
+              {detectedHand
+                ? `${detectedHand} hand in view`
+                : "Camera + audio on · show one hand"}
+            </p>
+          </div>
           <button
-            aria-busy={sessionState === "starting"}
+            aria-controls="circle-fifths-setup-content"
+            aria-expanded="false"
+            className="secondary"
+            onClick={openSetupPanel}
             type="button"
-            onClick={() => void handleStartSession()}
-            disabled={sessionState === "starting"}
           >
-            {sessionState === "active"
-              ? "Restart Camera + Audio"
-              : sessionState === "starting"
-                ? "Starting..."
-                : "Enable Camera + Audio"}
+            Setup
           </button>
         </div>
-        <div className="circle-fifths-stats">
-          <div>
-            <strong>Status</strong>
-            <span>{statusMessage}</span>
+
+        <div id="circle-fifths-setup-content" hidden={setupCollapsed}>
+          <button
+            aria-label="Close setup panel"
+            className="circle-fifths-mobile-close"
+            onClick={closeSetupPanel}
+            type="button"
+          >
+            ×
+          </button>
+          <div className="circle-fifths-setup-heading">
+            <div>
+              <p className="circle-fifths-kicker">Motion Arcade · Create</p>
+              <h1 id="circle-fifths-title">Jam Studio</h1>
+            </div>
+            {sessionState === "active" ? (
+              <button
+                aria-controls="circle-fifths-setup-content"
+                aria-expanded="true"
+                className="circle-fifths-setup-collapse secondary"
+                onClick={closeSetupPanel}
+                type="button"
+              >
+                Done
+              </button>
+            ) : null}
           </div>
-          <div>
-            <strong>Hand</strong>
-            <span>{detectedHand ?? "Waiting"}</span>
-          </div>
-          <div>
-            <strong>Last chord</strong>
-            <span>{lastChordTitle}</span>
-          </div>
-          <div>
-            <strong>Pinch</strong>
-            <span>{pinchActive ? "Active" : "Idle"}</span>
-          </div>
-        </div>
-        {errorMessage ? (
-          <p className="circle-fifths-error" role="alert">
-            {errorMessage}
+          <p className="circle-fifths-copy">
+            Trace the circle with one hand, or play its major and minor chords with a pointer,
+            keyboard, or touch. Record a short idea when one clicks.
           </p>
-        ) : null}
+          <div className="circle-fifths-actions">
+            <button
+              aria-busy={sessionState === "starting"}
+              type="button"
+              onClick={() => void handleStartSession()}
+              disabled={sessionState === "starting"}
+            >
+              {sessionState === "active"
+                ? "Restart Camera + Audio"
+                : sessionState === "starting"
+                  ? "Starting..."
+                  : "Enable Camera + Audio"}
+            </button>
+          </div>
+          <details className="circle-fifths-session-diagnostics">
+            <summary>Tracking details</summary>
+            <div className="circle-fifths-stats">
+              <div>
+                <strong>Status</strong>
+                <span>{statusMessage}</span>
+              </div>
+              <div>
+                <strong>Hand</strong>
+                <span>{detectedHand ?? "Waiting"}</span>
+              </div>
+              <div>
+                <strong>Last chord</strong>
+                <span>{lastChordTitle}</span>
+              </div>
+              <div>
+                <strong>Pinch</strong>
+                <span>{pinchActive ? "Active" : "Idle"}</span>
+              </div>
+            </div>
+          </details>
+          {errorMessage ? (
+            <p className="circle-fifths-error" role="alert">
+              {errorMessage}
+            </p>
+          ) : null}
+        </div>
       </section>
 
       <section
@@ -1277,7 +1366,7 @@ export default function CircleOfFifthsPage() {
 
       <section
         aria-labelledby="circle-fifths-drums-title"
-        className="circle-fifths-panel circle-fifths-panel-bottom-right"
+        className="circle-fifths-panel circle-fifths-panel-bottom-right circle-fifths-performance-tray"
         data-mobile-open={mobilePanel === "drums"}
         id="circle-fifths-drums-panel"
       >
@@ -1686,9 +1775,9 @@ export default function CircleOfFifthsPage() {
       <nav aria-label="Circle controls" className="circle-fifths-mobile-toolbar">
         <button
           aria-controls="circle-fifths-setup-panel"
-          aria-expanded={mobilePanel === "setup"}
-          className={mobilePanel === "setup" ? "active" : ""}
-          onClick={() => setMobilePanel(mobilePanel === "setup" ? null : "setup")}
+          aria-expanded={mobilePanel === "setup" && setupExpanded}
+          className={mobilePanel === "setup" && setupExpanded ? "active" : ""}
+          onClick={toggleSetupPanel}
           type="button"
         >
           Setup
@@ -1706,7 +1795,8 @@ export default function CircleOfFifthsPage() {
 
       <svg
         className="circle-fifths-wheel"
-        viewBox={`0 0 ${viewport.width} ${viewport.height}`}
+        ref={wheelRef}
+        viewBox={`0 0 ${WHEEL_VIEWBOX_SIZE} ${WHEEL_VIEWBOX_SIZE}`}
         aria-describedby="circle-fifths-wheel-description"
         aria-label="Interactive circle of fifths chord wheel"
         role="group"
@@ -1951,6 +2041,31 @@ function isPointInsideElement(point, element) {
 
 function getElementRect(element) {
   return element?.getBoundingClientRect?.() ?? null;
+}
+
+function getWheelPointFromClientPoint(point, wheelElement, layout) {
+  const rect = getElementRect(wheelElement);
+  if (
+    !point ||
+    !rect ||
+    rect.width <= 0 ||
+    rect.height <= 0 ||
+    !Number.isFinite(point.x) ||
+    !Number.isFinite(point.y)
+  ) {
+    return null;
+  }
+
+  const normalizedX = (point.x - rect.left) / rect.width;
+  const normalizedY = (point.y - rect.top) / rect.height;
+  if (normalizedX < 0 || normalizedX > 1 || normalizedY < 0 || normalizedY > 1) {
+    return null;
+  }
+
+  return {
+    x: normalizedX * layout.width,
+    y: normalizedY * layout.height,
+  };
 }
 
 function getClockTime() {
