@@ -13,6 +13,11 @@ import {
   readCreativeAsset,
   saveCreativeAsset,
 } from "../creativeAssetStorage.js";
+import {
+  GESTURE_ART_VIDEO_DURATION_MS,
+  getGestureArtVideoExportCapability,
+  startGestureArtCanvasRecording,
+} from "../gestureArtVideoExport.js";
 import "../gestureArtStudio.css";
 
 const ART_MODES = Object.freeze([
@@ -21,7 +26,7 @@ const ART_MODES = Object.freeze([
   { id: "flow", label: "Current" },
   { id: "swirl", label: "Orbit" },
 ]);
-const LOOP_DURATION_MS = 10_000;
+const LOOP_DURATION_MS = GESTURE_ART_VIDEO_DURATION_MS;
 const RECORD_SAMPLE_MS = 66;
 const MAX_UNDO_STEPS = 6;
 
@@ -136,6 +141,8 @@ export default function GestureArtLab({
   const recordedFramesRef = useRef([]);
   const replayingRef = useRef(false);
   const replayStartRef = useRef(0);
+  const videoExportCancelRef = useRef(null);
+  const mountedRef = useRef(true);
   const lastMetricsPublishRef = useRef(0);
   const galleryStoreRef = useRef(null);
   if (!galleryStoreRef.current) {
@@ -153,6 +160,15 @@ export default function GestureArtLab({
   const [recording, setRecording] = useState(false);
   const [recordedFrames, setRecordedFrames] = useState([]);
   const [replaying, setReplaying] = useState(false);
+  const [exportingVideo, setExportingVideo] = useState(false);
+  const [videoExportCapability, setVideoExportCapability] = useState({
+    supported: false,
+    reason: "checking",
+    mimeType: null,
+  });
+  const [videoExportStatus, setVideoExportStatus] = useState(
+    "Checking whether this browser can export artwork video.",
+  );
   const [galleryEntries, setGalleryEntries] = useState(() =>
     galleryStoreRef.current.list({ modeId: "gesture-art" }),
   );
@@ -181,6 +197,25 @@ export default function GestureArtLab({
   useEffect(() => {
     replayingRef.current = replaying;
   }, [replaying]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const capability = getGestureArtVideoExportCapability({
+      canvas: canvasRef.current,
+    });
+    setVideoExportCapability(capability);
+    setVideoExportStatus(
+      capability.supported
+        ? "Record a movement loop to export a ten-second WebM."
+        : "Video export is unavailable in this browser. PNG export and loop replay still work.",
+    );
+
+    return () => {
+      mountedRef.current = false;
+      videoExportCancelRef.current?.();
+      videoExportCancelRef.current = null;
+    };
+  }, []);
 
   useEffect(
     () =>
@@ -275,7 +310,10 @@ export default function GestureArtLab({
             const finishedFrames = [...recordingFramesRef.current];
             recordedFramesRef.current = finishedFrames;
             setRecordedFrames(finishedFrames);
-            setStatusMessage("Loop captured. Replay it or save a still frame.");
+            setStatusMessage("Loop captured. Replay it, export video, or save a still frame.");
+            setVideoExportStatus(
+              "Loop ready. WebM export records the artwork canvas only.",
+            );
           } else if (
             now - lastRecordingSampleRef.current >= RECORD_SAMPLE_MS
           ) {
@@ -463,6 +501,9 @@ export default function GestureArtLab({
   }
 
   function startRecording() {
+    if (exportingVideo) {
+      return;
+    }
     recordingFramesRef.current = [];
     lastRecordingSampleRef.current = 0;
     recordedFramesRef.current = [];
@@ -471,10 +512,13 @@ export default function GestureArtLab({
     setRecording(true);
     recordingStartRef.current = performance.now();
     setStatusMessage("Recording a ten-second movement loop.");
+    setVideoExportStatus(
+      "Finish recording before exporting the artwork video.",
+    );
   }
 
   function toggleReplay() {
-    if (recording || recordedFrames.length === 0) {
+    if (recording || exportingVideo || recordedFrames.length === 0) {
       return;
     }
     setReplaying((current) => {
@@ -485,6 +529,75 @@ export default function GestureArtLab({
       setStatusMessage(next ? "Replaying the captured loop." : "Loop replay stopped.");
       return next;
     });
+  }
+
+  async function exportLoopVideo() {
+    if (
+      exportingVideo ||
+      recording ||
+      recordedFramesRef.current.length === 0
+    ) {
+      return;
+    }
+    const capability = getGestureArtVideoExportCapability({
+      canvas: canvasRef.current,
+    });
+    if (!capability.supported) {
+      setVideoExportCapability(capability);
+      setVideoExportStatus(
+        "Video export is unavailable in this browser. PNG export and loop replay still work.",
+      );
+      return;
+    }
+
+    const wasReplaying = replayingRef.current;
+    replayStartRef.current = performance.now();
+    replayingRef.current = true;
+    setReplaying(true);
+    setExportingVideo(true);
+    setVideoExportStatus(
+      "Exporting ten seconds of artwork video. Keep this tab open.",
+    );
+    setStatusMessage("Rendering the captured loop to WebM…");
+
+    let recordingJob = null;
+    try {
+      recordingJob = startGestureArtCanvasRecording({
+        canvas: canvasRef.current,
+      });
+      videoExportCancelRef.current = recordingJob.cancel;
+      const { blob } = await recordingJob.promise;
+      if (!mountedRef.current) {
+        return;
+      }
+      downloadBlob(
+        blob,
+        `motion-arcade-light-painting-${Date.now()}.webm`,
+      );
+      setVideoExportStatus(
+        "WebM exported. It contains the artwork canvas only—no camera imagery or audio.",
+      );
+      setStatusMessage("Artwork video exported.");
+    } catch (error) {
+      if (!mountedRef.current || error?.code === "cancelled") {
+        return;
+      }
+      const message =
+        error?.code === "size-limit"
+          ? "Video export stopped at its safe size limit. Try a still PNG instead."
+          : "This browser could not finish the artwork video. PNG export and loop replay still work.";
+      setVideoExportStatus(message);
+      setStatusMessage(message);
+    } finally {
+      if (videoExportCancelRef.current === recordingJob?.cancel) {
+        videoExportCancelRef.current = null;
+      }
+      if (mountedRef.current) {
+        replayingRef.current = wasReplaying;
+        setReplaying(wasReplaying);
+        setExportingVideo(false);
+      }
+    }
   }
 
   function handleCanvasKeyDown(event) {
@@ -665,17 +778,49 @@ export default function GestureArtLab({
         </div>
 
         <div className="gesture-art-loop-controls">
-          <button disabled={recording} onClick={startRecording} type="button">
+          <button
+            disabled={recording || exportingVideo}
+            onClick={startRecording}
+            type="button"
+          >
             {recording ? "Recording…" : "Record 10s loop"}
           </button>
           <button
             className="secondary"
-            disabled={recording || recordedFrames.length === 0}
+            disabled={
+              recording || exportingVideo || recordedFrames.length === 0
+            }
             onClick={toggleReplay}
             type="button"
           >
             {replaying ? "Stop replay" : "Replay loop"}
           </button>
+          <button
+            aria-describedby="gesture-art-video-export-status"
+            className="gesture-art-video-export"
+            disabled={
+              recording ||
+              exportingVideo ||
+              recordedFrames.length === 0 ||
+              !videoExportCapability.supported
+            }
+            onClick={() => void exportLoopVideo()}
+            type="button"
+          >
+            {exportingVideo ? "Exporting video…" : "Export loop video"}
+          </button>
+          <p
+            aria-live="polite"
+            className="gesture-art-loop-status"
+            id="gesture-art-video-export-status"
+            role="status"
+          >
+            {videoExportStatus}
+          </p>
+          <p className="gesture-art-loop-privacy">
+            Video export captures ten seconds of this artwork canvas only—never
+            camera frames or audio.
+          </p>
         </div>
 
         <details className="gesture-art-gallery" open={galleryEntries.length > 0}>

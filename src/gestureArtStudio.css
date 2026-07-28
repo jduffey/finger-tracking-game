@@ -264,6 +264,28 @@
   grid-template-columns: 1fr 1fr;
 }
 
+.gesture-art-loop-controls .gesture-art-video-export,
+.gesture-art-loop-status,
+.gesture-art-loop-privacy {
+  grid-column: 1 / -1;
+}
+
+.gesture-art-loop-status,
+.gesture-art-loop-privacy {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.gesture-art-loop-status {
+  color: #c8d6ed;
+  min-height: 2.05em;
+}
+
+.gesture-art-loop-privacy {
+  color: #8fffd5;
+}
+
 .gesture-art-gallery {
   border-top: 1px solid var(--studio-border);
   padding-top: 12px;
