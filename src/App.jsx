@@ -171,8 +171,12 @@ import {
 } from "./skyPatrolGame.js";
 import {
   WFC_WORLD_MODE_ID,
+  clearWfcWorld,
   createWfcWorldGame,
   createWfcWorldStepInput,
+  getWfcWorldGoalModel,
+  selectWfcWorldTile,
+  startWfcWorldCollapse,
   stepWfcWorldGame,
 } from "./wfc/wfcWorldGame.js";
 import {
@@ -401,6 +405,11 @@ const SpatialGestureMemory = lazy(
 const WfcWorldRenderer = lazy(() =>
   import("./wfc/WfcWorldRenderer.jsx").then((module) => ({
     default: module.WfcWorldRenderer,
+  })),
+);
+const WfcWorldProjectPanel = lazy(() =>
+  import("./wfc/WfcWorldProjectPanel.jsx").then((module) => ({
+    default: module.WfcWorldProjectPanel,
   })),
 );
 
@@ -1780,6 +1789,7 @@ export default function App() {
   const [fullscreenFruitNinjaState, setFullscreenFruitNinjaState] = useState(null);
   const [fullscreenSkyPatrolHud, setFullscreenSkyPatrolHud] = useState(null);
   const [fullscreenWfcWorldState, setFullscreenWfcWorldState] = useState(null);
+  const [fullscreenWfcProjectOpen, setFullscreenWfcProjectOpen] = useState(false);
   const [fullscreenInvadersState, setFullscreenInvadersState] = useState(null);
   const [fullscreenFlappyState, setFullscreenFlappyState] = useState(null);
   const [fullscreenMissileCommandState, setFullscreenMissileCommandState] = useState(null);
@@ -2563,6 +2573,10 @@ export default function App() {
   const fullscreenHandBounceLegendUi = useMemo(
     () => getFullscreenHandBounceLegendUi(),
     [],
+  );
+  const fullscreenWfcWorldGoalUi = useMemo(
+    () => getWfcWorldGoalModel(fullscreenWfcWorldState),
+    [fullscreenWfcWorldState],
   );
   const fullscreenMissileLaunchPreview = useMemo(
     () => getMissileCommandLaunchPreview(fullscreenMissileCommandState, fullscreenMissileAimPoint),
@@ -3842,6 +3856,7 @@ export default function App() {
         fullscreenWfcWorldStateRef.current = null;
         setFullscreenWfcWorldState(null);
       }
+      setFullscreenWfcProjectOpen(false);
       return undefined;
     }
 
@@ -10510,6 +10525,69 @@ export default function App() {
     publishFullscreenSkyPatrolState(nextState);
   }
 
+  function publishFullscreenWfcWorldState(nextState) {
+    if (!nextState) {
+      return;
+    }
+    fullscreenWfcWorldStateRef.current = nextState;
+    setFullscreenWfcWorldState(nextState);
+  }
+
+  function handleFullscreenWfcWorldSelectTile(tileId) {
+    publishFullscreenWfcWorldState(
+      selectWfcWorldTile(fullscreenWfcWorldStateRef.current, tileId),
+    );
+  }
+
+  function handleFullscreenWfcWorldGenerate() {
+    publishFullscreenWfcWorldState(
+      startWfcWorldCollapse(fullscreenWfcWorldStateRef.current),
+    );
+  }
+
+  function handleFullscreenWfcWorldClear() {
+    publishFullscreenWfcWorldState(
+      clearWfcWorld(fullscreenWfcWorldStateRef.current),
+    );
+  }
+
+  function handleFullscreenWfcWorldSave(snapshot) {
+    const current = fullscreenWfcWorldStateRef.current;
+    if (!current || !snapshot) {
+      return;
+    }
+    publishFullscreenWfcWorldState({
+      ...current,
+      snapshot: {
+        id: snapshot.id,
+        name: snapshot.name,
+        revision: snapshot.revision,
+      },
+      message: `${snapshot.name}, revision ${snapshot.revision}, saved locally.`,
+    });
+  }
+
+  function handleFullscreenWfcWorldRestore(restoredGame) {
+    if (!restoredGame) {
+      return;
+    }
+    fullscreenWfcWorldLastTickRef.current = 0;
+    publishFullscreenWfcWorldState(restoredGame);
+    setFullscreenWfcProjectOpen(false);
+  }
+
+  function handleFullscreenWfcWorldDelete(snapshot) {
+    const current = fullscreenWfcWorldStateRef.current;
+    if (!current || current.snapshot?.id !== snapshot?.id) {
+      return;
+    }
+    publishFullscreenWfcWorldState({
+      ...current,
+      snapshot: null,
+      message: `${snapshot.name} was removed from saved projects. Your open canvas is unchanged.`,
+    });
+  }
+
   function getFullscreenWfcWorldMousePoint(event) {
     const rect = event.currentTarget.getBoundingClientRect();
     return {
@@ -10602,8 +10680,7 @@ export default function App() {
         pinchStarted: false,
       };
     }
-    fullscreenWfcWorldStateRef.current = nextState;
-    setFullscreenWfcWorldState(nextState);
+    publishFullscreenWfcWorldState(nextState);
   }
 
   function updateFullscreenInvadersSimulation(timestamp) {
@@ -14013,14 +14090,61 @@ export default function App() {
                 <LazyExperienceFallback label="Building World Painter…" />
               }
             >
-              <WfcWorldRenderer
-                game={fullscreenWfcWorldState}
-                style={fullscreenCameraViewport?.style ?? undefined}
-                onMouseDown={handleFullscreenWfcWorldMouseDown}
-                onMouseMove={handleFullscreenWfcWorldMouseMove}
-                onMouseUp={stopFullscreenWfcWorldMouseInput}
-                onMouseLeave={stopFullscreenWfcWorldMouseInput}
-              />
+              <>
+                <WfcWorldRenderer
+                  game={fullscreenWfcWorldState}
+                  style={fullscreenCameraViewport?.style ?? undefined}
+                  onMouseDown={handleFullscreenWfcWorldMouseDown}
+                  onMouseMove={handleFullscreenWfcWorldMouseMove}
+                  onMouseUp={stopFullscreenWfcWorldMouseInput}
+                  onMouseLeave={stopFullscreenWfcWorldMouseInput}
+                  onSelectTile={handleFullscreenWfcWorldSelectTile}
+                  onGenerate={handleFullscreenWfcWorldGenerate}
+                  onClear={handleFullscreenWfcWorldClear}
+                />
+                <div
+                  className={`fullscreen-camera-wfc-project-dock ${
+                    fullscreenWfcProjectOpen ? "open" : ""
+                  }`}
+                  style={fullscreenCameraViewport?.style ?? undefined}
+                >
+                  <button
+                    aria-expanded={fullscreenWfcProjectOpen}
+                    className="fullscreen-camera-wfc-project-trigger"
+                    onClick={() =>
+                      setFullscreenWfcProjectOpen((current) => !current)
+                    }
+                    type="button"
+                  >
+                    <span>
+                      {fullscreenWfcProjectOpen ? "Close project" : "World project"}
+                    </span>
+                    <strong>
+                      {fullscreenWfcWorldGoalUi.progress.overallPercent}%
+                    </strong>
+                  </button>
+                  {fullscreenWfcProjectOpen ? (
+                    <div
+                      aria-label="Fingerprint Worlds project tools"
+                      className="fullscreen-camera-wfc-project-surface"
+                      role="dialog"
+                    >
+                      <Suspense
+                        fallback={
+                          <LazyExperienceFallback label="Opening project library…" />
+                        }
+                      >
+                        <WfcWorldProjectPanel
+                          game={fullscreenWfcWorldState}
+                          onDelete={handleFullscreenWfcWorldDelete}
+                          onRestore={handleFullscreenWfcWorldRestore}
+                          onSave={handleFullscreenWfcWorldSave}
+                        />
+                      </Suspense>
+                    </div>
+                  ) : null}
+                </div>
+              </>
             </Suspense>
           ) : fullscreenGridMode === "invaders" ? (
             <div

@@ -2235,9 +2235,12 @@ body {
 
 .fullscreen-camera-wfc-palette-tile,
 .fullscreen-camera-wfc-control {
+  appearance: none;
   align-items: center;
   border-radius: 8px;
+  cursor: pointer;
   display: flex;
+  font: inherit;
   position: absolute;
   z-index: 5;
 }
@@ -2271,6 +2274,29 @@ body {
   line-height: 1;
 }
 
+.fullscreen-camera-wfc-palette-tile small {
+  align-items: center;
+  background: rgba(10, 17, 27, 0.55);
+  border-radius: 999px;
+  color: inherit;
+  display: flex;
+  font-size: 0.55rem;
+  font-weight: 900;
+  height: 1rem;
+  justify-content: center;
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 1rem;
+}
+
+.fullscreen-camera-wfc-palette-tile:focus-visible,
+.fullscreen-camera-wfc-control:focus-visible,
+.fullscreen-camera-wfc-project-trigger:focus-visible {
+  outline: 3px solid #fff2a8;
+  outline-offset: 3px;
+}
+
 .fullscreen-camera-wfc-control {
   background: rgba(10, 17, 27, 0.76);
   border: 1px solid rgba(223, 234, 248, 0.22);
@@ -2286,9 +2312,89 @@ body {
   color: #fff2a8;
 }
 
+.fullscreen-camera-wfc-control:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
 .fullscreen-camera-wfc-world.conflict .fullscreen-camera-wfc-status {
   border-color: rgba(255, 113, 113, 0.58);
   box-shadow: 0 0 18px rgba(255, 84, 84, 0.16);
+}
+
+.fullscreen-camera-wfc-project-dock {
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  z-index: 11;
+}
+
+.fullscreen-camera-wfc-project-trigger {
+  align-items: center;
+  appearance: none;
+  backdrop-filter: blur(14px);
+  background: rgba(12, 28, 23, 0.9);
+  border: 1px solid rgba(185, 240, 106, 0.48);
+  border-radius: 999px;
+  bottom: 18px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28);
+  color: #f7f7ec;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 850;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 10px 8px 14px;
+  pointer-events: auto;
+  position: absolute;
+  right: 18px;
+  z-index: 3;
+}
+
+.fullscreen-camera-wfc-project-trigger strong {
+  align-items: center;
+  background: #b9f06a;
+  border-radius: 999px;
+  color: #13210d;
+  display: flex;
+  font-size: 0.68rem;
+  height: 28px;
+  justify-content: center;
+  min-width: 42px;
+  padding-inline: 7px;
+}
+
+.fullscreen-camera-wfc-project-dock.open
+  .fullscreen-camera-wfc-project-trigger {
+  bottom: auto;
+  right: 24px;
+  top: 20px;
+}
+
+.fullscreen-camera-wfc-project-surface {
+  backdrop-filter: blur(22px);
+  background:
+    linear-gradient(180deg, rgba(17, 35, 29, 0.98), rgba(9, 21, 18, 0.98));
+  border: 1px solid rgba(226, 241, 226, 0.18);
+  border-radius: 20px;
+  bottom: 10px;
+  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.34);
+  overflow: hidden;
+  padding-top: 3.65rem;
+  pointer-events: auto;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  width: min(28rem, calc(100% - 20px));
+  z-index: 2;
+}
+
+.fullscreen-camera-wfc-project-surface > .wfc-project {
+  height: 100%;
+  max-block-size: none;
+  width: 100%;
 }
 
 @keyframes wfc-cell-pop {

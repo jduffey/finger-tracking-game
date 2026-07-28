@@ -19,6 +19,9 @@ export function WfcWorldRenderer({
   onMouseMove,
   onMouseUp,
   onMouseLeave,
+  onSelectTile,
+  onGenerate,
+  onClear,
 }) {
   if (!game?.layout) {
     return null;
@@ -91,11 +94,16 @@ export function WfcWorldRenderer({
       <div className="fullscreen-camera-wfc-panel">
         <div className="fullscreen-camera-wfc-palette">
           {game.layout.palette.map((tile) => (
-            <span
+            <button
+              aria-label={`${tile.ariaLabel}. ${tile.accessibility?.description ?? ""}`}
+              aria-pressed={tile.id === game.selectedTileId}
               key={tile.id}
               className={`fullscreen-camera-wfc-palette-tile ${
                 tile.id === game.selectedTileId ? "selected" : ""
               }`}
+              onClick={() => onSelectTile?.(tile.id)}
+              onMouseDown={(event) => event.stopPropagation()}
+              onMouseUp={(event) => event.stopPropagation()}
               style={{
                 left: `${tile.left}px`,
                 top: `${tile.top}px`,
@@ -105,30 +113,51 @@ export function WfcWorldRenderer({
                 "--wfc-tile-accent": tile.accent,
                 "--wfc-tile-text": tile.textColor,
               }}
+              type="button"
             >
-              <span>{tile.icon}</span>
+              <span aria-hidden="true">{tile.icon}</span>
               <strong>{tile.label}</strong>
-            </span>
+              <small>{tile.accessibility?.shortcut}</small>
+            </button>
           ))}
         </div>
         <div className="fullscreen-camera-wfc-controls">
           {game.layout.controls.map((control) => (
-            <span
+            <button
+              aria-label={
+                control.id === "generate"
+                  ? "Generate a complete world from the placed terrain rules"
+                  : "Clear every placed terrain rule and start a new world"
+              }
+              disabled={control.id === "generate" && game.phase === "collapsing"}
               key={control.id}
               className={`fullscreen-camera-wfc-control ${control.id}`}
+              onClick={
+                control.id === "generate"
+                  ? () => onGenerate?.()
+                  : () => onClear?.()
+              }
+              onMouseDown={(event) => event.stopPropagation()}
+              onMouseUp={(event) => event.stopPropagation()}
               style={{
                 left: `${control.left}px`,
                 top: `${control.top}px`,
                 width: `${control.width}px`,
                 height: `${control.height}px`,
               }}
+              type="button"
             >
               {control.label}
-            </span>
+            </button>
           ))}
         </div>
       </div>
-      <div className="fullscreen-camera-wfc-status">
+      <div
+        aria-atomic="true"
+        aria-live="polite"
+        className="fullscreen-camera-wfc-status"
+        role="status"
+      >
         <span>{game.message}</span>
         <strong>{game.constraints.length} rules</strong>
       </div>
