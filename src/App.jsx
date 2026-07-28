@@ -151,7 +151,9 @@ import {
 } from "./spaceInvadersGame.js";
 import {
   SKY_PATROL_STARTING_LIVES,
+  createSkyPatrolDailyGame,
   createSkyPatrolGame,
+  restartSkyPatrolGame,
   stepSkyPatrolGame,
 } from "./skyPatrolGame.js";
 import {
@@ -173,11 +175,15 @@ import {
 } from "./skyPatrolHandOverlay.js";
 import {
   getSkyPatrolFireCooldownUi,
+  getSkyPatrolCheckpointUi,
+  getSkyPatrolComboUi,
   getSkyPatrolGameOverUi,
   getSkyPatrolGunCooldownUi,
   getSkyPatrolHudItems,
   getSkyPatrolLegendUi,
   getSkyPatrolLifeIcons,
+  getSkyPatrolMissionUi,
+  getSkyPatrolOnboardingUi,
   getSkyPatrolStartPromptUi,
 } from "./skyPatrolUi.js";
 import {
@@ -203,14 +209,24 @@ import {
   getTicTacToeWinningLineUi,
 } from "./ticTacToeUi.js";
 import {
-  FRUIT_NINJA_BASE_SCORE,
   FRUIT_NINJA_BLADE_TRAIL_MS,
-  FRUIT_NINJA_BOMB_PENALTY,
-  FRUIT_NINJA_COMBO_BONUS,
-  FRUIT_NINJA_GAME_OVER_LIVES,
+  createFruitNinjaDailyGame,
   createFruitNinjaGame,
+  restartFruitNinjaGame,
   stepFruitNinjaGame,
 } from "./fruitNinjaGame.js";
+import {
+  getFruitNinjaBombWarnings,
+  getFruitNinjaComboUi,
+  getFruitNinjaHud,
+  getFruitNinjaLegendItems,
+  getFruitNinjaPowerUi,
+  getFruitNinjaPrecisionUi,
+  getFruitNinjaRecapUi,
+  getFruitNinjaRoundUi,
+  getFruitNinjaSceneClassName,
+  getFruitNinjaTargetUi,
+} from "./fruitNinjaUi.js";
 import {
   detectHands,
   getCurrentBackend,
@@ -1865,6 +1881,14 @@ export default function App() {
   const transformRef = useRef(transform);
   const cursorRef = useRef(cursor);
   const rawCursorRef = useRef(rawCursor);
+  const fallbackPointerRef = useRef({
+    active: false,
+    justPressed: false,
+    pointerType: "mouse",
+    pressed: false,
+    x: window.innerWidth / 2,
+    y: window.innerHeight / 2,
+  });
   const cursorTrailRef = useRef([]);
   const cursorTrailLastSampleAtRef = useRef(0);
   const fullscreenRingTrailRef = useRef([]);
@@ -2584,6 +2608,62 @@ export default function App() {
   const fullscreenSkyPatrolStartPromptUi = useMemo(
     () => getSkyPatrolStartPromptUi(fullscreenSkyPatrolHud),
     [fullscreenSkyPatrolHud],
+  );
+  const fullscreenSkyPatrolMissionUi = useMemo(
+    () => getSkyPatrolMissionUi(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
+  );
+  const fullscreenSkyPatrolCheckpointUi = useMemo(
+    () => getSkyPatrolCheckpointUi(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
+  );
+  const fullscreenSkyPatrolComboUi = useMemo(
+    () => getSkyPatrolComboUi(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
+  );
+  const fullscreenSkyPatrolOnboardingUi = useMemo(
+    () => getSkyPatrolOnboardingUi(fullscreenSkyPatrolHud),
+    [fullscreenSkyPatrolHud],
+  );
+  const fullscreenFruitNinjaRoundUi = useMemo(
+    () => getFruitNinjaRoundUi(fullscreenFruitNinjaState),
+    [fullscreenFruitNinjaState],
+  );
+  const fullscreenFruitNinjaHudUi = useMemo(
+    () =>
+      getFruitNinjaHud(
+        fullscreenFruitNinjaState,
+        typeof performance === "undefined" ? 0 : performance.now(),
+      ),
+    [fullscreenFruitNinjaState],
+  );
+  const fullscreenFruitNinjaBombWarnings = useMemo(
+    () => getFruitNinjaBombWarnings(fullscreenFruitNinjaState),
+    [fullscreenFruitNinjaState],
+  );
+  const fullscreenFruitNinjaComboUi = useMemo(
+    () =>
+      getFruitNinjaComboUi(
+        fullscreenFruitNinjaState,
+        typeof performance === "undefined" ? 0 : performance.now(),
+      ),
+    [fullscreenFruitNinjaState],
+  );
+  const fullscreenFruitNinjaPrecisionUi = useMemo(
+    () => getFruitNinjaPrecisionUi(fullscreenFruitNinjaState?.lastSlice),
+    [fullscreenFruitNinjaState?.lastSlice],
+  );
+  const fullscreenFruitNinjaPowerUi = useMemo(
+    () => getFruitNinjaPowerUi(fullscreenFruitNinjaState),
+    [fullscreenFruitNinjaState],
+  );
+  const fullscreenFruitNinjaRecapUi = useMemo(
+    () => getFruitNinjaRecapUi(fullscreenFruitNinjaState, "Restart Round"),
+    [fullscreenFruitNinjaState],
+  );
+  const fullscreenFruitNinjaLegendItems = useMemo(
+    () => getFruitNinjaLegendItems(),
+    [],
   );
 
   const fullscreenHexGridMetrics = useMemo(() => {
@@ -3621,10 +3701,17 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame = createFruitNinjaGame(
-      fullscreenCameraViewport.width,
-      fullscreenCameraViewport.height,
-    );
+    const templateGame =
+      activeLaunchContextRef.current.challenge === "daily"
+        ? createFruitNinjaDailyGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
+            activeLaunchContextRef.current.dayKey,
+          )
+        : createFruitNinjaGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
+          );
     const nextGame = initializeOrResizeFullscreenGame(
       "fruit-ninja",
       fullscreenFruitNinjaStateRef.current,
@@ -3672,10 +3759,19 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame = createSkyPatrolGame(
-      fullscreenCameraViewport.width,
-      fullscreenCameraViewport.height,
-    );
+    const templateGame =
+      activeLaunchContextRef.current.challenge === "daily"
+        ? createSkyPatrolDailyGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
+            {
+              dayKey: activeLaunchContextRef.current.dayKey,
+            },
+          )
+        : createSkyPatrolGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
+          );
     const nextGame = initializeOrResizeFullscreenGame(
       "sky-patrol",
       fullscreenSkyPatrolStateRef.current,
@@ -4311,6 +4407,164 @@ export default function App() {
     return () => {
       window.removeEventListener("pointerdown", unlockAudio, true);
       window.removeEventListener("keydown", unlockAudio, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    const isNativeControl = (target) =>
+      target instanceof Element &&
+      Boolean(
+        target.closest(
+          "button, a, input, select, textarea, summary, [role='button'], [role='link']",
+        ),
+      );
+    const updateFallbackPoint = (event) => {
+      if (
+        trackingRequestedRef.current ||
+        !Number.isFinite(event.clientX) ||
+        !Number.isFinite(event.clientY)
+      ) {
+        return false;
+      }
+      fallbackPointerRef.current = {
+        ...fallbackPointerRef.current,
+        active: true,
+        pointerType: event.pointerType || "mouse",
+        x: event.clientX,
+        y: event.clientY,
+      };
+      cursorRef.current = {
+        x: event.clientX,
+        y: event.clientY,
+      };
+      return true;
+    };
+    const handleFallbackPointerMove = (event) => {
+      updateFallbackPoint(event);
+    };
+    const handleFallbackPointerDown = (event) => {
+      if (
+        event.button !== 0 ||
+        !updateFallbackPoint(event) ||
+        isNativeControl(event.target)
+      ) {
+        return;
+      }
+      fallbackPointerRef.current = {
+        ...fallbackPointerRef.current,
+        justPressed:
+          fallbackPointerRef.current.justPressed ||
+          !fallbackPointerRef.current.pressed,
+        pressed: true,
+      };
+    };
+    const releaseFallbackPointer = (event) => {
+      if (trackingRequestedRef.current) {
+        return;
+      }
+      const pointerType =
+        event?.pointerType || fallbackPointerRef.current.pointerType;
+      fallbackPointerRef.current = {
+        ...fallbackPointerRef.current,
+        active:
+          pointerType === "mouse" && fallbackPointerRef.current.active,
+        pressed: false,
+      };
+    };
+    const resetFallbackPointer = () => {
+      fallbackPointerRef.current = {
+        ...fallbackPointerRef.current,
+        active: false,
+        justPressed: false,
+        pressed: false,
+      };
+    };
+    const handleFallbackKeyDown = (event) => {
+      if (
+        trackingRequestedRef.current ||
+        phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+        isNativeControl(event.target)
+      ) {
+        return;
+      }
+      const movementByKey = {
+        ArrowDown: [0, 1],
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+        ArrowUp: [0, -1],
+      };
+      const movement = movementByKey[event.key];
+      if (movement) {
+        event.preventDefault();
+        const step = event.shiftKey ? 72 : 28;
+        const nextPoint = clampPoint(
+          {
+            x: fallbackPointerRef.current.x + movement[0] * step,
+            y: fallbackPointerRef.current.y + movement[1] * step,
+          },
+          viewportRef.current.width,
+          viewportRef.current.height,
+        );
+        fallbackPointerRef.current = {
+          ...fallbackPointerRef.current,
+          active: true,
+          pointerType: "keyboard",
+          x: nextPoint.x,
+          y: nextPoint.y,
+        };
+        cursorRef.current = nextPoint;
+        return;
+      }
+      if ((event.key === " " || event.key === "Enter") && !event.repeat) {
+        event.preventDefault();
+        fallbackPointerRef.current = {
+          ...fallbackPointerRef.current,
+          active: true,
+          justPressed: true,
+          pointerType: "keyboard",
+          pressed: true,
+        };
+      }
+    };
+    const handleFallbackKeyUp = (event) => {
+      if (event.key !== " " && event.key !== "Enter") {
+        return;
+      }
+      fallbackPointerRef.current = {
+        ...fallbackPointerRef.current,
+        pressed: false,
+      };
+    };
+
+    window.addEventListener("pointermove", handleFallbackPointerMove, {
+      passive: true,
+    });
+    window.addEventListener("pointerdown", handleFallbackPointerDown, true);
+    window.addEventListener("pointerup", releaseFallbackPointer, true);
+    window.addEventListener("pointercancel", releaseFallbackPointer, true);
+    window.addEventListener("mousemove", handleFallbackPointerMove, {
+      passive: true,
+    });
+    window.addEventListener("mousedown", handleFallbackPointerDown, true);
+    window.addEventListener("mouseup", releaseFallbackPointer, true);
+    window.addEventListener("blur", resetFallbackPointer);
+    window.addEventListener("keydown", handleFallbackKeyDown);
+    window.addEventListener("keyup", handleFallbackKeyUp);
+    return () => {
+      window.removeEventListener("pointermove", handleFallbackPointerMove);
+      window.removeEventListener("pointerdown", handleFallbackPointerDown, true);
+      window.removeEventListener("pointerup", releaseFallbackPointer, true);
+      window.removeEventListener(
+        "pointercancel",
+        releaseFallbackPointer,
+        true,
+      );
+      window.removeEventListener("mousemove", handleFallbackPointerMove);
+      window.removeEventListener("mousedown", handleFallbackPointerDown, true);
+      window.removeEventListener("mouseup", releaseFallbackPointer, true);
+      window.removeEventListener("blur", resetFallbackPointer);
+      window.removeEventListener("keydown", handleFallbackKeyDown);
+      window.removeEventListener("keyup", handleFallbackKeyUp);
     };
   }, []);
 
@@ -5980,7 +6234,9 @@ export default function App() {
       type: EXPERIENCE_LIFECYCLE_EVENTS.FINISH,
       result: {
         ...recorded.result,
-        isPersonalBest: recorded.personalBests.length > 0,
+        isPersonalBest: recorded.personalBests.some(
+          ({ metricId, value }) => metricId === "score" && value > 0,
+        ),
         personalBestMetricIds: recorded.personalBests.map(
           ({ metricId }) => metricId,
         ),
@@ -8230,8 +8486,19 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
-    beginRestartedProgressionSession(getModeByFullscreenId("sky-patrol"));
-    const nextGame = createSkyPatrolGame(viewportMetrics.width, viewportMetrics.height);
+    beginRestartedProgressionSession(
+      getModeByFullscreenId("sky-patrol"),
+      activeLaunchContextRef.current,
+    );
+    const nextGame = fullscreenSkyPatrolStateRef.current?.layout
+      ? restartSkyPatrolGame(fullscreenSkyPatrolStateRef.current)
+      : activeLaunchContextRef.current.challenge === "daily"
+        ? createSkyPatrolDailyGame(
+            viewportMetrics.width,
+            viewportMetrics.height,
+            { dayKey: activeLaunchContextRef.current.dayKey },
+          )
+        : createSkyPatrolGame(viewportMetrics.width, viewportMetrics.height);
     fullscreenSkyPatrolLastTickRef.current = 0;
     publishFullscreenSkyPatrolState(nextGame);
   }
@@ -8318,15 +8585,29 @@ export default function App() {
           status: fullscreenSkyPatrolHud?.message,
           items: [
             item("score", "Score", fullscreenSkyPatrolHud?.score ?? 0, "strong"),
-            item("lives", "Lives", fullscreenSkyPatrolHud?.lives ?? 0),
+            item(
+              "mission",
+              "Mission",
+              `${fullscreenSkyPatrolHud?.mission ?? 1}/${
+                fullscreenSkyPatrolHud?.totalMissions ?? 1
+              }`,
+            ),
+            item("accuracy", "Accuracy", `${fullscreenSkyPatrolHud?.accuracy ?? 0}%`),
+            item("combo", "Combo", fullscreenSkyPatrolHud?.comboCount ?? 0),
           ],
         };
       case "slice-air":
         return {
-          status: fullscreenFruitNinjaState?.message,
+          status: fullscreenFruitNinjaHudUi.status,
           items: [
-            item("score", "Score", fullscreenFruitNinjaState?.score ?? 0, "strong"),
-            item("combo", "Combo", fullscreenFruitNinjaState?.comboCount ?? 0),
+            ...fullscreenFruitNinjaHudUi.items.map((hudItem) =>
+              item(
+                hudItem.id,
+                hudItem.label,
+                hudItem.value,
+                hudItem.id === "score" ? "strong" : "normal",
+              ),
+            ),
           ],
         };
       case "missile-command":
@@ -9506,6 +9787,36 @@ export default function App() {
       return null;
     }
 
+    const activePointer = getActiveFullscreenPointer(viewportMetrics);
+    if (activePointer.active && activePointer.source !== "tracking") {
+      const ballRadius =
+        fullscreenHandBounceStateRef.current?.layout?.ballRadius ?? 32;
+      const width = clampValue(
+        ballRadius * 3.35,
+        ballRadius * 2.15,
+        viewportMetrics.width * 0.34,
+      );
+      const height = clampValue(
+        ballRadius * 1.08,
+        ballRadius * 0.9,
+        ballRadius * 1.55,
+      );
+      return {
+        x: clampValue(
+          activePointer.x,
+          width / 2 + 6,
+          viewportMetrics.width - width / 2 - 6,
+        ),
+        y: clampValue(
+          activePointer.y,
+          height / 2 + ballRadius * 0.42,
+          viewportMetrics.height - height / 2 - ballRadius * 0.24,
+        ),
+        width,
+        height,
+      };
+    }
+
     const renderMetrics = computeCameraRenderMetrics("contain");
     const primaryHand = Array.isArray(fullscreenHandsRef.current)
       ? fullscreenHandsRef.current[0] ?? null
@@ -9689,6 +10000,61 @@ export default function App() {
       viewportMetrics,
       (point) => projectCameraPointToCanvas(point, renderMetrics),
     );
+  }
+
+  function getActiveFullscreenPointer(viewportMetrics) {
+    if (!viewportMetrics) {
+      return {
+        active: false,
+        actionActive: false,
+        actionStarted: false,
+        source: "none",
+        x: 0,
+        y: 0,
+      };
+    }
+
+    if (
+      handDetectedRef.current &&
+      Number.isFinite(cursorRef.current?.x) &&
+      Number.isFinite(cursorRef.current?.y)
+    ) {
+      return {
+        active: true,
+        actionActive: Boolean(pinchStateRef.current),
+        actionStarted: false,
+        source: "tracking",
+        x: clampValue(
+          cursorRef.current.x - viewportMetrics.left,
+          0,
+          viewportMetrics.width,
+        ),
+        y: clampValue(
+          cursorRef.current.y - viewportMetrics.top,
+          0,
+          viewportMetrics.height,
+        ),
+      };
+    }
+
+    const fallback = fallbackPointerRef.current;
+    const localX = fallback.x - viewportMetrics.left;
+    const localY = fallback.y - viewportMetrics.top;
+    const withinViewport =
+      !trackingRequestedRef.current &&
+      fallback.active &&
+      localX >= 0 &&
+      localX <= viewportMetrics.width &&
+      localY >= 0 &&
+      localY <= viewportMetrics.height;
+    return {
+      active: withinViewport,
+      actionActive: withinViewport && fallback.pressed,
+      actionStarted: withinViewport && fallback.justPressed,
+      source: withinViewport ? fallback.pointerType || "pointer" : "none",
+      x: withinViewport ? localX : 0,
+      y: withinViewport ? localY : 0,
+    };
   }
 
   function getFullscreenLandingHandSkeleton(viewportMetrics) {
@@ -9918,10 +10284,8 @@ export default function App() {
 
     const fallbackPaddleX =
       fullscreenBreakoutStateRef.current?.paddle?.x ?? viewportMetrics.width / 2;
-    const pointerX =
-      handDetectedRef.current && Number.isFinite(cursorRef.current?.x)
-        ? cursorRef.current.x - viewportMetrics.left
-        : fallbackPaddleX;
+    const pointer = getActiveFullscreenPointer(viewportMetrics);
+    const pointerX = pointer.active ? pointer.x : fallbackPaddleX;
     const nextState = stepBreakoutGame(
       fullscreenBreakoutStateRef.current,
       deltaSeconds,
@@ -9931,7 +10295,7 @@ export default function App() {
     setFullscreenBreakoutState(nextState);
   }
 
-  function getFullscreenBreakoutCoopInput() {
+  function getFullscreenBreakoutCoopInput(primaryPointer) {
     const hands = Array.isArray(fullscreenHandsRef.current) ? fullscreenHandsRef.current : [];
     const secondaryHand = selectBreakoutCoopSupportHand(
       hands,
@@ -9954,7 +10318,7 @@ export default function App() {
       fullscreenBreakoutCoopSecondaryPinchLatchRef.current = false;
     }
 
-    const primaryPinching = handDetectedRef.current && pinchStateRef.current;
+    const primaryPinching = Boolean(primaryPointer?.actionActive);
     let primaryPinchRising = false;
     if (primaryPinching && !fullscreenBreakoutCoopPrimaryPinchLatchRef.current) {
       primaryPinchRising = true;
@@ -9991,11 +10355,9 @@ export default function App() {
 
     const fallbackPaddleX =
       fullscreenBreakoutCoopStateRef.current?.paddle?.x ?? viewportMetrics.width / 2;
-    const pointerX =
-      handDetectedRef.current && Number.isFinite(cursorRef.current?.x)
-        ? cursorRef.current.x - viewportMetrics.left
-        : fallbackPaddleX;
-    const coopInput = getFullscreenBreakoutCoopInput();
+    const pointer = getActiveFullscreenPointer(viewportMetrics);
+    const pointerX = pointer.active ? pointer.x : fallbackPaddleX;
+    const coopInput = getFullscreenBreakoutCoopInput(pointer);
     const nextState = stepBreakoutCoopGame(
       fullscreenBreakoutCoopStateRef.current,
       deltaSeconds,
@@ -10029,10 +10391,8 @@ export default function App() {
 
     const fallbackPlayerX =
       fullscreenBrickDodgerStateRef.current?.player?.x ?? viewportMetrics.width / 2;
-    const pointerX =
-      handDetectedRef.current && Number.isFinite(cursorRef.current?.x)
-        ? cursorRef.current.x - viewportMetrics.left
-        : fallbackPlayerX;
+    const pointer = getActiveFullscreenPointer(viewportMetrics);
+    const pointerX = pointer.active ? pointer.x : fallbackPlayerX;
     const nextState = stepBrickDodgerGame(
       fullscreenBrickDodgerStateRef.current,
       deltaSeconds,
@@ -10064,10 +10424,8 @@ export default function App() {
 
     const fallbackPaddleX =
       fullscreenFingerPongStateRef.current?.player?.x ?? viewportMetrics.width / 2;
-    const pointerX =
-      handDetectedRef.current && Number.isFinite(cursorRef.current?.x)
-        ? cursorRef.current.x - viewportMetrics.left
-        : fallbackPaddleX;
+    const pointer = getActiveFullscreenPointer(viewportMetrics);
+    const pointerX = pointer.active ? pointer.x : fallbackPaddleX;
     const nextState = stepFingerPongGame(
       fullscreenFingerPongStateRef.current,
       deltaSeconds,
@@ -10097,16 +10455,15 @@ export default function App() {
     const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
     fullscreenFruitNinjaLastTickRef.current = timestamp;
 
-    const pointer =
-      handDetectedRef.current &&
-      Number.isFinite(cursorRef.current?.x) &&
-      Number.isFinite(cursorRef.current?.y)
-        ? {
-            active: true,
-            x: clampValue(cursorRef.current.x - viewportMetrics.left, 0, viewportMetrics.width),
-            y: clampValue(cursorRef.current.y - viewportMetrics.top, 0, viewportMetrics.height),
-          }
-        : { active: false };
+    const activePointer = getActiveFullscreenPointer(viewportMetrics);
+    console.debug("[fruit-pointer]", activePointer.active, activePointer.source, activePointer.x, activePointer.y);
+    const pointer = activePointer.active
+      ? {
+          active: true,
+          x: activePointer.x,
+          y: activePointer.y,
+        }
+      : { active: false };
     const nextState = stepFruitNinjaGame(
       fullscreenFruitNinjaStateRef.current,
       deltaSeconds,
@@ -10137,21 +10494,19 @@ export default function App() {
     const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
     fullscreenSkyPatrolLastTickRef.current = timestamp;
 
+    const pointer = getActiveFullscreenPointer(viewportMetrics);
     const nextState = stepSkyPatrolGame(
       fullscreenSkyPatrolStateRef.current,
       deltaSeconds,
       {
-        pointerActive:
-          handDetectedRef.current &&
-          Number.isFinite(cursorRef.current?.x) &&
-          Number.isFinite(cursorRef.current?.y),
-        pointerX: handDetectedRef.current
-          ? clampValue(cursorRef.current?.x - viewportMetrics.left, 0, viewportMetrics.width)
+        pointerActive: pointer.active,
+        pointerX: pointer.active
+          ? pointer.x
           : fullscreenSkyPatrolStateRef.current.ship.x,
-        pointerY: handDetectedRef.current
-          ? clampValue(cursorRef.current?.y - viewportMetrics.top, 0, viewportMetrics.height)
+        pointerY: pointer.active
+          ? pointer.y
           : fullscreenSkyPatrolStateRef.current.ship.y,
-        fireRequested: handDetectedRef.current && pinchStateRef.current,
+        fireRequested: pointer.actionActive,
       },
     );
     publishFullscreenSkyPatrolState(nextState);
@@ -10275,15 +10630,13 @@ export default function App() {
 
     const fallbackShipX =
       fullscreenInvadersStateRef.current?.ship?.x ?? viewportMetrics.width / 2;
-    const pointerX =
-      handDetectedRef.current && Number.isFinite(cursorRef.current?.x)
-        ? cursorRef.current.x - viewportMetrics.left
-        : fallbackShipX;
+    const pointer = getActiveFullscreenPointer(viewportMetrics);
+    const pointerX = pointer.active ? pointer.x : fallbackShipX;
     const nextState = stepSpaceInvadersGame(
       fullscreenInvadersStateRef.current,
       deltaSeconds,
       pointerX,
-      handDetectedRef.current && pinchStateRef.current,
+      pointer.actionActive,
     );
     fullscreenInvadersStateRef.current = nextState;
     setFullscreenInvadersState(nextState);
@@ -10364,15 +10717,12 @@ export default function App() {
     const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
     fullscreenTicTacToeLastTickRef.current = timestamp;
 
-    const pointerActive =
-      handDetectedRef.current &&
-      Number.isFinite(cursorRef.current?.x) &&
-      Number.isFinite(cursorRef.current?.y);
+    const pointer = getActiveFullscreenPointer(viewportMetrics);
     const nextState = stepTicTacToeGame(fullscreenTicTacToeStateRef.current, deltaSeconds, {
-      pointerActive,
-      pointerX: pointerActive ? cursorRef.current.x - viewportMetrics.left : 0,
-      pointerY: pointerActive ? cursorRef.current.y - viewportMetrics.top : 0,
-      pinchActive: handDetectedRef.current && pinchStateRef.current,
+      pointerActive: pointer.active,
+      pointerX: pointer.active ? pointer.x : 0,
+      pointerY: pointer.active ? pointer.y : 0,
+      pinchActive: pointer.actionActive,
     });
     fullscreenTicTacToeStateRef.current = nextState;
     setFullscreenTicTacToeState(nextState);
@@ -10424,6 +10774,12 @@ export default function App() {
       (latestLifecycle &&
         latestLifecycle.phase !== EXPERIENCE_PHASES.RUNNING);
     if (simulationBlocked) {
+      if (fallbackPointerRef.current.justPressed) {
+        fallbackPointerRef.current = {
+          ...fallbackPointerRef.current,
+          justPressed: false,
+        };
+      }
       simulationTimingRef.current.pause(timestamp);
       return;
     }
@@ -10448,6 +10804,17 @@ export default function App() {
         updateFullscreenOverlayGames(stepTimestamp);
       },
     );
+
+    if (
+      !trackingRequestedRef.current &&
+      fallbackPointerRef.current.justPressed
+    ) {
+      handlePinchClick(timestamp);
+      fallbackPointerRef.current = {
+        ...fallbackPointerRef.current,
+        justPressed: false,
+      };
+    }
 
     // Whack-a-Mole is a wall-clock round. It counts active visible time even
     // when simulation catch-up is capped, while paused/tracking-lost gaps do not
@@ -11917,11 +12284,22 @@ export default function App() {
     if (!fullscreenCameraViewport) {
       return;
     }
-    beginRestartedProgressionSession(getModeByFullscreenId("fruit-ninja"));
-    const nextGame = createFruitNinjaGame(
-      fullscreenCameraViewport.width,
-      fullscreenCameraViewport.height,
+    beginRestartedProgressionSession(
+      getModeByFullscreenId("fruit-ninja"),
+      activeLaunchContextRef.current,
     );
+    const nextGame = fullscreenFruitNinjaStateRef.current?.layout
+      ? restartFruitNinjaGame(fullscreenFruitNinjaStateRef.current)
+      : activeLaunchContextRef.current.challenge === "daily"
+        ? createFruitNinjaDailyGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
+            activeLaunchContextRef.current.dayKey,
+          )
+        : createFruitNinjaGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
+          );
     fullscreenFruitNinjaLastTickRef.current = 0;
     fullscreenFruitNinjaStateRef.current = nextGame;
     setFullscreenFruitNinjaState(nextGame);
@@ -11929,10 +12307,13 @@ export default function App() {
 
   function renderFullscreenFruitTarget(target) {
     const size = target.radius * 2;
+    const targetUi = getFruitNinjaTargetUi(target);
     return (
       <div
+        aria-label={targetUi.label}
         key={target.id}
-        className={`fullscreen-camera-fruit-target ${target.kind === "bomb" ? "bomb" : "fruit"}`}
+        className={targetUi.className}
+        role="img"
         style={{
           left: `${target.x - target.radius}px`,
           top: `${target.y - target.radius}px`,
@@ -11952,6 +12333,21 @@ export default function App() {
             background: target.kind === "bomb" ? target.accent : target.accent,
           }}
         />
+        {targetUi.kind === "bomb" ? (
+          <span
+            aria-hidden="true"
+            className="fullscreen-camera-fruit-bomb-fuse"
+            style={{ "--fruit-bomb-fuse": targetUi.fuseProgress }}
+          />
+        ) : targetUi.variant !== "standard" ? (
+          <span className="fullscreen-camera-fruit-special-mark">
+            {targetUi.variant === "golden"
+              ? "★"
+              : targetUi.variant === "frost"
+                ? "❄"
+                : "◆"}
+          </span>
+        ) : null}
       </div>
     );
   }
@@ -13051,7 +13447,7 @@ export default function App() {
             </div>
           ) : fullscreenGridMode === "fruit-ninja" ? (
             <div
-              className="fullscreen-camera-fruit-ninja"
+              className={getFruitNinjaSceneClassName(fullscreenFruitNinjaState)}
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               <div className="fullscreen-camera-fruit-blade-trail">
@@ -13089,6 +13485,21 @@ export default function App() {
               {fullscreenFruitNinjaState?.targets?.map((target) =>
                 renderFullscreenFruitTarget(target),
               )}
+              {fullscreenFruitNinjaBombWarnings.map((warning) => (
+                <div
+                  aria-label={`${warning.label}${
+                    warning.secondsUntilArmed
+                      ? ` in ${warning.secondsUntilArmed} seconds`
+                      : ""
+                  }`}
+                  className={warning.className}
+                  key={`bomb-warning-${warning.id}`}
+                  role="status"
+                  style={{ left: `${warning.x}px` }}
+                >
+                  <span aria-hidden="true">!</span>
+                </div>
+              ))}
               {fullscreenFruitNinjaState?.particles?.map((particle) => (
                 <div
                   key={particle.id}
@@ -13117,21 +13528,134 @@ export default function App() {
                 </div>
               ))}
               <div className="fullscreen-camera-fruit-scoreboard">
-                <span>Score {fullscreenFruitNinjaState?.score ?? 0}</span>
-                <span>Lives {fullscreenFruitNinjaState?.lives ?? FRUIT_NINJA_GAME_OVER_LIVES}</span>
-                <span>Combo x{Math.max(1, fullscreenFruitNinjaState?.comboCount ?? 0)}</span>
+                {fullscreenFruitNinjaHudUi.items.map((item) => (
+                  <span className={item.id} key={item.id}>
+                    <small>{item.label}</small>
+                    <strong>{item.value}</strong>
+                  </span>
+                ))}
               </div>
               <div className="fullscreen-camera-fruit-legend">
-                <span>Fruit +{FRUIT_NINJA_BASE_SCORE}</span>
-                <span>Combo +{FRUIT_NINJA_COMBO_BONUS}</span>
-                <span>Bomb -{FRUIT_NINJA_BOMB_PENALTY}</span>
+                {fullscreenFruitNinjaLegendItems.map((item) => (
+                  <span className={item.id} key={item.id}>
+                    {item.label}
+                  </span>
+                ))}
               </div>
-              <div className="fullscreen-camera-fruit-banner">
-                {fullscreenFruitNinjaState?.message}
+              <div
+                aria-label={`Round progress ${Math.round(
+                  fullscreenFruitNinjaRoundUi.progress * 100,
+                )}%`}
+                className={`fullscreen-camera-fruit-round-meter ${fullscreenFruitNinjaRoundUi.urgency}`}
+                role="progressbar"
+                aria-valuemax="100"
+                aria-valuemin="0"
+                aria-valuenow={Math.round(
+                  fullscreenFruitNinjaRoundUi.progress * 100,
+                )}
+              >
+                <span
+                  style={{
+                    "--fruit-round-progress":
+                      fullscreenFruitNinjaRoundUi.progress,
+                  }}
+                />
               </div>
+              <div className="fullscreen-camera-fruit-powers">
+                <span
+                  className={`fever ${
+                    fullscreenFruitNinjaPowerUi.fever.active ? "active" : ""
+                  }`}
+                  style={{
+                    "--fruit-power-progress":
+                      fullscreenFruitNinjaPowerUi.fever.active
+                        ? fullscreenFruitNinjaPowerUi.fever.remaining
+                        : fullscreenFruitNinjaPowerUi.fever.charge,
+                  }}
+                >
+                  {fullscreenFruitNinjaPowerUi.fever.label}
+                </span>
+                <span
+                  className={`slow-time ${
+                    fullscreenFruitNinjaPowerUi.slowTime.active ? "active" : ""
+                  }`}
+                  style={{
+                    "--fruit-power-progress":
+                      fullscreenFruitNinjaPowerUi.slowTime.remaining,
+                  }}
+                >
+                  {fullscreenFruitNinjaPowerUi.slowTime.label}
+                </span>
+                <span className="shields">
+                  {fullscreenFruitNinjaPowerUi.shields.charges.map(
+                    (charged, index) => (
+                      <i
+                        aria-hidden="true"
+                        className={charged ? "charged" : ""}
+                        key={`fruit-shield-${index}`}
+                      />
+                    ),
+                  )}
+                  <span className="sr-only">
+                    {fullscreenFruitNinjaPowerUi.shields.label}
+                  </span>
+                </span>
+              </div>
+              {fullscreenFruitNinjaComboUi.active ? (
+                <div
+                  className={`fullscreen-camera-fruit-combo ${fullscreenFruitNinjaComboUi.tier}`}
+                  style={{
+                    "--fruit-combo-window":
+                      fullscreenFruitNinjaComboUi.windowProgress,
+                  }}
+                >
+                  <strong>{fullscreenFruitNinjaComboUi.label}</strong>
+                  <small>Best {fullscreenFruitNinjaComboUi.bestCombo}</small>
+                </div>
+              ) : null}
+              {fullscreenFruitNinjaPrecisionUi.visible ? (
+                <div className={fullscreenFruitNinjaPrecisionUi.className}>
+                  <strong>{fullscreenFruitNinjaPrecisionUi.label}</strong>
+                  {fullscreenFruitNinjaPrecisionUi.bonus > 0 ? (
+                    <span>+{fullscreenFruitNinjaPrecisionUi.bonus}</span>
+                  ) : null}
+                </div>
+              ) : null}
+              {fullscreenFruitNinjaRoundUi.announcementVisible ? (
+                <div
+                  aria-live="polite"
+                  className="fullscreen-camera-fruit-wave-banner"
+                  role="status"
+                >
+                  {fullscreenFruitNinjaRoundUi.announcement}
+                </div>
+              ) : (
+                <div className="fullscreen-camera-fruit-banner">
+                  {fullscreenFruitNinjaState?.message}
+                </div>
+              )}
               {isFullscreenFruitNinjaMode &&
-              fullscreenFruitNinjaState?.status === "gameover" ? (
-                <div className="fullscreen-camera-fruit-gameover">Round Over</div>
+              fullscreenFruitNinjaRecapUi.visible ? (
+                <div className="fullscreen-camera-fruit-gameover">
+                  <span>{fullscreenFruitNinjaRecapUi.title}</span>
+                  <strong>{fullscreenFruitNinjaRecapUi.score}</strong>
+                  <em>Grade {fullscreenFruitNinjaRecapUi.grade}</em>
+                  <div>
+                    {fullscreenFruitNinjaRecapUi.stats.map((stat) => (
+                      <small key={stat.id}>
+                        {stat.label} <b>{stat.value}</b>
+                      </small>
+                    ))}
+                  </div>
+                  {fullscreenFruitNinjaRecapUi.medals.length ? (
+                    <p>
+                      {fullscreenFruitNinjaRecapUi.medals
+                        .map((medal) => medal.label)
+                        .join(" · ")}
+                    </p>
+                  ) : null}
+                  <small>{fullscreenFruitNinjaRecapUi.restartText}</small>
+                </div>
               ) : null}
             </div>
           ) : fullscreenGridMode === "sky-patrol" ? (
@@ -13180,6 +13704,64 @@ export default function App() {
                     )}
                   </span>
                 ))}
+              </div>
+              <div
+                className={`fullscreen-camera-sky-patrol-mission ${fullscreenSkyPatrolMissionUi.phase}`}
+              >
+                <span>
+                  Mission {fullscreenSkyPatrolMissionUi.mission}/
+                  {fullscreenSkyPatrolMissionUi.totalMissions}
+                </span>
+                <strong>{fullscreenSkyPatrolMissionUi.name}</strong>
+                <small>{fullscreenSkyPatrolMissionUi.goalText}</small>
+                <span
+                  aria-label={`${fullscreenSkyPatrolMissionUi.progress} of ${fullscreenSkyPatrolMissionUi.goal}`}
+                  className="fullscreen-camera-sky-patrol-mission-track"
+                  role="progressbar"
+                  aria-valuemax={fullscreenSkyPatrolMissionUi.goal || 1}
+                  aria-valuemin="0"
+                  aria-valuenow={fullscreenSkyPatrolMissionUi.progress}
+                >
+                  <i
+                    style={{
+                      "--sky-mission-progress":
+                        fullscreenSkyPatrolMissionUi.progressRatio,
+                    }}
+                  />
+                </span>
+              </div>
+              {fullscreenSkyPatrolComboUi.visible ? (
+                <div className="fullscreen-camera-sky-patrol-combo">
+                  <strong>{fullscreenSkyPatrolComboUi.label}</strong>
+                  <span>{fullscreenSkyPatrolComboUi.multiplier}x score</span>
+                </div>
+              ) : null}
+              <div
+                aria-label="Sky Patrol power status"
+                className="fullscreen-camera-sky-patrol-powers"
+              >
+                <span
+                  className={
+                    (fullscreenSkyPatrolHud?.shieldCharges ?? 0) > 0
+                      ? "ready"
+                      : ""
+                  }
+                >
+                  Shield {fullscreenSkyPatrolHud?.shieldCharges ?? 0}
+                </span>
+                <span
+                  className={
+                    (fullscreenSkyPatrolHud?.wingmanActiveMs ?? 0) > 0
+                      ? "active"
+                      : (fullscreenSkyPatrolHud?.wingmanCharges ?? 0) > 0
+                        ? "ready"
+                        : ""
+                  }
+                >
+                  {(fullscreenSkyPatrolHud?.wingmanActiveMs ?? 0) > 0
+                    ? "Wingmen active"
+                    : `Wingmen ${fullscreenSkyPatrolHud?.wingmanCharges ?? 0}`}
+                </span>
               </div>
               <div
                 className={`fullscreen-camera-sky-patrol-gun-meter ${fullscreenSkyPatrolGunCooldownUi.state}`}
@@ -13249,14 +13831,40 @@ export default function App() {
                     {fullscreenSkyPatrolGameOverUi.restartText}
                   </span>
                 </div>
-              ) : fullscreenSkyPatrolStartPromptUi.visible ? (
+              ) : fullscreenSkyPatrolCheckpointUi.visible ? (
+                <div
+                  aria-live="polite"
+                  className="fullscreen-camera-sky-patrol-banner checkpoint"
+                  role="status"
+                >
+                  <span className="fullscreen-camera-sky-patrol-start-title">
+                    {fullscreenSkyPatrolCheckpointUi.title}
+                  </span>
+                  <span className="fullscreen-camera-sky-patrol-checkpoint-stats">
+                    {fullscreenSkyPatrolCheckpointUi.stats.map((stat) => (
+                      <small key={stat.label}>
+                        {stat.label} <strong>{stat.value}</strong>
+                      </small>
+                    ))}
+                  </span>
+                  <span>{fullscreenSkyPatrolCheckpointUi.nextMissionText}</span>
+                </div>
+              ) : fullscreenSkyPatrolOnboardingUi.visible ||
+                fullscreenSkyPatrolStartPromptUi.visible ? (
                 <div className="fullscreen-camera-sky-patrol-banner start-prompt">
                   <span className="fullscreen-camera-sky-patrol-start-title">
-                    {fullscreenSkyPatrolStartPromptUi.title}
+                    {fullscreenSkyPatrolOnboardingUi.visible
+                      ? fullscreenSkyPatrolOnboardingUi.title
+                      : fullscreenSkyPatrolStartPromptUi.title}
                   </span>
                   <span className="fullscreen-camera-sky-patrol-start-detail">
-                    {fullscreenSkyPatrolStartPromptUi.detail}
+                    {fullscreenSkyPatrolOnboardingUi.visible
+                      ? fullscreenSkyPatrolOnboardingUi.objective
+                      : fullscreenSkyPatrolStartPromptUi.detail}
                   </span>
+                  {fullscreenSkyPatrolOnboardingUi.safetyLabel ? (
+                    <small>{fullscreenSkyPatrolOnboardingUi.safetyLabel}</small>
+                  ) : null}
                 </div>
               ) : null}
             </div>

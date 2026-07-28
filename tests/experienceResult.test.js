@@ -115,6 +115,19 @@ test("personal-best and metric definitions produce a game-specific view safely",
   assert.equal(view.actions[1].label, "Choose another game");
 });
 
+test("an explicitly non-record result can still mark individual saved metrics", () => {
+  const result = normalizeExperienceResult({
+    outcome: EXPERIENCE_OUTCOMES.COMPLETED,
+    score: 0,
+    metrics: { wavesReached: 1 },
+    isPersonalBest: false,
+    personalBestMetricIds: ["wavesReached"],
+  });
+
+  assert.equal(result.isPersonalBest, false);
+  assert.deepEqual(result.personalBestMetricIds, ["wavesReached"]);
+});
+
 test("broken custom formatters fall back and restart can be intentionally hidden", () => {
   const view = createExperienceResultViewModel(
     {

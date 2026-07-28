@@ -2708,6 +2708,128 @@ body {
   font-weight: 800;
 }
 
+.fullscreen-camera-sky-patrol-mission {
+  background: rgba(9, 17, 27, 0.78);
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 12px;
+  color: #f4f7fb;
+  display: grid;
+  gap: 3px;
+  left: 50%;
+  max-width: min(440px, calc(100% - 220px));
+  padding: 8px 12px;
+  pointer-events: none;
+  position: absolute;
+  text-align: center;
+  top: 74px;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 4;
+}
+
+.fullscreen-camera-sky-patrol-mission > span:first-child,
+.fullscreen-camera-sky-patrol-mission small {
+  color: rgba(226, 239, 255, 0.72);
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.fullscreen-camera-sky-patrol-mission > span:first-child {
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-sky-patrol-mission-track {
+  background: rgba(226, 240, 255, 0.12);
+  border-radius: 999px;
+  height: 4px;
+  margin-top: 3px;
+  overflow: hidden;
+}
+
+.fullscreen-camera-sky-patrol-mission-track i {
+  background: linear-gradient(90deg, #70d6ff, #fff2a8);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transform: scaleX(var(--sky-mission-progress, 0));
+  transform-origin: left;
+  width: 100%;
+}
+
+.fullscreen-camera-sky-patrol-combo {
+  color: #fff2a8;
+  display: grid;
+  left: 18px;
+  pointer-events: none;
+  position: absolute;
+  text-shadow: 0 3px 14px rgba(0, 0, 0, 0.72);
+  top: 142px;
+  z-index: 4;
+}
+
+.fullscreen-camera-sky-patrol-combo strong {
+  font-size: clamp(1.05rem, 2.8vw, 1.8rem);
+}
+
+.fullscreen-camera-sky-patrol-combo span {
+  color: #f4f7fb;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.fullscreen-camera-sky-patrol-powers {
+  display: grid;
+  gap: 6px;
+  pointer-events: none;
+  position: absolute;
+  right: 82px;
+  top: 76px;
+  z-index: 4;
+}
+
+.fullscreen-camera-sky-patrol-powers > span {
+  background: rgba(9, 17, 27, 0.68);
+  border: 1px solid rgba(202, 220, 239, 0.2);
+  border-radius: 999px;
+  color: rgba(226, 239, 255, 0.66);
+  font-size: 0.66rem;
+  font-weight: 850;
+  padding: 5px 8px;
+}
+
+.fullscreen-camera-sky-patrol-powers > span.ready,
+.fullscreen-camera-sky-patrol-powers > span.active {
+  border-color: rgba(255, 242, 168, 0.58);
+  color: #fff2a8;
+}
+
+.fullscreen-camera-sky-patrol-powers > span.active {
+  box-shadow: 0 0 15px rgba(112, 214, 255, 0.24);
+  color: #9be9ff;
+}
+
+.fullscreen-camera-sky-patrol-banner.checkpoint {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  max-width: min(560px, calc(100% - 36px));
+  padding: 16px 20px;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.fullscreen-camera-sky-patrol-checkpoint-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: center;
+}
+
+.fullscreen-camera-sky-patrol-checkpoint-stats small {
+  color: rgba(235, 244, 255, 0.82);
+}
+
 .fullscreen-camera-invaders {
   overflow: hidden;
   pointer-events: none;
@@ -3482,6 +3604,57 @@ html[data-low-sensory="true"] .fullscreen-camera-invaders-ufo {
   border: 3px solid rgba(9, 17, 27, 0.72);
 }
 
+.fullscreen-camera-fruit-ninja.fever-active {
+  box-shadow: inset 0 0 110px rgba(255, 190, 72, 0.18);
+}
+
+.fullscreen-camera-fruit-ninja.slow-time-active {
+  box-shadow: inset 0 0 110px rgba(97, 216, 255, 0.18);
+}
+
+.fullscreen-camera-fruit-target.special-golden {
+  box-shadow: 0 0 26px rgba(255, 216, 77, 0.7);
+}
+
+.fullscreen-camera-fruit-target.special-frost {
+  box-shadow: 0 0 24px rgba(97, 216, 255, 0.66);
+}
+
+.fullscreen-camera-fruit-target.special-shield {
+  box-shadow: 0 0 24px rgba(157, 124, 255, 0.66);
+}
+
+.fullscreen-camera-fruit-special-mark {
+  color: #fff;
+  font-size: clamp(0.9rem, 2vw, 1.3rem);
+  font-weight: 900;
+  position: absolute;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.48);
+}
+
+.fullscreen-camera-fruit-target.bomb.telegraphing {
+  border-color: rgba(255, 218, 112, 0.92);
+  opacity: 0.82;
+}
+
+.fullscreen-camera-fruit-target.bomb.armed {
+  border-color: rgba(255, 100, 85, 0.94);
+  box-shadow: 0 0 24px rgba(255, 86, 72, 0.5) !important;
+}
+
+.fullscreen-camera-fruit-bomb-fuse {
+  background: conic-gradient(
+    #ff6b57 calc(var(--fruit-bomb-fuse, 0) * 1turn),
+    rgba(255, 255, 255, 0.16) 0
+  );
+  border-radius: 50%;
+  height: 82%;
+  inset: 9%;
+  mask: radial-gradient(circle, transparent 70%, #000 72%);
+  position: absolute;
+  width: 82%;
+}
+
 .fullscreen-camera-fruit-target.fruit::after,
 .fullscreen-camera-fruit-split::after {
   background: rgba(255, 255, 255, 0.55);
@@ -3583,9 +3756,26 @@ html[data-low-sensory="true"] .fullscreen-camera-invaders-ufo {
 }
 
 .fullscreen-camera-fruit-scoreboard {
+  align-items: center;
   font-size: 0.95rem;
   font-weight: 700;
   top: 18px;
+}
+
+.fullscreen-camera-fruit-scoreboard > span {
+  display: grid;
+  gap: 1px;
+}
+
+.fullscreen-camera-fruit-scoreboard small {
+  color: rgba(226, 239, 255, 0.68);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-fruit-scoreboard strong {
+  font-size: 0.95rem;
 }
 
 .fullscreen-camera-fruit-legend {
@@ -3602,13 +3792,166 @@ html[data-low-sensory="true"] .fullscreen-camera-invaders-ufo {
   transform: translateX(-50%);
 }
 
+.fullscreen-camera-fruit-round-meter {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  height: 4px;
+  left: 18px;
+  overflow: hidden;
+  position: absolute;
+  right: 18px;
+  top: 8px;
+  z-index: 4;
+}
+
+.fullscreen-camera-fruit-round-meter > span {
+  background: linear-gradient(90deg, #61d8ff, #ffd84d);
+  display: block;
+  height: 100%;
+  transform: scaleX(var(--fruit-round-progress, 0));
+  transform-origin: left;
+  width: 100%;
+}
+
+.fullscreen-camera-fruit-round-meter.urgent > span {
+  background: #ffb15c;
+}
+
+.fullscreen-camera-fruit-round-meter.critical > span {
+  background: #ff6b57;
+}
+
+.fullscreen-camera-fruit-powers {
+  display: grid;
+  gap: 7px;
+  pointer-events: none;
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  z-index: 4;
+}
+
+.fullscreen-camera-fruit-powers > span {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(97, 216, 255, 0.32) calc(var(--fruit-power-progress, 0) * 100%),
+      rgba(9, 17, 27, 0.74) 0
+    );
+  border: 1px solid rgba(202, 220, 239, 0.22);
+  border-radius: 999px;
+  color: rgba(244, 247, 251, 0.78);
+  font-size: 0.68rem;
+  font-weight: 850;
+  padding: 6px 9px;
+}
+
+.fullscreen-camera-fruit-powers > span.active {
+  border-color: rgba(255, 216, 77, 0.72);
+  color: #fff6b0;
+}
+
+.fullscreen-camera-fruit-powers .shields {
+  display: flex;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
+.fullscreen-camera-fruit-powers .shields i {
+  border: 1px solid rgba(240, 234, 255, 0.48);
+  border-radius: 50%;
+  height: 10px;
+  width: 10px;
+}
+
+.fullscreen-camera-fruit-powers .shields i.charged {
+  background: #9d7cff;
+  box-shadow: 0 0 10px rgba(157, 124, 255, 0.72);
+}
+
+.fullscreen-camera-fruit-combo,
+.fullscreen-camera-fruit-precision {
+  color: #fff6b0;
+  display: grid;
+  left: 50%;
+  pointer-events: none;
+  position: absolute;
+  text-align: center;
+  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.62);
+  transform: translateX(-50%);
+  z-index: 4;
+}
+
+.fullscreen-camera-fruit-combo {
+  top: 94px;
+}
+
+.fullscreen-camera-fruit-combo strong {
+  font-size: clamp(1rem, 3.2vw, 1.9rem);
+}
+
+.fullscreen-camera-fruit-combo small {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.fullscreen-camera-fruit-precision {
+  top: 144px;
+}
+
+.fullscreen-camera-fruit-precision strong {
+  font-size: clamp(1.2rem, 4vw, 2.4rem);
+}
+
+.fullscreen-camera-fruit-precision.perfect {
+  color: #ffd84d;
+}
+
+.fullscreen-camera-fruit-wave-banner {
+  background: rgba(9, 17, 27, 0.82);
+  border: 1px solid rgba(255, 216, 77, 0.42);
+  border-radius: 999px;
+  color: #fff6b0;
+  font-size: clamp(0.9rem, 2.3vw, 1.2rem);
+  font-weight: 900;
+  left: 50%;
+  padding: 9px 16px;
+  position: absolute;
+  top: 70px;
+  transform: translateX(-50%);
+  z-index: 4;
+}
+
+.fullscreen-camera-fruit-bomb-warning {
+  align-items: center;
+  background: rgba(106, 28, 25, 0.88);
+  border: 2px solid #ffb4ab;
+  border-radius: 50%;
+  bottom: 78px;
+  color: #fff;
+  display: flex;
+  font-weight: 950;
+  height: 28px;
+  justify-content: center;
+  position: absolute;
+  transform: translateX(-50%);
+  width: 28px;
+  z-index: 4;
+}
+
+.fullscreen-camera-fruit-bomb-warning.telegraphing {
+  background: rgba(108, 74, 18, 0.86);
+  border-color: #ffd84d;
+}
+
 .fullscreen-camera-fruit-gameover {
   background: rgba(9, 17, 27, 0.76);
   border: 1px solid rgba(202, 220, 239, 0.22);
   border-radius: 20px;
   color: #fffdf7;
-  font-size: clamp(1.8rem, 6vw, 3.2rem);
-  font-weight: 900;
+  display: grid;
+  font-size: clamp(1rem, 2.4vw, 1.4rem);
+  font-weight: 800;
+  gap: 7px;
   left: 50%;
   letter-spacing: 0.06em;
   padding: 18px 24px;
@@ -3616,6 +3959,32 @@ html[data-low-sensory="true"] .fullscreen-camera-invaders-ufo {
   text-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
   top: 50%;
   transform: translate(-50%, -50%);
+  width: min(560px, calc(100% - 36px));
+  z-index: 5;
+}
+
+.fullscreen-camera-fruit-gameover > strong {
+  color: #fff6b0;
+  font-size: clamp(2rem, 7vw, 4rem);
+}
+
+.fullscreen-camera-fruit-gameover > em {
+  color: #61d8ff;
+  font-style: normal;
+}
+
+.fullscreen-camera-fruit-gameover > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: center;
+}
+
+.fullscreen-camera-fruit-gameover p,
+.fullscreen-camera-fruit-gameover small {
+  font-size: 0.76rem;
+  letter-spacing: 0;
+  margin: 0;
 }
 
 .fullscreen-camera-ring-group {
@@ -6551,6 +6920,26 @@ button:disabled {
     width: 148px;
   }
 
+  .fullscreen-camera-sky-patrol-mission {
+    max-width: calc(100% - 188px);
+    padding: 6px 9px;
+    top: 66px;
+  }
+
+  .fullscreen-camera-sky-patrol-mission small {
+    display: none;
+  }
+
+  .fullscreen-camera-sky-patrol-powers {
+    right: 70px;
+    top: 112px;
+  }
+
+  .fullscreen-camera-sky-patrol-combo {
+    left: 12px;
+    top: 124px;
+  }
+
   .fullscreen-camera-tic-tac-toe-status {
     flex-basis: 100%;
     font-size: 0.95rem;
@@ -6571,6 +6960,25 @@ button:disabled {
 
   .fullscreen-camera-fruit-scoreboard {
     right: 12px;
+  }
+
+  .fullscreen-camera-fruit-scoreboard .wave {
+    display: none;
+  }
+
+  .fullscreen-camera-fruit-powers {
+    right: 12px;
+    top: 72px;
+  }
+
+  .fullscreen-camera-fruit-legend {
+    max-width: calc(100% - 24px);
+  }
+
+  .fullscreen-camera-fruit-legend .golden,
+  .fullscreen-camera-fruit-legend .frost,
+  .fullscreen-camera-fruit-legend .shield {
+    display: none;
   }
 
   .fullscreen-camera-fruit-legend {

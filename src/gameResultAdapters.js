@@ -4,6 +4,8 @@ import { getFlappyResultStats } from "./flappyGame.js";
 import { getSpaceInvadersResultStats } from "./spaceInvadersGame.js";
 import { getBrickDodgerResultStats } from "./brickDodgerGame.js";
 import { getMissileCommandResultStats } from "./missileCommandGame.js";
+import { getSkyPatrolResultStats } from "./skyPatrolGame.js";
+import { createFruitNinjaResult } from "./fruitNinjaGame.js";
 
 const RESULT_IDENTIFIER_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,79}$/i;
 const RESERVED_RESULT_IDENTIFIERS = new Set([
@@ -97,11 +99,30 @@ function adaptSkyPatrol(state, input) {
     return null;
   }
   const durationMs = resolveDurationMs(state, input.durationMs);
+  const result =
+    state.result ??
+    getSkyPatrolResultStats(state) ?? {
+      outcome: state.outcome ?? "defeat",
+      score: state.score,
+      missionReached: state.mission,
+      missionsCleared: state.missionsCleared,
+      targetsDestroyed: state.targetsDestroyed,
+      accuracy: state.accuracy,
+      bestCombo: state.bestCombo,
+      powerUpsCollected: state.powerUpsCollected,
+      livesRemaining: state.lives,
+    };
   return scoreDescriptor({
-    outcome: "lost",
-    score: state.score,
+    outcome: result.outcome === "victory" ? "won" : "lost",
+    score: result.score,
     metrics: {
-      targetsDestroyed: nonNegativeInteger(state.targetsDestroyed),
+      missionReached: nonNegativeInteger(result.missionReached, 1),
+      missionsCleared: nonNegativeInteger(result.missionsCleared),
+      targetsDestroyed: nonNegativeInteger(result.targetsDestroyed),
+      accuracyPercent: nonNegative(result.accuracy),
+      bestCombo: nonNegativeInteger(result.bestCombo),
+      powerUpsCollected: nonNegativeInteger(result.powerUpsCollected),
+      livesRemaining: nonNegativeInteger(result.livesRemaining),
       ...(durationMs === null ? {} : { survivalMs: durationMs }),
     },
     durationMs,
@@ -113,11 +134,19 @@ function adaptFruitNinja(state, input) {
     return null;
   }
   const durationMs = resolveDurationMs(state, input.durationMs);
+  const result =
+    state.result ??
+    createFruitNinjaResult(state, state.endReason);
   return scoreDescriptor({
-    outcome: "completed",
-    score: state.score,
+    outcome: result.outcome === "completed" ? "completed" : "lost",
+    score: result.score,
     metrics: {
-      finalCombo: nonNegativeInteger(state.comboCount),
+      fruitSliced: nonNegativeInteger(result.stats?.fruitSliced),
+      bestCombo: nonNegativeInteger(result.bestCombo),
+      precisionPercent: nonNegative(result.precisionRate) * 100,
+      bombsHit: nonNegativeInteger(result.stats?.bombsHit),
+      wavesReached: nonNegativeInteger(result.stats?.wavesReached, 1),
+      livesRemaining: nonNegativeInteger(result.livesRemaining),
       ...(durationMs === null ? {} : { survivalMs: durationMs }),
     },
     durationMs,

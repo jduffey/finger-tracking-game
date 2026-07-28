@@ -890,7 +890,7 @@ export function createSkyPatrolDailyGame(width, height, options = {}) {
   });
 }
 
-function restartSkyPatrolGame(state, rng = Math.random) {
+export function restartSkyPatrolGame(state, rng = Math.random) {
   if (state.challenge?.mode === "daily") {
     return createSkyPatrolDailyGame(state.layout.width, state.layout.height, {
       date: state.challenge.dayKey,

@@ -130,6 +130,7 @@ const catalog = [
     difficulty: "Easy",
     players: 1,
     featured: true,
+    dailyChallenge: true,
     ...sharedFullscreenGame,
   },
   {

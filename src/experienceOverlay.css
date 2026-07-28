@@ -277,6 +277,66 @@
   text-transform: uppercase;
 }
 
+.experience-overlay-dialog.results {
+  padding: clamp(22px, 3.5vw, 34px);
+}
+
+.experience-overlay-dialog.results .experience-overlay-dialog-mark {
+  border-radius: 12px;
+  height: 38px;
+  margin-bottom: 12px;
+  width: 38px;
+}
+
+.experience-overlay-dialog.results h2 {
+  font-size: clamp(2.15rem, 6vw, 3.5rem);
+  margin: 6px 0 10px;
+}
+
+.experience-overlay-dialog.results > p {
+  font-size: 0.94rem;
+  line-height: 1.4;
+}
+
+.experience-overlay-dialog.results .experience-overlay-results-metrics {
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.experience-overlay-dialog.results .experience-overlay-primary-metric {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px 16px;
+}
+
+.experience-overlay-dialog.results
+  .experience-overlay-primary-metric
+  > strong {
+  grid-column: 1;
+  font-size: clamp(1.8rem, 5vw, 2.8rem);
+}
+
+.experience-overlay-dialog.results .experience-overlay-primary-metric > em {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.experience-overlay-dialog.results
+  .experience-overlay-results-metrics
+  dl
+  > div {
+  padding: 8px 11px;
+}
+
+.experience-overlay-dialog.results .experience-overlay-results-metrics dd {
+  font-size: 0.94rem;
+  margin-top: 2px;
+}
+
+.experience-overlay-dialog.results .experience-overlay-dialog-actions {
+  margin-top: 16px;
+}
+
 .experience-overlay-root.experience-overlay-state-countdown {
   background: rgba(3, 6, 14, 0.48);
   place-items: center;

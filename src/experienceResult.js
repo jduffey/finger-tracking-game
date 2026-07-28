@@ -174,7 +174,9 @@ export function normalizeExperienceResult(value, options = {}) {
     title: normalizeCopy(source.title),
     message: normalizeCopy(source.message),
     isPersonalBest:
-      Boolean(source.isPersonalBest) || personalBestMetricIds.length > 0,
+      typeof source.isPersonalBest === "boolean"
+        ? source.isPersonalBest
+        : personalBestMetricIds.length > 0,
     personalBestMetricIds,
   };
 }

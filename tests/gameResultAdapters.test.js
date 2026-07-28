@@ -20,14 +20,42 @@ const ENDED_AT = "2026-07-01T12:02:00.000Z";
 const TERMINAL_STATES = Object.freeze({
   "sky-patrol": {
     status: "gameover",
+    outcome: "victory",
     score: 840,
     targetsDestroyed: 9,
+    mission: 4,
+    totalMissions: 4,
+    lives: 2,
+    layout: { width: 800, height: 600 },
+    result: {
+      outcome: "victory",
+      score: 840,
+      missionReached: 4,
+      missionsCleared: 4,
+      targetsDestroyed: 9,
+      accuracy: 72,
+      bestCombo: 6,
+      powerUpsCollected: 3,
+      livesRemaining: 2,
+    },
     elapsedMs: 82_000,
   },
   "fruit-ninja": {
     status: "gameover",
+    endReason: "round-complete",
     score: 350,
     comboCount: 4,
+    bestCombo: 8,
+    lives: 2,
+    stats: {
+      fruitSliced: 18,
+      perfectSlices: 3,
+      greatSlices: 6,
+      goodSlices: 3,
+      bombsHit: 1,
+      wavesReached: 5,
+      bestCombo: 8,
+    },
     elapsedMs: 61_000,
   },
   "missile-command": {
@@ -175,7 +203,7 @@ test("every supported fullscreen adapter returns null until its state is termina
 
 test("terminal fullscreen modes map to stable mode ids and semantic outcomes", () => {
   const expected = {
-    "sky-patrol": { modeId: "sky-patrol", outcome: "lost", score: 840 },
+    "sky-patrol": { modeId: "sky-patrol", outcome: "won", score: 840 },
     "fruit-ninja": { modeId: "slice-air", outcome: "completed", score: 350 },
     "missile-command": { modeId: "missile-command", outcome: "won", score: 1_200 },
     "brick-dodger": { modeId: "brick-dodger", outcome: "completed", score: 975 },
@@ -222,12 +250,23 @@ test("fullscreen results expose useful mode-specific secondary metrics", () => {
 
   assert.deepEqual(resultFor("sky-patrol").metrics, {
     score: 840,
+    missionReached: 4,
+    missionsCleared: 4,
     targetsDestroyed: 9,
+    accuracyPercent: 72,
+    bestCombo: 6,
+    powerUpsCollected: 3,
+    livesRemaining: 2,
     survivalMs: 120_000,
   });
   assert.deepEqual(resultFor("fruit-ninja").metrics, {
     score: 350,
-    finalCombo: 4,
+    fruitSliced: 18,
+    bestCombo: 8,
+    precisionPercent: 75,
+    bombsHit: 1,
+    wavesReached: 5,
+    livesRemaining: 2,
     survivalMs: 120_000,
   });
   assert.deepEqual(resultFor("missile-command").metrics, {
@@ -337,6 +376,16 @@ test("an Invaders wave clear is an intermission, not a terminal result", () => {
 
 test("loss and draw terminal variants remain distinct", () => {
   const cases = [
+    [
+      "sky-patrol",
+      {
+        status: "gameover",
+        outcome: "defeat",
+        score: 300,
+        layout: { width: 800 },
+      },
+      "lost",
+    ],
     ["breakout", { status: "gameover", score: 400, lives: 0 }, "lost"],
     ["breakout-coop", { status: "gameover", score: 700, lives: 0 }, "lost"],
     ["finger-pong", { status: "lost", score: 3, opponentScore: 7 }, "lost"],
