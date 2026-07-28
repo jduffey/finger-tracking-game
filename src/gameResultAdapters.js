@@ -6,6 +6,7 @@ import { getBrickDodgerResultStats } from "./brickDodgerGame.js";
 import { getMissileCommandResultStats } from "./missileCommandGame.js";
 import { getSkyPatrolResultStats } from "./skyPatrolGame.js";
 import { createFruitNinjaResult } from "./fruitNinjaGame.js";
+import { getFullscreenHandBounceResultStats } from "./fullscreenHandBounceGame.js";
 
 const RESULT_IDENTIFIER_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,79}$/i;
 const RESERVED_RESULT_IDENTIFIERS = new Set([
@@ -222,11 +223,37 @@ function adaptHandBounce(state, input) {
     return null;
   }
   const durationMs = resolveDurationMs(state, input.durationMs);
+  const result =
+    state.result ??
+    getFullscreenHandBounceResultStats(state) ?? {
+      outcome: state.outcome ?? "defeat",
+      score: state.score,
+      saves: state.saveCount,
+      targetHits: state.stats?.targetHits,
+      trickShots: state.stats?.trickShots,
+      bestCombo: state.stats?.bestCombo,
+      stagesCleared: state.stats?.stagesCleared,
+      stageReached: state.stage,
+      livesRemaining: state.lives,
+      drops: state.stats?.drops,
+      powerUpsActivated: state.stats?.powerUpsActivated,
+    };
   return scoreDescriptor({
-    outcome: "completed",
-    score: finite(state.score, state.saveCount),
+    outcome: result.outcome === "victory" ? "won" : "lost",
+    score: finite(result.score, state.saveCount),
     metrics: {
-      saves: nonNegativeInteger(state.saveCount, nonNegativeInteger(state.score)),
+      saves: nonNegativeInteger(
+        result.saves,
+        nonNegativeInteger(state.saveCount, nonNegativeInteger(state.score)),
+      ),
+      targetHits: nonNegativeInteger(result.targetHits),
+      trickShots: nonNegativeInteger(result.trickShots),
+      bestCombo: nonNegativeInteger(result.bestCombo),
+      stagesCleared: nonNegativeInteger(result.stagesCleared),
+      stageReached: nonNegativeInteger(result.stageReached, 1),
+      livesRemaining: nonNegativeInteger(result.livesRemaining),
+      drops: nonNegativeInteger(result.drops),
+      powerUpsActivated: nonNegativeInteger(result.powerUpsActivated),
       ...(durationMs === null ? {} : { survivalMs: durationMs }),
     },
     durationMs,

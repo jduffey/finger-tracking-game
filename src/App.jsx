@@ -66,9 +66,20 @@ import {
   stepFingerPongGame,
 } from "./fingerPongGame.js";
 import {
+  createFullscreenHandBounceDailyGame,
   createFullscreenHandBounceGame,
+  restartFullscreenHandBounceGame as restartFullscreenHandBounceCampaign,
   stepFullscreenHandBounceGame,
 } from "./fullscreenHandBounceGame.js";
+import {
+  getFullscreenHandBounceCheckpointUi,
+  getFullscreenHandBounceHudUi,
+  getFullscreenHandBounceLegendUi,
+  getFullscreenHandBouncePowerUi,
+  getFullscreenHandBounceResultUi,
+  getFullscreenHandBounceStageUi,
+  getFullscreenHandBounceTargetUi,
+} from "./fullscreenHandBounceUi.js";
 import {
   WHACK_A_MOLE_ACTIONS,
   WHACK_A_MOLE_PHASES,
@@ -2525,6 +2536,34 @@ export default function App() {
     () => getBrickDodgerResultUi(fullscreenBrickDodgerState),
     [fullscreenBrickDodgerState],
   );
+  const fullscreenHandBounceHudUi = useMemo(
+    () => getFullscreenHandBounceHudUi(fullscreenHandBounceState),
+    [fullscreenHandBounceState],
+  );
+  const fullscreenHandBounceStageUi = useMemo(
+    () => getFullscreenHandBounceStageUi(fullscreenHandBounceState),
+    [fullscreenHandBounceState],
+  );
+  const fullscreenHandBounceTargetUi = useMemo(
+    () => getFullscreenHandBounceTargetUi(fullscreenHandBounceState),
+    [fullscreenHandBounceState],
+  );
+  const fullscreenHandBouncePowerUi = useMemo(
+    () => getFullscreenHandBouncePowerUi(fullscreenHandBounceState),
+    [fullscreenHandBounceState],
+  );
+  const fullscreenHandBounceCheckpointUi = useMemo(
+    () => getFullscreenHandBounceCheckpointUi(fullscreenHandBounceState),
+    [fullscreenHandBounceState],
+  );
+  const fullscreenHandBounceResultUi = useMemo(
+    () => getFullscreenHandBounceResultUi(fullscreenHandBounceState),
+    [fullscreenHandBounceState],
+  );
+  const fullscreenHandBounceLegendUi = useMemo(
+    () => getFullscreenHandBounceLegendUi(),
+    [],
+  );
   const fullscreenMissileLaunchPreview = useMemo(
     () => getMissileCommandLaunchPreview(fullscreenMissileCommandState, fullscreenMissileAimPoint),
     [fullscreenMissileAimPoint, fullscreenMissileCommandState],
@@ -3565,10 +3604,20 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame = createFullscreenHandBounceGame(
-      fullscreenCameraViewport.width,
-      fullscreenCameraViewport.height,
-    );
+    const templateGame =
+      activeLaunchContextRef.current.challenge === "daily"
+        ? createFullscreenHandBounceDailyGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
+            {
+              dayKey: activeLaunchContextRef.current.dayKey,
+              date: activeLaunchContextRef.current.dayKey,
+            },
+          )
+        : createFullscreenHandBounceGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
+          );
     const nextGame = initializeOrResizeFullscreenGame(
       "hand-bounce",
       fullscreenHandBounceStateRef.current,
@@ -8398,11 +8447,26 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
-    beginRestartedProgressionSession(getModeByFullscreenId("hand-bounce"));
-    const nextGame = createFullscreenHandBounceGame(
-      viewportMetrics.width,
-      viewportMetrics.height,
+    beginRestartedProgressionSession(
+      getModeByFullscreenId("hand-bounce"),
+      activeLaunchContextRef.current,
     );
+    const currentGame = fullscreenHandBounceStateRef.current;
+    const nextGame = currentGame?.layout
+      ? restartFullscreenHandBounceCampaign(currentGame)
+      : activeLaunchContextRef.current.challenge === "daily"
+        ? createFullscreenHandBounceDailyGame(
+            viewportMetrics.width,
+            viewportMetrics.height,
+            {
+              dayKey: activeLaunchContextRef.current.dayKey,
+              date: activeLaunchContextRef.current.dayKey,
+            },
+          )
+        : createFullscreenHandBounceGame(
+            viewportMetrics.width,
+            viewportMetrics.height,
+          );
     fullscreenHandBounceLastTickRef.current = 0;
     fullscreenHandBounceStateRef.current = nextGame;
     setFullscreenHandBounceState(nextGame);
@@ -8683,9 +8747,14 @@ export default function App() {
       case "hand-bounce":
         return {
           status: fullscreenHandBounceState?.message,
-          items: [
-            item("saves", "Saves", fullscreenHandBounceState?.saveCount ?? 0, "strong"),
-          ],
+          items: fullscreenHandBounceHudUi.items.map((hudItem, index) =>
+            item(
+              hudItem.id,
+              hudItem.label,
+              hudItem.value,
+              index === 0 ? "strong" : "default",
+            ),
+          ),
         };
       case "invaders":
         return {
@@ -13330,6 +13399,21 @@ export default function App() {
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               <div className="fullscreen-camera-hand-bounce-backdrop" />
+              {fullscreenHandBounceTargetUi.visible ? (
+                <div
+                  className="fullscreen-camera-hand-bounce-target"
+                  role={fullscreenHandBounceTargetUi.role}
+                  aria-label={fullscreenHandBounceTargetUi.ariaLabel}
+                  style={{
+                    left: `${fullscreenHandBounceTargetUi.x}px`,
+                    top: `${fullscreenHandBounceTargetUi.y}px`,
+                    width: `${fullscreenHandBounceTargetUi.width}px`,
+                    height: `${fullscreenHandBounceTargetUi.height}px`,
+                  }}
+                >
+                  <span>{fullscreenHandBounceTargetUi.label}</span>
+                </div>
+              ) : null}
               {fullscreenHandBounceState?.ball ? (
                 <div
                   className="fullscreen-camera-hand-bounce-ball-shadow"
@@ -13374,29 +13458,127 @@ export default function App() {
                   }}
                 />
               ) : null}
-              <div className="fullscreen-camera-hand-bounce-scoreboard">
-                <span>Saves {fullscreenHandBounceState?.score ?? 0}</span>
-                <span>Best {fullscreenHandBounceState?.bestScore ?? 0}</span>
-                <span>
-                  Speed{" "}
-                  {Math.round(
-                    Math.hypot(
-                      fullscreenHandBounceState?.ball?.vx ?? 0,
-                      fullscreenHandBounceState?.ball?.vy ?? 0,
-                    ),
+              <section
+                className={`fullscreen-camera-hand-bounce-stage ${
+                  fullscreenHandBounceStageUi.urgent ? "urgent" : ""
+                }`}
+                aria-label={`Stage ${fullscreenHandBounceStageUi.stage}: ${fullscreenHandBounceStageUi.name}`}
+              >
+                <div className="fullscreen-camera-hand-bounce-stage-heading">
+                  <span>
+                    Stage {fullscreenHandBounceStageUi.stage}/
+                    {fullscreenHandBounceStageUi.totalStages}
+                  </span>
+                  <strong>{fullscreenHandBounceStageUi.name}</strong>
+                  <time>{fullscreenHandBounceStageUi.timeLabel}</time>
+                </div>
+                <p>{fullscreenHandBounceStageUi.goalText}</p>
+                <div className="fullscreen-camera-hand-bounce-goals">
+                  {fullscreenHandBounceStageUi.goals.map((goal) => (
+                    <span className={goal.complete ? "complete" : ""} key={goal.id}>
+                      {goal.label} {goal.text}
+                    </span>
+                  ))}
+                </div>
+                <div
+                  className="fullscreen-camera-hand-bounce-stage-progress"
+                  role="progressbar"
+                  aria-label={`${fullscreenHandBounceStageUi.name} goal progress`}
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-valuenow={Math.round(
+                    fullscreenHandBounceStageUi.completionRatio * 100,
                   )}
-                </span>
+                >
+                  <span
+                    style={{
+                      width: `${fullscreenHandBounceStageUi.completionRatio * 100}%`,
+                    }}
+                  />
+                </div>
+              </section>
+              <div
+                className="fullscreen-camera-hand-bounce-scoreboard"
+                aria-label={fullscreenHandBounceHudUi.ariaLabel}
+              >
+                {fullscreenHandBounceHudUi.items.map((hudItem) => (
+                  <span key={hudItem.id}>
+                    <small>{hudItem.label}</small>
+                    <strong>{hudItem.value}</strong>
+                  </span>
+                ))}
               </div>
-              <div className="fullscreen-camera-hand-bounce-legend">
-                <span>No pinch needed</span>
-                <span>Use your palm to volley</span>
-                <span>Miss the bottom and the round ends</span>
+              <div
+                className={`fullscreen-camera-hand-bounce-power ${
+                  fullscreenHandBouncePowerUi.active ? "active" : ""
+                }`}
+                aria-label={fullscreenHandBouncePowerUi.ariaLabel}
+              >
+                <div>
+                  <strong>{fullscreenHandBouncePowerUi.label}</strong>
+                  <span>{fullscreenHandBouncePowerUi.detail}</span>
+                </div>
+                <div className="fullscreen-camera-hand-bounce-power-track">
+                  <span
+                    style={{
+                      width: `${fullscreenHandBouncePowerUi.progress * 100}%`,
+                    }}
+                  />
+                </div>
               </div>
+              {(fullscreenHandBounceState?.stage ?? 1) === 1 &&
+              (fullscreenHandBounceState?.saveCount ?? 0) < 2 ? (
+                <div
+                  className="fullscreen-camera-hand-bounce-legend"
+                  aria-label={fullscreenHandBounceLegendUi.ariaLabel}
+                >
+                  {fullscreenHandBounceLegendUi.items.map((legendItem) => (
+                    <span key={legendItem.id}>
+                      <strong>{legendItem.label}</strong>
+                      {legendItem.detail}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {fullscreenHandBounceCheckpointUi.visible ? (
+                <div
+                  className="fullscreen-camera-hand-bounce-checkpoint"
+                  role={fullscreenHandBounceCheckpointUi.liveRole}
+                >
+                  <strong>{fullscreenHandBounceCheckpointUi.title}</strong>
+                  <div>
+                    {fullscreenHandBounceCheckpointUi.stats.map((stat) => (
+                      <span key={stat.label}>
+                        {stat.label} <b>{stat.value}</b>
+                      </span>
+                    ))}
+                  </div>
+                  <small>{fullscreenHandBounceCheckpointUi.nextStageText}</small>
+                </div>
+              ) : null}
+              {fullscreenHandBounceResultUi.visible ? (
+                <div className="fullscreen-camera-hand-bounce-result" role="status">
+                  <strong>{fullscreenHandBounceResultUi.title}</strong>
+                  <p>{fullscreenHandBounceResultUi.summary}</p>
+                  {fullscreenHandBounceResultUi.newPersonalBest ? (
+                    <span className="personal-best">New personal best</span>
+                  ) : null}
+                  <div>
+                    {fullscreenHandBounceResultUi.stats.map((stat) => (
+                      <span key={stat.label}>
+                        <small>{stat.label}</small>
+                        <b>{stat.value}</b>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               {fullscreenHandBounceState?.message ? (
                 <div
                   className={`fullscreen-camera-hand-bounce-banner ${
                     fullscreenHandBounceState.status === "gameover" ? "game-over" : ""
                   }`}
+                  aria-live="polite"
                 >
                   {fullscreenHandBounceState.message}
                 </div>

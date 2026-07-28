@@ -29,6 +29,7 @@ function progressItem(id, label, value, goal) {
 }
 
 export function getFullscreenHandBounceHudUi(state = {}) {
+  state = state ?? {};
   const config = state.stageConfig ?? {};
   return {
     ariaLabel: `Hand Bounce score ${state.score ?? 0}. Stage ${state.stage ?? 1} of ${state.totalStages ?? 1}.`,
@@ -56,6 +57,7 @@ export function getFullscreenHandBounceHudUi(state = {}) {
 }
 
 export function getFullscreenHandBounceStageUi(state = {}) {
+  state = state ?? {};
   const config = state.stageConfig ?? {};
   const progress = state.stageProgress ?? {};
   const goals = [
@@ -103,6 +105,7 @@ export function getFullscreenHandBounceStageUi(state = {}) {
 }
 
 export function getFullscreenHandBounceTargetUi(state = {}) {
+  state = state ?? {};
   const rect = getFullscreenHandBounceTargetRect(state);
   if (!rect) {
     return {
@@ -120,6 +123,7 @@ export function getFullscreenHandBounceTargetUi(state = {}) {
 }
 
 export function getFullscreenHandBouncePowerUi(state = {}) {
+  state = state ?? {};
   const focus = clamp(state.focus ?? 0, 0, FULLSCREEN_HAND_BOUNCE_MAX_FOCUS);
   const active = (state.powerModeMs ?? 0) > 0;
   return {
@@ -139,6 +143,7 @@ export function getFullscreenHandBouncePowerUi(state = {}) {
 }
 
 export function getFullscreenHandBounceCheckpointUi(state = {}) {
+  state = state ?? {};
   if (state.phase !== "checkpoint" || !state.lastStageRecap) {
     return {
       visible: false,
@@ -166,6 +171,7 @@ export function getFullscreenHandBounceCheckpointUi(state = {}) {
 }
 
 export function getFullscreenHandBounceResultUi(state = {}) {
+  state = state ?? {};
   if (state.status !== "gameover") {
     return {
       visible: false,
@@ -231,6 +237,8 @@ export function getFullscreenHandBounceAnnouncement(
   state = {},
   previousState = {},
 ) {
+  state = state ?? {};
+  previousState = previousState ?? {};
   if (state.status === "gameover" && previousState.status !== "gameover") {
     return getFullscreenHandBounceResultUi(state).title;
   }

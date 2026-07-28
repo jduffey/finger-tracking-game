@@ -1659,38 +1659,222 @@ body {
   transform-origin: center;
 }
 
+.fullscreen-camera-hand-bounce-target {
+  align-items: center;
+  background:
+    radial-gradient(circle, rgba(255, 236, 139, 0.18), transparent 64%),
+    rgba(255, 196, 71, 0.06);
+  border: 3px dashed rgba(255, 224, 111, 0.94);
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 7px rgba(255, 202, 77, 0.1),
+    inset 0 0 28px rgba(255, 224, 111, 0.18),
+    0 0 34px rgba(255, 195, 62, 0.28);
+  color: #fff2b5;
+  display: flex;
+  justify-content: center;
+  position: absolute;
+}
+
+.fullscreen-camera-hand-bounce-target span {
+  background: rgba(9, 17, 27, 0.86);
+  border: 1px solid rgba(255, 226, 119, 0.44);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
 .fullscreen-camera-hand-bounce-scoreboard,
 .fullscreen-camera-hand-bounce-legend,
-.fullscreen-camera-hand-bounce-banner {
+.fullscreen-camera-hand-bounce-banner,
+.fullscreen-camera-hand-bounce-stage,
+.fullscreen-camera-hand-bounce-power,
+.fullscreen-camera-hand-bounce-checkpoint,
+.fullscreen-camera-hand-bounce-result {
+  backdrop-filter: blur(14px);
   background: rgba(9, 17, 27, 0.74);
   border: 1px solid rgba(202, 220, 239, 0.22);
   border-radius: 14px;
   color: #f4f7fb;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  left: 18px;
   padding: 10px 14px;
   position: absolute;
+  z-index: 3;
+}
+
+.fullscreen-camera-hand-bounce-stage {
+  left: 18px;
+  max-width: min(350px, calc(100% - 36px));
+  top: 18px;
+  width: 350px;
+}
+
+.fullscreen-camera-hand-bounce-stage.urgent {
+  border-color: rgba(255, 135, 104, 0.72);
+  box-shadow: 0 0 24px rgba(255, 93, 69, 0.16);
+}
+
+.fullscreen-camera-hand-bounce-stage-heading {
+  align-items: baseline;
+  display: grid;
+  gap: 5px 10px;
+  grid-template-columns: auto 1fr auto;
+}
+
+.fullscreen-camera-hand-bounce-stage-heading > span {
+  color: #ffc86e;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-hand-bounce-stage-heading strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fullscreen-camera-hand-bounce-stage-heading time {
+  color: #fff3cc;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+}
+
+.fullscreen-camera-hand-bounce-stage p {
+  color: rgba(244, 247, 251, 0.76);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  margin: 6px 0 8px;
+}
+
+.fullscreen-camera-hand-bounce-goals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.fullscreen-camera-hand-bounce-goals span {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: rgba(244, 247, 251, 0.78);
+  font-size: 0.68rem;
+  font-weight: 750;
+  padding: 3px 7px;
+}
+
+.fullscreen-camera-hand-bounce-goals span.complete {
+  background: rgba(82, 232, 153, 0.16);
+  color: #a5ffd0;
+}
+
+.fullscreen-camera-hand-bounce-stage-progress,
+.fullscreen-camera-hand-bounce-power-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  height: 5px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.fullscreen-camera-hand-bounce-stage-progress span,
+.fullscreen-camera-hand-bounce-power-track span {
+  background: linear-gradient(90deg, #ffad45, #ffe483);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 180ms ease-out;
 }
 
 .fullscreen-camera-hand-bounce-scoreboard {
-  font-size: 0.95rem;
-  font-weight: 700;
+  display: grid;
+  font-size: 0.82rem;
+  gap: 7px;
+  grid-template-columns: repeat(6, minmax(46px, 1fr));
   left: auto;
   right: 18px;
   top: 18px;
 }
 
+.fullscreen-camera-hand-bounce-scoreboard > span {
+  display: grid;
+  gap: 1px;
+  text-align: center;
+}
+
+.fullscreen-camera-hand-bounce-scoreboard small {
+  color: rgba(244, 247, 251, 0.58);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fullscreen-camera-hand-bounce-scoreboard strong {
+  color: #fff4cf;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.fullscreen-camera-hand-bounce-power {
+  display: grid;
+  gap: 6px;
+  right: 18px;
+  top: 82px;
+  width: min(300px, calc(100% - 36px));
+}
+
+.fullscreen-camera-hand-bounce-power > div:first-child {
+  align-items: center;
+  display: flex;
+  font-size: 0.7rem;
+  justify-content: space-between;
+}
+
+.fullscreen-camera-hand-bounce-power > div:first-child span {
+  color: rgba(244, 247, 251, 0.62);
+}
+
+.fullscreen-camera-hand-bounce-power.active {
+  border-color: rgba(255, 225, 93, 0.68);
+  box-shadow: 0 0 28px rgba(255, 195, 43, 0.2);
+}
+
+.fullscreen-camera-hand-bounce-power.active
+  .fullscreen-camera-hand-bounce-power-track
+  span {
+  background: linear-gradient(90deg, #fff28c, #ff7b45, #ffdf51);
+  width: 100% !important;
+}
+
 .fullscreen-camera-hand-bounce-legend {
   bottom: 18px;
+  display: flex;
   font-size: 0.82rem;
+  gap: 10px;
+  left: 18px;
+  max-width: min(760px, calc(100% - 36px));
+}
+
+.fullscreen-camera-hand-bounce-legend > span {
+  color: rgba(244, 247, 251, 0.66);
+  display: grid;
+  font-size: 0.68rem;
+  line-height: 1.25;
+  max-width: 170px;
+}
+
+.fullscreen-camera-hand-bounce-legend strong {
+  color: #fff1c3;
+  font-size: 0.7rem;
 }
 
 .fullscreen-camera-hand-bounce-banner {
-  font-size: 0.9rem;
+  font-size: 0.76rem;
   left: 50%;
-  max-width: min(540px, calc(100% - 36px));
+  max-width: min(280px, calc(100% - 36px));
   text-align: center;
   top: 18px;
   transform: translateX(-50%);
@@ -1698,6 +1882,58 @@ body {
 
 .fullscreen-camera-hand-bounce-banner.game-over {
   background: rgba(53, 13, 13, 0.82);
+}
+
+.fullscreen-camera-hand-bounce-checkpoint,
+.fullscreen-camera-hand-bounce-result {
+  display: grid;
+  gap: 10px;
+  left: 50%;
+  max-width: min(520px, calc(100% - 36px));
+  padding: 20px 22px;
+  text-align: center;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: max-content;
+}
+
+.fullscreen-camera-hand-bounce-checkpoint > strong,
+.fullscreen-camera-hand-bounce-result > strong {
+  color: #ffe18b;
+  font-size: clamp(1.35rem, 3vw, 2.2rem);
+}
+
+.fullscreen-camera-hand-bounce-checkpoint > div,
+.fullscreen-camera-hand-bounce-result > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: center;
+}
+
+.fullscreen-camera-hand-bounce-checkpoint span,
+.fullscreen-camera-hand-bounce-result div > span {
+  display: grid;
+  font-size: 0.72rem;
+  gap: 2px;
+}
+
+.fullscreen-camera-hand-bounce-checkpoint small,
+.fullscreen-camera-hand-bounce-result small,
+.fullscreen-camera-hand-bounce-result p {
+  color: rgba(244, 247, 251, 0.68);
+  margin: 0;
+}
+
+.fullscreen-camera-hand-bounce-result .personal-best {
+  background: rgba(255, 224, 100, 0.16);
+  border-radius: 999px;
+  color: #ffe578;
+  font-size: 0.72rem;
+  font-weight: 850;
+  justify-self: center;
+  padding: 4px 9px;
+  text-transform: uppercase;
 }
 
 .fullscreen-camera-flappy-pipe {
@@ -7849,5 +8085,77 @@ button:disabled {
   .offaxis-chamber-stage {
     min-height: 420px;
     padding: 14px;
+  }
+}
+
+@media (max-width: 760px) {
+  .fullscreen-camera-hand-bounce-stage {
+    left: 12px;
+    max-width: calc(100% - 24px);
+    padding: 8px 10px;
+    top: 12px;
+    width: calc(100% - 24px);
+  }
+
+  .fullscreen-camera-hand-bounce-stage p {
+    display: none;
+  }
+
+  .fullscreen-camera-hand-bounce-scoreboard {
+    grid-template-columns: repeat(4, minmax(46px, 1fr));
+    left: 12px;
+    right: 12px;
+    top: 104px;
+  }
+
+  .fullscreen-camera-hand-bounce-scoreboard > span:nth-child(2),
+  .fullscreen-camera-hand-bounce-scoreboard > span:nth-child(6) {
+    display: none;
+  }
+
+  .fullscreen-camera-hand-bounce-power {
+    left: 12px;
+    right: 12px;
+    top: 166px;
+    width: auto;
+  }
+
+  .fullscreen-camera-hand-bounce-banner {
+    max-width: calc(100% - 24px);
+    top: 228px;
+  }
+
+  .fullscreen-camera-hand-bounce-legend {
+    bottom: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    left: 12px;
+    max-width: calc(100% - 24px);
+    right: 12px;
+  }
+
+  .fullscreen-camera-hand-bounce-legend > span:nth-child(n + 3) {
+    display: none;
+  }
+
+  .fullscreen-camera-hand-bounce-checkpoint,
+  .fullscreen-camera-hand-bounce-result {
+    max-width: calc(100% - 24px);
+    padding: 16px;
+  }
+}
+
+@media (max-height: 620px) and (orientation: landscape) {
+  .fullscreen-camera-hand-bounce-stage p,
+  .fullscreen-camera-hand-bounce-legend {
+    display: none;
+  }
+
+  .fullscreen-camera-hand-bounce-stage {
+    padding-block: 7px;
+  }
+
+  .fullscreen-camera-hand-bounce-power {
+    top: 76px;
   }
 }

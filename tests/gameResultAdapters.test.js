@@ -82,9 +82,23 @@ const TERMINAL_STATES = Object.freeze({
   },
   "hand-bounce": {
     status: "gameover",
+    outcome: "victory",
     score: 14,
     saveCount: 14,
     elapsedMs: 31_000,
+    result: {
+      outcome: "victory",
+      score: 14,
+      saves: 14,
+      targetHits: 5,
+      trickShots: 3,
+      bestCombo: 8,
+      stagesCleared: 3,
+      stageReached: 3,
+      livesRemaining: 1,
+      drops: 1,
+      powerUpsActivated: 2,
+    },
   },
   breakout: {
     status: "cleared",
@@ -207,7 +221,7 @@ test("terminal fullscreen modes map to stable mode ids and semantic outcomes", (
     "fruit-ninja": { modeId: "slice-air", outcome: "completed", score: 350 },
     "missile-command": { modeId: "missile-command", outcome: "won", score: 1_200 },
     "brick-dodger": { modeId: "brick-dodger", outcome: "completed", score: 975 },
-    "hand-bounce": { modeId: "hand-bounce", outcome: "completed", score: 14 },
+    "hand-bounce": { modeId: "hand-bounce", outcome: "won", score: 14 },
     breakout: { modeId: "breakout", outcome: "won", score: 5_400 },
     "breakout-coop": { modeId: "breakout-coop", outcome: "won", score: 7_250 },
     "finger-pong": { modeId: "finger-pong", outcome: "won", score: 7 },
@@ -290,6 +304,14 @@ test("fullscreen results expose useful mode-specific secondary metrics", () => {
   assert.deepEqual(resultFor("hand-bounce").metrics, {
     score: 14,
     saves: 14,
+    targetHits: 5,
+    trickShots: 3,
+    bestCombo: 8,
+    stagesCleared: 3,
+    stageReached: 3,
+    livesRemaining: 1,
+    drops: 1,
+    powerUpsActivated: 2,
     survivalMs: 120_000,
   });
 

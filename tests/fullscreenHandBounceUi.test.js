@@ -137,3 +137,13 @@ test("legend and announcements are concise and non-visual", () => {
     /Power volley active/,
   );
 });
+
+test("Hand Bounce UI models stay safe before a game state exists", () => {
+  assert.equal(getFullscreenHandBounceHudUi(null).items[0].value, 0);
+  assert.equal(getFullscreenHandBounceStageUi(null).stage, 1);
+  assert.equal(getFullscreenHandBounceTargetUi(null).visible, false);
+  assert.equal(getFullscreenHandBouncePowerUi(null).progress, 0);
+  assert.equal(getFullscreenHandBounceCheckpointUi(null).visible, false);
+  assert.equal(getFullscreenHandBounceResultUi(null).visible, false);
+  assert.equal(getFullscreenHandBounceAnnouncement(null, null), "");
+});
