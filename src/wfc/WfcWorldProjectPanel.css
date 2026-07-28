@@ -232,6 +232,7 @@
 }
 
 .wfc-project-field input,
+.wfc-project-field select,
 .wfc-project-field textarea,
 .wfc-project-file input {
   background: rgba(5, 13, 10, 0.72);
@@ -247,6 +248,11 @@
   padding: 0.65rem 0.75rem;
 }
 
+.wfc-project-field select {
+  min-block-size: 2.75rem;
+  padding: 0.65rem 2rem 0.65rem 0.75rem;
+}
+
 .wfc-project-field textarea {
   line-height: 1.35;
   min-block-size: 6rem;
@@ -255,12 +261,62 @@
 }
 
 .wfc-project-field input:focus-visible,
+.wfc-project-field select:focus-visible,
 .wfc-project-field textarea:focus-visible,
 .wfc-project-file input:focus-visible,
 .wfc-project button:focus-visible,
 .wfc-project summary:focus-visible {
   outline: 3px solid var(--wfc-project-accent);
   outline-offset: 2px;
+}
+
+.wfc-project-generator-copy,
+.wfc-project-generator-note {
+  color: var(--wfc-project-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.wfc-project-generator-copy {
+  margin-block-start: 0.6rem !important;
+}
+
+.wfc-project-generator-note {
+  margin-block-start: 0.65rem !important;
+}
+
+.wfc-project-generator-fields {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  margin-block-start: 0.75rem;
+}
+
+.wfc-project-field--compact {
+  align-content: start;
+  margin-block-start: 0;
+}
+
+.wfc-project-field--compact > small {
+  color: var(--wfc-project-muted);
+  font-size: 0.62rem;
+  line-height: 1.35;
+}
+
+.wfc-project-seed-value {
+  background: rgba(185, 240, 106, 0.12);
+  border: 1px solid rgba(185, 240, 106, 0.3);
+  border-radius: 999px;
+  color: var(--wfc-project-accent);
+  flex: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.62rem;
+  font-weight: 750;
+  max-inline-size: 10rem;
+  overflow: hidden;
+  padding: 0.4rem 0.65rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wfc-project-actions {
@@ -456,6 +512,10 @@
   .wfc-project-actions--library {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wfc-project-generator-fields {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .wfc-project-actions--library .wfc-project-button {

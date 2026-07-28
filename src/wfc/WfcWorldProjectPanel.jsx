@@ -8,8 +8,12 @@ import {
 } from "react";
 
 import {
+  applyWfcWorldTemplate,
+  createWfcWorldSeed,
   getWfcWorldGoalModel,
   getWfcWorldQualitySummary,
+  normalizeWfcWorldSeed,
+  setWfcWorldSeed,
 } from "./wfcWorldGame.js";
 import {
   WFC_WORLD_LIBRARY_STORAGE_KEY,
@@ -27,6 +31,11 @@ import {
   upsertWfcWorldSnapshot,
   validateWfcWorldLibrary,
 } from "./wfcWorldPersistence.js";
+import {
+  WFC_WORLD_BLANK_TEMPLATE_ID,
+  WFC_WORLD_STARTER_TEMPLATES,
+  getWfcWorldStarterTemplate,
+} from "./wfcWorldTemplates.js";
 
 import "./WfcWorldProjectPanel.css";
 
@@ -158,6 +167,8 @@ function ProjectMetric({ label, value, detail }) {
  *
  * Pass `game` and update it in `onRestore`. The library can be controlled with
  * `library` + `onLibraryChange`, or left uncontrolled to use localStorage.
+ * `onWorldChange` can publish seed/template setup without using the restore
+ * callback; when omitted, setup falls back to `onRestore` for compatibility.
  * Export/share callbacks receive the generated content even when browser
  * download or clipboard APIs are unavailable.
  */
@@ -166,6 +177,7 @@ export function WfcWorldProjectPanel({
   library: controlledLibrary,
   onLibraryChange,
   onRestore,
+  onWorldChange,
   onSave,
   onDelete,
   onImport,
@@ -182,6 +194,10 @@ export function WfcWorldProjectPanel({
   const nameId = useId();
   const importId = useId();
   const shareId = useId();
+  const seedId = useId();
+  const seedHelpId = useId();
+  const templateId = useId();
+  const templateHelpId = useId();
   const resolvedStorage = useMemo(() => resolveStorage(storage), [storage]);
   const isControlled = controlledLibrary !== undefined;
   const initialReadRef = useRef(null);
@@ -219,6 +235,11 @@ export function WfcWorldProjectPanel({
   const [projectName, setProjectName] = useState(
     game?.snapshot?.name ?? defaultName,
   );
+  const [seedDraft, setSeedDraft] = useState(game?.seed ?? "");
+  const [starterTemplateId, setStarterTemplateId] = useState(
+    getWfcWorldStarterTemplate(game?.templateId)?.id ??
+      WFC_WORLD_BLANK_TEMPLATE_ID,
+  );
   const [activeSnapshotId, setActiveSnapshotId] = useState(
     game?.snapshot?.id ?? null,
   );
@@ -247,6 +268,9 @@ export function WfcWorldProjectPanel({
     library.snapshots.find(
       (snapshot) => snapshot.id === activeSnapshotId,
     ) ?? null;
+  const selectedStarterTemplate =
+    getWfcWorldStarterTemplate(starterTemplateId) ??
+    WFC_WORLD_STARTER_TEMPLATES[0];
 
   const announce = useCallback(
     (message, tone = "neutral") => {
@@ -300,6 +324,14 @@ export function WfcWorldProjectPanel({
   }, [game?.snapshot?.id, game?.snapshot?.name]);
 
   useEffect(() => {
+    setSeedDraft(game?.seed ?? "");
+    setStarterTemplateId(
+      getWfcWorldStarterTemplate(game?.templateId)?.id ??
+        WFC_WORLD_BLANK_TEMPLATE_ID,
+    );
+  }, [game?.seed, game?.templateId]);
+
+  useEffect(() => {
     if (
       selectedSnapshotId &&
       !library.snapshots.some(
@@ -315,6 +347,81 @@ export function WfcWorldProjectPanel({
       announce(controlledLibraryError, "warning");
     }
   }, [announce, controlledLibraryError]);
+
+  const publishWorldSetup = useCallback(
+    (nextGame, event) => {
+      if (onWorldChange) {
+        onWorldChange(nextGame, event);
+      } else {
+        onRestore?.(nextGame, null);
+      }
+    },
+    [onRestore, onWorldChange],
+  );
+
+  const applySeed = useCallback(() => {
+    if (!seedDraft.trim()) {
+      announce("Enter a world seed first.", "warning");
+      return;
+    }
+    const nextGame = setWfcWorldSeed(game, seedDraft);
+    if (!nextGame) {
+      announce("This seed could not be applied.", "warning");
+      return;
+    }
+    setSeedDraft(nextGame.seed);
+    publishWorldSetup(nextGame, {
+      type: "seed",
+      seed: nextGame.seed,
+    });
+    announce(
+      `Seed ${nextGame.seed} applied. Your current terrain rules are ready to generate.`,
+      "success",
+    );
+  }, [announce, game, publishWorldSetup, seedDraft]);
+
+  const applyStarterTemplate = useCallback(() => {
+    if (!seedDraft.trim()) {
+      announce("Enter a world seed first.", "warning");
+      return;
+    }
+    const nextGame = applyWfcWorldTemplate(game, starterTemplateId, {
+      seed: seedDraft,
+    });
+    if (!nextGame) {
+      announce("This starter could not be applied.", "warning");
+      return;
+    }
+    setActiveSnapshotId(null);
+    setSeedDraft(nextGame.seed);
+    setProjectName(defaultName);
+    publishWorldSetup(nextGame, {
+      type: "template",
+      seed: nextGame.seed,
+      templateId: nextGame.templateId,
+    });
+    announce(
+      `${selectedStarterTemplate.name} started with seed ${nextGame.seed}.`,
+      "success",
+    );
+  }, [
+    announce,
+    defaultName,
+    game,
+    publishWorldSetup,
+    seedDraft,
+    selectedStarterTemplate.name,
+    starterTemplateId,
+  ]);
+
+  const suggestSeed = useCallback(() => {
+    const nextSeed = createWfcWorldSeed();
+    setSeedDraft(nextSeed);
+    announce(
+      `Seed ${nextSeed} is ready. Apply it or start from a template.`,
+      "neutral",
+    );
+  }, [announce]);
 
   const saveProject = useCallback(
     ({ asNew = false } = {}) => {
@@ -628,6 +735,103 @@ export function WfcWorldProjectPanel({
         </div>
         <span className="wfc-project-state">{projectStateLabel}</span>
       </header>
+
+      <section
+        aria-labelledby={`${headingId}-generator`}
+        className="wfc-project-card wfc-project-generator"
+      >
+        <div className="wfc-project-card-heading">
+          <div>
+            <p className="wfc-project-eyebrow">Reproducible setup</p>
+            <h3 id={`${headingId}-generator`}>Seed and starter</h3>
+          </div>
+          <span
+            aria-label={`Current seed ${normalizeWfcWorldSeed(game?.seed)}`}
+            className="wfc-project-seed-value"
+          >
+            {normalizeWfcWorldSeed(game?.seed)}
+          </span>
+        </div>
+        <p className="wfc-project-generator-copy">
+          The same seed, starter, and terrain rules always grow the same
+          landscape.
+        </p>
+        <div className="wfc-project-generator-fields">
+          <label
+            className="wfc-project-field wfc-project-field--compact"
+            htmlFor={seedId}
+          >
+            <span>World seed</span>
+            <input
+              aria-describedby={seedHelpId}
+              autoComplete="off"
+              id={seedId}
+              maxLength="48"
+              onChange={(event) => setSeedDraft(event.target.value)}
+              placeholder="quiet-meadow-001"
+              spellCheck="false"
+              type="text"
+              value={seedDraft}
+            />
+            <small id={seedHelpId}>
+              Share this seed to reproduce your generated layout.
+            </small>
+          </label>
+          <label
+            className="wfc-project-field wfc-project-field--compact"
+            htmlFor={templateId}
+          >
+            <span>Starter template</span>
+            <select
+              aria-describedby={templateHelpId}
+              id={templateId}
+              onChange={(event) =>
+                setStarterTemplateId(event.target.value)
+              }
+              value={starterTemplateId}
+            >
+              {WFC_WORLD_STARTER_TEMPLATES.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+            <small id={templateHelpId}>
+              {selectedStarterTemplate.description}
+            </small>
+          </label>
+        </div>
+        <div className="wfc-project-actions">
+          <button
+            className="wfc-project-button wfc-project-button--primary"
+            disabled={!seedDraft.trim()}
+            onClick={applyStarterTemplate}
+            type="button"
+          >
+            Start from template
+          </button>
+          <button
+            className="wfc-project-button"
+            disabled={!seedDraft.trim()}
+            onClick={applySeed}
+            type="button"
+          >
+            Apply seed to current rules
+          </button>
+          <button
+            className="wfc-project-button"
+            onClick={suggestSeed}
+            type="button"
+          >
+            Surprise me
+          </button>
+        </div>
+        <p className="wfc-project-generator-note">
+          Applying a seed resets the current generation but keeps its rules.
+          Starting from a template replaces unsaved rules; saved projects stay
+          untouched.
+        </p>
+      </section>
 
       <section
         aria-labelledby={`${headingId}-goal`}

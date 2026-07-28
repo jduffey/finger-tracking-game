@@ -11038,6 +11038,14 @@ export default function App() {
     setFullscreenWfcProjectOpen(false);
   }
 
+  function handleFullscreenWfcWorldChange(nextGame) {
+    if (!nextGame) {
+      return;
+    }
+    fullscreenWfcWorldLastTickRef.current = 0;
+    publishFullscreenWfcWorldState(nextGame);
+  }
+
   function handleFullscreenWfcWorldDelete(snapshot) {
     const current = fullscreenWfcWorldStateRef.current;
     if (!current || current.snapshot?.id !== snapshot?.id) {
@@ -14714,6 +14722,7 @@ export default function App() {
                           onDelete={handleFullscreenWfcWorldDelete}
                           onRestore={handleFullscreenWfcWorldRestore}
                           onSave={handleFullscreenWfcWorldSave}
+                          onWorldChange={handleFullscreenWfcWorldChange}
                         />
                       </Suspense>
                     </div>

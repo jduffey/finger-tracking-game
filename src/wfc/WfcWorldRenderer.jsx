@@ -1,5 +1,8 @@
 import { memo, useLayoutEffect, useMemo, useRef } from "react";
-import { getWfcWorldCellCenter } from "./wfcWorldGame.js";
+import {
+  getWfcWorldCellCenter,
+  normalizeWfcWorldSeed,
+} from "./wfcWorldGame.js";
 import {
   areWfcWorldCellVisualStatesEqual,
   getWfcWorldCellClassName,
@@ -237,7 +240,10 @@ export function WfcWorldRenderer({
         role="status"
       >
         <span>{game.message}</span>
-        <strong>{game.constraints.length} rules</strong>
+        <strong>
+          {game.constraints.length} rules · Seed{" "}
+          {normalizeWfcWorldSeed(game.seed)}
+        </strong>
       </div>
     </div>
   );

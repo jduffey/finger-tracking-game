@@ -1,10 +1,13 @@
 import {
   WFC_WORLD_COLS,
+  WFC_WORLD_FALLBACK_SEED,
   WFC_WORLD_MODE_ID,
   WFC_WORLD_ROWS,
+  WFC_WORLD_SEED_MAX_LENGTH,
   createWfcWorldGame,
   getWfcWorldGrid,
   getWfcWorldQualitySummary,
+  normalizeWfcWorldSeed,
 } from "./wfcWorldGame.js";
 import {
   createWfcState,
@@ -12,6 +15,10 @@ import {
   setWfcConstraint,
 } from "./wfcSolver.js";
 import { FINGERPRINT_WORLD_TILES } from "./wfcTiles.js";
+import {
+  WFC_WORLD_BLANK_TEMPLATE_ID,
+  getWfcWorldStarterTemplate,
+} from "./wfcWorldTemplates.js";
 
 export const WFC_WORLD_SNAPSHOT_KIND =
   "motion-arcade/fingerprint-world-snapshot";
@@ -19,13 +26,14 @@ export const WFC_WORLD_EXPORT_KIND =
   "motion-arcade/fingerprint-world-export";
 export const WFC_WORLD_LIBRARY_KIND =
   "motion-arcade/fingerprint-world-library";
-export const WFC_WORLD_SCHEMA_VERSION = 1;
+export const WFC_WORLD_SCHEMA_VERSION = 2;
 export const WFC_WORLD_LIBRARY_STORAGE_KEY =
   "motion-arcade.fingerprint-worlds.v1";
 
 export const WFC_WORLD_PERSISTENCE_LIMITS = Object.freeze({
   maxNameLength: 64,
   maxIdLength: 80,
+  maxSeedLength: WFC_WORLD_SEED_MAX_LENGTH,
   maxConstraints: 256,
   maxSnapshots: 24,
   maxSnapshotBytes: 128 * 1024,
@@ -136,6 +144,10 @@ function getSnapshotWorldFromGame(game) {
     cols: WFC_WORLD_COLS,
     rows: WFC_WORLD_ROWS,
     generation: normalizeInteger(game?.generation),
+    seed: normalizeWfcWorldSeed(game?.seed),
+    templateId:
+      getWfcWorldStarterTemplate(game?.templateId)?.id ??
+      WFC_WORLD_BLANK_TEMPLATE_ID,
     selectedTileId: TILE_IDS.has(game?.selectedTileId)
       ? game.selectedTileId
       : "grass",
@@ -272,7 +284,8 @@ export function validateWfcWorldSnapshot(value) {
     }
 
     const errors = [];
-    if (value.version !== WFC_WORLD_SCHEMA_VERSION) {
+    const sourceVersion = value.version;
+    if (sourceVersion !== 1 && sourceVersion !== WFC_WORLD_SCHEMA_VERSION) {
       errors.push("Snapshot version is invalid");
     }
     const id =
@@ -335,6 +348,34 @@ export function validateWfcWorldSnapshot(value) {
     if (!Number.isInteger(generation) || generation < 0) {
       errors.push("Snapshot generation is invalid");
     }
+    let seed;
+    let templateId;
+    if (sourceVersion === 1) {
+      seed = `legacy-${stableHash({
+        id,
+        generation: normalizeInteger(generation),
+        constraints: world.constraints,
+        grid: world.grid,
+      })}`;
+      templateId = WFC_WORLD_BLANK_TEMPLATE_ID;
+    } else {
+      seed =
+        typeof world.seed === "string"
+          ? world.seed.trim().replace(/\s+/g, " ")
+          : "";
+      if (!seed || seed.length > WFC_WORLD_PERSISTENCE_LIMITS.maxSeedLength) {
+        errors.push("Snapshot seed is invalid");
+        seed = WFC_WORLD_FALLBACK_SEED;
+      }
+      templateId =
+        typeof world.templateId === "string"
+          ? world.templateId
+          : "";
+      if (!getWfcWorldStarterTemplate(templateId)) {
+        errors.push("Snapshot starter template is invalid");
+        templateId = WFC_WORLD_BLANK_TEMPLATE_ID;
+      }
+    }
     if (!TILE_IDS.has(world.selectedTileId)) {
       errors.push("Snapshot selected terrain is invalid");
     }
@@ -364,6 +405,8 @@ export function validateWfcWorldSnapshot(value) {
           cols: WFC_WORLD_COLS,
           rows: WFC_WORLD_ROWS,
           generation,
+          seed,
+          templateId,
           selectedTileId: world.selectedTileId,
           constraints,
           grid,
@@ -489,7 +532,9 @@ export function restoreWfcWorldSnapshot(
   }
 
   const game = {
-    ...createWfcWorldGame(width, height),
+    ...createWfcWorldGame(width, height, {
+      seed: snapshot.world.seed,
+    }),
     wfc,
     phase: snapshot.state === "complete" ? "complete" : "seeding",
     selectedTileId: snapshot.world.selectedTileId,
@@ -497,6 +542,9 @@ export function restoreWfcWorldSnapshot(
       ...constraint,
     })),
     generation: snapshot.world.generation,
+    seed: snapshot.world.seed,
+    templateId: snapshot.world.templateId,
+    randomCursor: 0,
     snapshot: {
       id: snapshot.id,
       name: snapshot.name,
@@ -504,8 +552,8 @@ export function restoreWfcWorldSnapshot(
     },
     message:
       snapshot.state === "complete"
-        ? `${snapshot.name} restored. This world is ready to explore.`
-        : `${snapshot.name} restored. Add rules or generate the world.`,
+        ? `${snapshot.name} restored with seed ${snapshot.world.seed}. This world is ready to explore.`
+        : `${snapshot.name} restored with seed ${snapshot.world.seed}. Add rules or generate the world.`,
   };
   return {
     ok: true,
@@ -596,7 +644,7 @@ export function importWfcWorldSnapshotJSON(raw) {
         "Export was created by a newer version",
       ]);
     }
-    if (parsed.version !== WFC_WORLD_SCHEMA_VERSION) {
+    if (parsed.version !== 1 && parsed.version !== WFC_WORLD_SCHEMA_VERSION) {
       return failure(WFC_WORLD_PERSISTENCE_STATUS.INVALID, [
         "Export version is invalid",
       ]);
@@ -642,6 +690,10 @@ export function exportWfcWorldSnapshotText(value) {
   const lines = [
     `Fingerprint Worlds — ${snapshot.name}`,
     `${snapshot.state === "complete" ? "Complete world" : "Draft"} · Revision ${snapshot.revision}`,
+    `Starter: ${
+      getWfcWorldStarterTemplate(snapshot.world.templateId)?.name ??
+      "Blank canvas"
+    } · Seed: ${snapshot.world.seed}`,
   ];
   if (snapshot.state === "complete") {
     lines.push(`Quality: ${quality.tierLabel} (${quality.score}/100)`);
@@ -700,7 +752,7 @@ export function validateWfcWorldLibrary(value) {
     if (value.kind !== WFC_WORLD_LIBRARY_KIND) {
       errors.push("World library kind is not recognized");
     }
-    if (value.version !== WFC_WORLD_SCHEMA_VERSION) {
+    if (value.version !== 1 && value.version !== WFC_WORLD_SCHEMA_VERSION) {
       errors.push("World library version is invalid");
     }
     if (!Number.isInteger(value.revision) || value.revision < 0) {

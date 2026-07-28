@@ -10,6 +10,10 @@ const styleSource = readFileSync(
   new URL("../src/wfc/WfcWorldProjectPanel.css", import.meta.url),
   "utf8",
 );
+const appSource = readFileSync(
+  new URL("../src/App.jsx", import.meta.url),
+  "utf8",
+);
 
 test("project panel supports controlled state or an internal local library", () => {
   assert.match(componentSource, /library: controlledLibrary/);
@@ -77,6 +81,29 @@ test("finite goal and quality models are exposed as accessible progress and metr
   assert.match(componentSource, /aria-live="polite"/);
   assert.match(componentSource, /aria-atomic="true"/);
   assert.match(componentSource, /role="status"/);
+});
+
+test("generator setup exposes user-visible seeds and meaningful starters", () => {
+  assert.match(componentSource, /Reproducible setup/);
+  assert.match(componentSource, /<span>World seed<\/span>/);
+  assert.match(componentSource, /maxLength="48"/);
+  assert.match(componentSource, /WFC_WORLD_STARTER_TEMPLATES\.map/);
+  assert.match(componentSource, /Starter template/);
+  assert.match(componentSource, /selectedStarterTemplate\.description/);
+  assert.match(componentSource, /Start from template/);
+  assert.match(componentSource, /Apply seed to current rules/);
+  assert.match(componentSource, /Surprise me/);
+  assert.match(componentSource, /applyWfcWorldTemplate/);
+  assert.match(componentSource, /setWfcWorldSeed/);
+  assert.match(componentSource, /createWfcWorldSeed/);
+  assert.match(componentSource, /onWorldChange\(nextGame, event\)/);
+  assert.match(componentSource, /onRestore\?\.\(nextGame, null\)/);
+  assert.match(
+    appSource,
+    /onWorldChange=\{handleFullscreenWfcWorldChange\}/,
+  );
+  assert.match(styleSource, /\.wfc-project-generator-fields/);
+  assert.match(styleSource, /\.wfc-project-seed-value/);
 });
 
 test("component styling is scoped, compact, responsive, and reduced-motion safe", () => {

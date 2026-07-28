@@ -21,6 +21,7 @@ test("World Painter announces canvas status without exposing the decorative grid
   assert.match(source, /aria-live="polite"/);
   assert.match(source, /aria-atomic="true"/);
   assert.match(source, /role="status"/);
+  assert.match(source, /normalizeWfcWorldSeed\(game\.seed\)/);
 });
 
 test("World Painter isolates the large grid from animation-frame shell renders", () => {

@@ -32,6 +32,7 @@ import {
   validateWfcWorldSnapshot,
 } from "../src/wfc/wfcWorldPersistence.js";
 import { isWfcGridValid } from "../src/wfc/wfcSolver.js";
+import { WFC_WORLD_BLANK_TEMPLATE_ID } from "../src/wfc/wfcWorldTemplates.js";
 
 const CREATED_AT = "2026-07-28T12:00:00.000Z";
 const UPDATED_AT = "2026-07-28T12:15:00.000Z";
@@ -41,7 +42,13 @@ function constantRng(value) {
 }
 
 function createSeededWorld() {
-  const game = selectWfcWorldTile(createWfcWorldGame(1280, 720), "castle");
+  const game = selectWfcWorldTile(
+    createWfcWorldGame(1280, 720, {
+      seed: "castle-coast-314",
+      templateId: "highland-keep",
+    }),
+    "castle",
+  );
   const center = getWfcWorldCellCenter(game.layout, 2, 2);
   return stepWfcWorldGame(
     game,
@@ -86,6 +93,8 @@ test("snapshot creation is named, versioned, stable, and deterministic", () => {
   assert.equal(first.snapshot.name, "Castle Coast");
   assert.equal(first.snapshot.revision, 1);
   assert.equal(first.snapshot.state, "complete");
+  assert.equal(first.snapshot.world.seed, "castle-coast-314");
+  assert.equal(first.snapshot.world.templateId, "highland-keep");
   assert.deepEqual(first.snapshot.world.grid, getWfcWorldGrid(game));
 
   const firstExport = exportWfcWorldSnapshotJSON(first.snapshot, {
@@ -115,6 +124,8 @@ test("draft snapshots restore authored rules without pretending generation finis
   assert.equal(restored.game.phase, "seeding");
   assert.equal(restored.game.layout.width, 640);
   assert.equal(restored.game.snapshot.name, "Castle Draft");
+  assert.equal(restored.game.seed, "castle-coast-314");
+  assert.equal(restored.game.templateId, "highland-keep");
   assert.deepEqual(restored.game.constraints, created.snapshot.world.constraints);
   assert.match(restored.game.message, /add rules or generate/i);
 });
@@ -189,6 +200,12 @@ test("safe validation rejects malformed, contradictory, mismatched, and future s
       ],
     },
   };
+  const invalidSeed = structuredClone(created);
+  invalidSeed.world.seed = "x".repeat(
+    WFC_WORLD_PERSISTENCE_LIMITS.maxSeedLength + 1,
+  );
+  const invalidTemplate = structuredClone(created);
+  invalidTemplate.world.templateId = "missing-starter";
 
   assert.equal(future.status, WFC_WORLD_PERSISTENCE_STATUS.UNSUPPORTED);
   assert.equal(validateWfcWorldSnapshot(mismatchedGrid).ok, false);
@@ -200,6 +217,14 @@ test("safe validation rejects malformed, contradictory, mismatched, and future s
   assert.match(
     validateWfcWorldSnapshot(contradictory).errors.join(" "),
     /contradict/i,
+  );
+  assert.match(
+    validateWfcWorldSnapshot(invalidSeed).errors.join(" "),
+    /seed/i,
+  );
+  assert.match(
+    validateWfcWorldSnapshot(invalidTemplate).errors.join(" "),
+    /starter template/i,
   );
   assert.equal(importWfcWorldSnapshotJSON("{").ok, false);
   assert.equal(
@@ -220,9 +245,58 @@ test("plain-text exports provide a compact, shareable world summary", () => {
   assert.equal(exported.ok, true);
   assert.match(exported.text, /^Fingerprint Worlds — Castle Coast/m);
   assert.match(exported.text, /Complete world · Revision 1/);
+  assert.match(exported.text, /Starter: Highland keep/);
+  assert.match(exported.text, /Seed: castle-coast-314/);
   assert.match(exported.text, /Quality: .+ \(\d+\/100\)/);
   assert.match(exported.text, /terrain types/);
   assert.match(exported.text, new RegExp(created.snapshot.id));
+});
+
+test("legacy version-one snapshots and libraries migrate without losing worlds", () => {
+  const current = createWfcWorldSnapshot(
+    createCompleteWorld(),
+    snapshotOptions(),
+  ).snapshot;
+  const legacy = structuredClone(current);
+  legacy.version = 1;
+  delete legacy.world.seed;
+  delete legacy.world.templateId;
+
+  const firstValidation = validateWfcWorldSnapshot(legacy);
+  const secondValidation = validateWfcWorldSnapshot(legacy);
+  const legacyLibrary = {
+    kind: WFC_WORLD_LIBRARY_KIND,
+    version: 1,
+    revision: 4,
+    snapshots: [legacy],
+  };
+  const migratedLibrary = validateWfcWorldLibrary(legacyLibrary);
+  const restored = restoreWfcWorldSnapshot(firstValidation.snapshot);
+  const imported = importWfcWorldSnapshotJSON(
+    JSON.stringify({
+      kind: WFC_WORLD_EXPORT_KIND,
+      version: 1,
+      exportedAt: UPDATED_AT,
+      snapshot: legacy,
+    }),
+  );
+
+  assert.equal(firstValidation.ok, true);
+  assert.deepEqual(firstValidation.snapshot, secondValidation.snapshot);
+  assert.equal(firstValidation.snapshot.version, WFC_WORLD_SCHEMA_VERSION);
+  assert.match(firstValidation.snapshot.world.seed, /^legacy-[a-f0-9]{8}$/);
+  assert.equal(
+    firstValidation.snapshot.world.templateId,
+    WFC_WORLD_BLANK_TEMPLATE_ID,
+  );
+  assert.deepEqual(firstValidation.snapshot.world.grid, current.world.grid);
+  assert.equal(migratedLibrary.ok, true);
+  assert.equal(migratedLibrary.library.version, WFC_WORLD_SCHEMA_VERSION);
+  assert.equal(migratedLibrary.library.revision, 4);
+  assert.equal(restored.game.seed, firstValidation.snapshot.world.seed);
+  assert.deepEqual(getWfcWorldGrid(restored.game), current.world.grid);
+  assert.equal(imported.ok, true);
+  assert.deepEqual(imported.snapshot, firstValidation.snapshot);
 });
 
 test("the pure local library saves revisions, prevents stale overwrites, and serializes", () => {
