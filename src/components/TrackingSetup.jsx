@@ -41,7 +41,41 @@ function SetupProgress({ readiness }) {
   );
 }
 
-function SetupError({ readiness, onRetry, onContinueWithoutCamera }) {
+function CameraDeviceSelect({
+  devices,
+  readiness,
+  onDeviceChange,
+  id = "tracking-camera-device",
+}) {
+  if (devices.length <= 1) {
+    return null;
+  }
+
+  return (
+    <label className="tracking-device-select" htmlFor={id}>
+      <span>Camera</span>
+      <select
+        id={id}
+        onChange={(event) => onDeviceChange(event.target.value)}
+        value={readiness?.selectedDeviceId ?? ""}
+      >
+        {devices.map((device) => (
+          <option key={device.deviceId} value={device.deviceId}>
+            {device.label || "Camera"}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function SetupError({
+  devices,
+  readiness,
+  onDeviceChange,
+  onRetry,
+  onContinueWithoutCamera,
+}) {
   const presentation = getCameraErrorPresentation(readiness?.status);
   if (!presentation) {
     return null;
@@ -52,9 +86,15 @@ function SetupError({ readiness, onRetry, onContinueWithoutCamera }) {
       <span className="tracking-setup-error-icon" aria-hidden="true">
         !
       </span>
-      <div>
+      <div className="tracking-setup-error-content">
         <h2>{presentation.title}</h2>
         <p>{presentation.message}</p>
+        <CameraDeviceSelect
+          devices={devices}
+          id="tracking-error-camera-device"
+          onDeviceChange={onDeviceChange}
+          readiness={readiness}
+        />
         <div className="tracking-setup-actions">
           <button className="tracking-primary-action" onClick={onRetry} type="button">
             {presentation.primaryAction}
@@ -272,7 +312,9 @@ export default function TrackingSetup({
 
           {hasError ? (
             <SetupError
+              devices={devices}
               onContinueWithoutCamera={onContinueWithoutCamera}
+              onDeviceChange={onDeviceChange}
               onRetry={onRetry}
               readiness={readiness}
             />
@@ -331,22 +373,11 @@ export default function TrackingSetup({
               ) : interactionAvailable ? (
                 <>
                   <TrackingInteractionInstructions check={interactionCheck} />
-                  {devices.length > 1 ? (
-                    <label className="tracking-device-select" htmlFor="tracking-camera-device">
-                      <span>Camera</span>
-                      <select
-                        id="tracking-camera-device"
-                        onChange={(event) => onDeviceChange(event.target.value)}
-                        value={readiness?.selectedDeviceId ?? ""}
-                      >
-                        {devices.map((device) => (
-                          <option key={device.deviceId} value={device.deviceId}>
-                            {device.label || "Camera"}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
+                  <CameraDeviceSelect
+                    devices={devices}
+                    onDeviceChange={onDeviceChange}
+                    readiness={readiness}
+                  />
                   <div className="tracking-setup-actions tracking-interaction-actions">
                     <button
                       aria-describedby="tracking-readiness-requirement"

@@ -145,6 +145,7 @@ function createPauseView(
   modeLabel,
   exitLabel,
   trackingRecovery,
+  instructions,
 ) {
   const primaryReason =
     getPrimaryExperiencePauseReason(lifecycle) ??
@@ -192,6 +193,7 @@ function createPauseView(
     eyebrow: presentation.eyebrow,
     title: presentation.title,
     message: presentation.message,
+    help: isTrackingLost ? "" : normalizeCopy(instructions),
     pauseReasons,
     primaryPauseReason: primaryReason,
     announcement: `${mode}. ${presentation.title}. ${presentation.message}`,
@@ -327,6 +329,7 @@ export function createExperienceOverlayViewModel({
         mode,
         normalizedExitLabel || "Back to home",
         trackingRecovery,
+        instructions,
       );
 
     case EXPERIENCE_PHASES.RESULTS: {

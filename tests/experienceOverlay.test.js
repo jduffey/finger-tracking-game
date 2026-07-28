@@ -19,6 +19,8 @@ test("experience overlay exposes dialogs, alerts, live regions, and native contr
   assert.match(componentSource, /role="timer"/);
   assert.match(componentSource, /type="button"/);
   assert.match(componentSource, /role="group"/);
+  assert.match(componentSource, /<details className="experience-overlay-help">/);
+  assert.match(componentSource, /<summary>How to play<\/summary>/);
 });
 
 test("experience overlay manages entry, restoration, escape, and trapped tab focus", () => {

@@ -170,6 +170,26 @@
   margin-right: 8px;
 }
 
+.experience-overlay-help {
+  background: rgba(124, 247, 200, 0.06);
+  border: 1px solid rgba(124, 247, 200, 0.18);
+  border-radius: 14px;
+  margin-top: 20px;
+  padding: 12px 14px;
+}
+
+.experience-overlay-help summary {
+  color: var(--experience-overlay-accent);
+  cursor: pointer;
+  font-weight: 850;
+  min-height: 24px;
+}
+
+.experience-overlay-help p {
+  font-size: 0.92rem;
+  margin-top: 10px;
+}
+
 .experience-overlay-dialog-actions {
   display: flex;
   flex-wrap: wrap;

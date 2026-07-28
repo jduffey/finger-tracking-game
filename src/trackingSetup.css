@@ -539,6 +539,11 @@
   gap: 14px;
 }
 
+.tracking-setup-error-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .tracking-setup-error-icon {
   align-items: center;
   background: rgba(255, 125, 134, 0.13);

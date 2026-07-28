@@ -248,6 +248,13 @@ function OverlayDialog({
           </ul>
         ) : null}
 
+        {view.help ? (
+          <details className="experience-overlay-help">
+            <summary>How to play</summary>
+            <p>{view.help}</p>
+          </details>
+        ) : null}
+
         {view.kind === EXPERIENCE_OVERLAY_KINDS.RESULTS ? (
           <ResultMetrics result={view.result} />
         ) : null}

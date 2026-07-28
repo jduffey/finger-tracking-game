@@ -26,6 +26,8 @@ test("tracking setup uses valid progress markup and a single mobile scroller", (
   assert.doesNotMatch(setup, /tracking-setup-progress-fill/);
   assert.match(setup, /aria-busy=\{loading\}/);
   assert.match(setup, /aria-label=\{`Live \$\{mirrorCamera \? "mirrored" : "direct"\} camera preview`\}/);
+  assert.match(setup, /id="tracking-error-camera-device"/);
+  assert.match(setup, /<CameraDeviceSelect[\s\S]*?devices=\{devices\}[\s\S]*?onDeviceChange=\{onDeviceChange\}/);
   assert.match(
     setupStyles,
     /@media \(max-width: 980px\)[\s\S]*?\.tracking-setup-page \{[\s\S]*?overflow: visible;/,

@@ -136,11 +136,16 @@ test("manual pause has a resumable dialog and preserves restart and exit", () =>
   const view = createExperienceOverlayViewModel({
     lifecycle,
     modeLabel: "Brick Dodger",
+    instructions: "Move between lanes and avoid the warning zones.",
   });
 
   assert.equal(view.kind, EXPERIENCE_OVERLAY_KINDS.PAUSED);
   assert.equal(view.isTrackingLost, false);
   assert.equal(view.title, "Paused");
+  assert.equal(
+    view.help,
+    "Move between lanes and avoid the warning zones.",
+  );
   assert.equal(view.actions[0].id, EXPERIENCE_OVERLAY_ACTIONS.RESUME);
   assert.equal(view.actions[0].reason, EXPERIENCE_PAUSE_REASONS.MANUAL);
   assert.deepEqual(
