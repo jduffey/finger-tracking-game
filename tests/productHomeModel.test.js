@@ -7,6 +7,7 @@ import {
   getFeaturedModes,
 } from "../src/modeRegistry.js";
 import {
+  LIBRARY_COLLECTIONS,
   filterLibraryModes,
   formatModeMetadata,
   getProductHomeAreaFromPath,
@@ -17,6 +18,7 @@ import {
   selectContinueMode,
   selectDailyChallengeMode,
   selectHomeRecommendations,
+  selectLibraryCollectionModes,
   selectQuickPlayMode,
 } from "../src/productHomeModel.js";
 import { MODE_MATURITY } from "../src/modeRegistry.js";
@@ -52,6 +54,39 @@ test("the public library omits developer-only diagnostics by default", () => {
     getLibraryModes({ includeInternal: true }).some(
       (mode) => mode.maturity === MODE_MATURITY.INTERNAL,
     ),
+  );
+});
+
+test("library collections resurface favorites and recents across every product area", () => {
+  const modes = getLibraryModes();
+  const crossAreaIds = ["pose-quest", "jam-studio", "sky-patrol"];
+  const favorites = selectLibraryCollectionModes(modes, {
+    collection: LIBRARY_COLLECTIONS.FAVORITES,
+    favoriteModeIds: [...crossAreaIds, "missing-mode", "jam-studio"],
+  });
+  const recent = selectLibraryCollectionModes(modes, {
+    collection: LIBRARY_COLLECTIONS.RECENT,
+    recentModeIds: crossAreaIds,
+  });
+
+  assert.deepEqual(
+    favorites.map((mode) => mode.id),
+    crossAreaIds,
+  );
+  assert.deepEqual(
+    recent.map((mode) => mode.area),
+    [PRODUCT_AREAS.LABS, PRODUCT_AREAS.CREATE, PRODUCT_AREAS.PLAY],
+  );
+  assert.deepEqual(
+    selectLibraryCollectionModes(modes, {
+      collection: LIBRARY_COLLECTIONS.FAVORITES,
+      favoriteModeIds: null,
+    }),
+    [],
+  );
+  assert.equal(
+    selectLibraryCollectionModes(modes, { collection: "unknown" }),
+    modes,
   );
 });
 

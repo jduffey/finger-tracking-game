@@ -66,3 +66,28 @@ test("the library exposes difficulty and seated-friendly browse controls", () =>
   assert.match(source, /setDifficultyFilter\("all"\)/);
   assert.match(source, /setSeatedOnly\(false\)/);
 });
+
+test("the library exposes accessible Favorites and Recent views with useful empty states", () => {
+  const source = readSource("src/components/ProductHome.jsx");
+  const styles = readSource("src/productHome.css");
+
+  assert.match(source, /LIBRARY_COLLECTION_FILTERS/);
+  assert.match(source, /selectLibraryCollectionModes\(libraryModes,/);
+  assert.match(source, /aria-label="Choose a library view"/);
+  assert.match(source, /aria-pressed=\{libraryCollection === filter\.id\}/);
+  assert.match(source, /aria-controls="experience-list"/);
+  assert.match(source, /No favorites yet\./);
+  assert.match(source, /No recent experiences yet\./);
+  assert.match(source, /Play, Create, or Labs/);
+  assert.match(source, /Browse all experiences/);
+  assert.match(source, /aria-live="polite"[\s\S]*?experiences"} shown/);
+
+  assert.match(
+    styles,
+    /\.product-library-collections \{[\s\S]*?display: flex;[\s\S]*?flex-wrap: wrap;/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 720px\)[\s\S]*?\.product-library-collections \{[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/,
+  );
+});

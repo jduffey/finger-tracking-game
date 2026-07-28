@@ -112,6 +112,7 @@
 .product-home-icon-button,
 .product-primary-action,
 .product-secondary-action,
+.product-library-collections button,
 .product-area-tabs button,
 .product-library-empty button {
   align-items: center;
@@ -653,11 +654,77 @@ button.product-shortcut-card:hover {
   color: #808ca4;
 }
 
+.product-library-view-bar {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin: 28px 0 12px;
+}
+
+.product-library-collections {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.product-library-collections-label {
+  color: var(--home-muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  margin-right: 2px;
+  text-transform: uppercase;
+}
+
+.product-library-collections button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--home-border);
+  border-radius: 12px;
+  color: var(--home-copy);
+  gap: 8px;
+  padding: 7px 9px 7px 12px;
+}
+
+.product-library-collections button.active {
+  background: rgba(124, 247, 200, 0.12);
+  border-color: rgba(124, 247, 200, 0.44);
+  color: var(--home-accent);
+}
+
+.product-library-collection-count {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  color: currentColor;
+  display: inline-flex;
+  font-size: 0.7rem;
+  font-weight: 900;
+  justify-content: center;
+  min-height: 24px;
+  min-width: 24px;
+  padding: 2px 6px;
+}
+
+.product-library-result-count {
+  color: var(--home-muted);
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.product-library-result-count strong {
+  color: var(--home-copy);
+}
+
 .product-area-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 28px 0 20px;
+  margin: 0 0 20px;
 }
 
 .product-area-tabs button {
@@ -899,6 +966,17 @@ button.product-shortcut-card:hover {
   padding: 8px 14px;
 }
 
+.product-library-empty > div {
+  display: grid;
+  gap: 5px;
+}
+
+.product-library-empty span {
+  color: var(--home-muted);
+  line-height: 1.5;
+  max-width: 52ch;
+}
+
 .product-home button:focus-visible,
 .product-home a:focus-visible,
 .product-home input:focus-visible,
@@ -1051,6 +1129,7 @@ button.product-shortcut-card:hover {
 
   .product-home-hero-actions,
   .product-library-heading,
+  .product-library-view-bar,
   .product-shortcuts-heading {
     align-items: stretch;
     flex-direction: column;
@@ -1083,6 +1162,24 @@ button.product-shortcut-card:hover {
 
   .product-mode-grid {
     grid-template-columns: 1fr;
+  }
+
+  .product-library-collections {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .product-library-collections-label {
+    grid-column: 1 / -1;
+  }
+
+  .product-library-collections button {
+    min-width: 0;
+  }
+
+  .product-library-result-count {
+    align-self: flex-end;
   }
 
   .product-progress-summary {

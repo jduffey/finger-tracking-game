@@ -19,6 +19,12 @@ export const PRODUCT_HOME_AREA_PATHS = Object.freeze({
   [PRODUCT_AREAS.LABS]: "/labs",
 });
 
+export const LIBRARY_COLLECTIONS = Object.freeze({
+  ALL: "all",
+  FAVORITES: "favorites",
+  RECENT: "recent",
+});
+
 export function getProductHomeAreaFromPath(pathname) {
   const normalizedPath =
     typeof pathname === "string"
@@ -154,6 +160,47 @@ export function getLibraryModes({ includeInternal = false } = {}) {
   return includeInternal
     ? modes
     : modes.filter((mode) => mode.maturity !== MODE_MATURITY.INTERNAL);
+}
+
+export function selectLibraryCollectionModes(
+  modes,
+  {
+    collection = LIBRARY_COLLECTIONS.ALL,
+    favoriteModeIds = [],
+    recentModeIds = [],
+  } = {},
+) {
+  const availableModes = Array.isArray(modes) ? modes : [];
+  if (collection === LIBRARY_COLLECTIONS.ALL) {
+    return availableModes;
+  }
+
+  const orderedModeIds =
+    collection === LIBRARY_COLLECTIONS.FAVORITES
+      ? favoriteModeIds
+      : collection === LIBRARY_COLLECTIONS.RECENT
+        ? recentModeIds
+        : null;
+  if (!Array.isArray(orderedModeIds)) {
+    return collection === LIBRARY_COLLECTIONS.FAVORITES ||
+      collection === LIBRARY_COLLECTIONS.RECENT
+      ? []
+      : availableModes;
+  }
+
+  const modesById = new Map(availableModes.map((mode) => [mode.id, mode]));
+  const seenModeIds = new Set();
+  return orderedModeIds.flatMap((modeId) => {
+    if (
+      typeof modeId !== "string" ||
+      seenModeIds.has(modeId) ||
+      !modesById.has(modeId)
+    ) {
+      return [];
+    }
+    seenModeIds.add(modeId);
+    return [modesById.get(modeId)];
+  });
 }
 
 function getQuickPlayCandidates() {

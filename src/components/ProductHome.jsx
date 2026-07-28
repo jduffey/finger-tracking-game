@@ -16,6 +16,7 @@ import {
 } from "../modeRegistry.js";
 import {
   HOME_AREA_COPY,
+  LIBRARY_COLLECTIONS,
   filterLibraryModes,
   formatModeMetadata,
   getLibraryModes,
@@ -23,6 +24,7 @@ import {
   selectContinueMode,
   selectDailyChallengeMode,
   selectHomeRecommendations,
+  selectLibraryCollectionModes,
   selectQuickPlayMode,
 } from "../productHomeModel.js";
 import { getHomeAchievementSummary } from "../achievementCatalog.js";
@@ -46,6 +48,12 @@ const DIFFICULTY_FILTERS = [
   { id: "Hard", label: "Hard" },
   { id: "Adaptive", label: "Adaptive" },
   { id: "Open play", label: "Open play" },
+];
+
+const LIBRARY_COLLECTION_FILTERS = [
+  { id: LIBRARY_COLLECTIONS.ALL, label: "All" },
+  { id: LIBRARY_COLLECTIONS.FAVORITES, label: "Favorites" },
+  { id: LIBRARY_COLLECTIONS.RECENT, label: "Recent" },
 ];
 
 function formatPlayTime(durationMs = 0) {
@@ -242,13 +250,41 @@ export default function ProductHome({
   const [trackingFilter, setTrackingFilter] = useState("all");
   const [playersFilter, setPlayersFilter] = useState("all");
   const [seatedOnly, setSeatedOnly] = useState(false);
+  const [libraryCollection, setLibraryCollection] = useState(
+    LIBRARY_COLLECTIONS.ALL,
+  );
   const lastQuickPlayModeIdRef = useRef(null);
   const libraryModes = useMemo(() => getLibraryModes(), []);
   const featuredModes = useMemo(() => getFeaturedModes(), []);
-  const favoriteSet = useMemo(() => new Set(favoriteModeIds), [favoriteModeIds]);
+  const favoriteSet = useMemo(
+    () => new Set(Array.isArray(favoriteModeIds) ? favoriteModeIds : []),
+    [favoriteModeIds],
+  );
+  const favoriteModes = useMemo(
+    () =>
+      selectLibraryCollectionModes(libraryModes, {
+        collection: LIBRARY_COLLECTIONS.FAVORITES,
+        favoriteModeIds,
+      }),
+    [favoriteModeIds, libraryModes],
+  );
+  const recentModes = useMemo(
+    () =>
+      selectLibraryCollectionModes(libraryModes, {
+        collection: LIBRARY_COLLECTIONS.RECENT,
+        recentModeIds,
+      }),
+    [libraryModes, recentModeIds],
+  );
+  const collectionModes =
+    libraryCollection === LIBRARY_COLLECTIONS.FAVORITES
+      ? favoriteModes
+      : libraryCollection === LIBRARY_COLLECTIONS.RECENT
+        ? recentModes
+        : libraryModes;
   const filteredModes = useMemo(
     () =>
-      filterLibraryModes(libraryModes, {
+      filterLibraryModes(collectionModes, {
         query,
         area: activeArea,
         maxMinutes: maxMinutes === "all" ? null : Number(maxMinutes),
@@ -259,8 +295,8 @@ export default function ProductHome({
       }),
     [
       activeArea,
+      collectionModes,
       difficultyFilter,
-      libraryModes,
       maxMinutes,
       playersFilter,
       query,
@@ -343,6 +379,56 @@ export default function ProductHome({
       },
     });
   }
+
+  function clearLibraryFilters({ showEverything = false } = {}) {
+    setQuery("");
+    setActiveArea("all");
+    setMaxMinutes("all");
+    setDifficultyFilter("all");
+    setTrackingFilter("all");
+    setPlayersFilter("all");
+    setSeatedOnly(false);
+    if (showEverything) {
+      setLibraryCollection(LIBRARY_COLLECTIONS.ALL);
+    }
+    onSelectArea?.("all");
+  }
+
+  const collectionCounts = {
+    [LIBRARY_COLLECTIONS.ALL]: libraryModes.length,
+    [LIBRARY_COLLECTIONS.FAVORITES]: favoriteModes.length,
+    [LIBRARY_COLLECTIONS.RECENT]: recentModes.length,
+  };
+  const selectedCollectionIsEmpty =
+    libraryCollection !== LIBRARY_COLLECTIONS.ALL &&
+    collectionModes.length === 0;
+  const emptyState =
+    libraryCollection === LIBRARY_COLLECTIONS.FAVORITES
+      ? selectedCollectionIsEmpty
+        ? {
+            title: "No favorites yet.",
+            detail:
+              "Select the star on any Play, Create, or Labs experience to keep it here.",
+          }
+        : {
+            title: "No favorites match these filters.",
+            detail: "Clear the filters to see everything you have saved.",
+          }
+      : libraryCollection === LIBRARY_COLLECTIONS.RECENT
+        ? selectedCollectionIsEmpty
+          ? {
+              title: "No recent experiences yet.",
+              detail:
+                "Open anything from Play, Create, or Labs and it will be easy to find here.",
+            }
+          : {
+              title: "No recent experiences match these filters.",
+              detail: "Clear the filters to see your recent activity.",
+            }
+        : {
+            title: "No experiences match these filters.",
+            detail: "Try a broader search or reset the library filters.",
+          };
 
   return (
     <div className="product-home">
@@ -653,11 +739,50 @@ export default function ProductHome({
             </label>
           </div>
 
+          <div className="product-library-view-bar">
+            <div
+              aria-controls="experience-list"
+              aria-label="Choose a library view"
+              className="product-library-collections"
+              role="group"
+            >
+              <span className="product-library-collections-label">Show</span>
+              {LIBRARY_COLLECTION_FILTERS.map((filter) => {
+                const count = collectionCounts[filter.id];
+                return (
+                  <button
+                    aria-label={`${filter.label}: ${count} ${
+                      count === 1 ? "experience" : "experiences"
+                    }`}
+                    aria-pressed={libraryCollection === filter.id}
+                    className={libraryCollection === filter.id ? "active" : ""}
+                    key={filter.id}
+                    onClick={() => setLibraryCollection(filter.id)}
+                    type="button"
+                  >
+                    <span>{filter.label}</span>
+                    <span aria-hidden="true" className="product-library-collection-count">
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p
+              aria-live="polite"
+              className="product-library-result-count"
+              role="status"
+            >
+              <strong>{filteredModes.length}</strong>{" "}
+              {filteredModes.length === 1 ? "experience" : "experiences"} shown
+            </p>
+          </div>
+
           <div
             aria-controls="experience-list"
             className="product-area-tabs"
             role="group"
-            aria-label="Filter experiences"
+            aria-label="Filter experiences by area"
           >
             {AREA_FILTERS.map((filter) => (
               <button
@@ -772,21 +897,22 @@ export default function ProductHome({
           </div>
 
           {filteredModes.length === 0 ? (
-            <div className="product-library-empty" role="status">
-              <strong>No experiences match that search.</strong>
+            <div className="product-library-empty">
+              <div aria-live="polite" role="status">
+                <strong>{emptyState.title}</strong>
+                <span>{emptyState.detail}</span>
+              </div>
               <button
-                onClick={() => {
-                  setQuery("");
-                  setActiveArea("all");
-                  setMaxMinutes("all");
-                  setDifficultyFilter("all");
-                  setTrackingFilter("all");
-                  setPlayersFilter("all");
-                  setSeatedOnly(false);
-                }}
+                onClick={() =>
+                  clearLibraryFilters({
+                    showEverything: selectedCollectionIsEmpty,
+                  })
+                }
                 type="button"
               >
-                Clear filters
+                {selectedCollectionIsEmpty
+                  ? "Browse all experiences"
+                  : "Clear filters"}
               </button>
             </div>
           ) : null}
