@@ -1,0 +1,1 @@
+export const FULLSCREEN_HOLD_CONTROL_MS = 1000;

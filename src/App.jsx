@@ -107,17 +107,8 @@ import {
   getTipRippleStrokeWidth,
   getTouchingTipRippleStrokeWidth,
 } from "./tipRipples.js";
-import {
-  FULLSCREEN_LANDING_MODE,
-  FULLSCREEN_MODE_LANDING_HOLD_MS,
-  createFullscreenLandingHandSkeleton,
-  createFullscreenModeLandingState,
-  getVerifiedFullscreenMenuHandPointerInput,
-  hasVerifiedFullscreenMenuHand,
-  resetFullscreenModeLandingHold,
-  selectFullscreenModeLandingMode,
-  stepFullscreenModeLanding,
-} from "./fullscreenModeLanding.js";
+import { FULLSCREEN_HOLD_CONTROL_MS } from "./fullscreenHoldControl.js";
+import { getVerifiedFullscreenHandPointerInput } from "./fullscreenHandPointer.js";
 import {
   areFullscreenExitControlStatesEqual,
   createFullscreenExitControlState,
@@ -290,9 +281,7 @@ import {
   deriveOffAxisHeadState,
 } from "./offAxisHeadTracking.js";
 import { createScopedLogger } from "./logger.js";
-import FullscreenLandingPage, {
-  WebcamBackground,
-} from "./components/FullscreenLandingPage.jsx";
+import WebcamBackground from "./components/WebcamBackground.jsx";
 import ProductHome from "./components/ProductHome.jsx";
 import { createGestureEngine } from "./gestures/gestureEngine.js";
 import {
@@ -1842,8 +1831,9 @@ export default function App() {
   const [fullscreenBodyPoses, setFullscreenBodyPoses] = useState([]);
   const [fullscreenSkeletonHands, setFullscreenSkeletonHands] = useState([]);
   const [fullscreenDetectedHandCount, setFullscreenDetectedHandCount] = useState(0);
-  const [fullscreenGridMode, setFullscreenGridMode] = useState(FULLSCREEN_LANDING_MODE);
-  const [fullscreenModeLandingState, setFullscreenModeLandingState] = useState(null);
+  const [fullscreenGridMode, setFullscreenGridMode] = useState(
+    () => motionVisualizerState.effect,
+  );
   const [fullscreenExitControlState, setFullscreenExitControlState] = useState(null);
   const [fullscreenRestartControlState, setFullscreenRestartControlState] = useState(null);
   const [fullscreenRingTrail, setFullscreenRingTrail] = useState([]);
@@ -1992,11 +1982,6 @@ export default function App() {
   const fullscreenPulseLastEmitByIdRef = useRef({});
   const fullscreenTipRippleStartedAtRef = useRef(0);
   const fullscreenGridModeRef = useRef(fullscreenGridMode);
-  const fullscreenModeLandingStateRef = useRef(null);
-  const fullscreenModeLandingViewportRef = useRef(null);
-  const fullscreenModeLandingLastTickRef = useRef(0);
-  const fullscreenModeLandingScrollTopRef = useRef(0);
-  const fullscreenLandingAppActiveRef = useRef(true);
   const fullscreenExitControlStateRef = useRef(null);
   const fullscreenExitControlViewportRef = useRef(null);
   const fullscreenExitControlLastTickRef = useRef(0);
@@ -2184,8 +2169,6 @@ export default function App() {
   );
   const isMinorityReportLabPhase = phase === PHASES.MINORITY_REPORT_LAB;
   const isImmersiveAppPhase = shouldUseImmersiveAppLayout(phase);
-  const isFullscreenModeLanding =
-    isFullscreenCameraPhase && fullscreenGridMode === FULLSCREEN_LANDING_MODE;
   const fullscreenExperienceMode = getModeByFullscreenId(fullscreenGridMode);
   const isMotionVisualizerMode =
     isFullscreenCameraPhase &&
@@ -2336,26 +2319,16 @@ export default function App() {
     pinchActive,
     draggingCellIndex: fullscreenTicTacToeDraggingCellIndex,
   });
-  const fullscreenModeLandingHoldProgress =
-    preferences.dwellDurationMs > 0
-      ? clampValue(
-          (fullscreenModeLandingState?.holdMs ?? 0) /
-            preferences.dwellDurationMs,
-          0,
-          1,
-        )
-      : 0;
-  const fullscreenModeLandingLayout = fullscreenModeLandingState?.layout ?? null;
   const fullscreenExitControlCountdown = (
     Math.max(
       0,
-      FULLSCREEN_MODE_LANDING_HOLD_MS - (fullscreenExitControlState?.holdMs ?? 0),
+      FULLSCREEN_HOLD_CONTROL_MS - (fullscreenExitControlState?.holdMs ?? 0),
     ) / 1000
   ).toFixed(2);
   const fullscreenRestartControlCountdown = (
     Math.max(
       0,
-      FULLSCREEN_MODE_LANDING_HOLD_MS - (fullscreenRestartControlState?.holdMs ?? 0),
+      FULLSCREEN_HOLD_CONTROL_MS - (fullscreenRestartControlState?.holdMs ?? 0),
     ) / 1000
   ).toFixed(2);
   const isSandboxPhase = phase === PHASES.SANDBOX;
@@ -2494,7 +2467,7 @@ export default function App() {
     }
   };
 
-  const cameraObjectFit = isFullscreenModeLanding ? "cover" : getCameraObjectFitForPhase(phase);
+  const cameraObjectFit = getCameraObjectFitForPhase(phase);
   const fullscreenCameraViewport = useMemo(() => {
     if (!isFullscreenCameraPhase) {
       return null;
@@ -2548,24 +2521,6 @@ export default function App() {
     fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
       ? fullscreenBrowserViewport
       : fullscreenCameraViewport;
-  const fullscreenCameraLandingViewport = useMemo(() => {
-    if (!isFullscreenCameraPhase) {
-      return null;
-    }
-
-    return {
-      left: 0,
-      top: 0,
-      width: viewport.width,
-      height: viewport.height,
-      style: {
-        left: "0px",
-        top: "0px",
-        width: `${viewport.width}px`,
-        height: `${viewport.height}px`,
-      },
-    };
-  }, [isFullscreenCameraPhase, viewport.height, viewport.width]);
   const fullscreenTicTacToeCursorPoint =
     isFullscreenTicTacToeMode &&
     fullscreenCameraViewport &&
@@ -3391,50 +3346,6 @@ export default function App() {
   }, [appLog]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || typeof document === "undefined") {
-      return undefined;
-    }
-
-    const markLandingAppActive = () => {
-      fullscreenLandingAppActiveRef.current = document.visibilityState !== "hidden";
-      fullscreenModeLandingLastTickRef.current = 0;
-    };
-
-    const clearLandingHold = () => {
-      fullscreenLandingAppActiveRef.current = false;
-      fullscreenModeLandingLastTickRef.current = 0;
-      setFullscreenModeLandingState((previous) => {
-        const sourceState = previous ?? fullscreenModeLandingStateRef.current;
-        if (!sourceState) {
-          fullscreenModeLandingStateRef.current = null;
-          return previous;
-        }
-        const nextState = resetFullscreenModeLandingHold(sourceState);
-        fullscreenModeLandingStateRef.current = nextState;
-        return nextState;
-      });
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        clearLandingHold();
-        return;
-      }
-      markLandingAppActive();
-    };
-
-    window.addEventListener("blur", clearLandingHold);
-    window.addEventListener("focus", markLandingAppActive);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener("blur", clearLandingHold);
-      window.removeEventListener("focus", markLandingAppActive);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, []);
-
-  useEffect(() => {
     appLog.info("Phase changed", { phase });
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [appLog, phase]);
@@ -3600,20 +3511,12 @@ export default function App() {
   }, [fullscreenGridMode]);
 
   useEffect(() => {
-    fullscreenModeLandingStateRef.current = fullscreenModeLandingState;
-  }, [fullscreenModeLandingState]);
-
-  useEffect(() => {
     fullscreenExitControlStateRef.current = fullscreenExitControlState;
   }, [fullscreenExitControlState]);
 
   useEffect(() => {
     fullscreenRestartControlStateRef.current = fullscreenRestartControlState;
   }, [fullscreenRestartControlState]);
-
-  useEffect(() => {
-    fullscreenModeLandingViewportRef.current = fullscreenCameraLandingViewport;
-  }, [fullscreenCameraLandingViewport]);
 
   useEffect(() => {
     fullscreenExitControlViewportRef.current = fullscreenCameraViewport;
@@ -3740,33 +3643,6 @@ export default function App() {
   useEffect(() => {
     if (
       phase !== PHASES.FULLSCREEN_CAMERA ||
-      fullscreenGridMode !== FULLSCREEN_LANDING_MODE ||
-      !fullscreenCameraLandingViewport
-    ) {
-      fullscreenModeLandingLastTickRef.current = 0;
-      fullscreenModeLandingScrollTopRef.current = 0;
-      if (fullscreenModeLandingStateRef.current) {
-        fullscreenModeLandingStateRef.current = null;
-        setFullscreenModeLandingState(null);
-      }
-      return undefined;
-    }
-
-    const nextLandingState = createFullscreenModeLandingState(
-      fullscreenCameraLandingViewport.width,
-      fullscreenCameraLandingViewport.height,
-    );
-    fullscreenModeLandingLastTickRef.current = 0;
-    fullscreenModeLandingScrollTopRef.current = 0;
-    fullscreenModeLandingStateRef.current = nextLandingState;
-    setFullscreenModeLandingState(nextLandingState);
-    return undefined;
-  }, [fullscreenCameraLandingViewport, fullscreenGridMode, phase]);
-
-  useEffect(() => {
-    if (
-      phase !== PHASES.FULLSCREEN_CAMERA ||
-      fullscreenGridMode === FULLSCREEN_LANDING_MODE ||
       !fullscreenCameraViewport
     ) {
       fullscreenExitControlLastTickRef.current = 0;
@@ -7149,7 +7025,6 @@ export default function App() {
     isCalibratingRef.current = false;
     calibrationSampleRef.current = null;
     setCalibrationSampleFrames(0);
-    setFullscreenGridMode(FULLSCREEN_LANDING_MODE);
     setPhase(PHASES.FULLSCREEN_CAMERA);
     phaseRef.current = PHASES.FULLSCREEN_CAMERA;
     setCalibrationMessage(
@@ -7179,8 +7054,6 @@ export default function App() {
       reason,
       previousMode: fullscreenGridModeRef.current,
     });
-    fullscreenGridModeRef.current = FULLSCREEN_LANDING_MODE;
-    setFullscreenGridMode(FULLSCREEN_LANDING_MODE);
     navigateToProductHome();
   }
 
@@ -9639,11 +9512,7 @@ export default function App() {
   }
 
   function computeCameraRenderMetrics(
-    objectFit =
-      phaseRef.current === PHASES.FULLSCREEN_CAMERA &&
-      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE
-        ? "cover"
-        : getCameraObjectFitForPhase(phaseRef.current),
+    objectFit = getCameraObjectFitForPhase(phaseRef.current),
   ) {
     const video = videoRef.current;
     const canvas = overlayCanvasRef.current;
@@ -10366,11 +10235,7 @@ export default function App() {
   function getFullscreenIndexOverlayPoints(hands) {
     const renderMetrics = computeCameraRenderMetrics("contain");
     const safeHands = Array.isArray(hands) ? hands : [];
-    const eligibleHands =
-      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE
-        ? safeHands.filter((hand) => hasVerifiedFullscreenMenuHand(hand))
-        : safeHands;
-    return eligibleHands
+    return safeHands
       .map((hand, handIndex) => {
         const indexTip = hand?.fingerTips?.index ?? hand?.indexTip ?? null;
         const projectedPoint = projectCameraPointToCanvas(indexTip, renderMetrics);
@@ -10390,15 +10255,11 @@ export default function App() {
   function getFullscreenTipOverlayPoints(hands) {
     const renderMetrics = computeCameraRenderMetrics("contain");
     const safeHands = Array.isArray(hands) ? hands : [];
-    const eligibleHands =
-      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE
-        ? safeHands.filter((hand) => hasVerifiedFullscreenMenuHand(hand))
-        : safeHands;
     const trackedFingerNames = getFullscreenTrackedFingerNames(
       fullscreenGridModeRef.current,
       EXTENT_FINGER_NAMES,
     );
-    return eligibleHands.flatMap((hand, handIndex) => {
+    return safeHands.flatMap((hand, handIndex) => {
       const handId = hand?.id ?? hand?.label ?? `hand-${handIndex}`;
       return trackedFingerNames.map((fingerName) => {
         const tip = hand?.fingerTips?.[fingerName] ?? hand?.[`${fingerName}Tip`] ?? null;
@@ -10554,13 +10415,6 @@ export default function App() {
     const tipPoints = getFullscreenTipOverlayPoints(hands);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE) {
-      return {
-        indexPoints,
-        tipPoints,
-      };
-    }
-
     if (shouldShowFullscreenNeonHandOutline(fullscreenGridModeRef.current)) {
       drawNeonActiveHandOutline(hands);
       return {
@@ -10588,13 +10442,10 @@ export default function App() {
     }
 
     if (shouldShowFullscreenHandSkeleton(fullscreenGridModeRef.current)) {
-      const isFullscreenLandingSkeleton = fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE;
       drawCameraOverlayHands(hands, {
         showSkeleton: true,
-        objectFit: isFullscreenLandingSkeleton ? "cover" : undefined,
-        highlightIndexOnly: isFullscreenLandingSkeleton,
-        showPointerRing: !isFullscreenLandingSkeleton,
-        showHandLabels: !isFullscreenLandingSkeleton,
+        showPointerRing: true,
+        showHandLabels: true,
       });
       return {
         indexPoints,
@@ -10631,10 +10482,8 @@ export default function App() {
   }
 
   function getVerifiedFullscreenHoldControlInput(viewportMetrics) {
-    const renderMetrics = computeCameraRenderMetrics(
-      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE ? "cover" : "contain",
-    );
-    return getVerifiedFullscreenMenuHandPointerInput(
+    const renderMetrics = computeCameraRenderMetrics("contain");
+    return getVerifiedFullscreenHandPointerInput(
       fullscreenHandsRef.current,
       viewportMetrics,
       (point) => projectCameraPointToCanvas(point, renderMetrics),
@@ -10696,93 +10545,9 @@ export default function App() {
     };
   }
 
-  function getFullscreenLandingHandSkeleton(viewportMetrics) {
-    const renderMetrics = computeCameraRenderMetrics("cover");
-    return createFullscreenLandingHandSkeleton(
-      fullscreenHandsRef.current,
-      viewportMetrics,
-      (point) => projectCameraPointToCanvas(point, renderMetrics),
-    );
-  }
-
-  function updateFullscreenModeLandingSimulation(timestamp) {
-    if (
-      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
-      fullscreenGridModeRef.current !== FULLSCREEN_LANDING_MODE ||
-      !fullscreenModeLandingStateRef.current
-    ) {
-      fullscreenModeLandingLastTickRef.current = timestamp;
-      return;
-    }
-
-    const viewportMetrics = fullscreenModeLandingViewportRef.current;
-    if (!viewportMetrics) {
-      fullscreenModeLandingLastTickRef.current = timestamp;
-      return;
-    }
-
-    const previousTimestamp = fullscreenModeLandingLastTickRef.current || timestamp;
-    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
-    fullscreenModeLandingLastTickRef.current = timestamp;
-    const holdInput = getVerifiedFullscreenHoldControlInput(viewportMetrics);
-    const appActive =
-      fullscreenLandingAppActiveRef.current &&
-      (typeof document === "undefined" || document.visibilityState !== "hidden");
-    const pointerActive = appActive && handDetectedRef.current && holdInput.pointerActive;
-    const scrollTop = Math.max(
-      0,
-      Number.isFinite(fullscreenModeLandingScrollTopRef.current)
-        ? fullscreenModeLandingScrollTopRef.current
-        : 0,
-    );
-    const nextState = stepFullscreenModeLanding(fullscreenModeLandingStateRef.current, deltaSeconds, {
-      appActive,
-      handVerified: holdInput.handVerified,
-      holdDurationMs: preferencesRef.current.dwellDurationMs,
-      pointerActive,
-      pointerX: pointerActive ? holdInput.pointerX : 0,
-      pointerY: pointerActive ? holdInput.pointerY : 0,
-      hitPointerX: pointerActive ? holdInput.pointerX : 0,
-      hitPointerY: pointerActive ? holdInput.pointerY + scrollTop : 0,
-    });
-    const nextStateWithSkeleton = {
-      ...nextState,
-      skeleton: getFullscreenLandingHandSkeleton(viewportMetrics),
-    };
-    fullscreenModeLandingStateRef.current = nextStateWithSkeleton;
-    setFullscreenModeLandingState(nextStateWithSkeleton);
-
-    if (
-      nextStateWithSkeleton.selectedModeId &&
-      nextStateWithSkeleton.selectedModeId !== fullscreenGridModeRef.current
-    ) {
-      setFullscreenGridMode(nextStateWithSkeleton.selectedModeId);
-    }
-  }
-
-  function handleFullscreenModeLandingBoxClick(event, modeId) {
-    event.preventDefault();
-    event.stopPropagation();
-    const nextState = selectFullscreenModeLandingMode(fullscreenModeLandingStateRef.current, modeId);
-    fullscreenModeLandingStateRef.current = nextState;
-    setFullscreenModeLandingState(nextState);
-
-    if (nextState.selectedModeId && nextState.selectedModeId !== fullscreenGridModeRef.current) {
-      setFullscreenGridMode(nextState.selectedModeId);
-    }
-  }
-
-  function handleFullscreenModeLandingScrollOffsetChange(scrollTop) {
-    fullscreenModeLandingScrollTopRef.current = Math.max(
-      0,
-      Number.isFinite(scrollTop) ? scrollTop : 0,
-    );
-  }
-
   function updateFullscreenExitControlSimulation(timestamp) {
     if (
       phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
-      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE ||
       !fullscreenExitControlStateRef.current
     ) {
       fullscreenExitControlLastTickRef.current = timestamp;
@@ -11089,7 +10854,6 @@ export default function App() {
     fullscreenFruitNinjaLastTickRef.current = timestamp;
 
     const activePointer = getActiveFullscreenPointer(viewportMetrics);
-    console.debug("[fruit-pointer]", activePointer.active, activePointer.source, activePointer.x, activePointer.y);
     const pointer = activePointer.active
       ? {
           active: true,
@@ -11425,7 +11189,6 @@ export default function App() {
 
   function updateFullscreenOverlayGames(timestamp) {
     runFullscreenOverlayGameUpdates(timestamp, {
-      updateFullscreenModeLandingSimulation,
       updateFullscreenExitControlSimulation,
       updateFullscreenRestartControlSimulation,
       updateFullscreenHandBounceSimulation,
@@ -13383,19 +13146,7 @@ export default function App() {
                 : ""
             }
           />
-          {isFullscreenModeLanding ? (
-            <FullscreenLandingPage
-              viewportStyle={fullscreenCameraLandingViewport?.style}
-              layout={fullscreenModeLandingLayout}
-              state={fullscreenModeLandingState}
-              holdProgress={fullscreenModeLandingHoldProgress}
-              dwellDurationMs={preferences.dwellDurationMs}
-              handDetected={handDetected}
-              fps={fps}
-              onSelect={handleFullscreenModeLandingBoxClick}
-              onScrollOffsetChange={handleFullscreenModeLandingScrollOffsetChange}
-            />
-          ) : fullscreenGridMode === "hex" ? (
+          {fullscreenGridMode === "hex" ? (
             <div
               className="fullscreen-camera-hex-grid motion-visualizer-layer"
               style={fullscreenHexGridMetrics?.style ?? undefined}
@@ -15573,7 +15324,7 @@ export default function App() {
                 {fullscreenRestartControlState.handVerified &&
                 fullscreenRestartControlState.holdActive
                   ? fullscreenRestartControlCountdown
-                  : (FULLSCREEN_MODE_LANDING_HOLD_MS / 1000).toFixed(2)}
+                  : (FULLSCREEN_HOLD_CONTROL_MS / 1000).toFixed(2)}
               </span>
               <span className="fullscreen-camera-restart-hint">
                 {!fullscreenRestartControlState.handVerified
@@ -15585,9 +15336,7 @@ export default function App() {
             </button>
           ) : null}
 
-          {!experienceLifecycle &&
-          !isFullscreenModeLanding &&
-          fullscreenExitControlState?.layout ? (
+          {!experienceLifecycle && fullscreenExitControlState?.layout ? (
             <button
               aria-label="Return Home"
               className={`fullscreen-camera-exit-box ${
@@ -15610,7 +15359,7 @@ export default function App() {
               <span className="fullscreen-camera-exit-countdown">
                 {fullscreenExitControlState.handVerified && fullscreenExitControlState.holdActive
                   ? fullscreenExitControlCountdown
-                  : (FULLSCREEN_MODE_LANDING_HOLD_MS / 1000).toFixed(2)}
+                  : (FULLSCREEN_HOLD_CONTROL_MS / 1000).toFixed(2)}
               </span>
               <span className="fullscreen-camera-exit-hint">
                 {!fullscreenExitControlState.handVerified
@@ -15623,7 +15372,7 @@ export default function App() {
           ) : null}
 
           <div className="fullscreen-camera-hud">
-            {!experienceLifecycle && !isFullscreenModeLanding ? (
+            {!experienceLifecycle ? (
               <div className="fullscreen-camera-hud-bottom">
                 <span
                   className={`tracking-indicator fullscreen-camera-status ${

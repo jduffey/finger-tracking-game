@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { FULLSCREEN_MODE_LANDING_HOLD_MS } from "../src/fullscreenModeLanding.js";
+import { FULLSCREEN_HOLD_CONTROL_MS } from "../src/fullscreenHoldControl.js";
 import {
   areFullscreenExitControlStatesEqual,
   createFullscreenExitControlLayout,
@@ -51,7 +51,7 @@ test("stepFullscreenExitControl waits for a verified hand before starting the 1.
   assert.equal(held.holdActive, true);
   assert.equal(held.holdMs, 0);
 
-  const stepsToExit = Math.ceil((FULLSCREEN_MODE_LANDING_HOLD_MS / 1000) * 60);
+  const stepsToExit = Math.ceil((FULLSCREEN_HOLD_CONTROL_MS / 1000) * 60);
   for (let index = 0; index < stepsToExit + 2; index += 1) {
     held = stepFullscreenExitControl(held, 1 / 60, {
       handVerified: true,

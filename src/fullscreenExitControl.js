@@ -1,5 +1,5 @@
 import { createTicTacToeLayout } from "./ticTacToeGame.js";
-import { FULLSCREEN_MODE_LANDING_HOLD_MS } from "./fullscreenModeLanding.js";
+import { FULLSCREEN_HOLD_CONTROL_MS } from "./fullscreenHoldControl.js";
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -94,7 +94,7 @@ export function stepFullscreenExitControl(state, dtSeconds, input) {
   const elapsedMs = Math.max(0, Math.min(0.05, Number.isFinite(dtSeconds) ? dtSeconds : 0)) * 1000;
   const holdMs = holdActive
     ? safeState.holdActive
-      ? Math.min(FULLSCREEN_MODE_LANDING_HOLD_MS, safeState.holdMs + elapsedMs)
+      ? Math.min(FULLSCREEN_HOLD_CONTROL_MS, safeState.holdMs + elapsedMs)
       : 0
     : 0;
 
@@ -103,6 +103,6 @@ export function stepFullscreenExitControl(state, dtSeconds, input) {
     handVerified,
     holdActive,
     holdMs,
-    shouldExit: holdActive && holdMs >= FULLSCREEN_MODE_LANDING_HOLD_MS,
+    shouldExit: holdActive && holdMs >= FULLSCREEN_HOLD_CONTROL_MS,
   };
 }
