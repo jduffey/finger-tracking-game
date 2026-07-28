@@ -79,6 +79,9 @@ test("pause and resume hooks freeze both setup and active rounds", () => {
 test("the component has a controlled reducer boundary and a camera input contract", () => {
   assert.match(source, /state: controlledState/);
   assert.match(source, /onAction/);
+  assert.match(source, /const onActionRef = useRef\(onAction\)/);
+  assert.match(source, /onActionRef\.current\?\.\(action\)/);
+  assert.match(source, /\[isControlled\],\s*\);/);
   assert.match(source, /reduceWhackAMoleGame\(previous, action\)/);
   assert.match(source, /source: "camera"/);
   assert.match(source, /type: WHACK_A_MOLE_ACTIONS\.HIT_HOLE/);

@@ -1,3 +1,9 @@
+import {
+  SYNTHETIC_HAND_MODEL_STATES,
+  SYNTHETIC_OPEN_HAND,
+  SYNTHETIC_PINCHED_HAND,
+} from "../fixtures/trackingHands.js";
+
 export const CAMERA_FAILURE_SCENARIOS = Object.freeze({
   dismissed: Object.freeze({
     errorName: "NotAllowedError",
@@ -7,6 +13,7 @@ export const CAMERA_FAILURE_SCENARIOS = Object.freeze({
   denied: Object.freeze({
     errorName: "NotAllowedError",
     errorMessage: "Camera permission was denied by the test browser.",
+    permissionState: "denied",
   }),
   noDevice: Object.freeze({
     errorName: "NotFoundError",
@@ -260,6 +267,87 @@ export async function installSuccessfulTrackingModelStub(page) {
       status: 200,
     }),
   );
+}
+
+/**
+ * Installs a controllable successful detector. It begins with a steady, open
+ * hand over the setup target; tests can then deliberately pinch, lose the hand,
+ * and reacquire it without replacing the model or camera stream.
+ */
+export async function installScriptedTrackingModelStub(page) {
+  const handsByState = {
+    [SYNTHETIC_HAND_MODEL_STATES.OPEN]: SYNTHETIC_OPEN_HAND,
+    [SYNTHETIC_HAND_MODEL_STATES.PINCHED]: SYNTHETIC_PINCHED_HAND,
+  };
+
+  await page.route("**/src/handTracking.js*", (route) =>
+    route.fulfill({
+      body: [
+        `const HANDS_BY_STATE = ${JSON.stringify(handsByState)};`,
+        `const DEFAULT_STATE = ${JSON.stringify(SYNTHETIC_HAND_MODEL_STATES.OPEN)};`,
+        `const MISSING_STATE = ${JSON.stringify(SYNTHETIC_HAND_MODEL_STATES.MISSING)};`,
+        "let lastDetectionMeta = {",
+        "  handsDetected: 0, invalid: false, reason: 'not_started',",
+        "};",
+        "function getState() {",
+        "  globalThis.__motionArcadeTrackingE2E ??= {};",
+        "  const state = globalThis.__motionArcadeTrackingE2E;",
+        "  state.syntheticHandModelState ??= DEFAULT_STATE;",
+        "  state.handDetectionCount ??= 0;",
+        "  return state;",
+        "}",
+        "function cloneHand(hand) {",
+        "  return {",
+        "    ...hand,",
+        "    indexTip: { ...hand.indexTip },",
+        "    thumbTip: { ...hand.thumbTip },",
+        "    fingerTips: Object.fromEntries(",
+        "      Object.entries(hand.fingerTips).map(([name, point]) => [name, { ...point }]),",
+        "    ),",
+        "    landmarks: hand.landmarks.map((point) => ({ ...point })),",
+        "  };",
+        "}",
+        "export async function initHandTracking() {",
+        "  const state = getState();",
+        "  state.modelInitializationCount =",
+        "    (state.modelInitializationCount ?? 0) + 1;",
+        "  return { dispose() {}, estimateHands: async () => [] };",
+        "}",
+        "export async function detectHands() {",
+        "  const state = getState();",
+        "  state.handDetectionCount += 1;",
+        "  const modelState = state.syntheticHandModelState;",
+        "  if (modelState === MISSING_STATE || !HANDS_BY_STATE[modelState]) {",
+        "    lastDetectionMeta = {",
+        "      handsDetected: 0, invalid: false, reason: 'no_hands',",
+        "    };",
+        "    return [];",
+        "  }",
+        "  lastDetectionMeta = {",
+        "    handsDetected: 1, invalid: false, reason: 'ok',",
+        "  };",
+        "  return [cloneHand(HANDS_BY_STATE[modelState])];",
+        "}",
+        "export function getCurrentBackend() { return 'e2e'; }",
+        "export function getCurrentRuntime() { return 'e2e'; }",
+        "export function getLastDetectionMeta() {",
+        "  return { ...lastDetectionMeta };",
+        "}",
+      ].join("\n"),
+      contentType: "text/javascript",
+      status: 200,
+    }),
+  );
+}
+
+export async function setSyntheticHandModelState(page, modelState) {
+  if (!Object.values(SYNTHETIC_HAND_MODEL_STATES).includes(modelState)) {
+    throw new TypeError(`Unsupported synthetic hand state: ${modelState}`);
+  }
+  await page.evaluate((nextState) => {
+    globalThis.__motionArcadeTrackingE2E ??= {};
+    globalThis.__motionArcadeTrackingE2E.syntheticHandModelState = nextState;
+  }, modelState);
 }
 
 export async function installFailingTrackingModelStub(page) {

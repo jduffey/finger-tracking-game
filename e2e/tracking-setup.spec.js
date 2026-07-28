@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { SYNTHETIC_HAND_MODEL_STATES } from "./fixtures/trackingHands.js";
 import {
   CAMERA_FAILURE_SCENARIOS,
   getCameraRequestCount,
@@ -8,8 +9,10 @@ import {
   holdTrackingModelInitialization,
   installCameraFailureStub,
   installFailingTrackingModelStub,
+  installScriptedTrackingModelStub,
   installSuccessfulTrackingModelStub,
   installSyntheticCameraStub,
+  setSyntheticHandModelState,
 } from "./helpers/tracking.js";
 
 const CAMERA_ERROR_CASES = [
@@ -224,4 +227,72 @@ test("tracking model failure offers retry and pointer fallback", async ({
   await expect(
     page.getByRole("heading", { name: "Ready, Set, Whack", level: 2 }),
   ).toBeVisible();
+});
+
+test("successful tracking setup gates play and runtime recovery requires stable reacquisition", async ({
+  page,
+}) => {
+  test.setTimeout(45_000);
+  await installSyntheticCameraStub(page);
+  await installScriptedTrackingModelStub(page);
+  await page.goto("/play/whack-a-mole");
+
+  await page.getByRole("button", { name: "Enable camera" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Pinch once", level: 2 }),
+  ).toBeVisible({ timeout: 20_000 });
+
+  await setSyntheticHandModelState(
+    page,
+    SYNTHETIC_HAND_MODEL_STATES.PINCHED,
+  );
+  await expect(
+    page.getByRole("heading", { name: "You’re ready", level: 2 }),
+  ).toBeVisible();
+
+  await setSyntheticHandModelState(page, SYNTHETIC_HAND_MODEL_STATES.OPEN);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/play\/whack-a-mole$/u);
+
+  const experience = page.locator(".wamx");
+  await expect(
+    page.getByRole("heading", { name: "Ready, Set, Whack", level: 2 }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Start round/i }).click();
+  await expect(experience).toHaveAttribute(
+    "data-experience-phase",
+    "playing",
+    { timeout: 15_000 },
+  );
+
+  await setSyntheticHandModelState(page, SYNTHETIC_HAND_MODEL_STATES.MISSING);
+  const trackingDialog = page.getByRole("alertdialog");
+  await expect(
+    trackingDialog.getByRole("heading", {
+      name: "Tracking lost",
+      level: 2,
+    }),
+  ).toBeVisible({ timeout: 6_000 });
+  await expect(experience).toHaveAttribute("data-experience-phase", "paused");
+
+  await setSyntheticHandModelState(page, SYNTHETIC_HAND_MODEL_STATES.OPEN);
+  await expect(
+    trackingDialog.getByRole("heading", {
+      name: "Hold steady",
+      level: 2,
+    }),
+  ).toBeVisible();
+
+  await page.waitForTimeout(1_000);
+  await expect(trackingDialog).toBeVisible();
+  await expect(experience).toHaveAttribute("data-experience-phase", "paused");
+  await expect(
+    trackingDialog.getByRole("progressbar"),
+  ).toHaveAttribute("aria-valuenow", /^(?:[1-9]|[1-8][0-9]|9[0-8])$/);
+
+  await expect(trackingDialog).toBeHidden({ timeout: 6_000 });
+  await expect(experience).not.toHaveAttribute(
+    "data-experience-phase",
+    "paused",
+  );
 });

@@ -257,16 +257,22 @@ export function WhackAMoleExperience({
     createWhackAMoleGame,
   );
   const isControlled = controlledState !== undefined;
+  // Live tracking can re-render the parent faster than this component's timer.
+  // Keep dispatch stable while still calling the latest controlled handler.
+  const onActionRef = useRef(onAction);
+  useEffect(() => {
+    onActionRef.current = onAction;
+  }, [onAction]);
   const experience = isControlled ? controlledState : internalState;
   const dispatchAction = useCallback(
     (action) => {
       if (isControlled) {
-        onAction?.(action);
+        onActionRef.current?.(action);
       } else {
         internalDispatch(action);
       }
     },
-    [isControlled, onAction],
+    [isControlled],
   );
   const stats = getWhackAMoleStats(experience);
   const summary = getWhackAMoleSummary(experience);
