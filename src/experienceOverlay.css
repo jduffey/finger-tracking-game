@@ -315,7 +315,7 @@
   text-transform: uppercase;
 }
 
-.experience-overlay-improvement-tip {
+.experience-overlay-guidance {
   align-items: baseline;
   background: rgba(124, 247, 200, 0.055);
   border: 1px solid rgba(124, 247, 200, 0.16);
@@ -327,18 +327,27 @@
   padding: 10px 12px;
 }
 
-.experience-overlay-improvement-tip strong {
+.experience-overlay-guidance strong {
   color: var(--experience-overlay-accent);
   font-size: 0.7rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.experience-overlay-improvement-tip p {
+.experience-overlay-guidance p {
   color: var(--experience-overlay-muted);
   font-size: 0.82rem;
   line-height: 1.4;
   margin: 0;
+}
+
+.experience-overlay-comfort-guidance {
+  background: rgba(120, 147, 255, 0.055);
+  border-color: rgba(120, 147, 255, 0.18);
+}
+
+.experience-overlay-comfort-guidance strong {
+  color: #cbd3ff;
 }
 
 .experience-overlay-dialog.results {
@@ -700,11 +709,16 @@
   border-color: rgba(255, 255, 255, 0.55);
 }
 
+:root[data-high-contrast="true"] .experience-overlay-guidance {
+  background: #070b16;
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
 @media (forced-colors: active) {
   .experience-overlay-dialog,
   .experience-overlay-hud,
   .experience-overlay-primary-metric,
-  .experience-overlay-improvement-tip {
+  .experience-overlay-guidance {
     border: 2px solid CanvasText;
     forced-color-adjust: auto;
   }

@@ -32,6 +32,8 @@ export const EXPERIENCE_OVERLAY_ACTIONS = Object.freeze({
 const MAX_HUD_ITEMS = 6;
 const MAX_COPY_LENGTH = 160;
 const SAFE_IDENTIFIER_PATTERN = /^[a-z0-9][a-z0-9._:-]*$/i;
+export const DEFAULT_EXPERIENCE_COMFORT_GUIDANCE =
+  "Clear a little space and keep movements relaxed; small, controlled motions work.";
 
 const PAUSE_PRESENTATIONS = Object.freeze({
   [EXPERIENCE_PAUSE_REASONS.MANUAL]: Object.freeze({
@@ -67,6 +69,16 @@ function normalizeCopy(value, fallback = "") {
   }
   const copy = value.trim();
   return copy ? copy.slice(0, MAX_COPY_LENGTH) : fallback;
+}
+
+function normalizeComfortGuidance(value) {
+  if (value === false) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return normalizeCopy(value) || null;
+  }
+  return DEFAULT_EXPERIENCE_COMFORT_GUIDANCE;
 }
 
 function normalizeHudItem(item, index) {
@@ -146,6 +158,7 @@ function createPauseView(
   exitLabel,
   trackingRecovery,
   instructions,
+  comfortGuidance,
 ) {
   const primaryReason =
     getPrimaryExperiencePauseReason(lifecycle) ??
@@ -175,6 +188,14 @@ function createPauseView(
     label: PAUSE_REASON_LABELS[reason] ?? "Experience paused",
   }));
   const mode = normalizeCopy(modeLabel, "Experience");
+  const pauseComfortGuidance = isTrackingLost ? null : comfortGuidance;
+  const announcement = `${mode}. ${presentation.title}. ${
+    presentation.message
+  }${
+    pauseComfortGuidance
+      ? ` Comfort reminder: ${pauseComfortGuidance}`
+      : ""
+  }`;
 
   return {
     visible: true,
@@ -194,9 +215,10 @@ function createPauseView(
     title: presentation.title,
     message: presentation.message,
     help: isTrackingLost ? "" : normalizeCopy(instructions),
+    comfortGuidance: pauseComfortGuidance,
     pauseReasons,
     primaryPauseReason: primaryReason,
-    announcement: `${mode}. ${presentation.title}. ${presentation.message}`,
+    announcement,
     actions: [
       ...(isTrackingLost
         ? []
@@ -230,6 +252,7 @@ export function createExperienceOverlayViewModel({
   resultOptions,
   exitLabel,
   trackingRecovery,
+  comfortGuidance,
 } = {}) {
   if (!isExperienceLifecycleState(lifecycle)) {
     return createHiddenView();
@@ -237,6 +260,8 @@ export function createExperienceOverlayViewModel({
 
   const mode = normalizeCopy(modeLabel, "Experience");
   const normalizedExitLabel = normalizeCopy(exitLabel);
+  const normalizedComfortGuidance =
+    normalizeComfortGuidance(comfortGuidance);
   switch (lifecycle.phase) {
     case EXPERIENCE_PHASES.READY: {
       const title = `Ready for ${mode}?`;
@@ -253,7 +278,14 @@ export function createExperienceOverlayViewModel({
         eyebrow: mode,
         title,
         message,
-        announcement: `${title} ${message}`,
+        comfortGuidance: normalizedComfortGuidance,
+        announcement: [
+          title,
+          message,
+          ...(normalizedComfortGuidance
+            ? [`Comfort reminder: ${normalizedComfortGuidance}`]
+            : []),
+        ].join(" "),
         actions: [
           createAction(
             EXPERIENCE_OVERLAY_ACTIONS.START,
@@ -330,6 +362,7 @@ export function createExperienceOverlayViewModel({
         normalizedExitLabel || "Back to home",
         trackingRecovery,
         instructions,
+        normalizedComfortGuidance,
       );
 
     case EXPERIENCE_PHASES.RESULTS: {

@@ -17,13 +17,17 @@ export const EXPERIENCE_RESULT_ACTIONS = Object.freeze({
   EXIT: "exit",
 });
 
+export const EXPERIENCE_BREAK_SUGGESTION_THRESHOLD_MS = 15 * 60 * 1000;
+
 const VALID_OUTCOMES = new Set(Object.values(EXPERIENCE_OUTCOMES));
 const SAFE_IDENTIFIER_PATTERN = /^[a-z0-9][a-z0-9._:-]*$/i;
 const RESERVED_IDENTIFIERS = new Set(["__proto__", "constructor", "prototype"]);
 const MAX_METRICS = 16;
 const MAX_COPY_LENGTH = 240;
-const MAX_IMPROVEMENT_TIP_LENGTH = 140;
+const MAX_RESULT_GUIDANCE_LENGTH = 140;
 const MAX_DURATION_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_BREAK_SUGGESTION =
+  "A short stretch or water break may feel good before another round.";
 
 const DEFAULT_RESULT_COPY = Object.freeze({
   [EXPERIENCE_OUTCOMES.COMPLETED]: Object.freeze({
@@ -156,8 +160,8 @@ function normalizeCopy(value) {
   return copy ? copy.slice(0, MAX_COPY_LENGTH) : null;
 }
 
-function normalizeImprovementTip(value) {
-  return normalizeCopy(value)?.slice(0, MAX_IMPROVEMENT_TIP_LENGTH) ?? null;
+function normalizeResultGuidance(value) {
+  return normalizeCopy(value)?.slice(0, MAX_RESULT_GUIDANCE_LENGTH) ?? null;
 }
 
 function normalizeMetrics(value) {
@@ -412,6 +416,26 @@ function createDefaultImprovementTip(result, metricViews, primaryMetric) {
   }
 }
 
+function createBreakSuggestion(result, settings) {
+  if (
+    settings.showBreakSuggestion === false ||
+    settings.breakSuggestion === false
+  ) {
+    return null;
+  }
+  const requestedThreshold = settings.breakSuggestionThresholdMs;
+  const thresholdMs = Number.isFinite(requestedThreshold)
+    ? Math.min(MAX_DURATION_MS, Math.max(1, requestedThreshold))
+    : EXPERIENCE_BREAK_SUGGESTION_THRESHOLD_MS;
+  if (result.durationMs < thresholdMs) {
+    return null;
+  }
+  return (
+    normalizeResultGuidance(settings.breakSuggestion) ??
+    DEFAULT_BREAK_SUGGESTION
+  );
+}
+
 /**
  * Produces presentation-ready, mode-agnostic copy, metrics, and actions. A UI
  * can render this model without understanding the originating game's state.
@@ -476,8 +500,9 @@ export function createExperienceResultViewModel(value, options = {}) {
   const improvementTip =
     settings.showImprovementTip === false || !defaultImprovementTip
       ? null
-      : normalizeImprovementTip(settings.improvementTip) ??
+      : normalizeResultGuidance(settings.improvementTip) ??
         defaultImprovementTip;
+  const breakSuggestion = createBreakSuggestion(result, settings);
 
   const actions = [];
   if (settings.allowRestart !== false) {
@@ -502,6 +527,9 @@ export function createExperienceResultViewModel(value, options = {}) {
   if (improvementTip) {
     announcementParts.push(`Try next: ${improvementTip}`);
   }
+  if (breakSuggestion) {
+    announcementParts.push(`Comfort check: ${breakSuggestion}`);
+  }
 
   return {
     outcome: result.outcome,
@@ -514,6 +542,7 @@ export function createExperienceResultViewModel(value, options = {}) {
     secondaryMetrics,
     metrics: metricViews,
     improvementTip,
+    breakSuggestion,
     actions,
     announcement: announcementParts.join(". "),
   };

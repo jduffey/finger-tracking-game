@@ -180,17 +180,17 @@ function ResultMetrics({ result }) {
   );
 }
 
-function ResultImprovementTip({ tip }) {
-  if (!tip) {
+function CompactGuidance({ copy, label, variant }) {
+  if (!copy) {
     return null;
   }
   return (
     <aside
-      aria-label="Try next"
-      className="experience-overlay-improvement-tip"
+      aria-label={label}
+      className={`experience-overlay-guidance ${variant}`}
     >
-      <strong>Try next</strong>
-      <p>{tip}</p>
+      <strong>{label}</strong>
+      <p>{copy}</p>
     </aside>
   );
 }
@@ -230,6 +230,12 @@ function OverlayDialog({
         <span className="experience-overlay-eyebrow">{view.eyebrow}</span>
         <h2 id={headingId}>{view.title}</h2>
         <p id={descriptionId}>{view.message}</p>
+
+        <CompactGuidance
+          copy={view.comfortGuidance}
+          label="Comfort reminder"
+          variant="experience-overlay-comfort-guidance"
+        />
 
         {view.isTrackingLost ? (
           <div
@@ -273,8 +279,15 @@ function OverlayDialog({
         {view.kind === EXPERIENCE_OVERLAY_KINDS.RESULTS ? (
           <>
             <ResultMetrics result={view.result} />
-            <ResultImprovementTip
-              tip={view.result?.improvementTip}
+            <CompactGuidance
+              copy={view.result?.improvementTip}
+              label="Try next"
+              variant="experience-overlay-improvement-tip"
+            />
+            <CompactGuidance
+              copy={view.result?.breakSuggestion}
+              label="Comfort check"
+              variant="experience-overlay-comfort-guidance"
             />
           </>
         ) : null}
@@ -307,6 +320,7 @@ export default function ExperienceOverlay({
   resultOptions,
   exitLabel,
   trackingRecovery,
+  comfortGuidance,
   onStart,
   onPause,
   onResume,
@@ -324,8 +338,10 @@ export default function ExperienceOverlay({
         resultOptions,
         exitLabel,
         trackingRecovery,
+        comfortGuidance,
       }),
     [
+      comfortGuidance,
       exitLabel,
       hud,
       instructions,

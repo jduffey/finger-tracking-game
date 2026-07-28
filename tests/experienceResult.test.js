@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  EXPERIENCE_BREAK_SUGGESTION_THRESHOLD_MS,
   EXPERIENCE_OUTCOMES,
   EXPERIENCE_RESULT_ACTIONS,
   EXPERIENCE_RESULT_TONES,
@@ -294,6 +295,79 @@ test("improvement coaching is bounded, overridable, and omitted when inappropria
     createExperienceResultViewModel({
       outcome: EXPERIENCE_OUTCOMES.COMPLETED,
     }).improvementTip,
+    null,
+  );
+});
+
+test("long result sessions offer a configurable nonblocking break suggestion", () => {
+  const shortView = createExperienceResultViewModel({
+    outcome: EXPERIENCE_OUTCOMES.COMPLETED,
+    score: 10,
+    durationMs: EXPERIENCE_BREAK_SUGGESTION_THRESHOLD_MS - 1,
+  });
+  const longView = createExperienceResultViewModel({
+    outcome: EXPERIENCE_OUTCOMES.COMPLETED,
+    score: 10,
+    durationMs: EXPERIENCE_BREAK_SUGGESTION_THRESHOLD_MS,
+  });
+
+  assert.equal(shortView.breakSuggestion, null);
+  assert.equal(
+    longView.breakSuggestion,
+    "A short stretch or water break may feel good before another round.",
+  );
+  assert.match(longView.announcement, /Comfort check: A short stretch/);
+
+  const customView = createExperienceResultViewModel(
+    {
+      outcome: EXPERIENCE_OUTCOMES.WON,
+      score: 10,
+      durationMs: 60_000,
+    },
+    {
+      breakSuggestionThresholdMs: 60_000,
+      breakSuggestion:
+        "Relax your hands and look away from the screen for a moment.",
+    },
+  );
+  assert.equal(
+    customView.breakSuggestion,
+    "Relax your hands and look away from the screen for a moment.",
+  );
+
+  const boundedView = createExperienceResultViewModel(
+    {
+      outcome: EXPERIENCE_OUTCOMES.WON,
+      score: 10,
+      durationMs: 60_000,
+    },
+    {
+      breakSuggestionThresholdMs: 1,
+      breakSuggestion: "x".repeat(200),
+    },
+  );
+  assert.equal(boundedView.breakSuggestion.length, 140);
+
+  assert.equal(
+    createExperienceResultViewModel(
+      {
+        outcome: EXPERIENCE_OUTCOMES.WON,
+        score: 10,
+        durationMs: EXPERIENCE_BREAK_SUGGESTION_THRESHOLD_MS,
+      },
+      { showBreakSuggestion: false },
+    ).breakSuggestion,
+    null,
+  );
+  assert.equal(
+    createExperienceResultViewModel(
+      {
+        outcome: EXPERIENCE_OUTCOMES.WON,
+        score: 10,
+        durationMs: EXPERIENCE_BREAK_SUGGESTION_THRESHOLD_MS,
+      },
+      { breakSuggestion: false },
+    ).breakSuggestion,
     null,
   );
 });
