@@ -2,7 +2,6 @@ import { TIC_TAC_TOE_RESET_HOLD_MS } from "./ticTacToeGame.js";
 
 export const FULLSCREEN_LANDING_MODE = "landing";
 export const FULLSCREEN_MODE_LANDING_HOLD_MS = TIC_TAC_TOE_RESET_HOLD_MS;
-export const FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID = "back-to-input-test";
 
 export const FULLSCREEN_CAMERA_LANDING_SECTIONS = [
   {
@@ -55,13 +54,6 @@ export const FULLSCREEN_CAMERA_LANDING_SECTIONS = [
         preview: "breakout",
         iconSrc: "/assets/launcher-icons/breakout.png",
         accent: "#22d3ee",
-      },
-      {
-        id: "find-your-grind-breakout",
-        label: "Find Your Grind",
-        preview: "breakout",
-        iconSrc: "/assets/launcher-icons/find-your-grind-breakout.png",
-        accent: "#2a5eff",
       },
       {
         id: "finger-pong",
@@ -126,19 +118,6 @@ export const FULLSCREEN_CAMERA_MODE_OPTIONS = FULLSCREEN_CAMERA_LANDING_SECTIONS
     sectionId: section.id,
   })),
 );
-
-export const FULLSCREEN_CAMERA_LANDING_OPTIONS = [
-  ...FULLSCREEN_CAMERA_MODE_OPTIONS,
-  {
-    id: FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
-    label: "Back to Input Test",
-    category: "Navigation",
-    kind: "navigation",
-    previewType: "back",
-    route: "input-test",
-    accent: "#22d3ee",
-  },
-];
 
 const LANDING_HAND_ROOT_CONNECTIONS = [
   [0, 1],
@@ -458,7 +437,7 @@ export function createFullscreenModeLandingState(width, height) {
 export function selectFullscreenModeLandingMode(state, modeId) {
   const safeState = state ?? createFullscreenModeLandingState(1280, 720);
   const selectedOption =
-    FULLSCREEN_CAMERA_LANDING_OPTIONS.find((option) => option.id === modeId) ?? null;
+    FULLSCREEN_CAMERA_MODE_OPTIONS.find((option) => option.id === modeId) ?? null;
   return {
     ...safeState,
     selectedModeId: selectedOption?.id ?? null,

@@ -99,6 +99,10 @@ test("player-facing capability claims match the experiences that exist", () => {
   const probabilityTable = getModeById("probability-table");
   assert.equal(probabilityTable.trackingProfile, "none");
   assert.equal(probabilityTable.supportsPointerFallback, true);
+
+  const forest = getModeById("forest-discovery");
+  assert.match(forest.summary, /three|guardian/i);
+  assert.equal(forest.supportsPointerFallback, true);
 });
 
 test("mode registry supports stable ids and paths", () => {

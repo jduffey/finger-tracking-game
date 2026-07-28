@@ -2,8 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
-  FULLSCREEN_CAMERA_LANDING_OPTIONS,
   FULLSCREEN_CAMERA_LANDING_SECTIONS,
   FULLSCREEN_CAMERA_MODE_OPTIONS,
   FULLSCREEN_MODE_LANDING_HOLD_MS,
@@ -60,7 +58,6 @@ test("fullscreen landing data groups visual effects above games", () => {
       "Brick Dodger",
       "Breakout Co-op",
       "Breakout",
-      "Find Your Grind",
       "Finger Pong",
       "Tic Tac Toe",
       "Slice Air",
@@ -86,7 +83,6 @@ test("fullscreen landing data uses generated icon assets for imported previews",
     "brick-dodger": "/assets/launcher-icons/brick-dodger.png",
     "breakout-coop": "/assets/launcher-icons/breakout-coop.png",
     breakout: "/assets/launcher-icons/breakout.png",
-    "find-your-grind-breakout": "/assets/launcher-icons/find-your-grind-breakout.png",
     "finger-pong": "/assets/launcher-icons/finger-pong.png",
     "tic-tac-toe": "/assets/launcher-icons/tic-tac-toe.png",
     "fruit-ninja": "/assets/launcher-icons/slice-air.png",
@@ -100,19 +96,6 @@ test("fullscreen landing data uses generated icon assets for imported previews",
     assert.equal(FULLSCREEN_CAMERA_MODE_OPTIONS.find((item) => item.id === id)?.iconSrc, iconSrc);
   }
   assert.equal(FULLSCREEN_CAMERA_MODE_OPTIONS.every((item) => item.iconSrc), true);
-});
-
-test("createFullscreenModeLandingLayout omits the footer back to input test control", () => {
-  const layout = createFullscreenModeLandingLayout(1366, 768);
-  const backBox = layout.boxes.find((box) => box.id === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID);
-  const backOption = FULLSCREEN_CAMERA_LANDING_OPTIONS.find(
-    (option) => option.id === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
-  );
-
-  assert.equal(backBox, undefined);
-  assert.equal(backOption?.label, "Back to Input Test");
-  assert.equal(backOption?.category, "Navigation");
-  assert.equal(FULLSCREEN_CAMERA_MODE_OPTIONS.some((option) => option.id === backOption?.id), false);
 });
 
 test("createFullscreenModeLandingLayout keeps the full menu inside representative viewports", () => {
@@ -494,20 +477,6 @@ test("stepFullscreenModeLanding can hit-test scrolled mobile tiles while keeping
   assert.equal(nextState.holdModeId, "missile-command");
   assert.equal(nextState.pointerX, targetPoint.x);
   assert.equal(nextState.pointerY, visiblePointerY);
-});
-
-test("selectFullscreenModeLandingMode preserves the back to input test navigation path", () => {
-  const base = createFullscreenModeLandingState(1280, 720);
-  const selectedState = selectFullscreenModeLandingMode(
-    base,
-    FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
-  );
-
-  assert.equal(
-    base.layout.boxes.some((box) => box.id === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID),
-    false,
-  );
-  assert.equal(selectedState.selectedModeId, FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID);
 });
 
 test("selectFullscreenModeLandingMode lets mouse clicks choose a fullscreen mode without a verified hand", () => {
