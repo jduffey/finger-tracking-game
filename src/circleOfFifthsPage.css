@@ -941,6 +941,53 @@
   }
 }
 
+:root[data-low-sensory="true"] .circle-fifths-page {
+  background: #050a10;
+}
+
+:root[data-low-sensory="true"] .circle-fifths-page .circle-fifths-video {
+  filter: saturate(0.62) contrast(0.94) brightness(0.5);
+}
+
+:root[data-low-sensory="true"] .circle-fifths-page .circle-fifths-grid {
+  opacity: 0.16;
+}
+
+:root[data-low-sensory="true"] .circle-fifths-page .circle-fifths-panel,
+:root[data-low-sensory="true"]
+  .circle-fifths-page
+  .circle-fifths-mobile-toolbar {
+  backdrop-filter: none;
+}
+
+:root[data-low-sensory="true"] .circle-fifths-page .circle-fifths-segment,
+:root[data-low-sensory="true"]
+  .circle-fifths-page
+  .circle-fifths-segment-label,
+:root[data-low-sensory="true"] .circle-fifths-page .circle-fifths-beat-button,
+:root[data-low-sensory="true"]
+  .circle-fifths-page
+  .circle-fifths-preset-tabs
+  button,
+:root[data-low-sensory="true"]
+  .circle-fifths-page
+  .circle-fifths-loop-pads
+  button {
+  transition: none;
+}
+
+:root[data-low-sensory="true"]
+  .circle-fifths-page
+  .circle-fifths-finger-glow {
+  display: none;
+}
+
+:root[data-low-sensory="true"]
+  .circle-fifths-page
+  .circle-fifths-finger-dot {
+  box-shadow: none;
+}
+
 @media (prefers-contrast: more) {
   .circle-fifths-page .circle-fifths-panel,
   .circle-fifths-page .circle-fifths-back-link,

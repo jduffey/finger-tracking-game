@@ -411,6 +411,25 @@ html[data-reduced-motion="true"] .gesture-art-tools {
   transition: none;
 }
 
+html[data-low-sensory="true"] .gesture-art-studio {
+  background: #030712;
+}
+
+html[data-low-sensory="true"] .gesture-art-header {
+  background: rgba(3, 7, 18, 0.9);
+}
+
+html[data-low-sensory="true"] .gesture-art-canvas-hint,
+html[data-low-sensory="true"] .gesture-art-status,
+html[data-low-sensory="true"] .gesture-art-tools {
+  backdrop-filter: none;
+}
+
+html[data-low-sensory="true"] .gesture-art-tools {
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
+  transition: none;
+}
+
 @media (prefers-contrast: more) {
   .gesture-art-tools,
   .gesture-art-home,

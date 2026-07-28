@@ -675,6 +675,24 @@
   animation: none;
 }
 
+:root[data-low-sensory="true"] .experience-overlay-dialog,
+:root[data-low-sensory="true"] .experience-overlay-countdown > strong {
+  animation: none;
+}
+
+:root[data-low-sensory="true"] .experience-overlay-backdrop,
+:root[data-low-sensory="true"] .experience-overlay-hud {
+  backdrop-filter: none;
+}
+
+:root[data-low-sensory="true"] .experience-overlay-backdrop {
+  background: rgba(3, 6, 14, 0.84);
+}
+
+:root[data-low-sensory="true"] .experience-overlay-tracking-progress > span {
+  transition: none;
+}
+
 :root[data-high-contrast="true"] .experience-overlay-dialog,
 :root[data-high-contrast="true"] .experience-overlay-hud {
   backdrop-filter: none;

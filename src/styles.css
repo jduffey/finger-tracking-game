@@ -7572,3 +7572,175 @@ button:disabled {
     top: 76px;
   }
 }
+
+/*
+ * Low-sensory keeps the geometry, labels, and color hierarchy that communicate
+ * gameplay state while reducing persistence, flashes, glow, and camera intensity.
+ */
+:root[data-low-sensory="true"] .fullscreen-camera-video {
+  filter: saturate(0.68) contrast(0.94) brightness(0.88);
+}
+
+:root[data-low-sensory="true"] .fullscreen-camera-stage.motion-visualizer-active {
+  background: var(--visualizer-background, #050914);
+}
+
+:root[data-low-sensory="true"]
+  .motion-visualizer-active
+  > .fullscreen-camera-video {
+  opacity: 0.38;
+  transition: none;
+}
+
+:root[data-low-sensory="true"]
+  .motion-visualizer-active
+  .motion-visualizer-layer {
+  filter: saturate(0.58) contrast(0.92);
+  opacity: 0.66;
+}
+
+:root[data-low-sensory="true"]
+  .motion-visualizer-active
+  .fullscreen-camera-rings
+  > .fullscreen-camera-ring-group:nth-last-child(n + 5) {
+  display: none;
+}
+
+:root[data-low-sensory="true"]
+  .motion-visualizer-active
+  .fullscreen-camera-pulse-ring {
+  filter: opacity(0.36);
+}
+
+:root[data-low-sensory="true"]
+  .motion-visualizer-active
+  .fullscreen-camera-static-ripple-field
+  .fullscreen-camera-static-ring:nth-child(even),
+:root[data-low-sensory="true"]
+  .motion-visualizer-active
+  .fullscreen-camera-static-ripple-field
+  .fullscreen-camera-tip-ripple-band:nth-child(even) {
+  display: none;
+}
+
+:root[data-low-sensory="true"]
+  .motion-visualizer-active
+  .fullscreen-camera-static-center {
+  box-shadow: none;
+}
+
+:root[data-low-sensory="true"] .tracked-cursor-trail,
+:root[data-low-sensory="true"] .fullscreen-camera-fruit-particle,
+:root[data-low-sensory="true"] .fullscreen-camera-missile-structure-smoke,
+:root[data-low-sensory="true"]
+  .fullscreen-camera-missile-explosion-shockwave,
+:root[data-low-sensory="true"]
+  .fullscreen-camera-sky-patrol-radar-sweep,
+:root[data-low-sensory="true"] .offaxis-forest-fireflies {
+  display: none;
+}
+
+:root[data-low-sensory="true"] .tracked-cursor,
+:root[data-low-sensory="true"] .raw-cursor,
+:root[data-low-sensory="true"] .fullscreen-camera-fruit-blade-segment,
+:root[data-low-sensory="true"] .fullscreen-camera-fruit-popup,
+:root[data-low-sensory="true"] .fullscreen-camera-missile-score-popup,
+:root[data-low-sensory="true"] .fullscreen-camera-missile-crosshair,
+:root[data-low-sensory="true"] .fullscreen-camera-sky-patrol-radar-blip,
+:root[data-low-sensory="true"] .fullscreen-camera-brick-dodger-bonus,
+:root[data-low-sensory="true"] .fullscreen-camera-hand-bounce-ball,
+:root[data-low-sensory="true"] .fullscreen-camera-hand-bounce-target,
+:root[data-low-sensory="true"] .fullscreen-camera-hand-bounce-power.active,
+:root[data-low-sensory="true"] .fullscreen-camera-invaders-shot,
+:root[data-low-sensory="true"] .fullscreen-camera-invaders-shield,
+:root[data-low-sensory="true"] .fullscreen-camera-invaders-ufo,
+:root[data-low-sensory="true"] .fullscreen-camera-invaders-power-up {
+  box-shadow: none;
+  text-shadow: none;
+}
+
+:root[data-low-sensory="true"] .fullscreen-camera-fruit-blade-segment {
+  filter: opacity(0.42);
+  height: 4px;
+}
+
+:root[data-low-sensory="true"] .fullscreen-camera-missile-trail,
+:root[data-low-sensory="true"] .fullscreen-camera-missile-head,
+:root[data-low-sensory="true"] .fullscreen-camera-missile-explosion {
+  box-shadow: none !important;
+}
+
+:root[data-low-sensory="true"] .fullscreen-camera-missile-trail.hostile {
+  background: #d78d76;
+}
+
+:root[data-low-sensory="true"]
+  .fullscreen-camera-missile-trail.hostile.urgent {
+  background: #df735d;
+}
+
+:root[data-low-sensory="true"]
+  .fullscreen-camera-missile-trail.hostile.critical {
+  background: #e65f61;
+}
+
+:root[data-low-sensory="true"] .fullscreen-camera-missile-trail.interceptor {
+  background: #9cc9d1;
+}
+
+:root[data-low-sensory="true"]
+  .fullscreen-camera-missile-explosion-core {
+  background: rgba(238, 207, 151, 0.2);
+}
+
+:root[data-low-sensory="true"]
+  .fullscreen-camera-missile-explosion.impact
+  .fullscreen-camera-missile-explosion-core {
+  background: rgba(218, 118, 94, 0.2);
+}
+
+:root[data-low-sensory="true"]
+  .fullscreen-camera-tic-tac-toe-mark.ai-placed,
+:root[data-low-sensory="true"]
+  .fullscreen-camera-tic-tac-toe-active-piece.ai.thinking,
+:root[data-low-sensory="true"] .fullscreen-camera-flappy-bird.pinch-pulse,
+:root[data-low-sensory="true"] .fullscreen-camera-invaders-ufo,
+:root[data-low-sensory="true"]
+  .fullscreen-camera-invaders-ship.invulnerable,
+:root[data-low-sensory="true"] .fullscreen-camera-wfc-cell.changed,
+:root[data-low-sensory="true"] .target-ring {
+  animation: none;
+}
+
+:root[data-low-sensory="true"]
+  .fullscreen-camera-invaders-ship.invulnerable {
+  filter: none;
+  opacity: 0.58;
+}
+
+:root[data-low-sensory="true"] .fullscreen-camera-tic-tac-toe-cell,
+:root[data-low-sensory="true"]
+  .fullscreen-camera-brick-dodger-lane-signal,
+:root[data-low-sensory="true"]
+  .fullscreen-camera-breakout-coop-meter-fill,
+:root[data-low-sensory="true"]
+  .fullscreen-camera-sky-patrol-legend.compact {
+  transition: none;
+}
+
+:root[data-low-sensory="true"]
+  .fullscreen-camera-brick-dodger-lane-signal.warning,
+:root[data-low-sensory="true"]
+  .fullscreen-camera-brick-dodger-lane-signal.watch {
+  background: rgba(130, 96, 39, 0.2);
+}
+
+:root[data-low-sensory="true"]
+  .fullscreen-camera-brick-dodger-lane-signal.critical {
+  background: rgba(128, 48, 46, 0.24);
+}
+
+:root[data-low-sensory="true"]
+  .fullscreen-camera-brick-dodger-lane-signal.pickup {
+  background: rgba(48, 106, 96, 0.2);
+}
