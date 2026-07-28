@@ -43,6 +43,8 @@ test("settings labels controls and confirms destructive local-data deletion", ()
   assert.match(settings, /controlId="dominant-hand"/);
   assert.match(settings, /href="\/privacy\.html"/);
   assert.match(settings, /Yes, delete local data/);
+  assert.match(settings, /Test effects/);
+  assert.match(settings, /Test music/);
   assert.match(
     settingsStyles,
     /@media \(max-width: 980px\)[\s\S]*?\.settings-page \{[\s\S]*?overflow: visible;/,

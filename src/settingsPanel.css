@@ -201,6 +201,41 @@
   padding: 7px 34px 7px 10px;
 }
 
+.settings-sound-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.settings-sound-preview button {
+  background: #eef5f4;
+  border: 1px solid #b9d5d0;
+  border-radius: 10px;
+  color: #24443f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  min-height: 42px;
+  padding: 8px 12px;
+}
+
+.settings-sound-preview button:hover:not(:disabled) {
+  background: #dff0ed;
+  border-color: #7cb8ad;
+}
+
+.settings-sound-preview button:focus-visible {
+  outline: 3px solid #2e8d80;
+  outline-offset: 2px;
+}
+
+.settings-sound-preview button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .settings-toggle {
   align-items: center;
   cursor: pointer;

@@ -72,6 +72,7 @@ export default function SettingsPanel({
   onReset,
   onDeleteLocalData,
   onStopCamera,
+  onPreviewSound,
   cameraActive = false,
 }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -349,6 +350,36 @@ export default function SettingsPanel({
               value={preferences.effectsVolume}
               valueLabel={`${Math.round(preferences.effectsVolume * 100)}%`}
             />
+            <SettingRow
+              controlId="sound-preview"
+              description={
+                preferences.muted
+                  ? "Unmute sound to hear previews."
+                  : "Check each channel at its current volume."
+              }
+              title="Sound preview"
+            >
+              <div
+                aria-labelledby="sound-preview-label"
+                className="settings-sound-preview"
+                id="sound-preview"
+              >
+                <button
+                  disabled={preferences.muted || preferences.effectsVolume <= 0}
+                  onClick={() => onPreviewSound?.("success")}
+                  type="button"
+                >
+                  Test effects
+                </button>
+                <button
+                  disabled={preferences.muted || preferences.musicVolume <= 0}
+                  onClick={() => onPreviewSound?.("music-preview")}
+                  type="button"
+                >
+                  Test music
+                </button>
+              </div>
+            </SettingRow>
           </div>
         </section>
 

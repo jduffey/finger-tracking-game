@@ -296,6 +296,7 @@ import {
   saveUserPreferences,
   toggleFavoriteMode,
 } from "./userPreferences.js";
+import { createAudioFeedback } from "./audioFeedback.js";
 import { createGameProgressionStore } from "./gameProgressionStorage.js";
 import { ACHIEVEMENT_DEFINITIONS } from "./achievementCatalog.js";
 import {
@@ -1587,6 +1588,7 @@ export default function App() {
   const appLog = useMemo(() => createScopedLogger("app"), []);
   const gestureEngineRef = useRef(null);
   const personalizationRef = useRef(null);
+  const audioFeedbackRef = useRef(null);
 
   if (!gestureEngineRef.current) {
     gestureEngineRef.current = createGestureEngine({
@@ -1597,6 +1599,9 @@ export default function App() {
     personalizationRef.current = createGesturePersonalization({
       logger: createScopedLogger("gesturePersonalization"),
     });
+  }
+  if (!audioFeedbackRef.current) {
+    audioFeedbackRef.current = createAudioFeedback();
   }
 
   const [viewport, setViewport] = useState(() => ({
@@ -1656,6 +1661,11 @@ export default function App() {
   const [latestGameResult, setLatestGameResult] = useState(null);
   const [experienceLifecycle, setExperienceLifecycle] = useState(null);
   const [experienceModeId, setExperienceModeId] = useState(null);
+  const previousAudioLifecycleRef = useRef({
+    attempt: null,
+    modeId: null,
+    phase: null,
+  });
   const [trackingReadiness, setTrackingReadiness] = useState(() =>
     createTrackingReadinessState(),
   );
@@ -4287,7 +4297,74 @@ export default function App() {
   useEffect(() => {
     const normalized = saveUserPreferences(preferences);
     applyPreferenceDocumentState(normalized);
+    audioFeedbackRef.current.configure(normalized);
   }, [preferences]);
+
+  useEffect(() => {
+    const unlockAudio = () => {
+      audioFeedbackRef.current.unlock();
+      window.removeEventListener("pointerdown", unlockAudio, true);
+      window.removeEventListener("keydown", unlockAudio, true);
+    };
+    window.addEventListener("pointerdown", unlockAudio, true);
+    window.addEventListener("keydown", unlockAudio, true);
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio, true);
+      window.removeEventListener("keydown", unlockAudio, true);
+    };
+  }, []);
+
+  useEffect(
+    () => () => {
+      audioFeedbackRef.current.dispose();
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const current = {
+      attempt: experienceLifecycle?.attempt ?? null,
+      modeId: experienceModeId,
+      phase: experienceLifecycle?.phase ?? null,
+    };
+    const previous = previousAudioLifecycleRef.current;
+    let cue = null;
+
+    if (
+      current.phase === EXPERIENCE_PHASES.RESULTS &&
+      previous.phase !== EXPERIENCE_PHASES.RESULTS
+    ) {
+      cue = "success";
+    } else if (
+      current.phase === EXPERIENCE_PHASES.PAUSED &&
+      previous.phase !== EXPERIENCE_PHASES.PAUSED
+    ) {
+      cue = "pause";
+    } else if (
+      previous.phase === EXPERIENCE_PHASES.PAUSED &&
+      (current.phase === EXPERIENCE_PHASES.COUNTDOWN ||
+        current.phase === EXPERIENCE_PHASES.RUNNING)
+    ) {
+      cue = "resume";
+    } else if (
+      current.phase &&
+      (previous.modeId !== current.modeId ||
+        previous.attempt !== current.attempt) &&
+      (current.phase === EXPERIENCE_PHASES.COUNTDOWN ||
+        current.phase === EXPERIENCE_PHASES.RUNNING)
+    ) {
+      cue = "start";
+    }
+
+    previousAudioLifecycleRef.current = current;
+    if (cue) {
+      audioFeedbackRef.current.play(cue);
+    }
+  }, [
+    experienceLifecycle?.attempt,
+    experienceLifecycle?.phase,
+    experienceModeId,
+  ]);
 
   useEffect(() => {
     dynamicQualityBudgetRef.current = dynamicQualityBudget;
@@ -12032,6 +12109,10 @@ export default function App() {
         onReset={() => setPreferences(normalizeUserPreferences())}
         onDeleteLocalData={deleteAllLocalProductData}
         onStopCamera={stopProductCamera}
+        onPreviewSound={(cue) => {
+          audioFeedbackRef.current.unlock();
+          audioFeedbackRef.current.play(cue);
+        }}
       />
     );
   }
