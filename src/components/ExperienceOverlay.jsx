@@ -180,6 +180,21 @@ function ResultMetrics({ result }) {
   );
 }
 
+function ResultImprovementTip({ tip }) {
+  if (!tip) {
+    return null;
+  }
+  return (
+    <aside
+      aria-label="Try next"
+      className="experience-overlay-improvement-tip"
+    >
+      <strong>Try next</strong>
+      <p>{tip}</p>
+    </aside>
+  );
+}
+
 function OverlayDialog({
   descriptionId,
   dialogRef,
@@ -256,7 +271,12 @@ function OverlayDialog({
         ) : null}
 
         {view.kind === EXPERIENCE_OVERLAY_KINDS.RESULTS ? (
-          <ResultMetrics result={view.result} />
+          <>
+            <ResultMetrics result={view.result} />
+            <ResultImprovementTip
+              tip={view.result?.improvementTip}
+            />
+          </>
         ) : null}
 
         <div className="experience-overlay-dialog-actions">

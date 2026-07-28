@@ -22,6 +22,7 @@ const SAFE_IDENTIFIER_PATTERN = /^[a-z0-9][a-z0-9._:-]*$/i;
 const RESERVED_IDENTIFIERS = new Set(["__proto__", "constructor", "prototype"]);
 const MAX_METRICS = 16;
 const MAX_COPY_LENGTH = 240;
+const MAX_IMPROVEMENT_TIP_LENGTH = 140;
 const MAX_DURATION_MS = 24 * 60 * 60 * 1000;
 
 const DEFAULT_RESULT_COPY = Object.freeze({
@@ -68,6 +69,68 @@ const DEFAULT_METRIC_LABELS = Object.freeze({
   smoothnessPercent: "Smoothness",
 });
 
+const HAZARD_IMPROVEMENT_TIPS = Object.freeze([
+  Object.freeze({
+    metricId: "bombsHit",
+    message: "Use shorter motions and leave more space around hazards.",
+  }),
+  Object.freeze({
+    metricId: "decoyHits",
+    message: "Wait for the target cue before committing to the hit.",
+  }),
+  Object.freeze({
+    metricId: "hitsTaken",
+    message: "Choose the safe path first, then reach for bonuses.",
+  }),
+  Object.freeze({
+    metricId: "drops",
+    message: "Stay under the target and use smaller corrections.",
+  }),
+]);
+
+const PERCENT_IMPROVEMENT_METRICS = Object.freeze([
+  Object.freeze({
+    metricId: "accuracyPercent",
+    noun: "accuracy",
+    action: "Slow down slightly",
+  }),
+  Object.freeze({
+    metricId: "accuracy",
+    noun: "accuracy",
+    action: "Slow down slightly",
+  }),
+  Object.freeze({
+    metricId: "precisionPercent",
+    noun: "precision",
+    action: "Use shorter, deliberate motions",
+  }),
+  Object.freeze({
+    metricId: "smoothnessPercent",
+    noun: "smoothness",
+    action: "Use one continuous motion",
+  }),
+]);
+
+const STREAK_IMPROVEMENT_METRICS = Object.freeze([
+  "bestCombo",
+  "combo",
+  "bestStreak",
+  "streak",
+  "bestRally",
+  "rally",
+  "bestCenterStreak",
+]);
+
+const PROGRESS_IMPROVEMENT_METRICS = Object.freeze([
+  Object.freeze({ metricId: "missionReached", noun: "mission" }),
+  Object.freeze({ metricId: "wavesReached", noun: "wave" }),
+  Object.freeze({ metricId: "wave", noun: "wave" }),
+  Object.freeze({ metricId: "stageReached", noun: "stage" }),
+  Object.freeze({ metricId: "stage", noun: "stage" }),
+  Object.freeze({ metricId: "level", noun: "level" }),
+  Object.freeze({ metricId: "round", noun: "round" }),
+]);
+
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -91,6 +154,10 @@ function normalizeCopy(value) {
   }
   const copy = value.trim();
   return copy ? copy.slice(0, MAX_COPY_LENGTH) : null;
+}
+
+function normalizeImprovementTip(value) {
+  return normalizeCopy(value)?.slice(0, MAX_IMPROVEMENT_TIP_LENGTH) ?? null;
 }
 
 function normalizeMetrics(value) {
@@ -243,6 +310,108 @@ function createMetricView(metricId, value, result, definitions, locale) {
   };
 }
 
+function createMetricLookup(metricViews) {
+  return Object.fromEntries(
+    metricViews.map((metric) => [metric.id, metric]),
+  );
+}
+
+function getPercentageValue(metric) {
+  if (!metric || !Number.isFinite(metric.value)) {
+    return null;
+  }
+  const percentage =
+    metric.id === "accuracy" && metric.value >= 0 && metric.value <= 1
+      ? metric.value * 100
+      : metric.value;
+  return Math.min(100, Math.max(0, percentage));
+}
+
+function createDefaultImprovementTip(result, metricViews, primaryMetric) {
+  if (
+    result.outcome === EXPERIENCE_OUTCOMES.ABANDONED ||
+    (result.score === null &&
+      metricViews.every(({ id }) => id === "duration"))
+  ) {
+    return null;
+  }
+
+  const metrics = createMetricLookup(metricViews);
+
+  for (const { metricId, message } of HAZARD_IMPROVEMENT_TIPS) {
+    if ((metrics[metricId]?.value ?? 0) > 0) {
+      return message;
+    }
+  }
+
+  for (const {
+    metricId,
+    noun,
+    action,
+  } of PERCENT_IMPROVEMENT_METRICS) {
+    const percentage = getPercentageValue(metrics[metricId]);
+    if (percentage === null || percentage >= 90) {
+      continue;
+    }
+    const target = Math.min(
+      95,
+      Math.max(10, Math.ceil((percentage + 5) / 5) * 5),
+    );
+    return `${action} and aim for ${target}% ${noun}.`;
+  }
+
+  const misses = metrics.misses?.value;
+  if (Number.isFinite(misses) && misses > 0) {
+    const missGoal =
+      misses <= 1 ? "zero misses" : `fewer than ${Math.ceil(misses)} misses`;
+    return `Wait for a clear target cue and aim for ${missGoal}.`;
+  }
+
+  for (const metricId of STREAK_IMPROVEMENT_METRICS) {
+    const metric = metrics[metricId];
+    if (!Number.isFinite(metric?.value)) {
+      continue;
+    }
+    const goal = Math.max(2, Math.floor(metric.value) + 1);
+    if (metricId.toLowerCase().includes("rally")) {
+      return `Return to center after each shot and aim for a rally of ${goal}.`;
+    }
+    if (metricId.toLowerCase().includes("combo")) {
+      return `Link clean actions without rushing and aim for a combo of ${goal}.`;
+    }
+    return `Keep a repeatable rhythm and aim for a streak of ${goal}.`;
+  }
+
+  if (
+    result.outcome === EXPERIENCE_OUTCOMES.LOST ||
+    result.outcome === EXPERIENCE_OUTCOMES.COMPLETED
+  ) {
+    for (const { metricId, noun } of PROGRESS_IMPROVEMENT_METRICS) {
+      const value = metrics[metricId]?.value;
+      if (Number.isFinite(value)) {
+        return `Settle into a steady start, then aim to reach ${noun} ${
+          Math.max(1, Math.floor(value) + 1)
+        }.`;
+      }
+    }
+  }
+
+  if (result.isPersonalBest && primaryMetric) {
+    return `Repeat the rhythm that worked and aim to beat ${primaryMetric.formattedValue}.`;
+  }
+
+  switch (result.outcome) {
+    case EXPERIENCE_OUTCOMES.LOST:
+      return "Start with smaller, safer movements, then add speed once control feels steady.";
+    case EXPERIENCE_OUTCOMES.DRAW:
+      return "Change one early choice and look for a second opening before committing.";
+    case EXPERIENCE_OUTCOMES.WON:
+      return "Keep the same control and remove one unnecessary movement next round.";
+    default:
+      return "Keep movements compact and aim for one longer clean streak.";
+  }
+}
+
 /**
  * Produces presentation-ready, mode-agnostic copy, metrics, and actions. A UI
  * can render this model without understanding the originating game's state.
@@ -299,6 +468,16 @@ export function createExperienceResultViewModel(value, options = {}) {
   const eyebrow = result.isPersonalBest
     ? normalizeCopy(settings.personalBestLabel) ?? "New personal best"
     : normalizeCopy(settings.modeLabel) ?? "Results";
+  const defaultImprovementTip = createDefaultImprovementTip(
+    result,
+    metricViews,
+    primaryMetric,
+  );
+  const improvementTip =
+    settings.showImprovementTip === false || !defaultImprovementTip
+      ? null
+      : normalizeImprovementTip(settings.improvementTip) ??
+        defaultImprovementTip;
 
   const actions = [];
   if (settings.allowRestart !== false) {
@@ -320,6 +499,9 @@ export function createExperienceResultViewModel(value, options = {}) {
       `${primaryMetric.label}: ${primaryMetric.formattedValue}`,
     );
   }
+  if (improvementTip) {
+    announcementParts.push(`Try next: ${improvementTip}`);
+  }
 
   return {
     outcome: result.outcome,
@@ -331,6 +513,7 @@ export function createExperienceResultViewModel(value, options = {}) {
     primaryMetric,
     secondaryMetrics,
     metrics: metricViews,
+    improvementTip,
     actions,
     announcement: announcementParts.join(". "),
   };

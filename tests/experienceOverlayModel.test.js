@@ -280,6 +280,11 @@ test("results presentation reuses normalized outcome, metrics, and actions", () 
   assert.equal(view.title, "You won!");
   assert.equal(view.result.primaryMetric.formattedValue, "42");
   assert.equal(view.result.isPersonalBest, true);
+  assert.equal(
+    view.result.improvementTip,
+    "Return to center after each shot and aim for a rally of 12.",
+  );
+  assert.match(view.announcement, /Try next: Return to center/);
   assert.deepEqual(
     view.actions.map(({ id, label }) => ({ id, label })),
     [

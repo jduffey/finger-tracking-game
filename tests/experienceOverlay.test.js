@@ -21,6 +21,10 @@ test("experience overlay exposes dialogs, alerts, live regions, and native contr
   assert.match(componentSource, /role="group"/);
   assert.match(componentSource, /<details className="experience-overlay-help">/);
   assert.match(componentSource, /<summary>How to play<\/summary>/);
+  assert.match(
+    componentSource,
+    /<aside[\s\S]*?aria-label="Try next"[\s\S]*?experience-overlay-improvement-tip/,
+  );
 });
 
 test("experience overlay manages entry, restoration, escape, and trapped tab focus", () => {
@@ -45,4 +49,5 @@ test("overlay CSS preserves usable controls and viewport space across form facto
   assert.match(styleSource, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(styleSource, /\[data-reduced-motion="true"\]/);
   assert.match(styleSource, /@media \(forced-colors: active\)/);
+  assert.match(styleSource, /\.experience-overlay-improvement-tip/);
 });

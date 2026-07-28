@@ -207,3 +207,93 @@ test("common arcade metrics use player-facing labels by default", () => {
   assert.equal(view.metrics[0].label, "Targets destroyed");
   assert.equal(view.metrics[1].label, "Survival");
 });
+
+test("scored results derive one concise next-run tip from useful metrics", () => {
+  const accuracyView = createExperienceResultViewModel({
+    outcome: EXPERIENCE_OUTCOMES.COMPLETED,
+    score: 420,
+    metrics: {
+      accuracyPercent: 72,
+      bestCombo: 4,
+    },
+  });
+  assert.equal(
+    accuracyView.improvementTip,
+    "Slow down slightly and aim for 80% accuracy.",
+  );
+  assert.match(
+    accuracyView.announcement,
+    /Try next: Slow down slightly and aim for 80% accuracy\./,
+  );
+
+  const hazardView = createExperienceResultViewModel({
+    outcome: EXPERIENCE_OUTCOMES.COMPLETED,
+    score: 800,
+    metrics: {
+      precisionPercent: 96,
+      bombsHit: 1,
+    },
+  });
+  assert.equal(
+    hazardView.improvementTip,
+    "Use shorter motions and leave more space around hazards.",
+  );
+
+  const rallyView = createExperienceResultViewModel({
+    outcome: EXPERIENCE_OUTCOMES.WON,
+    score: 7,
+    metrics: {
+      accuracyPercent: 94,
+      bestRally: 11,
+    },
+  });
+  assert.equal(
+    rallyView.improvementTip,
+    "Return to center after each shot and aim for a rally of 12.",
+  );
+});
+
+test("improvement coaching is bounded, overridable, and omitted when inappropriate", () => {
+  const customTip = "Use the first few targets to settle into your rhythm.";
+  const customView = createExperienceResultViewModel(
+    {
+      outcome: EXPERIENCE_OUTCOMES.WON,
+      score: 10,
+    },
+    { improvementTip: `  ${customTip}  ` },
+  );
+  assert.equal(customView.improvementTip, customTip);
+
+  const boundedView = createExperienceResultViewModel(
+    {
+      outcome: EXPERIENCE_OUTCOMES.COMPLETED,
+      score: 10,
+    },
+    { improvementTip: "x".repeat(200) },
+  );
+  assert.equal(boundedView.improvementTip.length, 140);
+
+  assert.equal(
+    createExperienceResultViewModel(
+      {
+        outcome: EXPERIENCE_OUTCOMES.COMPLETED,
+        score: 10,
+      },
+      { showImprovementTip: false },
+    ).improvementTip,
+    null,
+  );
+  assert.equal(
+    createExperienceResultViewModel({
+      outcome: EXPERIENCE_OUTCOMES.ABANDONED,
+      score: 10,
+    }).improvementTip,
+    null,
+  );
+  assert.equal(
+    createExperienceResultViewModel({
+      outcome: EXPERIENCE_OUTCOMES.COMPLETED,
+    }).improvementTip,
+    null,
+  );
+});
