@@ -1,4 +1,5 @@
 import { Suspense, lazy, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { getModeById } from "../modeRegistry.js";
 
@@ -30,6 +31,29 @@ export default function MyCreationsLauncher({ onSelectMode }) {
     onSelectMode?.(mode);
   }
 
+  const panel =
+    open && typeof document !== "undefined"
+      ? createPortal(
+          <Suspense
+            fallback={
+              <div
+                aria-live="polite"
+                className="product-home-creations-loading"
+                role="status"
+              >
+                Opening My Creations…
+              </div>
+            }
+          >
+            <MyCreationsPanel
+              onClose={() => close()}
+              onOpenMode={openMode}
+            />
+          </Suspense>,
+          document.body,
+        )
+      : null;
+
   return (
     <>
       <button
@@ -44,24 +68,7 @@ export default function MyCreationsLauncher({ onSelectMode }) {
         <span aria-hidden="true">✦</span>
         <span className="product-home-creations-label">My creations</span>
       </button>
-      {open ? (
-        <Suspense
-          fallback={
-            <div
-              aria-live="polite"
-              className="product-home-creations-loading"
-              role="status"
-            >
-              Opening My Creations…
-            </div>
-          }
-        >
-          <MyCreationsPanel
-            onClose={() => close()}
-            onOpenMode={openMode}
-          />
-        </Suspense>
-      ) : null}
+      {panel}
     </>
   );
 }
