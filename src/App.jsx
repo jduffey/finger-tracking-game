@@ -330,6 +330,15 @@ import {
   saveUserPreferences,
   toggleFavoriteMode,
 } from "./userPreferences.js";
+import {
+  adaptHandsForCamera,
+  adaptPoseForCamera,
+  adaptPosesForCamera,
+  expandPointerRangeForSeatedPlay,
+  getCursorSmoothingAlpha,
+  getPinchThresholds,
+  selectPreferredHand,
+} from "./inputPreferences.js";
 import { createAudioFeedback } from "./audioFeedback.js";
 import { createGameProgressionStore } from "./gameProgressionStorage.js";
 import { ACHIEVEMENT_DEFINITIONS } from "./achievementCatalog.js";
@@ -429,10 +438,7 @@ function LazyExperienceFallback({ label = "Loading experience…" }) {
 const PHASES = APP_PHASES;
 const ARCADE_RUN_STORAGE_KEY = "motionArcade.arcadeRun";
 
-const PINCH_START_THRESHOLD = 0.045;
-const PINCH_END_THRESHOLD = 0.06;
 const PINCH_DEBOUNCE_MS = 250;
-const CURSOR_ALPHA = 0.35;
 const CURSOR_TRAIL_DURATION_MS = 1000;
 const CURSOR_TRAIL_SAMPLE_INTERVAL_MS = 34;
 const CURSOR_TRAIL_MIN_DISTANCE_PX = 6;
@@ -1309,7 +1315,7 @@ function summarizeExtentForLog(extent, canvasWidth, canvasHeight) {
 
   return {
     samples: extent.count,
-    mirroredNormalized: normalized,
+    normalized,
     canvasPixels: pixels,
   };
 }
@@ -1658,6 +1664,8 @@ export default function App() {
   const [trackingRequested, setTrackingRequested] = useState(false);
   const [pendingModeId, setPendingModeId] = useState(null);
   const [preferences, setPreferences] = useState(() => loadUserPreferences());
+  const preferencesRef = useRef(preferences);
+  preferencesRef.current = preferences;
   const [deviceCapabilities, setDeviceCapabilities] = useState(() =>
     assessDeviceCapabilities(collectDeviceCapabilitySignals()),
   );
@@ -2221,11 +2229,15 @@ export default function App() {
     pinchActive,
     draggingCellIndex: fullscreenTicTacToeDraggingCellIndex,
   });
-  const fullscreenModeLandingHoldProgress = clampValue(
-    (fullscreenModeLandingState?.holdMs ?? 0) / FULLSCREEN_MODE_LANDING_HOLD_MS,
-    0,
-    1,
-  );
+  const fullscreenModeLandingHoldProgress =
+    preferences.dwellDurationMs > 0
+      ? clampValue(
+          (fullscreenModeLandingState?.holdMs ?? 0) /
+            preferences.dwellDurationMs,
+          0,
+          1,
+        )
+      : 0;
   const fullscreenModeLandingLayout = fullscreenModeLandingState?.layout ?? null;
   const fullscreenExitControlCountdown = (
     Math.max(
@@ -3011,7 +3023,12 @@ export default function App() {
   }
 
   function publishFullscreenBodyPoses(poses) {
-    const safePoses = Array.isArray(poses) ? poses.slice(0, FULLSCREEN_BODY_SKELETON_MAX_PEOPLE) : [];
+    const safePoses = adaptPosesForCamera(
+      Array.isArray(poses)
+        ? poses.slice(0, FULLSCREEN_BODY_SKELETON_MAX_PEOPLE)
+        : [],
+      preferencesRef.current.mirrorCamera,
+    );
     fullscreenBodyPosesRef.current = safePoses;
     setFullscreenBodyPoses(safePoses);
   }
@@ -9214,6 +9231,15 @@ export default function App() {
       vMin: sourceNormalized.yMin,
       vMax: sourceNormalized.yMax,
     };
+    const directNormalized = {
+      uMin: sourceNormalized.xMin,
+      uMax: sourceNormalized.xMax,
+      vMin: sourceNormalized.yMin,
+      vMax: sourceNormalized.yMax,
+    };
+    const displayNormalized = preferencesRef.current.mirrorCamera
+      ? mirroredNormalized
+      : directNormalized;
 
     return {
       canvas: {
@@ -9240,6 +9266,7 @@ export default function App() {
       },
       sourceNormalized,
       mirroredNormalized,
+      displayNormalized,
     };
   }
 
@@ -9277,17 +9304,17 @@ export default function App() {
       return accumulator;
     }, {});
 
-    const visibleMirroredBounds = renderMetrics
+    const visibleDisplayBounds = renderMetrics
       ? {
-          uMin: roundMetric(renderMetrics.mirroredNormalized.uMin),
-          uMax: roundMetric(renderMetrics.mirroredNormalized.uMax),
-          vMin: roundMetric(renderMetrics.mirroredNormalized.vMin),
-          vMax: roundMetric(renderMetrics.mirroredNormalized.vMax),
+          uMin: roundMetric(renderMetrics.displayNormalized.uMin),
+          uMax: roundMetric(renderMetrics.displayNormalized.uMax),
+          vMin: roundMetric(renderMetrics.displayNormalized.vMin),
+          vMax: roundMetric(renderMetrics.displayNormalized.vMax),
           uSpan: roundMetric(
-            renderMetrics.mirroredNormalized.uMax - renderMetrics.mirroredNormalized.uMin,
+            renderMetrics.displayNormalized.uMax - renderMetrics.displayNormalized.uMin,
           ),
           vSpan: roundMetric(
-            renderMetrics.mirroredNormalized.vMax - renderMetrics.mirroredNormalized.vMin,
+            renderMetrics.displayNormalized.vMax - renderMetrics.displayNormalized.vMin,
           ),
         }
       : null;
@@ -9320,7 +9347,7 @@ export default function App() {
         ),
       },
       fingerExtents,
-      visibleMirroredBounds,
+      visibleDisplayBounds,
       lastVisibleBounds:
         extentState.lastVisibleBounds && Number.isFinite(extentState.lastVisibleBounds.uMin)
           ? {
@@ -9666,7 +9693,10 @@ export default function App() {
     if (!ctx) {
       return;
     }
-    const activeHand = Array.isArray(hands) ? hands[0] ?? null : null;
+    const activeHand = selectPreferredHand(
+      hands,
+      preferencesRef.current.dominantHand,
+    );
     const landmarks = Array.isArray(activeHand?.landmarks) ? activeHand.landmarks : [];
     if (landmarks.length === 0) {
       return;
@@ -9972,7 +10002,10 @@ export default function App() {
 
     const renderMetrics = computeCameraRenderMetrics("contain");
     const primaryHand = Array.isArray(fullscreenHandsRef.current)
-      ? fullscreenHandsRef.current[0] ?? null
+      ? selectPreferredHand(
+          fullscreenHandsRef.current,
+          preferencesRef.current.dominantHand,
+        )
       : null;
     if (!renderMetrics || !primaryHand) {
       return null;
@@ -10252,6 +10285,7 @@ export default function App() {
     const nextState = stepFullscreenModeLanding(fullscreenModeLandingStateRef.current, deltaSeconds, {
       appActive,
       handVerified: holdInput.handVerified,
+      holdDurationMs: preferencesRef.current.dwellDurationMs,
       pointerActive,
       pointerX: pointerActive ? holdInput.pointerX : 0,
       pointerY: pointerActive ? holdInput.pointerY : 0,
@@ -10454,9 +10488,12 @@ export default function App() {
       hands,
       fullscreenPrimaryHandIdRef.current,
     );
+    const pinchThresholds = getPinchThresholds(
+      preferencesRef.current.pinchThreshold,
+    );
     const secondaryPinching =
       secondaryHand && Number.isFinite(secondaryHand.pinchDistance)
-        ? secondaryHand.pinchDistance < PINCH_START_THRESHOLD
+        ? secondaryHand.pinchDistance < pinchThresholds.start
         : false;
 
     let secondaryAbilityRequested = false;
@@ -10466,7 +10503,7 @@ export default function App() {
     } else if (
       !secondaryHand ||
       !Number.isFinite(secondaryHand.pinchDistance) ||
-      secondaryHand.pinchDistance > PINCH_END_THRESHOLD
+      secondaryHand.pinchDistance > pinchThresholds.end
     ) {
       fullscreenBreakoutCoopSecondaryPinchLatchRef.current = false;
     }
@@ -11221,7 +11258,7 @@ export default function App() {
     handGraceFrameCounterRef.current = 0;
 
     const renderMetrics = computeCameraRenderMetrics();
-    const visibleBounds = renderMetrics?.mirroredNormalized ?? null;
+    const visibleBounds = renderMetrics?.displayNormalized ?? null;
     const thumbTipRawU = Number.isFinite(hand.thumbTip?.uRaw) ? hand.thumbTip.uRaw : hand.thumbTip?.u;
     const thumbTipRawV = Number.isFinite(hand.thumbTip?.vRaw) ? hand.thumbTip.vRaw : hand.thumbTip?.v;
     const indexTipRawU = Number.isFinite(hand.indexTip?.uRaw) ? hand.indexTip.uRaw : hand.indexTip?.u;
@@ -11258,10 +11295,15 @@ export default function App() {
             : null;
     const usesIndexPointer =
       phaseRef.current === PHASES.RUNNER || phaseRef.current === PHASES.FULLSCREEN_CAMERA;
-    const mappedPointerTip =
+    const baseMappedPointerTip =
       usesIndexPointer && mappedIndexTip
         ? mappedIndexTip
         : mappedThumbTip;
+    const mappedPointerTip = expandPointerRangeForSeatedPlay(
+      baseMappedPointerTip,
+      preferencesRef.current.seatedMode &&
+        phaseRef.current !== PHASES.CALIBRATION,
+    );
     const pointerSource = usesIndexPointer && mappedIndexTip ? "index" : "thumb";
     const pointerRawU = pointerSource === "index" ? indexTipRawU : thumbTipRawU;
     const pointerRawV = pointerSource === "index" ? indexTipRawV : thumbTipRawV;
@@ -11361,10 +11403,13 @@ export default function App() {
     setRawCursor(rawPoint);
 
     const prev = cursorRef.current;
+    const cursorAlpha = getCursorSmoothingAlpha(
+      preferencesRef.current.cursorSmoothing,
+    );
     const smoothed = clampPoint(
       {
-        x: CURSOR_ALPHA * rawPoint.x + (1 - CURSOR_ALPHA) * prev.x,
-        y: CURSOR_ALPHA * rawPoint.y + (1 - CURSOR_ALPHA) * prev.y,
+        x: cursorAlpha * rawPoint.x + (1 - cursorAlpha) * prev.x,
+        y: cursorAlpha * rawPoint.y + (1 - cursorAlpha) * prev.y,
       },
       viewportRef.current.width,
       viewportRef.current.height,
@@ -11416,10 +11461,13 @@ export default function App() {
       }
     }
 
+    const pinchThresholds = getPinchThresholds(
+      preferencesRef.current.pinchThreshold,
+    );
     let nextPinch = pinchStateRef.current;
-    if (!nextPinch && hand.pinchDistance < PINCH_START_THRESHOLD) {
+    if (!nextPinch && hand.pinchDistance < pinchThresholds.start) {
       nextPinch = true;
-    } else if (nextPinch && hand.pinchDistance > PINCH_END_THRESHOLD) {
+    } else if (nextPinch && hand.pinchDistance > pinchThresholds.end) {
       nextPinch = false;
     }
 
@@ -11640,6 +11688,7 @@ export default function App() {
       hands,
       timestamp,
       confidenceThreshold: labConfidenceThresholdRef.current,
+      pinchThreshold: preferencesRef.current.pinchThreshold,
       personalizationEnabled: labPersonalizationEnabledRef.current,
       personalizer: personalizationRef.current,
     });
@@ -12019,13 +12068,21 @@ export default function App() {
             });
             return;
           }
-          const stableHands = assignStableHandLabels(detectedHands, {
+          const labeledHands = assignStableHandLabels(detectedHands, {
             memory: handLabelMemoryRef.current,
             timestamp,
             pose,
           }).slice(0, TRACKING_DEFAULT_HAND_LIMIT);
+          const stableHands = adaptHandsForCamera(
+            labeledHands,
+            preferencesRef.current.mirrorCamera,
+          );
+          const displayPose = adaptPoseForCamera(
+            pose,
+            preferencesRef.current.mirrorCamera,
+          );
           if (!cancelled && mountedRef.current) {
-            processPoseFrame(pose, timestamp, stableHands);
+            processPoseFrame(displayPose, timestamp, stableHands);
           }
         } catch (error) {
           appLog.error("Pose frame inference failed", { error });
@@ -12158,16 +12215,23 @@ export default function App() {
                   TRACKING_DEFAULT_HAND_LIMIT,
                 )
               : TRACKING_DEFAULT_HAND_LIMIT;
-          const stableHands = assignStableHandLabels(detectedHands, {
+          const labeledHands = assignStableHandLabels(detectedHands, {
             memory: handLabelMemoryRef.current,
             timestamp,
             pose: minorityReportPose,
           }).slice(0, fullscreenTrackedHandLimit);
+          const stableHands = adaptHandsForCamera(
+            labeledHands,
+            preferencesRef.current.mirrorCamera,
+          );
           fullscreenHandsRef.current = stableHands;
           if (phaseRef.current === PHASES.FULLSCREEN_CAMERA) {
             setFullscreenDetectedHandCount(stableHands.length);
           }
-          const primaryHand = stableHands[0] ?? null;
+          const primaryHand = selectPreferredHand(
+            stableHands,
+            preferencesRef.current.dominantHand,
+          );
           fullscreenPrimaryHandIdRef.current = primaryHand?.id ?? primaryHand?.label ?? null;
           processTrackingFrame(primaryHand, timestamp);
           if (phaseRef.current === PHASES.FULLSCREEN_CAMERA) {
@@ -12721,6 +12785,7 @@ export default function App() {
         capabilities={deviceCapabilities}
         recommendation={capabilityRecommendation}
         qualityBudget={dynamicQualityBudget}
+        mirrorCamera={preferences.mirrorCamera}
         videoRef={videoRef}
         devices={cameraDevices}
         onBack={() => navigateToProductHome()}
@@ -12836,6 +12901,7 @@ export default function App() {
               layout={fullscreenModeLandingLayout}
               state={fullscreenModeLandingState}
               holdProgress={fullscreenModeLandingHoldProgress}
+              dwellDurationMs={preferences.dwellDurationMs}
               handDetected={handDetected}
               fps={fps}
               onSelect={handleFullscreenModeLandingBoxClick}
@@ -15109,7 +15175,11 @@ export default function App() {
     isCalibrationLayoutPhase && !isBodyPosePhase ? "calibration-layout" : ""
   } ${isBodyPosePhase ? "body-layout" : ""} ${
     hideInactiveCameraPane ? "single-pane-layout" : ""
-  } ${showLeftPaneResizer ? "resizable-layout" : ""}`;
+  } ${showLeftPaneResizer ? "resizable-layout" : ""} ${
+    preferences.cameraPreview === "expanded"
+      ? "camera-preview-expanded"
+      : ""
+  }`;
   const contentGridStyle = showLeftPaneResizer
     ? {
         "--left-pane-resizer-width": `${RESIZABLE_LEFT_PANE_HANDLE_WIDTH_PX}px`,
@@ -15279,7 +15349,9 @@ export default function App() {
       <div className={contentGridClassName} ref={contentGridRef} style={contentGridStyle}>
         {!hideInactiveCameraPane ? (
           <section className="card camera-card" ref={cameraPaneRef}>
-          <div className="camera-preview-panel">
+          <div
+            className={`camera-preview-panel preview-${preferences.cameraPreview}`}
+          >
             <h2>{cameraPanelTitle}</h2>
             {showInlineCameraPreview ? (
               <div

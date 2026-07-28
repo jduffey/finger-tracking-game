@@ -34,7 +34,15 @@ export function WebcamBackground({
   );
 }
 
-function LandingHeader() {
+function LandingHeader({ dwellDurationMs = 1000 }) {
+  const dwellSeconds = dwellDurationMs / 1000;
+  const selectionInstruction =
+    dwellDurationMs > 0
+      ? `Hover for ${dwellSeconds.toFixed(
+          Number.isInteger(dwellSeconds) ? 0 : 1,
+        )} ${dwellDurationMs === 1000 ? "second" : "seconds"} to select`
+      : "Pinch or click to select";
+
   return (
     <header className="fullscreen-camera-landing-header">
       <div className="fullscreen-camera-landing-title-row">
@@ -46,7 +54,7 @@ function LandingHeader() {
       </div>
       <span className="fullscreen-camera-landing-instruction">
         <span className="fullscreen-camera-landing-clock" aria-hidden="true" />
-        Hover for 1 second to select
+        {selectionInstruction}
       </span>
     </header>
   );
@@ -192,6 +200,7 @@ export default function FullscreenLandingPage({
   holdProgress,
   handDetected,
   fps,
+  dwellDurationMs = 1000,
   onSelect,
   onScrollOffsetChange,
 }) {
@@ -216,7 +225,7 @@ export default function FullscreenLandingPage({
           style={{ height: `${layout.scrollHeight}px` }}
         />
       ) : null}
-      <LandingHeader />
+      <LandingHeader dwellDurationMs={dwellDurationMs} />
       <HandSkeletonOverlay
         skeleton={state?.skeleton}
         width={layout?.width}

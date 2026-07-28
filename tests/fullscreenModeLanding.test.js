@@ -385,6 +385,37 @@ test("stepFullscreenModeLanding clears the hold when the pointer leaves the hove
   assert.equal(switched.selectedModeId, null);
 });
 
+test("stepFullscreenModeLanding honors custom dwell timing and supports dwell off", () => {
+  const base = createFullscreenModeLandingState(1280, 720);
+  const targetBox = base.layout.boxes.find((box) => box.id === "square");
+  const pointer = getBoxCenter(targetBox);
+  const input = {
+    handVerified: true,
+    pointerActive: true,
+    pointerX: pointer.x,
+    pointerY: pointer.y,
+    holdDurationMs: 250,
+  };
+
+  let customDwell = stepFullscreenModeLanding(base, 1 / 60, input);
+  for (let index = 0; index < 6; index += 1) {
+    customDwell = stepFullscreenModeLanding(customDwell, 0.05, input);
+  }
+  assert.equal(customDwell.selectedModeId, "square");
+
+  const dwellOff = stepFullscreenModeLanding(base, 1 / 60, {
+    ...input,
+    holdDurationMs: 0,
+  });
+  const stillOff = stepFullscreenModeLanding(dwellOff, 1, {
+    ...input,
+    holdDurationMs: 0,
+  });
+  assert.equal(stillOff.holdModeId, "square");
+  assert.equal(stillOff.holdMs, 0);
+  assert.equal(stillOff.selectedModeId, null);
+});
+
 test("stepFullscreenModeLanding clears stale hover progress when the app is inactive", () => {
   const base = createFullscreenModeLandingState(1280, 720);
   const firstBox = base.layout.boxes.find((box) => box.id === "square");

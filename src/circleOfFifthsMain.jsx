@@ -3,10 +3,15 @@ import ReactDOM from "react-dom/client";
 import CircleOfFifthsPage from "./CircleOfFifthsPage.jsx";
 import AppErrorBoundary from "./components/AppErrorBoundary.jsx";
 import { createScopedLogger, initializeLogging } from "./logger.js";
+import {
+  applyPreferenceDocumentState,
+  loadUserPreferences,
+} from "./userPreferences.js";
 import "./styles.css";
 import "./circleOfFifthsPage.css";
 
 initializeLogging();
+applyPreferenceDocumentState(loadUserPreferences());
 const bootLog = createScopedLogger("circleOfFifthsBootstrap");
 bootLog.info("Circle of fifths page bootstrap started", {
   rootElementFound: Boolean(document.getElementById("root")),

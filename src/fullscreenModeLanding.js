@@ -550,12 +550,15 @@ export function stepFullscreenModeLanding(state, dtSeconds, input) {
   const hoveredBox = getHoveredModeBox(safeState.layout, hitPointer);
   const hoveredModeId = hoveredBox?.id ?? null;
   const elapsedMs = Math.max(0, Math.min(0.05, Number.isFinite(dtSeconds) ? dtSeconds : 0)) * 1000;
+  const holdDurationMs = Number.isFinite(input?.holdDurationMs)
+    ? Math.max(0, input.holdDurationMs)
+    : FULLSCREEN_MODE_LANDING_HOLD_MS;
 
   let holdMs = 0;
-  if (hoveredModeId) {
+  if (hoveredModeId && holdDurationMs > 0) {
     holdMs =
       safeState.holdModeId === hoveredModeId
-        ? Math.min(FULLSCREEN_MODE_LANDING_HOLD_MS, safeState.holdMs + elapsedMs)
+        ? Math.min(holdDurationMs, safeState.holdMs + elapsedMs)
         : 0;
   }
 
@@ -569,6 +572,8 @@ export function stepFullscreenModeLanding(state, dtSeconds, input) {
     holdModeId: hoveredModeId,
     holdMs,
     selectedModeId:
-      hoveredModeId && holdMs >= FULLSCREEN_MODE_LANDING_HOLD_MS ? hoveredModeId : null,
+      hoveredModeId && holdDurationMs > 0 && holdMs >= holdDurationMs
+        ? hoveredModeId
+        : null,
   };
 }

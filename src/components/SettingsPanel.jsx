@@ -110,7 +110,7 @@ export default function SettingsPanel({
           <div className="settings-card">
             <SettingRow
               controlId="dominant-hand"
-              description="Used for one-hand tutorials and player-side defaults."
+              description="Chooses which visible hand drives one-hand games and menus."
               title="Dominant hand"
             >
               <select
@@ -125,7 +125,7 @@ export default function SettingsPanel({
             </SettingRow>
             <SettingRow
               controlId="seated-mode"
-              description="Optimizes instructions and movement ranges for seated play."
+              description="Expands smaller pointer movements across the play area to reduce physical reach."
               title="Seated mode"
             >
               <Toggle
@@ -136,7 +136,7 @@ export default function SettingsPanel({
             </SettingRow>
             <SettingRow
               controlId="mirror-camera"
-              description="Matches movement to a familiar mirror view."
+              description="Keeps the preview and motion controls aligned in either mirror or direct view."
               title="Mirror camera"
             >
               <Toggle
@@ -146,7 +146,7 @@ export default function SettingsPanel({
               />
             </SettingRow>
             <RangeSetting
-              description="Choose immediate selection or extra time to avoid accidental activation."
+              description="Sets hover-to-select timing in tracking menus. Turn it off to require a pinch or click."
               id="dwell-duration"
               max={2000}
               min={0}
@@ -157,7 +157,9 @@ export default function SettingsPanel({
               valueLabel={
                 preferences.dwellDurationMs === 0
                   ? "Off"
-                  : `${(preferences.dwellDurationMs / 1000).toFixed(2)} s`
+                  : `${(preferences.dwellDurationMs / 1000).toFixed(
+                      preferences.dwellDurationMs % 1000 === 0 ? 0 : 1,
+                    )} s`
               }
             />
             <RangeSetting
@@ -394,7 +396,7 @@ export default function SettingsPanel({
           <div className="settings-card settings-data-actions">
             <SettingRow
               controlId="camera-preview"
-              description="Choose how much room the camera preview uses outside setup."
+              description="Choose the split-screen workspace preview size. Setup and camera-first games still show video."
               title="Camera preview"
             >
               <select

@@ -104,6 +104,8 @@ test("applies accessibility preferences to the document root", () => {
       reducedMotion: true,
       highContrast: true,
       lowSensory: true,
+      mirrorCamera: false,
+      seatedMode: true,
       uiScale: 1.2,
       cursorScale: 1.5,
     },
@@ -114,7 +116,14 @@ test("applies accessibility preferences to the document root", () => {
     reducedMotion: "true",
     highContrast: "true",
     lowSensory: "true",
+    mirrorCamera: "false",
+    seatedMode: "true",
   });
   assert.equal(properties["--user-ui-scale"], 1.2);
   assert.equal(properties["--user-cursor-scale"], 1.5);
+  assert.equal(properties["--user-font-size"], "19.2px");
+  assert.equal(properties["--user-cursor-size"], "33px");
+  assert.equal(properties["--user-cursor-trail-size"], "27px");
+  assert.equal(properties["--user-circle-cursor-size"], "36px");
+  assert.equal(properties["--user-circle-cursor-glow-size"], "210px");
 });

@@ -84,6 +84,7 @@ export default function TrackingSetup({
   onDeviceChange,
   onContinueWithoutCamera,
   onContinue,
+  mirrorCamera = true,
 }) {
   const status = readiness?.status ?? TRACKING_READINESS_STATES.IDLE;
   const idle = status === TRACKING_READINESS_STATES.IDLE;
@@ -137,7 +138,7 @@ export default function TrackingSetup({
           </h2>
           <div className={`tracking-camera-frame ${ready ? "ready" : ""}`}>
             <video
-              aria-label="Live mirrored camera preview"
+              aria-label={`Live ${mirrorCamera ? "mirrored" : "direct"} camera preview`}
               autoPlay
               muted
               playsInline

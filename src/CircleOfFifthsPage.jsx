@@ -22,15 +22,23 @@ import {
   getDrumBpmFromSliderPosition,
   getSliderRatioFromDrumBpm,
 } from "./circleOfFifthsDrums.js";
+import { loadUserPreferences } from "./userPreferences.js";
+import {
+  adaptHandsForCamera,
+  expandPointerRangeForSeatedPlay,
+  getCursorSmoothingAlpha,
+  getPinchThresholds,
+  selectPreferredHand,
+} from "./inputPreferences.js";
 
 const pageLog = createScopedLogger("circleOfFifthsPage");
-const POINTER_SMOOTHING = 0.26;
+const DEFAULT_POINTER_ALPHA = 0.26;
+const DEFAULT_APP_POINTER_ALPHA = 0.35;
 const AUTOSTART_SESSION_KEY = "circle-of-fifths-autostart";
 const DEFAULT_DRUM_BPM = 112;
-const PINCH_START_THRESHOLD = 0.045;
-const PINCH_END_THRESHOLD = 0.06;
 
 export default function CircleOfFifthsPage() {
+  const preferences = useMemo(() => loadUserPreferences(), []);
   const videoRef = useRef(null);
   const detectorRef = useRef(null);
   const sessionControllerRef = useRef(null);
@@ -151,12 +159,16 @@ export default function CircleOfFifthsPage() {
       try {
         const videoElement = videoRef.current;
         const detector = detectorRef.current;
-        const hands = await detectHands(detector, videoElement);
+        const detectedHands = await detectHands(detector, videoElement);
         if (cancelled) {
           return;
         }
 
-        const hand = hands[0] ?? null;
+        const hands = adaptHandsForCamera(
+          detectedHands,
+          preferences.mirrorCamera,
+        );
+        const hand = selectPreferredHand(hands, preferences.dominantHand);
         if (!hand?.indexTip) {
           smoothedPointRef.current = null;
           pinchActiveRef.current = false;
@@ -173,21 +185,32 @@ export default function CircleOfFifthsPage() {
           return;
         }
 
+        const pointerTip = expandPointerRangeForSeatedPlay(
+          hand.indexTip,
+          preferences.seatedMode,
+        );
         const rawPoint = {
-          x: hand.indexTip.u * viewport.width,
-          y: hand.indexTip.v * viewport.height,
+          x: pointerTip.u * viewport.width,
+          y: pointerTip.v * viewport.height,
         };
+        const pointerAlpha =
+          getCursorSmoothingAlpha(preferences.cursorSmoothing) *
+          (DEFAULT_POINTER_ALPHA / DEFAULT_APP_POINTER_ALPHA);
         const previousPoint = smoothedPointRef.current;
         const nextPoint = previousPoint
           ? {
-              x: previousPoint.x + (rawPoint.x - previousPoint.x) * POINTER_SMOOTHING,
-              y: previousPoint.y + (rawPoint.y - previousPoint.y) * POINTER_SMOOTHING,
+              x: previousPoint.x + (rawPoint.x - previousPoint.x) * pointerAlpha,
+              y: previousPoint.y + (rawPoint.y - previousPoint.y) * pointerAlpha,
             }
           : rawPoint;
         smoothedPointRef.current = nextPoint;
 
         const wasPinching = pinchActiveRef.current;
-        const isPinching = getPinchState(hand.pinchDistance, wasPinching);
+        const isPinching = getPinchState(
+          hand.pinchDistance,
+          wasPinching,
+          preferences.pinchThreshold,
+        );
         pinchActiveRef.current = isPinching;
 
         const nextSegment = getSegmentAtPoint(nextPoint, wheelLayout);
@@ -265,7 +288,7 @@ export default function CircleOfFifthsPage() {
       }
       processingFrameRef.current = false;
     };
-  }, [sessionState, viewport.height, viewport.width, wheelLayout]);
+  }, [preferences, sessionState, viewport.height, viewport.width, wheelLayout]);
 
   useEffect(() => {
     const audioContext = audioContextRef.current;
@@ -882,16 +905,17 @@ async function closeAudioContextRef(audioContextRef) {
   });
 }
 
-function getPinchState(pinchDistance, wasPinching) {
+function getPinchState(pinchDistance, wasPinching, pinchThreshold) {
   if (!Number.isFinite(pinchDistance)) {
     return false;
   }
 
+  const thresholds = getPinchThresholds(pinchThreshold);
   if (wasPinching) {
-    return pinchDistance <= PINCH_END_THRESHOLD;
+    return pinchDistance <= thresholds.end;
   }
 
-  return pinchDistance <= PINCH_START_THRESHOLD;
+  return pinchDistance <= thresholds.start;
 }
 
 function getHoveredBeatId(point, beatButtonRefs) {

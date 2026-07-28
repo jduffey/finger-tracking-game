@@ -149,6 +149,28 @@ export function applyPreferenceDocumentState(
   root.dataset.reducedMotion = normalized.reducedMotion ? "true" : "false";
   root.dataset.highContrast = normalized.highContrast ? "true" : "false";
   root.dataset.lowSensory = normalized.lowSensory ? "true" : "false";
+  root.dataset.mirrorCamera = normalized.mirrorCamera ? "true" : "false";
+  root.dataset.seatedMode = normalized.seatedMode ? "true" : "false";
   root.style.setProperty("--user-ui-scale", normalized.uiScale);
   root.style.setProperty("--user-cursor-scale", normalized.cursorScale);
+  root.style.setProperty(
+    "--user-font-size",
+    `${16 * normalized.uiScale}px`,
+  );
+  root.style.setProperty(
+    "--user-cursor-size",
+    `${22 * normalized.cursorScale}px`,
+  );
+  root.style.setProperty(
+    "--user-cursor-trail-size",
+    `${18 * normalized.cursorScale}px`,
+  );
+  root.style.setProperty(
+    "--user-circle-cursor-size",
+    `${24 * normalized.cursorScale}px`,
+  );
+  root.style.setProperty(
+    "--user-circle-cursor-glow-size",
+    `${140 * normalized.cursorScale}px`,
+  );
 }
