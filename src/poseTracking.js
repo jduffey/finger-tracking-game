@@ -3,6 +3,7 @@ import "@tensorflow/tfjs-backend-webgl";
 import "@tensorflow/tfjs-backend-cpu";
 import * as poseDetection from "@tensorflow-models/pose-detection";
 import { createScopedLogger } from "./logger.js";
+import { getMoveNetModelPath } from "./trackingAssetConfig.js";
 
 const poseLog = createScopedLogger("poseTracking");
 const DEFAULT_RUNTIME = "tfjs";
@@ -20,6 +21,37 @@ let lastPoseMeta = {
 
 function clamp01(value) {
   return Math.min(1, Math.max(0, value));
+}
+
+export function createPoseDetectorConfig({
+  model = DEFAULT_MODEL,
+  runtime = DEFAULT_RUNTIME,
+  modelType,
+  maxPoses = DEFAULT_MAX_POSES,
+} = {}) {
+  if (model === poseDetection.SupportedModels.MoveNet) {
+    const resolvedModelType =
+      modelType ?? (maxPoses > 1 ? MULTIPOSE_MODEL_TYPE : DEFAULT_MODEL_TYPE);
+    const modelUrl = getMoveNetModelPath(resolvedModelType);
+    if (!modelUrl) {
+      throw new Error(
+        `MoveNet model type "${resolvedModelType}" is not available as a self-hosted asset.`,
+      );
+    }
+
+    return {
+      runtime,
+      modelType: resolvedModelType,
+      modelUrl,
+      enableSmoothing: maxPoses <= 1,
+      ...(maxPoses > 1 ? { enableTracking: true } : {}),
+    };
+  }
+
+  return {
+    runtime,
+    maxPoses,
+  };
 }
 
 export async function initPoseTracking(options = {}) {
@@ -52,18 +84,12 @@ export async function initPoseTracking(options = {}) {
     await tf.ready();
   }
 
-  const detectorConfig =
-    model === poseDetection.SupportedModels.MoveNet
-      ? {
-          runtime,
-          modelType,
-          enableSmoothing: maxPoses <= 1,
-          ...(maxPoses > 1 ? { enableTracking: true } : {}),
-        }
-      : {
-          runtime,
-          maxPoses,
-        };
+  const detectorConfig = createPoseDetectorConfig({
+    model,
+    runtime,
+    modelType,
+    maxPoses,
+  });
 
   const detector = await poseDetection.createDetector(model, detectorConfig);
   activeRuntime = runtime;

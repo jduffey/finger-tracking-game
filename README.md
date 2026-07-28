@@ -41,8 +41,8 @@ every fingertip is not required.
 - npm
 - Webcam access
 - A modern desktop Chromium browser is recommended
-- No third-party model CDN is required; pinned MediaPipe Hands assets are served
-  from the same origin as the app
+- No third-party model CDN is required; pinned MediaPipe Hands and MoveNet body-pose
+  assets are served from the same origin as the app
 
 Camera access requires a
 [secure context](https://developer.mozilla.org/docs/Web/Security/Secure_Contexts).
@@ -122,7 +122,8 @@ explanation in the pull request rather than changing the thresholds as a routine
   or save video frames and does not request microphone access.
 - Hand tracking starts with the MediaPipe Hands runtime and can probe or fall back to
   TFJS backends when needed.
-- Pinned MediaPipe Hands model assets are served by the app from the same origin.
+- Pinned MediaPipe Hands and MoveNet body-pose model assets are served by the app
+  from the same origin.
 - Body Pose Lab and Off-Axis Forest Walk use pose detection rather than the hand-tracking flow.
 - Calibration, preferences, favorites, recent activity, gesture personalization, and
   selected game or lab progress can be stored in the browser's `localStorage`.
@@ -149,6 +150,8 @@ To use `npm run symphony`:
 
 - **No camera prompt appears**: check browser and OS camera permissions, and make sure another app is not exclusively holding the webcam.
 - **The page loads but hand tracking does not start**: retry in Chrome or another Chromium browser with WebGL enabled and confirm the host serves the bundled `/vendor/mediapipe/hands/` assets.
+- **A body-pose mode cannot initialize**: confirm the host serves the bundled
+  `/vendor/movenet/` model files and does not rewrite their relative shard paths.
 - **The cursor feels off**: rerun calibration and keep your hand fully visible while capturing.
 - **Tracking is noisy or slow**: improve lighting, reduce background clutter, and close other GPU-heavy browser tabs.
 - **The Circle of Fifths page is silent**: confirm the browser allows audio playback and interact with the page so the `AudioContext` can start.

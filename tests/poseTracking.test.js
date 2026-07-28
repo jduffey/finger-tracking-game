@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectPose, detectPoses, getLastPoseMeta } from "../src/poseTracking.js";
+import {
+  createPoseDetectorConfig,
+  detectPose,
+  detectPoses,
+  getLastPoseMeta,
+} from "../src/poseTracking.js";
 
 function createPose(id, xOffset = 0) {
   return {
@@ -21,6 +26,36 @@ function createVideo() {
     videoHeight: 200,
   };
 }
+
+test("MoveNet detector configs always select a vendored same-origin model", () => {
+  assert.deepEqual(createPoseDetectorConfig(), {
+    runtime: "tfjs",
+    modelType: "SinglePose.Lightning",
+    modelUrl: "/vendor/movenet/singlepose-lightning-v4/model.json",
+    enableSmoothing: true,
+  });
+
+  assert.deepEqual(
+    createPoseDetectorConfig({
+      maxPoses: 4,
+    }),
+    {
+      runtime: "tfjs",
+      modelType: "MultiPose.Lightning",
+      modelUrl: "/vendor/movenet/multipose-lightning-v1/model.json",
+      enableSmoothing: false,
+      enableTracking: true,
+    },
+  );
+
+  assert.throws(
+    () =>
+      createPoseDetectorConfig({
+        modelType: "SinglePose.Thunder",
+      }),
+    /not available as a self-hosted asset/,
+  );
+});
 
 test("detectPoses returns normalized multi-pose results up to the requested max", async () => {
   let estimateConfig = null;

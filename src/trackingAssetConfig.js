@@ -1,4 +1,10 @@
 export const MEDIAPIPE_HANDS_SOLUTION_PATH = "/vendor/mediapipe/hands";
+export const MOVENET_MODEL_BASE_PATH = "/vendor/movenet";
+
+export const MOVENET_MODEL_PATHS = Object.freeze({
+  "SinglePose.Lightning": `${MOVENET_MODEL_BASE_PATH}/singlepose-lightning-v4/model.json`,
+  "MultiPose.Lightning": `${MOVENET_MODEL_BASE_PATH}/multipose-lightning-v1/model.json`,
+});
 
 export const MEDIAPIPE_HANDS_ASSET_NAMES = Object.freeze([
   "hand_landmark_full.tflite",
@@ -13,3 +19,7 @@ export const MEDIAPIPE_HANDS_ASSET_NAMES = Object.freeze([
   "hands_solution_wasm_bin.js",
   "hands_solution_wasm_bin.wasm",
 ]);
+
+export function getMoveNetModelPath(modelType) {
+  return MOVENET_MODEL_PATHS[modelType] ?? null;
+}
