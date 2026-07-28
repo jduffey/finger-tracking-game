@@ -4,14 +4,17 @@ import assert from "node:assert/strict";
 import {
   PRODUCT_AREAS,
   TRACKING_PROFILES,
+  getFeaturedModes,
 } from "../src/modeRegistry.js";
 import {
   filterLibraryModes,
   formatModeMetadata,
   getHomeSections,
   getLibraryModes,
+  hasReturningHomeActivity,
   selectContinueMode,
   selectDailyChallengeMode,
+  selectHomeRecommendations,
   selectQuickPlayMode,
 } from "../src/productHomeModel.js";
 import { MODE_MATURITY } from "../src/modeRegistry.js";
@@ -83,6 +86,72 @@ test("quick play favors unplayed featured games and is deterministic when seeded
 
   assert.equal(first.area, PRODUCT_AREAS.PLAY);
   assert.notEqual(afterFirst.id, first.id);
+});
+
+test("quick play never immediately repeats the latest game when alternatives exist", () => {
+  const playedFeaturedIds = getFeaturedModes()
+    .filter((mode) => mode.area === PRODUCT_AREAS.PLAY)
+    .map((mode) => mode.id);
+
+  assert.ok(playedFeaturedIds.length > 1);
+  for (const randomValue of [0, 0.25, 0.5, 0.75, 0.999999]) {
+    assert.notEqual(
+      selectQuickPlayMode({
+        recentModeIds: playedFeaturedIds,
+        randomValue,
+      }).id,
+      playedFeaturedIds[0],
+    );
+  }
+});
+
+test("quick play can exclude its previous in-session pick", () => {
+  const first = selectQuickPlayMode({ randomValue: 0 });
+  const second = selectQuickPlayMode({
+    excludedModeIds: [first.id],
+    randomValue: 0,
+  });
+
+  assert.notEqual(second.id, first.id);
+});
+
+test("home recommendations prefer favorites, skip duplicate shortcuts, and stay unique", () => {
+  const recommendations = selectHomeRecommendations({
+    favoriteModeIds: ["sky-patrol", "missile-command"],
+    recentModeIds: ["slice-air", "sky-patrol"],
+    excludedModeIds: ["sky-patrol"],
+    limit: 2,
+  });
+
+  assert.equal(recommendations[0].id, "missile-command");
+  assert.equal(recommendations.length, 2);
+  assert.equal(new Set(recommendations.map((mode) => mode.id)).size, 2);
+  assert.ok(recommendations.every((mode) => mode.id !== "sky-patrol"));
+  assert.deepEqual(selectHomeRecommendations({ limit: 0 }), []);
+});
+
+test("home treats any durable activity as a returning visit", () => {
+  assert.equal(hasReturningHomeActivity(), false);
+  assert.equal(
+    hasReturningHomeActivity({
+      progression: { totals: { sessionsPlayed: 1 } },
+    }),
+    true,
+  );
+  assert.equal(
+    hasReturningHomeActivity({ recentModeIds: ["sky-patrol"] }),
+    true,
+  );
+  assert.equal(
+    hasReturningHomeActivity({ favoriteModeIds: ["slice-air"] }),
+    true,
+  );
+  assert.equal(
+    hasReturningHomeActivity({
+      latestResult: { modeId: "missile-command" },
+    }),
+    true,
+  );
 });
 
 test("daily challenge is stable within a day and rotates across dates", () => {

@@ -128,19 +128,47 @@ export function getLibraryModes({ includeInternal = false } = {}) {
     : modes.filter((mode) => mode.maturity !== MODE_MATURITY.INTERNAL);
 }
 
-export function selectQuickPlayMode({
-  recentModeIds = [],
-  randomValue = Math.random(),
-} = {}) {
-  const featured = getFeaturedModes().filter(
+function getQuickPlayCandidates() {
+  return getFeaturedModes().filter(
     (mode) =>
       mode.area === PRODUCT_AREAS.PLAY &&
       mode.maturity !== MODE_MATURITY.EXPERIMENTAL &&
       mode.maturity !== MODE_MATURITY.INTERNAL,
   );
-  const recentSet = new Set(Array.isArray(recentModeIds) ? recentModeIds : []);
-  const unplayed = featured.filter((mode) => !recentSet.has(mode.id));
-  const candidates = unplayed.length > 0 ? unplayed : featured;
+}
+
+export function selectQuickPlayMode({
+  recentModeIds = [],
+  excludedModeIds = [],
+  randomValue = Math.random(),
+} = {}) {
+  const featured = getQuickPlayCandidates();
+  const recentIds = Array.isArray(recentModeIds) ? recentModeIds : [];
+  const latestModeId = recentIds.find(
+    (modeId) => typeof modeId === "string" && modeId,
+  );
+  const excludedSet = new Set(
+    (Array.isArray(excludedModeIds) ? excludedModeIds : []).filter(
+      (modeId) => typeof modeId === "string" && modeId,
+    ),
+  );
+  if (latestModeId) {
+    excludedSet.add(latestModeId);
+  }
+
+  const nonRepeating = featured.filter((mode) => !excludedSet.has(mode.id));
+  const withoutLatest = latestModeId
+    ? featured.filter((mode) => mode.id !== latestModeId)
+    : featured;
+  const eligible =
+    nonRepeating.length > 0
+      ? nonRepeating
+      : withoutLatest.length > 0
+        ? withoutLatest
+        : featured;
+  const recentSet = new Set(recentIds);
+  const unplayed = eligible.filter((mode) => !recentSet.has(mode.id));
+  const candidates = unplayed.length > 0 ? unplayed : eligible;
   if (candidates.length === 0) {
     return null;
   }
@@ -149,6 +177,63 @@ export function selectQuickPlayMode({
     ? Math.min(0.999999, Math.max(0, randomValue))
     : 0;
   return candidates[Math.floor(safeRandomValue * candidates.length)] ?? candidates[0];
+}
+
+export function selectHomeRecommendations({
+  recentModeIds = [],
+  favoriteModeIds = [],
+  excludedModeIds = [],
+  limit = 2,
+} = {}) {
+  const candidates = getQuickPlayCandidates();
+  const recentSet = new Set(Array.isArray(recentModeIds) ? recentModeIds : []);
+  const excludedSet = new Set(
+    (Array.isArray(excludedModeIds) ? excludedModeIds : []).filter(Boolean),
+  );
+  const byId = new Map(candidates.map((mode) => [mode.id, mode]));
+  const ordered = [
+    ...(Array.isArray(favoriteModeIds) ? favoriteModeIds : [])
+      .map((modeId) => byId.get(modeId))
+      .filter(Boolean),
+    ...candidates.filter((mode) => !recentSet.has(mode.id)),
+    ...candidates,
+  ];
+  const recommendations = [];
+  const safeLimit = Number.isFinite(limit)
+    ? Math.max(0, Math.floor(limit))
+    : 2;
+  if (safeLimit === 0) {
+    return recommendations;
+  }
+
+  for (const mode of ordered) {
+    if (
+      excludedSet.has(mode.id) ||
+      recommendations.some((entry) => entry.id === mode.id)
+    ) {
+      continue;
+    }
+    recommendations.push(mode);
+    if (recommendations.length >= safeLimit) {
+      break;
+    }
+  }
+  return recommendations;
+}
+
+export function hasReturningHomeActivity({
+  progression,
+  latestResult,
+  recentModeIds = [],
+  favoriteModeIds = [],
+} = {}) {
+  return Boolean(
+    latestResult ||
+      (progression?.totals?.sessionsPlayed ?? 0) > 0 ||
+      progression?.recentResults?.length ||
+      (Array.isArray(recentModeIds) && recentModeIds.length > 0) ||
+      (Array.isArray(favoriteModeIds) && favoriteModeIds.length > 0),
+  );
 }
 
 export function selectContinueMode(recentModeIds = []) {

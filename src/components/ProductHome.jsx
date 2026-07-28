@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import {
   MODE_MATURITY,
@@ -12,8 +12,10 @@ import {
   filterLibraryModes,
   formatModeMetadata,
   getLibraryModes,
+  hasReturningHomeActivity,
   selectContinueMode,
   selectDailyChallengeMode,
+  selectHomeRecommendations,
   selectQuickPlayMode,
 } from "../productHomeModel.js";
 import { getHomeAchievementSummary } from "../achievementCatalog.js";
@@ -195,6 +197,7 @@ export default function ProductHome({
   const [maxMinutes, setMaxMinutes] = useState("all");
   const [trackingFilter, setTrackingFilter] = useState("all");
   const [playersFilter, setPlayersFilter] = useState("all");
+  const lastQuickPlayModeIdRef = useRef(null);
   const libraryModes = useMemo(() => getLibraryModes(), []);
   const featuredModes = useMemo(() => getFeaturedModes(), []);
   const favoriteSet = useMemo(() => new Set(favoriteModeIds), [favoriteModeIds]);
@@ -216,29 +219,75 @@ export default function ProductHome({
       trackingFilter,
     ],
   );
-  const quickPlayMode = useMemo(
-    () => selectQuickPlayMode({ recentModeIds, randomValue: 0 }),
-    [recentModeIds],
-  );
   const arcadeRunMode = useMemo(() => getModeById("arcade-run"), []);
   const leadMode = featuredModes.find((mode) => mode.id === "sky-patrol") ?? featuredModes[0];
-  const dailyMode = useMemo(() => selectDailyChallengeMode(), []);
-  const continueMode = selectContinueMode(recentModeIds);
-  const favoriteModes = favoriteModeIds
-    .map((modeId) => getModeById(modeId))
-    .filter(Boolean)
-    .slice(0, 3);
   const totals = progression?.totals ?? {};
   const recentResult =
     latestResult ?? progression?.recentResults?.[0] ?? null;
   const recentResultMode = recentResult
     ? getModeById(recentResult.modeId)
     : null;
-  const hasProgress = (totals.sessionsPlayed ?? 0) > 0;
+  const dailyMode = useMemo(() => selectDailyChallengeMode(), []);
+  const continueMode = selectContinueMode([
+    ...(Array.isArray(recentModeIds) ? recentModeIds : []),
+    recentResult?.modeId,
+  ]);
+  const isReturningUser = hasReturningHomeActivity({
+    progression,
+    latestResult,
+    recentModeIds,
+    favoriteModeIds,
+  });
+  const recommendationModes = useMemo(
+    () =>
+      selectHomeRecommendations({
+        recentModeIds,
+        favoriteModeIds,
+        excludedModeIds: [continueMode?.id, dailyMode?.id],
+        limit: 2,
+      }),
+    [
+      continueMode?.id,
+      dailyMode?.id,
+      favoriteModeIds,
+      recentModeIds,
+    ],
+  );
+  const canQuickPlay = featuredModes.some(
+    (mode) =>
+      mode.area === PRODUCT_AREAS.PLAY &&
+      mode.maturity !== MODE_MATURITY.EXPERIMENTAL &&
+      mode.maturity !== MODE_MATURITY.INTERNAL,
+  );
   const achievementSummary = useMemo(
     () => getHomeAchievementSummary(progression),
     [progression],
   );
+
+  function launchQuickPlay() {
+    const quickPlayMode = selectQuickPlayMode({
+      recentModeIds,
+      excludedModeIds: [lastQuickPlayModeIdRef.current],
+      randomValue: Math.random(),
+    });
+    if (!quickPlayMode) {
+      return;
+    }
+    lastQuickPlayModeIdRef.current = quickPlayMode.id;
+    onSelectMode(quickPlayMode);
+  }
+
+  function launchDaily() {
+    if (!dailyMode) {
+      return;
+    }
+    onSelectMode(dailyMode, {
+      launchContext: {
+        challenge: "daily",
+        dayKey: new Date().toISOString().slice(0, 10),
+      },
+    });
+  }
 
   return (
     <div className="product-home">
@@ -269,53 +318,48 @@ export default function ProductHome({
         </div>
       </header>
 
-      <main className="product-home-main">
-        <section className="product-home-hero" aria-labelledby="home-title">
-          <div className="product-home-intro">
-            <span className="product-home-eyebrow">Webcam-powered play</span>
-            <h1 id="home-title">Move, play, and make something surprising.</h1>
-            <p>
-              Short arcade challenges and creative tools that turn natural movement into
-              immediate feedback. Camera processing stays on this device.
-            </p>
-            <div className="product-home-hero-actions">
-              <button
-                className="product-primary-action"
-                disabled={!arcadeRunMode}
-                onClick={() => arcadeRunMode && onSelectMode(arcadeRunMode)}
-                type="button"
-              >
-                Start an Arcade Run
-              </button>
-              <button
-                className="product-secondary-action"
-                disabled={!quickPlayMode}
-                onClick={() => quickPlayMode && onSelectMode(quickPlayMode)}
-                type="button"
-              >
-                Quick play
-              </button>
-              <button className="product-secondary-action" onClick={onOpenSetup} type="button">
-                Check my setup
-              </button>
-            </div>
-          </div>
-          <FeaturedMode mode={leadMode} onSelect={onSelectMode} />
-        </section>
+      <main
+        className={`product-home-main${isReturningUser ? " is-returning" : ""}`}
+      >
+        {isReturningUser ? (
+          <section
+            className="product-home-hero is-returning"
+            aria-labelledby="home-title"
+          >
+            <div className="product-returning-summary">
+              <div>
+                <span className="product-home-eyebrow">Welcome back</span>
+                <h1 id="home-title">Ready for your next move?</h1>
+                <p>
+                  Pick a route and get playing. Your progress, favorites, and
+                  personal bests stay on this device.
+                </p>
+                <div className="product-home-hero-actions">
+                  <button
+                    className="product-primary-action"
+                    disabled={!arcadeRunMode}
+                    onClick={() =>
+                      arcadeRunMode && onSelectMode(arcadeRunMode)
+                    }
+                    type="button"
+                  >
+                    Start an Arcade Run
+                  </button>
+                  <button
+                    className="product-secondary-action"
+                    disabled={!canQuickPlay}
+                    onClick={launchQuickPlay}
+                    type="button"
+                  >
+                    Quick play
+                  </button>
+                </div>
+              </div>
 
-        <section
-          aria-labelledby="home-shortcuts-title"
-          className="product-home-shortcuts"
-        >
-          <div className="product-shortcuts-heading">
-            <div>
-              <span className="product-home-eyebrow">For you</span>
-              <h2 id="home-shortcuts-title">
-                {hasProgress ? "Pick up where you left off" : "A great first session"}
-              </h2>
-            </div>
-            {hasProgress ? (
-              <dl className="product-progress-summary" aria-label="Local play summary">
+              <dl
+                className="product-progress-summary"
+                aria-label="Local play summary"
+              >
                 <div>
                   <dt>Sessions</dt>
                   <dd>{totals.sessionsPlayed ?? 0}</dd>
@@ -331,85 +375,182 @@ export default function ProductHome({
                 <div>
                   <dt>Medals</dt>
                   <dd>
-                    {achievementSummary.unlockedCount}/{achievementSummary.totalCount}
+                    {achievementSummary.unlockedCount}/
+                    {achievementSummary.totalCount}
                   </dd>
                 </div>
               </dl>
-            ) : null}
-          </div>
 
-          <div className="product-shortcut-grid">
-            {continueMode ? (
-              <button
-                className="product-shortcut-card continue"
-                onClick={() => onSelectMode(continueMode)}
-                type="button"
-              >
-                <span>Continue</span>
-                <strong>{continueMode.label}</strong>
-                <small>{continueMode.controlHint}</small>
-              </button>
-            ) : null}
-            {dailyMode ? (
-              <button
-                className="product-shortcut-card daily"
-                onClick={() =>
-                  onSelectMode(dailyMode, {
-                    launchContext: {
-                      challenge: "daily",
-                      dayKey: new Date().toISOString().slice(0, 10),
-                    },
-                  })
-                }
-                type="button"
-              >
-                <span>Daily challenge</span>
-                <strong>{dailyMode.label}</strong>
-                <small>Today’s shared local challenge</small>
-              </button>
-            ) : null}
-            {recentResult && recentResultMode ? (
-              <div className="product-shortcut-card result" role="status">
-                <span>{formatResultOutcome(recentResult.outcome)}</span>
-                <strong>{recentResultMode.label}</strong>
-                <small>
-                  {Number.isFinite(recentResult.score)
-                    ? `Score ${recentResult.score}`
-                    : formatPlayTime(recentResult.durationMs)}
-                </small>
-              </div>
-            ) : null}
-            {favoriteModes.map((mode) => (
-              <button
-                className="product-shortcut-card favorite"
-                key={mode.id}
-                onClick={() => onSelectMode(mode)}
-                type="button"
-              >
-                <span>Favorite</span>
-                <strong>{mode.label}</strong>
-                <small>{mode.typicalMinutes} min · {mode.difficulty}</small>
-              </button>
-            ))}
-          </div>
-          {achievementSummary.next ? (
-            <div className="product-achievement-progress">
-              <span aria-hidden="true">◎</span>
-              <div>
-                <strong>Next medal: {achievementSummary.next.title}</strong>
-                <small>
-                  {achievementSummary.next.description}{" "}
-                  {achievementSummary.next.progressState.label}
-                </small>
-              </div>
-              <progress
-                aria-label={`Progress toward ${achievementSummary.next.title}`}
-                max="1"
-                value={achievementSummary.next.progressState.ratio}
-              />
+              {recentResult && recentResultMode ? (
+                <div className="product-returning-last-result">
+                  <span>{formatResultOutcome(recentResult.outcome)}</span>
+                  <strong>{recentResultMode.label}</strong>
+                  <small>
+                    {Number.isFinite(recentResult.score)
+                      ? `Score ${recentResult.score}`
+                      : formatPlayTime(recentResult.durationMs)}
+                  </small>
+                </div>
+              ) : null}
             </div>
-          ) : null}
-        </section>
+
+            <div
+              className="product-returning-picks"
+              aria-labelledby="home-recommendations-title"
+            >
+              <div className="product-returning-picks-heading">
+                <div>
+                  <span className="product-home-eyebrow">For you</span>
+                  <h2 id="home-recommendations-title">Jump right in</h2>
+                </div>
+                <span>Fresh picks based on local play</span>
+              </div>
+
+              <div className="product-returning-grid">
+                {continueMode ? (
+                  <button
+                    className="product-shortcut-card continue"
+                    onClick={() => onSelectMode(continueMode)}
+                    type="button"
+                  >
+                    <span>Continue</span>
+                    <strong>{continueMode.label}</strong>
+                    <small>{continueMode.controlHint}</small>
+                  </button>
+                ) : null}
+                {dailyMode ? (
+                  <button
+                    className="product-shortcut-card daily"
+                    onClick={launchDaily}
+                    type="button"
+                  >
+                    <span>Daily challenge</span>
+                    <strong>{dailyMode.label}</strong>
+                    <small>Today’s shared local challenge</small>
+                  </button>
+                ) : null}
+                {recommendationModes.map((mode) => (
+                  <button
+                    className="product-shortcut-card recommended"
+                    key={mode.id}
+                    onClick={() => onSelectMode(mode)}
+                    type="button"
+                  >
+                    <span>
+                      {favoriteSet.has(mode.id) ? "Favorite pick" : "Try next"}
+                    </span>
+                    <strong>{mode.label}</strong>
+                    <small>
+                      {mode.typicalMinutes} min · {mode.difficulty}
+                    </small>
+                  </button>
+                ))}
+              </div>
+
+              {achievementSummary.next ? (
+                <div className="product-achievement-progress">
+                  <span aria-hidden="true">◎</span>
+                  <div>
+                    <strong>Next medal: {achievementSummary.next.title}</strong>
+                    <small>
+                      {achievementSummary.next.description}{" "}
+                      {achievementSummary.next.progressState.label}
+                    </small>
+                  </div>
+                  <progress
+                    aria-label={`Progress toward ${achievementSummary.next.title}`}
+                    max="1"
+                    value={achievementSummary.next.progressState.ratio}
+                  />
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : (
+          <>
+            <section className="product-home-hero" aria-labelledby="home-title">
+              <div className="product-home-intro">
+                <span className="product-home-eyebrow">Webcam-powered play</span>
+                <h1 id="home-title">
+                  Move, play, and make something surprising.
+                </h1>
+                <p>
+                  Short arcade challenges and creative tools that turn natural
+                  movement into immediate feedback. Camera processing stays on
+                  this device.
+                </p>
+                <div className="product-home-hero-actions">
+                  <button
+                    className="product-primary-action"
+                    disabled={!arcadeRunMode}
+                    onClick={() =>
+                      arcadeRunMode && onSelectMode(arcadeRunMode)
+                    }
+                    type="button"
+                  >
+                    Start an Arcade Run
+                  </button>
+                  <button
+                    className="product-secondary-action"
+                    disabled={!canQuickPlay}
+                    onClick={launchQuickPlay}
+                    type="button"
+                  >
+                    Quick play
+                  </button>
+                  <button
+                    className="product-secondary-action"
+                    onClick={onOpenSetup}
+                    type="button"
+                  >
+                    Check my setup
+                  </button>
+                </div>
+              </div>
+              <FeaturedMode mode={leadMode} onSelect={onSelectMode} />
+            </section>
+
+            <section
+              aria-labelledby="home-shortcuts-title"
+              className="product-home-shortcuts"
+            >
+              <div className="product-shortcuts-heading">
+                <div>
+                  <span className="product-home-eyebrow">For you</span>
+                  <h2 id="home-shortcuts-title">A great first session</h2>
+                </div>
+              </div>
+
+              <div className="product-shortcut-grid">
+                {dailyMode ? (
+                  <button
+                    className="product-shortcut-card daily"
+                    onClick={launchDaily}
+                    type="button"
+                  >
+                    <span>Daily challenge</span>
+                    <strong>{dailyMode.label}</strong>
+                    <small>Today’s shared local challenge</small>
+                  </button>
+                ) : null}
+                {recommendationModes.map((mode) => (
+                  <button
+                    className="product-shortcut-card recommended"
+                    key={mode.id}
+                    onClick={() => onSelectMode(mode)}
+                    type="button"
+                  >
+                    <span>Great place to start</span>
+                    <strong>{mode.label}</strong>
+                    <small>
+                      {mode.typicalMinutes} min · {mode.difficulty}
+                    </small>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </>
+        )}
 
         <section className="product-library" id="experience-library" aria-labelledby="library-title">
           <div className="product-library-heading">
