@@ -19,6 +19,9 @@ function createMockContext() {
     },
     closePath() {},
     fill() {},
+    fillText(...args) {
+      this.operations.push({ type: "fillText", args });
+    },
     fillRect(...args) {
       this.operations.push({ type: "fillRect", fillStyle: this.fillStyle, args });
     },
@@ -112,6 +115,26 @@ test("getSkyPatrolHudState summarizes the visible Sky Patrol HUD values", () => 
     gunCharge: 1,
     gunCooldownMs: 0,
     gunStatus: "ready",
+    mission: 1,
+    totalMissions: 4,
+    missionName: "Coastal Sweep",
+    missionGoalText: "Destroy 6 threats",
+    missionProgress: 0,
+    missionGoal: 6,
+    bossMission: false,
+    comboCount: 0,
+    comboExpiresMs: 0,
+    accuracy: 0,
+    shieldCharges: 0,
+    wingmanCharges: 1,
+    wingmanActiveMs: 0,
+    overdriveMs: 0,
+    powerUpCount: 0,
+    startSafetyMs: 2600,
+    checkpointMs: 0,
+    lastMissionRecap: null,
+    outcome: null,
+    result: null,
     incomingIndicators: [],
     legendFaded: false,
     radarBlips: [
@@ -175,6 +198,20 @@ test("areSkyPatrolHudStatesEqual only changes when the rendered HUD changes", ()
     areSkyPatrolHudStatesEqual(hud, {
       ...hud,
       gunCharge: 0.5,
+    }),
+    false,
+  );
+  assert.equal(
+    areSkyPatrolHudStatesEqual(hud, {
+      ...hud,
+      missionProgress: 5,
+    }),
+    false,
+  );
+  assert.equal(
+    areSkyPatrolHudStatesEqual(hud, {
+      ...hud,
+      result: { outcome: "victory", score: 8000 },
     }),
     false,
   );
@@ -261,5 +298,92 @@ test("createSkyPatrolCanvasRenderer draws damage flash after the scene", () => {
   assert.ok(
     flashIndex > firstSceneDrawIndex,
     `expected damage flash after scene rendering, saw ${flashIndex} before ${firstSceneDrawIndex}`,
+  );
+});
+
+test("createSkyPatrolCanvasRenderer draws mission telegraphs and power-up sprites", () => {
+  const game = createSkyPatrolGame(960, 720);
+  const { context, renderer } = createMockRenderer();
+  const spriteImage = { complete: true, naturalWidth: 1024 };
+  renderer.setSpriteImage(spriteImage);
+
+  renderer.draw({
+    ...game,
+    ship: null,
+    threatTelegraphs: [
+      {
+        id: "boss-warning",
+        kind: "ace",
+        label: "Boss incoming",
+        x: 480,
+        ageMs: 200,
+        durationMs: 1000,
+      },
+    ],
+    powerUps: [
+      {
+        id: "power-up-1",
+        type: "shield",
+        x: 320,
+        y: 240,
+        width: 40,
+        height: 40,
+      },
+    ],
+  });
+
+  assert.ok(
+    context.operations.some(
+      (operation) =>
+        operation.type === "fillRect" && operation.fillStyle === "#ff5370",
+    ),
+    "expected a boss warning marker",
+  );
+  assert.ok(
+    context.operations.some(
+      (operation) =>
+        operation.type === "fillText" && operation.args[0] === "Boss incoming",
+    ),
+    "expected the telegraph label",
+  );
+  assert.ok(
+    context.drawImageCalls.some(
+      (call) =>
+        call.image === spriteImage &&
+        call.args.length === 9 &&
+        call.args[1] === 573 &&
+        call.args[2] === 620,
+    ),
+    "expected the shield power-up atlas sprite",
+  );
+});
+
+test("createSkyPatrolCanvasRenderer gives checkpoints an in-world recap pause", () => {
+  const game = createSkyPatrolGame(960, 720);
+  const { context, renderer } = createMockRenderer();
+
+  renderer.draw({
+    ...game,
+    status: "checkpoint",
+    lastMissionRecap: {
+      name: "Coastal Sweep",
+      accuracy: 82,
+      checkpointBonus: 1420,
+      clean: true,
+    },
+  });
+
+  assert.ok(
+    context.operations.some(
+      (operation) =>
+        operation.type === "fillText" && operation.args[0] === "CLEAN CHECKPOINT",
+    ),
+  );
+  assert.ok(
+    context.operations.some(
+      (operation) =>
+        operation.type === "fillText" &&
+        String(operation.args[0]).includes("82% accuracy"),
+    ),
   );
 });
