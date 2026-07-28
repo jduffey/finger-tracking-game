@@ -42,6 +42,12 @@ function PredictionScale({
           {predictedHits} hit{predictedHits === 1 ? "" : "s"}
         </output>
       </div>
+      <label
+        className="probability-sr-only"
+        htmlFor="probability-prediction-input"
+      >
+        Predicted matching trials
+      </label>
       <input
         aria-describedby="probability-prediction-help"
         id="probability-prediction-input"

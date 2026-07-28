@@ -36,6 +36,9 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/dependency-review-action@v4
 
+      - name: Install browser test runtime
+        run: npx playwright install --with-deps chromium
+
       - name: Run quality checks
         run: npm run check
 

@@ -87,9 +87,10 @@ npm run preview
 - `npm run preview`: serves the built output locally
 - `npm test`: runs the Node test suite
 - `npm run test:ci`: runs the same suite with the explicit CI reporter
+- `npm run test:e2e`: runs camera-free Chromium journeys and accessibility smoke checks
 - `npm run audit`: checks installed dependencies for high-severity advisories
 - `npm run check:bundle-budget`: checks the built main page's eager JS and CSS against the startup budgets
-- `npm run check`: runs the complete test suite, creates a production build, checks the startup bundle budget, and audits dependencies
+- `npm run check`: runs unit and browser tests, creates a production build, checks the startup bundle budget, and audits dependencies
 - `npm run symphony`: launches the optional Symphony workflow wrapper
 
 Pull requests and pushes to `main` run `npm run check` on Node.js 22 through the
