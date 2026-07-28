@@ -104,14 +104,12 @@ export function DemoTile({ item, active, holdProgress, onSelect }) {
   );
 }
 
-export function FooterStatus({ handDetected, fps }) {
+export function FooterStatus({ handDetected, style }) {
   return (
-    <div className="fullscreen-camera-landing-footer">
+    <div className="fullscreen-camera-landing-footer" style={style}>
       <span className={`fullscreen-camera-landing-status ${handDetected ? "ok" : "warn"}`}>
         <span className="fullscreen-camera-landing-status-dot" aria-hidden="true" />
         {handDetected ? "Tracking Active" : "Hand not detected"}
-        <span className="fullscreen-camera-landing-status-separator" />
-        FPS: {Math.round(fps)}
       </span>
       <span className="fullscreen-camera-landing-helper">
         Point your <strong>index finger</strong> to explore
@@ -198,10 +196,11 @@ export default function FullscreenLandingPage({
   onScrollOffsetChange,
 }) {
   const demoItems = layout?.boxes ?? [];
+  const scrollable = (layout?.scrollHeight ?? 0) > (layout?.height ?? 0) + 1;
 
   return (
     <div
-      className="fullscreen-camera-mode-landing"
+      className={`fullscreen-camera-mode-landing ${scrollable ? "scrollable" : ""}`}
       style={{
         ...(viewportStyle ?? {}),
         "--landing-scale": layout?.scale ?? 1,
@@ -210,6 +209,13 @@ export default function FullscreenLandingPage({
         onScrollOffsetChange?.(event.currentTarget.scrollTop);
       }}
     >
+      {scrollable ? (
+        <div
+          aria-hidden="true"
+          className="fullscreen-camera-landing-scroll-spacer"
+          style={{ height: `${layout.scrollHeight}px` }}
+        />
+      ) : null}
       <LandingHeader />
       <HandSkeletonOverlay
         skeleton={state?.skeleton}
@@ -229,7 +235,10 @@ export default function FullscreenLandingPage({
         />
       ))}
       <IndexFingerMarker state={state} />
-      <FooterStatus handDetected={handDetected} fps={fps} />
+      <FooterStatus
+        handDetected={handDetected}
+        style={scrollable ? { bottom: "auto", top: `${layout.footerTop}px` } : undefined}
+      />
     </div>
   );
 }

@@ -1069,7 +1069,7 @@ export default function MinorityReportLab(props) {
           <div className="button-row compact">
             {onBack ? (
               <button type="button" className="secondary" onClick={onBack}>
-                Back to Input Test
+                Home
               </button>
             ) : null}
             {onReset ? (

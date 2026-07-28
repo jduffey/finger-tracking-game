@@ -37,6 +37,7 @@ import {
   FIND_YOUR_GRIND_BREAKOUT_MODE_ID,
   createBreakoutGame,
   createFindYourGrindBreakoutGame,
+  restartBreakoutGame,
   stepBreakoutGame,
 } from "./breakoutGame.js";
 import {
@@ -192,7 +193,7 @@ import {
   getCurrentRuntime,
   getLastDetectionMeta,
   initHandTracking,
-} from "./handTracking.js";
+} from "./trackingRuntimeLoader.js";
 import { assignStableHandLabels } from "./handLabeling.js";
 import { getHandOverlayStyle } from "./handOverlayStyles.js";
 import {
@@ -206,8 +207,12 @@ import {
   shouldUseImmersiveAppLayout,
 } from "./cameraLayout.js";
 import {
+  CAMERA_INTERRUPTION_RETRY_DELAY_MS,
+  attachCameraStreamToVideo,
   getCameraVideoKeepAliveAction,
   getStaleInferenceKeepAliveAction,
+  observeCameraStreamInterruptions,
+  releaseCameraStream,
   shouldRunTrackingKeepAlive,
 } from "./trackingKeepAlive.js";
 import {
@@ -216,7 +221,7 @@ import {
   getLastPoseMeta,
   getPoseRuntime,
   initPoseTracking,
-} from "./poseTracking.js";
+} from "./trackingRuntimeLoader.js";
 import {
   FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
   FULLSCREEN_HAND_SKELETON_MAX_HANDS,
@@ -241,38 +246,64 @@ import SpatialGestureMemory from "./components/SpatialGestureMemory.jsx";
 import GestureAnalyticsLab from "./components/GestureAnalyticsLab.jsx";
 import GestureArtLab from "./components/GestureArtLab.jsx";
 import GestureControlOS from "./components/GestureControlOS.jsx";
+import ProductHome from "./components/ProductHome.jsx";
+import SettingsPanel from "./components/SettingsPanel.jsx";
+import TrackingSetup from "./components/TrackingSetup.jsx";
+import ExperienceOverlay from "./components/ExperienceOverlay.jsx";
 import { createGestureEngine } from "./gestures/gestureEngine.js";
-import { shouldShowWorkspaceNav } from "./workspaceNavigation.js";
+import {
+  APP_PHASES,
+  TRACKING_PROFILES,
+  getModeByFullscreenId,
+  getModeById,
+  getModeByPhase,
+  getModeByPath,
+} from "./modeRegistry.js";
+import {
+  TRACKING_READINESS_STATES,
+  createTrackingReadinessState,
+  reduceTrackingReadiness,
+} from "./trackingReadiness.js";
+import {
+  EXPERIENCE_LIFECYCLE_EVENTS,
+  EXPERIENCE_PAUSE_REASONS,
+  EXPERIENCE_PHASES,
+  createExperienceLifecycle,
+  transitionExperienceLifecycle,
+} from "./experienceLifecycle.js";
+import {
+  applyPreferenceDocumentState,
+  clearUserPreferences,
+  loadUserPreferences,
+  normalizeUserPreferences,
+  recordRecentMode,
+  saveUserPreferences,
+  toggleFavoriteMode,
+} from "./userPreferences.js";
+import { createGameProgressionStore } from "./gameProgressionStorage.js";
+import { ACHIEVEMENT_DEFINITIONS } from "./achievementCatalog.js";
+import {
+  createFullscreenGameResult,
+  createSpatialMemoryResult,
+  createWhackAMoleResult,
+} from "./gameResultAdapters.js";
 import {
   RESIZABLE_LEFT_PANE_HANDLE_WIDTH_PX,
   RESIZABLE_LEFT_PANE_MIN_WIDTH_PX,
   clampResizableLeftPaneWidth,
 } from "./layoutSizing.js";
+import { resizeFullscreenGameState } from "./viewportStateTransform.js";
+import { createFixedStepSessionTiming } from "./sessionTiming.js";
 import {
   ALL_GESTURE_IDS,
   GESTURE_DEFINITIONS,
   GESTURE_IDS,
+  PERSONALIZATION_STORAGE_KEY,
   isTwoHandGesture,
 } from "./gestures/constants.js";
 import { createGesturePersonalization } from "./gestures/personalization.js";
 
-const PHASES = {
-  CALIBRATION: "CALIBRATION",
-  FULLSCREEN_CAMERA: "FULLSCREEN_CAMERA",
-  SANDBOX: "SANDBOX",
-  FLIGHT: "FLIGHT",
-  RUNNER: "RUNNER",
-  BODY_POSE: "BODY_POSE",
-  OFF_AXIS_LAB: "OFF_AXIS_LAB",
-  MINORITY_REPORT_LAB: "MINORITY_REPORT_LAB",
-  CONVEYOR: "CONVEYOR",
-  ROULETTE: "ROULETTE",
-  SPATIAL_GESTURE_MEMORY: "SPATIAL_GESTURE_MEMORY",
-  GESTURE_ANALYTICS_LAB: "GESTURE_ANALYTICS_LAB",
-  GESTURE_ART_LAB: "GESTURE_ART_LAB",
-  GESTURE_CONTROL_OS: "GESTURE_CONTROL_OS",
-  GAME: "GAME",
-};
+const PHASES = APP_PHASES;
 
 const PINCH_START_THRESHOLD = 0.045;
 const PINCH_END_THRESHOLD = 0.06;
@@ -311,6 +342,32 @@ const FULLSCREEN_VORONOI_DOT_RADIUS = 4.5;
 const CIRCLE_OF_FIFTHS_AUTOSTART_SESSION_KEY = "circle-of-fifths-autostart";
 const DESKTOP_LAYOUT_BREAKPOINT_PX = 980;
 const LEFT_PANE_RESIZE_KEYBOARD_STEP_PX = 24;
+let fallbackProgressionSessionSequence = 0;
+
+function createProgressionSessionId() {
+  if (globalThis.crypto?.randomUUID) {
+    return `session-${globalThis.crypto.randomUUID()}`;
+  }
+  fallbackProgressionSessionSequence += 1;
+  return `session-${Date.now()}-${fallbackProgressionSessionSequence}`;
+}
+
+function initializeOrResizeFullscreenGame(mode, currentState, templateState) {
+  if (
+    !currentState?.layout ||
+    !templateState?.layout ||
+    (currentState.variant &&
+      templateState.variant &&
+      currentState.variant !== templateState.variant)
+  ) {
+    return templateState;
+  }
+  return resizeFullscreenGameState(
+    mode,
+    currentState,
+    templateState.layout,
+  );
+}
 
 function clipPolygonToHalfPlane(polygon, normalX, normalY, offset) {
   if (!Array.isArray(polygon) || polygon.length === 0) {
@@ -1476,7 +1533,27 @@ export default function App() {
     width: window.innerWidth,
     height: window.innerHeight,
   }));
-  const [phase, setPhase] = useState(PHASES.FULLSCREEN_CAMERA);
+  const [phase, setPhase] = useState(PHASES.HOME);
+  const [trackingRequested, setTrackingRequested] = useState(false);
+  const [pendingModeId, setPendingModeId] = useState(null);
+  const [preferences, setPreferences] = useState(() => loadUserPreferences());
+  const progressionStoreRef = useRef(null);
+  if (!progressionStoreRef.current) {
+    progressionStoreRef.current = createGameProgressionStore({
+      achievementDefinitions: ACHIEVEMENT_DEFINITIONS,
+    });
+  }
+  const [gameProgression, setGameProgression] = useState(() =>
+    progressionStoreRef.current.getState(),
+  );
+  const [latestGameResult, setLatestGameResult] = useState(null);
+  const [experienceLifecycle, setExperienceLifecycle] = useState(null);
+  const [experienceModeId, setExperienceModeId] = useState(null);
+  const [trackingReadiness, setTrackingReadiness] = useState(() =>
+    createTrackingReadinessState(),
+  );
+  const [cameraDevices, setCameraDevices] = useState([]);
+  const [requestedCameraDeviceId, setRequestedCameraDeviceId] = useState("");
   const [leftPaneWidth, setLeftPaneWidth] = useState(null);
   const [isLeftPaneResizing, setIsLeftPaneResizing] = useState(false);
 
@@ -1636,6 +1713,18 @@ export default function App() {
   const fullscreenBodyPoseLastInferenceAtRef = useRef(0);
   const streamRef = useRef(null);
   const attachedVideoElementRef = useRef(null);
+  const cameraRetryRef = useRef(null);
+  const routeInitializedRef = useRef(false);
+  const activeProgressionSessionRef = useRef(null);
+  const experienceLifecycleRef = useRef(null);
+  const experienceModeIdRef = useRef(null);
+  const trackingRequestedRef = useRef(trackingRequested);
+  const simulationTimingRef = useRef(null);
+  if (!simulationTimingRef.current) {
+    simulationTimingRef.current = createFixedStepSessionTiming();
+  }
+  const simulationEpochRef = useRef(null);
+  const lifecycleLastTickRef = useRef(0);
   const rafRef = useRef(0);
   const inferenceBusyRef = useRef(false);
   const activeInferenceTokenRef = useRef(0);
@@ -1805,6 +1894,7 @@ export default function App() {
 
   const gameRunningRef = useRef(gameRunning);
   const gameStartTimeRef = useRef(0);
+  const gameElapsedMsRef = useRef(0);
   const nextSpawnAtRef = useRef(Number.POSITIVE_INFINITY);
   const activeMoleRef = useRef(null);
   const timeLeftRef = useRef(timeLeft);
@@ -1814,10 +1904,31 @@ export default function App() {
     [calibrationTargets, calibrationTargetIndex],
   );
   const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
+  const isProductHomePhase = phase === PHASES.HOME;
+  const isProductTrackingSetupPhase = phase === PHASES.TRACKING_SETUP;
+  const isProductSettingsPhase = phase === PHASES.SETTINGS;
+  const productTrackingStatus =
+    trackingReadiness.status === TRACKING_READINESS_STATES.READY
+      ? "ready"
+      : [
+            TRACKING_READINESS_STATES.DENIED,
+            TRACKING_READINESS_STATES.NO_DEVICE,
+            TRACKING_READINESS_STATES.DEVICE_BUSY,
+            TRACKING_READINESS_STATES.UNSUPPORTED,
+            TRACKING_READINESS_STATES.INSECURE,
+            TRACKING_READINESS_STATES.MODEL_ERROR,
+            TRACKING_READINESS_STATES.ERROR,
+            TRACKING_READINESS_STATES.INTERRUPTED,
+          ].includes(trackingReadiness.status)
+        ? "error"
+        : trackingRequested
+          ? "loading"
+          : "idle";
   const isMinorityReportLabPhase = phase === PHASES.MINORITY_REPORT_LAB;
   const isImmersiveAppPhase = shouldUseImmersiveAppLayout(phase);
   const isFullscreenModeLanding =
     isFullscreenCameraPhase && fullscreenGridMode === FULLSCREEN_LANDING_MODE;
+  const fullscreenExperienceMode = getModeByFullscreenId(fullscreenGridMode);
   const isFullscreenBreakoutGridMode =
     fullscreenGridMode === "breakout" ||
     fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID;
@@ -1866,6 +1977,7 @@ export default function App() {
   const fullscreenRestartControlLabel = getFullscreenRestartControlLabel(fullscreenGridMode, {
     handBounce: fullscreenHandBounceState,
     brickDodger: fullscreenBrickDodgerState,
+    breakout: fullscreenBreakoutState,
     fingerPong: fullscreenFingerPongState,
     fruitNinja: fullscreenFruitNinjaState,
     skyPatrol: fullscreenSkyPatrolHud,
@@ -2465,12 +2577,10 @@ export default function App() {
       return false;
     }
 
-    if (video.srcObject !== stream) {
-      video.srcObject = stream;
-    }
+    const previousAttachedVideoElement = attachedVideoElementRef.current;
 
     try {
-      await video.play();
+      await attachCameraStreamToVideo({ video, stream });
     } catch (error) {
       appLog.warn("Video playback could not be resumed for active camera element", {
         reason,
@@ -2483,6 +2593,13 @@ export default function App() {
       );
     }
 
+    if (
+      previousAttachedVideoElement &&
+      previousAttachedVideoElement !== video &&
+      previousAttachedVideoElement.srcObject === stream
+    ) {
+      previousAttachedVideoElement.srcObject = null;
+    }
     attachedVideoElementRef.current = video;
 
     const primaryTrack = stream.getVideoTracks()[0];
@@ -2514,6 +2631,43 @@ export default function App() {
     }
 
     return true;
+  }
+
+  function clearCameraTrackingReadiness() {
+    activeInferenceTokenRef.current += 1;
+    inferenceBusyRef.current = false;
+    inferenceBusySkipCounterRef.current = 0;
+    lastInferenceStartedAtRef.current = 0;
+    lastInferenceCompletedAtRef.current = 0;
+    lastTrackingKeepAliveAtRef.current = 0;
+    lastValidHandTimestampRef.current = 0;
+    handGraceFrameCounterRef.current = 0;
+    lastFrameTimeRef.current = 0;
+    fpsRef.current = 0;
+    handLabelMemoryRef.current = { byLabel: {} };
+    fullscreenHandsRef.current = [];
+    fullscreenPrimaryHandIdRef.current = null;
+    fullscreenBodyPosesRef.current = [];
+    handDetectedRef.current = false;
+    pinchStateRef.current = false;
+    poseStatusRef.current = createEmptyPoseStatus();
+    setCameraReady(false);
+    setHandDetected(false);
+    setPinchActive(false);
+    setFps(0);
+    setFullscreenDetectedHandCount(0);
+    setFullscreenIndexPoints([]);
+    setFullscreenTipPoints([]);
+    setFullscreenBodyPoses([]);
+    setFullscreenSkeletonHands([]);
+    setPoseStatus(createEmptyPoseStatus());
+  }
+
+  function retryCamera(reason = "manual_retry") {
+    const retry = cameraRetryRef.current;
+    if (typeof retry === "function") {
+      retry(reason);
+    }
   }
 
   function getTrackingTimestamp() {
@@ -2690,6 +2844,20 @@ export default function App() {
       attachedVideoElement: attachedVideoElementRef.current,
     });
 
+    if (videoAction.shouldRecover) {
+      appLog.warn("Tracking keep-alive detected an interrupted camera stream", videoAction);
+      clearCameraTrackingReadiness();
+      setTrackingReadiness((current) =>
+        reduceTrackingReadiness(current, {
+          type: "TRACK_INTERRUPTED",
+          error: new Error("Camera stream interrupted"),
+        }),
+      );
+      setCameraError("Camera connection was interrupted. Reconnecting…");
+      retryCamera(`keep_alive_${videoAction.reason}`);
+      return;
+    }
+
     if (videoAction.shouldAttach) {
       appLog.info("Tracking keep-alive refreshing camera playback", videoAction);
       void attachStreamToVideoElement(video, `keep_alive_${videoAction.reason}`).catch((error) => {
@@ -2697,11 +2865,9 @@ export default function App() {
           videoAction,
           error,
         });
-        setCameraError(
-          error instanceof Error
-            ? error.message
-            : "Camera video playback could not be restarted.",
-        );
+        clearCameraTrackingReadiness();
+        setCameraError("Camera playback was interrupted. Reconnecting…");
+        retryCamera(`keep_alive_playback_${videoAction.reason}`);
       });
     } else if (videoAction.reason !== "healthy") {
       appLog.debug("Tracking keep-alive skipped camera refresh", videoAction);
@@ -3029,14 +3195,21 @@ export default function App() {
     }
 
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
-        if (phase === PHASES.FULLSCREEN_CAMERA) {
-          returnFromFullscreenCameraScreen();
-          return;
-        }
-        if (phase === PHASES.MINORITY_REPORT_LAB) {
-          returnFromMinorityReportLab();
-        }
+      if (event.key !== "Escape" || event.defaultPrevented) {
+        return;
+      }
+      const lifecycle = experienceLifecycleRef.current;
+      if (
+        lifecycle?.phase === EXPERIENCE_PHASES.RUNNING ||
+        lifecycle?.phase === EXPERIENCE_PHASES.COUNTDOWN
+      ) {
+        event.preventDefault();
+        dispatchExperienceLifecycle({
+          type: EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
+          reason: EXPERIENCE_PAUSE_REASONS.MANUAL,
+        });
+      } else if (!lifecycle) {
+        navigateToProductHome();
       }
     };
 
@@ -3134,9 +3307,14 @@ export default function App() {
       return undefined;
     }
 
-    const nextGame = createFullscreenHandBounceGame(
+    const templateGame = createFullscreenHandBounceGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
+    );
+    const nextGame = initializeOrResizeFullscreenGame(
+      "hand-bounce",
+      fullscreenHandBounceStateRef.current,
+      templateGame,
     );
     fullscreenHandBounceLastTickRef.current = 0;
     fullscreenHandBounceStateRef.current = nextGame;
@@ -3158,9 +3336,14 @@ export default function App() {
       return undefined;
     }
 
-    const nextGame = createBrickDodgerGame(
+    const templateGame = createBrickDodgerGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
+    );
+    const nextGame = initializeOrResizeFullscreenGame(
+      "brick-dodger",
+      fullscreenBrickDodgerStateRef.current,
+      templateGame,
     );
     fullscreenBrickDodgerLastTickRef.current = 0;
     fullscreenBrickDodgerStateRef.current = nextGame;
@@ -3183,16 +3366,21 @@ export default function App() {
       return undefined;
     }
 
-    const nextGame =
+    const templateGame =
       fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
         ? createFindYourGrindBreakoutGame(
             fullscreenBreakoutViewport.width,
             fullscreenBreakoutViewport.height,
           )
-        : createBreakoutGame(
+          : createBreakoutGame(
             fullscreenBreakoutViewport.width,
             fullscreenBreakoutViewport.height,
           );
+    const nextGame = initializeOrResizeFullscreenGame(
+      fullscreenGridMode,
+      fullscreenBreakoutStateRef.current,
+      templateGame,
+    );
     fullscreenBreakoutLastTickRef.current = 0;
     fullscreenBreakoutStateRef.current = nextGame;
     setFullscreenBreakoutState(nextGame);
@@ -3216,9 +3404,14 @@ export default function App() {
       return undefined;
     }
 
-    const nextGame = createBreakoutCoopGame(
+    const templateGame = createBreakoutCoopGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
+    );
+    const nextGame = initializeOrResizeFullscreenGame(
+      "breakout-coop",
+      fullscreenBreakoutCoopStateRef.current,
+      templateGame,
     );
     fullscreenBreakoutCoopLastTickRef.current = 0;
     fullscreenBreakoutCoopPrimaryPinchLatchRef.current = false;
@@ -3243,9 +3436,14 @@ export default function App() {
       return undefined;
     }
 
-    const nextGame = createFruitNinjaGame(
+    const templateGame = createFruitNinjaGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
+    );
+    const nextGame = initializeOrResizeFullscreenGame(
+      "fruit-ninja",
+      fullscreenFruitNinjaStateRef.current,
+      templateGame,
     );
     fullscreenFruitNinjaLastTickRef.current = 0;
     fullscreenFruitNinjaStateRef.current = nextGame;
@@ -3289,9 +3487,14 @@ export default function App() {
       return undefined;
     }
 
-    const nextGame = createSkyPatrolGame(
+    const templateGame = createSkyPatrolGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
+    );
+    const nextGame = initializeOrResizeFullscreenGame(
+      "sky-patrol",
+      fullscreenSkyPatrolStateRef.current,
+      templateGame,
     );
     fullscreenSkyPatrolLastTickRef.current = 0;
     publishFullscreenSkyPatrolState(nextGame);
@@ -3319,10 +3522,20 @@ export default function App() {
       return undefined;
     }
 
-    const nextGame = createWfcWorldGame(
+    const templateGame = createWfcWorldGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
     );
+    const previousGame = fullscreenWfcWorldStateRef.current;
+    const nextGame = previousGame
+      ? {
+          ...previousGame,
+          layout: templateGame.layout,
+          hoverCell: null,
+          paintDragActive: false,
+          lastPaintedCell: null,
+        }
+      : templateGame;
     fullscreenWfcWorldLastTickRef.current = 0;
     fullscreenWfcWorldMouseInputRef.current = {
       pointerActive: false,
@@ -3350,9 +3563,14 @@ export default function App() {
       return undefined;
     }
 
-    const nextGame = createSpaceInvadersGame(
+    const templateGame = createSpaceInvadersGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
+    );
+    const nextGame = initializeOrResizeFullscreenGame(
+      "invaders",
+      fullscreenInvadersStateRef.current,
+      templateGame,
     );
     fullscreenInvadersLastTickRef.current = 0;
     fullscreenInvadersStateRef.current = nextGame;
@@ -3374,9 +3592,14 @@ export default function App() {
       return undefined;
     }
 
-    const nextGame = createFingerPongGame(
+    const templateGame = createFingerPongGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
+    );
+    const nextGame = initializeOrResizeFullscreenGame(
+      "finger-pong",
+      fullscreenFingerPongStateRef.current,
+      templateGame,
     );
     fullscreenFingerPongLastTickRef.current = 0;
     fullscreenFingerPongStateRef.current = nextGame;
@@ -3398,9 +3621,14 @@ export default function App() {
       return undefined;
     }
 
-    const nextGame = createFlappyGame(
+    const templateGame = createFlappyGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
+    );
+    const nextGame = initializeOrResizeFullscreenGame(
+      "flappy",
+      fullscreenFlappyStateRef.current,
+      templateGame,
     );
     fullscreenFlappyLastTickRef.current = 0;
     fullscreenFlappyStateRef.current = nextGame;
@@ -3422,9 +3650,14 @@ export default function App() {
       return undefined;
     }
 
-    const nextGame = createMissileCommandGame(
+    const templateGame = createMissileCommandGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
+    );
+    const nextGame = initializeOrResizeFullscreenGame(
+      "missile-command",
+      fullscreenMissileCommandStateRef.current,
+      templateGame,
     );
     fullscreenMissileCommandLastTickRef.current = 0;
     fullscreenMissileCommandStateRef.current = nextGame;
@@ -3446,9 +3679,14 @@ export default function App() {
       return undefined;
     }
 
-    const nextGame = createTicTacToeGame(
+    const templateGame = createTicTacToeGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
+    );
+    const nextGame = initializeOrResizeFullscreenGame(
+      "tic-tac-toe",
+      fullscreenTicTacToeStateRef.current,
+      templateGame,
     );
     fullscreenTicTacToeLastTickRef.current = 0;
     fullscreenTicTacToeStateRef.current = nextGame;
@@ -3810,6 +4048,26 @@ export default function App() {
   }, [appLog, score, timeLeft, gameRunning, activeMoleIndex]);
 
   useEffect(() => {
+    recordActiveProgressionResult();
+  }, [
+    gameRunning,
+    score,
+    spatialMemoryState,
+    timeLeft,
+    fullscreenBrickDodgerState,
+    fullscreenBreakoutCoopState,
+    fullscreenBreakoutState,
+    fullscreenFingerPongState,
+    fullscreenFlappyState,
+    fullscreenFruitNinjaState,
+    fullscreenHandBounceState,
+    fullscreenInvadersState,
+    fullscreenMissileCommandState,
+    fullscreenSkyPatrolHud,
+    fullscreenTicTacToeState,
+  ]);
+
+  useEffect(() => {
     appLog.debug("Debug overlay state changed", { debugEnabled });
   }, [appLog, debugEnabled]);
 
@@ -3828,6 +4086,101 @@ export default function App() {
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
+
+  useEffect(() => {
+    const normalized = saveUserPreferences(preferences);
+    applyPreferenceDocumentState(normalized);
+  }, [preferences]);
+
+  useEffect(() => {
+    trackingRequestedRef.current = trackingRequested;
+  }, [trackingRequested]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      dispatchExperienceLifecycle({
+        type:
+          document.visibilityState === "hidden"
+            ? EXPERIENCE_LIFECYCLE_EVENTS.PAUSE
+            : EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
+        reason: EXPERIENCE_PAUSE_REASONS.VISIBILITY,
+      });
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!experienceModeId || !trackingRequested) {
+      dispatchExperienceLifecycle({
+        type: EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
+        reason: EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS,
+      });
+      return;
+    }
+    dispatchExperienceLifecycle({
+      type: handDetected
+        ? EXPERIENCE_LIFECYCLE_EVENTS.RESUME
+        : EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
+      reason: EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS,
+    });
+  }, [experienceModeId, handDetected, trackingRequested]);
+
+  useEffect(
+    () =>
+      progressionStoreRef.current.subscribe((progress) => {
+        setGameProgression(progress);
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    const navigateFromLocation = () => {
+      const path = window.location.pathname;
+      if (path === "/settings") {
+        openProductSettings({ updateHistory: false });
+        return;
+      }
+      const mode = getModeByPath(path);
+      if (mode) {
+        selectProductMode(mode, { updateHistory: false });
+        return;
+      }
+      navigateToProductHome({ updateHistory: false });
+    };
+
+    if (!routeInitializedRef.current) {
+      routeInitializedRef.current = true;
+      navigateFromLocation();
+    }
+    window.addEventListener("popstate", navigateFromLocation);
+    return () => {
+      window.removeEventListener("popstate", navigateFromLocation);
+    };
+  }, [cameraReady, modelReady]);
+
+  useEffect(() => {
+    if (!trackingRequested) {
+      setTrackingReadiness(createTrackingReadinessState());
+      return;
+    }
+    if (!cameraReady || !modelReady) {
+      return;
+    }
+
+    setTrackingReadiness((current) => {
+      const withHand = reduceTrackingReadiness(current, {
+        type: "HAND_DETECTED",
+        detected: handDetected,
+      });
+      return reduceTrackingReadiness(withHand, {
+        type: "POINTER_READY",
+        ready: handDetected,
+      });
+    });
+  }, [cameraReady, handDetected, modelReady, trackingRequested]);
 
   useEffect(() => {
     poseStatusRef.current = poseStatus;
@@ -4047,52 +4400,258 @@ export default function App() {
 
   useEffect(() => {
     mountedRef.current = true;
-    appLog.info("Camera initialization effect started");
+    if (!trackingRequested) {
+      cameraRetryRef.current = null;
+      return () => {
+        mountedRef.current = false;
+      };
+    }
 
-    const initCamera = async () => {
+    appLog.info("Camera initialization effect started");
+    setTrackingReadiness((current) =>
+      reduceTrackingReadiness(current, { type: "START_REQUEST" }),
+    );
+
+    let cancelled = false;
+    let requestInFlight = false;
+    let requestSequence = 0;
+    let automaticRetryAttempts = 0;
+    let retryTimerId = 0;
+    let observedStream = null;
+    let stopObservingCameraStream = () => {};
+
+    const clearRetryTimer = () => {
+      if (retryTimerId) {
+        window.clearTimeout(retryTimerId);
+        retryTimerId = 0;
+      }
+    };
+
+    const releaseStream = (stream) => {
+      if (!stream) {
+        return;
+      }
+
+      if (observedStream === stream) {
+        stopObservingCameraStream();
+        stopObservingCameraStream = () => {};
+        observedStream = null;
+      }
+
+      const releaseResult = releaseCameraStream({
+        stream,
+        videoElements: [videoRef.current, attachedVideoElementRef.current],
+      });
+      if (streamRef.current === stream) {
+        streamRef.current = null;
+      }
+      if (
+        !attachedVideoElementRef.current ||
+        !streamRef.current ||
+        attachedVideoElementRef.current.srcObject !== streamRef.current
+      ) {
+        attachedVideoElementRef.current = null;
+      }
+      appLog.info("Released camera stream", releaseResult);
+    };
+
+    const scheduleInterruptedRetry = (reason) => {
+      clearRetryTimer();
+      retryTimerId = window.setTimeout(() => {
+        retryTimerId = 0;
+        cameraRetryRef.current?.(`interrupted_${reason}`);
+      }, CAMERA_INTERRUPTION_RETRY_DELAY_MS);
+    };
+
+    const handleStreamInterruption = (stream, reason) => {
+      if (cancelled || streamRef.current !== stream) {
+        return;
+      }
+
+      appLog.warn("Camera stream was interrupted", { reason });
+      clearCameraTrackingReadiness();
+      setTrackingReadiness((current) =>
+        reduceTrackingReadiness(current, {
+          type: "TRACK_INTERRUPTED",
+          error: new Error(`Camera stream interrupted: ${reason}`),
+        }),
+      );
+      releaseStream(stream);
+      if (automaticRetryAttempts >= 1) {
+        setCameraError(
+          "Camera connection was interrupted and could not reconnect. Select Retry camera to try again.",
+        );
+        return;
+      }
+
+      setCameraError("Camera connection was interrupted. Reconnecting…");
+      scheduleInterruptedRetry(reason);
+    };
+
+    const requestCamera = async (reason) => {
+      if (cancelled || requestInFlight) {
+        return false;
+      }
+
+      requestInFlight = true;
+      const requestId = requestSequence + 1;
+      requestSequence = requestId;
+      let candidateStream = null;
+
       try {
-        appLog.info("Requesting webcam access");
+        appLog.info("Requesting webcam access", { reason });
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error("This browser does not support webcam access.");
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({
+        candidateStream = await navigator.mediaDevices.getUserMedia({
           audio: false,
           video: {
-            facingMode: "user",
+            ...(requestedCameraDeviceId
+              ? { deviceId: { exact: requestedCameraDeviceId } }
+              : { facingMode: "user" }),
             width: { ideal: 1280 },
             height: { ideal: 720 },
           },
         });
 
-        if (!mountedRef.current) {
-          appLog.warn("Camera stream obtained but component was unmounted; closing tracks");
-          stream.getTracks().forEach((track) => track.stop());
-          return;
+        if (cancelled || requestSequence !== requestId || !mountedRef.current) {
+          appLog.warn("Camera stream obtained after lifecycle changed; closing tracks", {
+            reason,
+          });
+          releaseCameraStream({ stream: candidateStream });
+          return false;
         }
 
-        streamRef.current = stream;
-        const video = videoRef.current;
-        if (video) {
-          await attachStreamToVideoElement(video, "camera_init");
-        } else {
-          appLog.warn("Video ref was unavailable after webcam stream setup");
-        }
-        setCameraReady(true);
-      } catch (error) {
-        appLog.error("Camera initialization failed", { error });
-        setCameraError(
-          error instanceof Error
-            ? error.message
-            : "Camera access failed. Check browser permissions.",
+        streamRef.current = candidateStream;
+        observedStream = candidateStream;
+        stopObservingCameraStream = observeCameraStreamInterruptions(
+          candidateStream,
+          (interruptionReason) => {
+            handleStreamInterruption(candidateStream, interruptionReason);
+          },
         );
+
+        const video = videoRef.current;
+        if (!video) {
+          throw new Error("Camera preview is unavailable.");
+        }
+        await attachStreamToVideoElement(video, reason);
+
+        const readyAction = getCameraVideoKeepAliveAction({
+          video,
+          stream: candidateStream,
+          attachedVideoElement: attachedVideoElementRef.current,
+        });
+        if (readyAction.shouldRecover || readyAction.shouldAttach) {
+          throw new Error(
+            readyAction.shouldRecover
+              ? "Camera stream ended before playback became ready."
+              : "Camera playback did not become ready.",
+          );
+        }
+        if (cancelled || requestSequence !== requestId || streamRef.current !== candidateStream) {
+          releaseStream(candidateStream);
+          return false;
+        }
+
+        automaticRetryAttempts = 0;
+        setCameraError("");
+        setCameraReady(true);
+        setTrackingReadiness((current) =>
+          reduceTrackingReadiness(current, {
+            type: "CAMERA_READY",
+            deviceId: candidateStream.getVideoTracks?.()[0]?.getSettings?.().deviceId ?? "",
+          }),
+        );
+        if (navigator.mediaDevices?.enumerateDevices) {
+          void navigator.mediaDevices
+            .enumerateDevices()
+            .then((devices) => {
+              if (!cancelled) {
+                setCameraDevices(devices.filter((device) => device.kind === "videoinput"));
+              }
+            })
+            .catch(() => {});
+        }
+        appLog.info("Camera is ready", { reason });
+        return true;
+      } catch (error) {
+        if (candidateStream) {
+          releaseStream(candidateStream);
+        }
+        if (!cancelled && requestSequence === requestId) {
+          clearCameraTrackingReadiness();
+          const errorMessage =
+            error instanceof Error
+              ? error.message
+              : "Camera access failed. Check browser permissions.";
+          appLog.error("Camera initialization failed", { reason, error });
+          setTrackingReadiness((current) =>
+            reduceTrackingReadiness(current, { type: "CAMERA_ERROR", error }),
+          );
+          setCameraError(
+            reason === "camera_init"
+              ? `${errorMessage} Select Retry camera to try again.`
+              : `Camera reconnection failed: ${errorMessage} Select Retry camera to try again.`,
+          );
+        }
+        return false;
+      } finally {
+        if (requestSequence === requestId) {
+          requestInFlight = false;
+        }
       }
     };
 
-    initCamera();
+    cameraRetryRef.current = (reason = "manual_retry") => {
+      if (cancelled) {
+        return;
+      }
+      if (requestInFlight) {
+        if (reason === "manual_retry") {
+          setCameraError("A camera request is already in progress.");
+        }
+        return;
+      }
+
+      const isAutomaticRetry = reason !== "manual_retry";
+      if (isAutomaticRetry && automaticRetryAttempts >= 1) {
+        clearCameraTrackingReadiness();
+        setCameraError(
+          "Camera connection was interrupted and could not reconnect. Select Retry camera to try again.",
+        );
+        return;
+      }
+
+      if (isAutomaticRetry) {
+        automaticRetryAttempts += 1;
+      } else {
+        automaticRetryAttempts = 0;
+      }
+
+      clearRetryTimer();
+      releaseStream(streamRef.current);
+      clearCameraTrackingReadiness();
+      setTrackingReadiness((current) =>
+        reduceTrackingReadiness(current, { type: "START_REQUEST" }),
+      );
+      setCameraError(
+        isAutomaticRetry
+          ? "Camera connection was interrupted. Reconnecting…"
+          : "Retrying camera…",
+      );
+      void requestCamera(reason);
+    };
+
+    void requestCamera("camera_init");
 
     return () => {
       appLog.info("Camera initialization cleanup started");
+      cancelled = true;
+      requestSequence += 1;
+      cameraRetryRef.current = null;
+      clearRetryTimer();
       mountedRef.current = false;
       if (rafRef.current) {
         appLog.debug("Cancelling RAF during camera cleanup", { rafId: rafRef.current });
@@ -4102,16 +4661,24 @@ export default function App() {
         appLog.info("Stopping webcam tracks during cleanup", {
           trackCount: streamRef.current.getTracks().length,
         });
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
+        releaseStream(streamRef.current);
       }
       attachedVideoElementRef.current = null;
     };
-  }, [appLog]);
+  }, [appLog, requestedCameraDeviceId, trackingRequested]);
 
   useEffect(() => {
+    if (!trackingRequested) {
+      setModelReady(false);
+      setModelError("");
+      return undefined;
+    }
+
     let cancelled = false;
     appLog.info("Hand-tracking model initialization effect started");
+    setTrackingReadiness((current) =>
+      reduceTrackingReadiness(current, { type: "MODEL_LOADING" }),
+    );
 
     const initModel = async () => {
       try {
@@ -4167,12 +4734,18 @@ export default function App() {
         setActiveBackend(backend);
         appLog.info("Hand-tracking detector is ready");
         setModelReady(true);
+        setTrackingReadiness((current) =>
+          reduceTrackingReadiness(current, { type: "MODEL_READY" }),
+        );
       } catch (error) {
         appLog.error("Failed to initialize hand-tracking detector", { error });
         setModelError(
           error instanceof Error
             ? error.message
             : "Failed to initialize hand tracking model.",
+        );
+        setTrackingReadiness((current) =>
+          reduceTrackingReadiness(current, { type: "MODEL_ERROR", error }),
         );
       }
     };
@@ -4188,7 +4761,7 @@ export default function App() {
         detectorRef.current = null;
       }
     };
-  }, [appLog]);
+  }, [appLog, trackingRequested]);
 
   useEffect(() => {
     if (!modelReady || !detectorRef.current) {
@@ -4342,11 +4915,9 @@ export default function App() {
         phase,
         error,
       });
-      setCameraError(
-        error instanceof Error
-          ? error.message
-          : "Camera video playback could not be started.",
-      );
+      clearCameraTrackingReadiness();
+      setCameraError("Camera playback was interrupted. Reconnecting…");
+      retryCamera("phase_video_swap_playback");
     });
   }, [cameraReady, phase]);
 
@@ -4893,6 +5464,403 @@ export default function App() {
     });
   }
 
+  function updateProductPath(path, { replace = false } = {}) {
+    if (!path || window.location.pathname === path) {
+      return;
+    }
+
+    const method = replace ? "replaceState" : "pushState";
+    window.history[method]({}, "", path);
+  }
+
+  function replaceExperienceLifecycle(nextLifecycle, nextModeId = experienceModeIdRef.current) {
+    experienceLifecycleRef.current = nextLifecycle;
+    experienceModeIdRef.current = nextModeId;
+    setExperienceLifecycle(nextLifecycle);
+    setExperienceModeId(nextModeId);
+  }
+
+  function dispatchExperienceLifecycle(event) {
+    const current = experienceLifecycleRef.current;
+    if (!current) {
+      return null;
+    }
+    const transition = transitionExperienceLifecycle(current, event);
+    if (transition.state !== current) {
+      replaceExperienceLifecycle(transition.state);
+    }
+    return transition;
+  }
+
+  function abandonActiveProgressionSession(reason = "left_experience") {
+    const activeSession = activeProgressionSessionRef.current;
+    if (!activeSession) {
+      return null;
+    }
+
+    activeProgressionSessionRef.current = null;
+    try {
+      return progressionStoreRef.current.abandonSession({
+        sessionId: activeSession.sessionId,
+        endedAt: new Date().toISOString(),
+        context: { reason },
+      });
+    } catch (error) {
+      appLog.warn("Could not close local progression session", {
+        error,
+        modeId: activeSession.modeId,
+        reason,
+      });
+      return null;
+    }
+  }
+
+  function beginProgressionSession(mode, context = {}) {
+    const canRecord =
+      mode?.supportsResults &&
+      (mode.entryKind === "fullscreen-mode" ||
+        mode.id === "whack-a-mole" ||
+        mode.id === "spatial-memory");
+    if (!canRecord) {
+      abandonActiveProgressionSession("opened_non_scored_experience");
+      setLatestGameResult(null);
+      replaceExperienceLifecycle(null, null);
+      return null;
+    }
+
+    abandonActiveProgressionSession("started_another_experience");
+    const startedAt = new Date().toISOString();
+    const session = {
+      sessionId: createProgressionSessionId(),
+      modeId: mode.id,
+      fullscreenMode: mode.fullscreenMode ?? null,
+      startedAt,
+      startedAtMs: performance.now(),
+    };
+    activeProgressionSessionRef.current = session;
+    setLatestGameResult(null);
+    replaceExperienceLifecycle(
+      createExperienceLifecycle({
+        autoStart: true,
+        countdownMs: 0,
+        resumeCountdownMs: 1_000,
+      }),
+      mode.id,
+    );
+    progressionStoreRef.current.beginSession({
+      sessionId: session.sessionId,
+      modeId: session.modeId,
+      startedAt,
+      context: {
+        input: cameraReady && modelReady ? "tracking" : "pointer",
+        ...context,
+      },
+    });
+    return session;
+  }
+
+  function getActiveProgressionResult() {
+    const session = activeProgressionSessionRef.current;
+    if (!session) {
+      return null;
+    }
+
+    const endedAt = new Date().toISOString();
+    const durationMs = Math.max(0, performance.now() - session.startedAtMs);
+    if (session.modeId === "whack-a-mole") {
+      return createWhackAMoleResult({
+        summary: {
+          score,
+          hits: score,
+          gameRunning,
+          timeLeft,
+          completed: !gameRunning && timeLeft <= 0,
+        },
+        sessionId: session.sessionId,
+        startedAt: session.startedAt,
+        endedAt,
+        durationMs,
+      });
+    }
+    if (session.modeId === "spatial-memory") {
+      return createSpatialMemoryResult({
+        state: spatialMemoryState,
+        sessionId: session.sessionId,
+        startedAt: session.startedAt,
+        endedAt,
+        durationMs,
+      });
+    }
+
+    const stateByFullscreenMode = {
+      "sky-patrol": fullscreenSkyPatrolStateRef.current,
+      "fruit-ninja": fullscreenFruitNinjaStateRef.current,
+      "missile-command": fullscreenMissileCommandStateRef.current,
+      "brick-dodger": fullscreenBrickDodgerStateRef.current,
+      "hand-bounce": fullscreenHandBounceStateRef.current,
+      breakout: fullscreenBreakoutStateRef.current,
+      "find-your-grind-breakout": fullscreenBreakoutStateRef.current,
+      "breakout-coop": fullscreenBreakoutCoopStateRef.current,
+      "finger-pong": fullscreenFingerPongStateRef.current,
+      "tic-tac-toe": fullscreenTicTacToeStateRef.current,
+      invaders: fullscreenInvadersStateRef.current,
+      flappy: fullscreenFlappyStateRef.current,
+    };
+    return createFullscreenGameResult({
+      fullscreenMode: session.fullscreenMode,
+      state: stateByFullscreenMode[session.fullscreenMode],
+      sessionId: session.sessionId,
+      startedAt: session.startedAt,
+      endedAt,
+      durationMs,
+    });
+  }
+
+  function recordActiveProgressionResult() {
+    const result = getActiveProgressionResult();
+    if (!result) {
+      return null;
+    }
+
+    const recorded = progressionStoreRef.current.recordResult(result);
+    activeProgressionSessionRef.current = null;
+    setLatestGameResult(recorded.result);
+    dispatchExperienceLifecycle({
+      type: EXPERIENCE_LIFECYCLE_EVENTS.FINISH,
+      result: {
+        ...recorded.result,
+        isPersonalBest: recorded.personalBests.length > 0,
+        personalBestMetricIds: recorded.personalBests.map(
+          ({ metricId }) => metricId,
+        ),
+      },
+    });
+    return recorded;
+  }
+
+  function beginRestartedProgressionSession(mode, context = {}) {
+    if (!recordActiveProgressionResult()) {
+      abandonActiveProgressionSession("restarted");
+    }
+    return beginProgressionSession(mode, { restart: true, ...context });
+  }
+
+  function navigateToProductHome({ updateHistory = true } = {}) {
+    if (!recordActiveProgressionResult()) {
+      abandonActiveProgressionSession("returned_home");
+    }
+    stopGameSession();
+    replaceExperienceLifecycle(null, null);
+    setPendingModeId(null);
+    setPhase(PHASES.HOME);
+    phaseRef.current = PHASES.HOME;
+    if (updateHistory) {
+      updateProductPath("/");
+    }
+  }
+
+  function openProductTrackingSetup({ updateHistory = true } = {}) {
+    if (!recordActiveProgressionResult()) {
+      abandonActiveProgressionSession("opened_tracking_setup");
+    }
+    replaceExperienceLifecycle(null, null);
+    setPhase(PHASES.TRACKING_SETUP);
+    phaseRef.current = PHASES.TRACKING_SETUP;
+    if (updateHistory) {
+      updateProductPath("/setup");
+    }
+  }
+
+  function openProductSettings({ updateHistory = true } = {}) {
+    if (!recordActiveProgressionResult()) {
+      abandonActiveProgressionSession("opened_settings");
+    }
+    replaceExperienceLifecycle(null, null);
+    setPhase(PHASES.SETTINGS);
+    phaseRef.current = PHASES.SETTINGS;
+    if (updateHistory) {
+      updateProductPath("/settings");
+    }
+  }
+
+  function launchRegisteredModeNow(mode, { updateHistory = true } = {}) {
+    if (!mode) {
+      navigateToProductHome({ updateHistory });
+      return;
+    }
+
+    setPendingModeId(null);
+    setPreferences((current) => recordRecentMode(current, mode.id));
+    if (updateHistory) {
+      updateProductPath(mode.path);
+    }
+
+    if (mode.entryKind === "page" && mode.href) {
+      window.location.assign(mode.href);
+      return;
+    }
+
+    if (mode.entryKind === "fullscreen-mode" && mode.fullscreenMode) {
+      beginProgressionSession(mode);
+      openFullscreenCameraScreen();
+      fullscreenGridModeRef.current = mode.fullscreenMode;
+      setFullscreenGridMode(mode.fullscreenMode);
+      return;
+    }
+
+    switch (mode.id) {
+      case "home":
+        navigateToProductHome({ updateHistory: false });
+        break;
+      case "tracking-setup":
+        openProductTrackingSetup({ updateHistory: false });
+        break;
+      case "whack-a-mole":
+        startGameSession();
+        break;
+      case "spatial-memory":
+        startSpatialGestureMemorySession();
+        break;
+      case "track-runner":
+        startRunnerSession();
+        break;
+      case "star-flight":
+        startFlightSession();
+        break;
+      case "conveyor-toss":
+        startConveyorSession();
+        break;
+      case "pinch-sandbox":
+        openSandboxScreen();
+        break;
+      case "probability-table":
+        startRouletteSession();
+        break;
+      case "pose-quest":
+        startBodyPoseLab();
+        break;
+      case "forest-discovery":
+        startOffAxisLab();
+        break;
+      case "spatial-desk":
+        startGestureControlOS();
+        break;
+      case "spatial-investigation":
+        startMinorityReportLab();
+        break;
+      case "gesture-analytics":
+        startGestureAnalyticsLab();
+        break;
+      case "gesture-art":
+        startGestureArtLab();
+        break;
+      default:
+        if (mode.phase) {
+          setPhase(mode.phase);
+          phaseRef.current = mode.phase;
+        } else {
+          navigateToProductHome({ updateHistory: false });
+        }
+    }
+  }
+
+  function selectProductMode(
+    modeOrId,
+    { updateHistory = true, allowWithoutTracking = false } = {},
+  ) {
+    const mode =
+      typeof modeOrId === "string" ? getModeById(modeOrId) : modeOrId;
+    if (!mode) {
+      return;
+    }
+
+    const needsTracking =
+      mode.trackingProfile && mode.trackingProfile !== TRACKING_PROFILES.NONE;
+    if (
+      needsTracking &&
+      !allowWithoutTracking &&
+      (!cameraReady || !modelReady)
+    ) {
+      setPendingModeId(mode.id);
+      if (updateHistory) {
+        updateProductPath(mode.path);
+      }
+      openProductTrackingSetup({ updateHistory: false });
+      return;
+    }
+
+    launchRegisteredModeNow(mode, { updateHistory });
+  }
+
+  function beginProductTrackingSetup() {
+    setCameraError("");
+    setModelError("");
+    setTrackingRequested(true);
+  }
+
+  function continueFromProductTrackingSetup() {
+    if (pendingModeId) {
+      selectProductMode(pendingModeId, {
+        updateHistory: false,
+        allowWithoutTracking: false,
+      });
+      return;
+    }
+    navigateToProductHome();
+  }
+
+  function continueWithoutProductTracking() {
+    const pendingMode = pendingModeId ? getModeById(pendingModeId) : null;
+    setTrackingRequested(false);
+    if (pendingMode?.supportsPointerFallback) {
+      launchRegisteredModeNow(pendingMode, { updateHistory: false });
+      return;
+    }
+    navigateToProductHome({
+      updateHistory: window.location.pathname !== "/",
+    });
+  }
+
+  function stopProductCamera() {
+    setTrackingRequested(false);
+    setCameraError("");
+    setModelError("");
+    setCameraDevices([]);
+    setTrackingReadiness((current) =>
+      reduceTrackingReadiness(current, { type: "STOP" }),
+    );
+  }
+
+  function updateProductPreferences(nextPreferences) {
+    setPreferences(normalizeUserPreferences(nextPreferences));
+  }
+
+  function deleteAllLocalProductData() {
+    const confirmed = window.confirm(
+      "Delete saved settings, calibration, gesture personalization, and local records?",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    clearCalibration();
+    clearUserPreferences();
+    try {
+      window.localStorage.removeItem(PERSONALIZATION_STORAGE_KEY);
+      window.localStorage.removeItem(SGM_STORAGE_KEY);
+    } catch (error) {
+      appLog.warn("Could not remove all local product data", { error });
+    }
+    personalizationRef.current.clearSamples?.();
+    activeProgressionSessionRef.current = null;
+    progressionStoreRef.current.clear();
+    setLatestGameResult(null);
+    setTransform(null);
+    transformRef.current = null;
+    setHasSavedCalibration(false);
+    setPreferences(normalizeUserPreferences());
+  }
+
   function openSandboxScreen() {
     appLog.info("Opening pinch drag sandbox screen");
     stopGameSession();
@@ -4936,19 +5904,18 @@ export default function App() {
   }
 
   function returnFromFullscreenCameraScreen() {
-    appLog.info("Returning from fullscreen camera to calibration input test");
-    setPhase(PHASES.CALIBRATION);
-    phaseRef.current = PHASES.CALIBRATION;
-    setCalibrationMessage("Back on Calibration Input Test.");
+    appLog.info("Returning from fullscreen camera to product home");
+    navigateToProductHome();
   }
 
   function returnToFullscreenCameraMenu(reason = "manual_mode_select") {
-    appLog.info("Returning to fullscreen camera menu", {
+    appLog.info("Returning from fullscreen experience to product home", {
       reason,
       previousMode: fullscreenGridModeRef.current,
     });
     fullscreenGridModeRef.current = FULLSCREEN_LANDING_MODE;
     setFullscreenGridMode(FULLSCREEN_LANDING_MODE);
+    navigateToProductHome();
   }
 
   function updateSandboxPhysics(timestamp, pointerPoint, hasHand, grabNow) {
@@ -6034,7 +7001,7 @@ export default function App() {
   }
 
   function returnFromMinorityReportLab() {
-    appLog.info("Returning from Minority Report Lab to calibration input test");
+    appLog.info("Returning from Minority Report Lab to product home");
     labTrainingSessionRef.current = null;
     setLabTrainingState((previous) =>
       previous.active
@@ -6044,9 +7011,7 @@ export default function App() {
           }
         : previous,
     );
-    setPhase(PHASES.CALIBRATION);
-    phaseRef.current = PHASES.CALIBRATION;
-    setCalibrationMessage("Back on Calibration Input Test.");
+    navigateToProductHome();
   }
 
   function startGestureAnalyticsLab() {
@@ -6507,6 +7472,7 @@ export default function App() {
       return;
     }
 
+    beginRestartedProgressionSession(getModeById("whack-a-mole"));
     const now = performance.now();
 
     setPhase(PHASES.GAME);
@@ -6524,12 +7490,13 @@ export default function App() {
     lastHoleIndexRef.current = -1;
 
     gameStartTimeRef.current = now;
-    nextSpawnAtRef.current = now + 350;
+    gameElapsedMsRef.current = 0;
+    nextSpawnAtRef.current = 350;
     gameRunningRef.current = true;
     setGameRunning(true);
     appLog.info("Game session started", {
       startAt: now,
-      firstSpawnAt: nextSpawnAtRef.current,
+      firstSpawnAtMs: nextSpawnAtRef.current,
       durationMs: GAME_DURATION_MS,
     });
   }
@@ -6744,6 +7711,7 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
+    beginRestartedProgressionSession(getModeByFullscreenId("missile-command"));
     const nextGame = createMissileCommandGame(viewportMetrics.width, viewportMetrics.height);
     fullscreenMissileCommandLastTickRef.current = 0;
     fullscreenMissileCommandStateRef.current = nextGame;
@@ -6755,6 +7723,7 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
+    beginRestartedProgressionSession(getModeByFullscreenId("brick-dodger"));
     const nextGame = createBrickDodgerGame(viewportMetrics.width, viewportMetrics.height);
     fullscreenBrickDodgerLastTickRef.current = 0;
     fullscreenBrickDodgerStateRef.current = nextGame;
@@ -6766,6 +7735,7 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
+    beginRestartedProgressionSession(getModeByFullscreenId("hand-bounce"));
     const nextGame = createFullscreenHandBounceGame(
       viewportMetrics.width,
       viewportMetrics.height,
@@ -6780,10 +7750,72 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
+    beginRestartedProgressionSession(getModeByFullscreenId("finger-pong"));
     const nextGame = createFingerPongGame(viewportMetrics.width, viewportMetrics.height);
     fullscreenFingerPongLastTickRef.current = 0;
     fullscreenFingerPongStateRef.current = nextGame;
     setFullscreenFingerPongState(nextGame);
+  }
+
+  function restartFullscreenBreakoutGame() {
+    const current = fullscreenBreakoutStateRef.current;
+    if (!current) {
+      return;
+    }
+    beginRestartedProgressionSession(
+      getModeByFullscreenId(fullscreenGridModeRef.current),
+    );
+    const nextGame = restartBreakoutGame(current);
+    fullscreenBreakoutLastTickRef.current = 0;
+    fullscreenBreakoutStateRef.current = nextGame;
+    setFullscreenBreakoutState(nextGame);
+  }
+
+  function restartFullscreenBreakoutCoopGame() {
+    const viewportMetrics = fullscreenBreakoutCoopViewportRef.current;
+    if (!viewportMetrics) {
+      return;
+    }
+    beginRestartedProgressionSession(getModeByFullscreenId("breakout-coop"));
+    const nextGame = createBreakoutCoopGame(
+      viewportMetrics.width,
+      viewportMetrics.height,
+    );
+    fullscreenBreakoutCoopLastTickRef.current = 0;
+    fullscreenBreakoutCoopPrimaryPinchLatchRef.current = false;
+    fullscreenBreakoutCoopSecondaryPinchLatchRef.current = false;
+    fullscreenBreakoutCoopStateRef.current = nextGame;
+    setFullscreenBreakoutCoopState(nextGame);
+  }
+
+  function restartFullscreenInvadersGame() {
+    const viewportMetrics = fullscreenBreakoutViewportRef.current;
+    if (!viewportMetrics) {
+      return;
+    }
+    beginRestartedProgressionSession(getModeByFullscreenId("invaders"));
+    const nextGame = createSpaceInvadersGame(
+      viewportMetrics.width,
+      viewportMetrics.height,
+    );
+    fullscreenInvadersLastTickRef.current = 0;
+    fullscreenInvadersStateRef.current = nextGame;
+    setFullscreenInvadersState(nextGame);
+  }
+
+  function restartFullscreenFlappyGame() {
+    const viewportMetrics = fullscreenFlappyViewportRef.current;
+    if (!viewportMetrics) {
+      return;
+    }
+    beginRestartedProgressionSession(getModeByFullscreenId("flappy"));
+    const nextGame = createFlappyGame(
+      viewportMetrics.width,
+      viewportMetrics.height,
+    );
+    fullscreenFlappyLastTickRef.current = 0;
+    fullscreenFlappyStateRef.current = nextGame;
+    setFullscreenFlappyState(nextGame);
   }
 
   function restartFullscreenSkyPatrolGame() {
@@ -6791,15 +7823,196 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
+    beginRestartedProgressionSession(getModeByFullscreenId("sky-patrol"));
     const nextGame = createSkyPatrolGame(viewportMetrics.width, viewportMetrics.height);
     fullscreenSkyPatrolLastTickRef.current = 0;
     publishFullscreenSkyPatrolState(nextGame);
+  }
+
+  function restartCurrentExperience() {
+    switch (experienceModeIdRef.current) {
+      case "whack-a-mole":
+        startGameSession();
+        break;
+      case "spatial-memory":
+        startSpatialGestureMemoryRound();
+        break;
+      case "sky-patrol":
+        restartFullscreenSkyPatrolGame();
+        break;
+      case "slice-air":
+        restartFullscreenFruitNinjaGame();
+        break;
+      case "missile-command":
+        restartFullscreenMissileCommandGame();
+        break;
+      case "brick-dodger":
+        restartFullscreenBrickDodgerGame();
+        break;
+      case "hand-bounce":
+        restartFullscreenHandBounceGame();
+        break;
+      case "breakout":
+        restartFullscreenBreakoutGame();
+        break;
+      case "breakout-coop":
+        restartFullscreenBreakoutCoopGame();
+        break;
+      case "finger-pong":
+        restartFullscreenFingerPongGame();
+        break;
+      case "tic-tac-toe":
+        restartFullscreenTicTacToeGame();
+        break;
+      case "invaders":
+        restartFullscreenInvadersGame();
+        break;
+      case "flappy":
+        restartFullscreenFlappyGame();
+        break;
+      default:
+        navigateToProductHome();
+    }
+  }
+
+  function getCurrentExperienceHud() {
+    const item = (id, label, value, emphasis = "normal") => ({
+      id,
+      label,
+      value,
+      emphasis,
+    });
+    switch (experienceModeId) {
+      case "whack-a-mole":
+        return {
+          status: gameRunning ? "Round in progress" : "Round complete",
+          items: [
+            item("score", "Score", score, "strong"),
+            item("time", "Time", `${timeLeft}s`),
+          ],
+        };
+      case "spatial-memory":
+        return {
+          status: spatialMemoryState.message,
+          items: [
+            item("round", "Round", spatialMemoryState.round, "strong"),
+            item(
+              "step",
+              "Step",
+              `${Math.min(
+                spatialMemoryState.currentStepIndex + 1,
+                spatialMemoryState.sequenceLength,
+              )}/${spatialMemoryState.sequenceLength}`,
+            ),
+          ],
+        };
+      case "sky-patrol":
+        return {
+          status: fullscreenSkyPatrolHud?.message,
+          items: [
+            item("score", "Score", fullscreenSkyPatrolHud?.score ?? 0, "strong"),
+            item("lives", "Lives", fullscreenSkyPatrolHud?.lives ?? 0),
+          ],
+        };
+      case "slice-air":
+        return {
+          status: fullscreenFruitNinjaState?.message,
+          items: [
+            item("score", "Score", fullscreenFruitNinjaState?.score ?? 0, "strong"),
+            item("combo", "Combo", fullscreenFruitNinjaState?.comboCount ?? 0),
+          ],
+        };
+      case "missile-command":
+        return {
+          status: fullscreenMissileCommandState?.message,
+          items: [
+            item("score", "Score", fullscreenMissileCommandState?.score ?? 0, "strong"),
+            item(
+              "cities",
+              "Cities",
+              fullscreenMissileCommandState?.structures?.filter(
+                ({ kind, alive }) => kind === "city" && alive,
+              ).length ?? 0,
+            ),
+          ],
+        };
+      case "brick-dodger":
+        return {
+          status: fullscreenBrickDodgerState?.message,
+          items: [
+            item("score", "Score", fullscreenBrickDodgerState?.score ?? 0, "strong"),
+            item("lives", "Lives", fullscreenBrickDodgerState?.lives ?? 0),
+          ],
+        };
+      case "breakout":
+        return {
+          status: fullscreenBreakoutState?.message,
+          items: [
+            item("score", "Score", fullscreenBreakoutState?.score ?? 0, "strong"),
+            item("level", "Level", fullscreenBreakoutState?.level ?? 1),
+            item("lives", "Lives", fullscreenBreakoutState?.lives ?? 0),
+          ],
+        };
+      case "breakout-coop":
+        return {
+          status: fullscreenBreakoutCoopState?.message,
+          items: [
+            item("score", "Score", fullscreenBreakoutCoopState?.score ?? 0, "strong"),
+            item("lives", "Lives", fullscreenBreakoutCoopState?.lives ?? 0),
+          ],
+        };
+      case "finger-pong":
+        return {
+          status: fullscreenFingerPongState?.message,
+          items: [
+            item("player", "You", fullscreenFingerPongState?.score ?? 0, "strong"),
+            item("opponent", "Opponent", fullscreenFingerPongState?.opponentScore ?? 0),
+          ],
+        };
+      case "hand-bounce":
+        return {
+          status: fullscreenHandBounceState?.message,
+          items: [
+            item("saves", "Saves", fullscreenHandBounceState?.saveCount ?? 0, "strong"),
+          ],
+        };
+      case "invaders":
+        return {
+          status: fullscreenInvadersState?.message,
+          items: [
+            item("score", "Score", fullscreenInvadersState?.score ?? 0, "strong"),
+            item(
+              "remaining",
+              "Remaining",
+              fullscreenInvadersState?.enemies?.filter(({ alive }) => alive).length ?? 0,
+            ),
+          ],
+        };
+      case "flappy":
+        return {
+          status: fullscreenFlappyState?.message,
+          items: [
+            item("score", "Gates", fullscreenFlappyState?.score ?? 0, "strong"),
+          ],
+        };
+      case "tic-tac-toe":
+        return {
+          status: fullscreenTicTacToeState?.message,
+          items: [
+            item("wins", "Wins", fullscreenTicTacToeState?.playerWins ?? 0, "strong"),
+            item("draws", "Draws", fullscreenTicTacToeState?.draws ?? 0),
+          ],
+        };
+      default:
+        return { status: "", items: [] };
+    }
   }
 
   function getFullscreenRestartControlStatesFromRefs() {
     return {
       handBounce: fullscreenHandBounceStateRef.current,
       brickDodger: fullscreenBrickDodgerStateRef.current,
+      breakout: fullscreenBreakoutStateRef.current,
       fingerPong: fullscreenFingerPongStateRef.current,
       fruitNinja: fullscreenFruitNinjaStateRef.current,
       skyPatrol: fullscreenSkyPatrolHudRef.current,
@@ -6823,6 +8036,10 @@ export default function App() {
         return true;
       case "brick-dodger":
         restartFullscreenBrickDodgerGame();
+        return true;
+      case "breakout":
+      case FIND_YOUR_GRIND_BREAKOUT_MODE_ID:
+        restartFullscreenBreakoutGame();
         return true;
       case "finger-pong":
         restartFullscreenFingerPongGame();
@@ -6877,6 +8094,7 @@ export default function App() {
   function restartFullscreenTicTacToeGame() {
     const existingGame = fullscreenTicTacToeStateRef.current;
     if (existingGame?.layout) {
+      beginRestartedProgressionSession(getModeByFullscreenId("tic-tac-toe"));
       const nextGame = restartTicTacToeRound(existingGame);
       fullscreenTicTacToeLastTickRef.current = 0;
       fullscreenTicTacToeStateRef.current = nextGame;
@@ -6888,6 +8106,7 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
+    beginRestartedProgressionSession(getModeByFullscreenId("tic-tac-toe"));
     const nextGame = createTicTacToeGame(viewportMetrics.width, viewportMetrics.height);
     fullscreenTicTacToeLastTickRef.current = 0;
     fullscreenTicTacToeStateRef.current = nextGame;
@@ -7024,7 +8243,7 @@ export default function App() {
       activeMoleRef.current = null;
       setActiveMoleIndex(null);
       setScore((value) => value + 1);
-      nextSpawnAtRef.current = timestamp + 100;
+      nextSpawnAtRef.current = gameElapsedMsRef.current + 100;
     } else {
       appLog.debug("Pinch click missed active mole", {
         holeIndex: activeMole.holeIndex,
@@ -7034,12 +8253,16 @@ export default function App() {
     }
   }
 
-  function updateGame(timestamp) {
+  function updateGame(timestamp, activeDeltaMs = 0) {
     if (!gameRunningRef.current) {
       return;
     }
 
-    const elapsed = timestamp - gameStartTimeRef.current;
+    gameElapsedMsRef.current += Math.max(
+      0,
+      Number.isFinite(activeDeltaMs) ? activeDeltaMs : 0,
+    );
+    const elapsed = gameElapsedMsRef.current;
     const remainingMs = GAME_DURATION_MS - elapsed;
     const nextTimeLeft = Math.max(0, Math.ceil(remainingMs / 1000));
 
@@ -7059,7 +8282,7 @@ export default function App() {
       return;
     }
 
-    if (activeMoleRef.current && timestamp >= activeMoleRef.current.expiresAt) {
+    if (activeMoleRef.current && elapsed >= activeMoleRef.current.expiresAt) {
       appLog.debug("Active mole expired", {
         activeMole: activeMoleRef.current,
         timestamp,
@@ -7068,7 +8291,7 @@ export default function App() {
       setActiveMoleIndex(null);
     }
 
-    if (!activeMoleRef.current && timestamp >= nextSpawnAtRef.current) {
+    if (!activeMoleRef.current && elapsed >= nextSpawnAtRef.current) {
       const count = holesRef.current.length;
       if (count > 0) {
         const nextIndex = pickRandomHole(count, lastHoleIndexRef.current);
@@ -7076,16 +8299,16 @@ export default function App() {
           lastHoleIndexRef.current = nextIndex;
           activeMoleRef.current = {
             holeIndex: nextIndex,
-            expiresAt: timestamp + MOLE_VISIBLE_MS,
+            expiresAt: elapsed + MOLE_VISIBLE_MS,
           };
           setActiveMoleIndex(nextIndex);
           appLog.info("Spawned new mole", {
             holeIndex: nextIndex,
-            expiresAt: timestamp + MOLE_VISIBLE_MS,
+            expiresAt: elapsed + MOLE_VISIBLE_MS,
           });
         }
       }
-      nextSpawnAtRef.current = timestamp + randomSpawnDelay();
+      nextSpawnAtRef.current = elapsed + randomSpawnDelay();
       appLog.debug("Scheduled next mole spawn", {
         nextSpawnAt: nextSpawnAtRef.current,
       });
@@ -8756,6 +9979,63 @@ export default function App() {
     updateFullscreenFruitNinjaSimulation(timestamp);
   }
 
+  function runAppSimulationFrame(timestamp) {
+    const currentLifecycle = experienceLifecycleRef.current;
+    const previousLifecycleTimestamp =
+      lifecycleLastTickRef.current || timestamp;
+    const lifecycleDeltaMs = Math.max(
+      0,
+      timestamp - previousLifecycleTimestamp,
+    );
+    lifecycleLastTickRef.current = timestamp;
+
+    if (
+      currentLifecycle?.phase === EXPERIENCE_PHASES.COUNTDOWN &&
+      document.visibilityState !== "hidden"
+    ) {
+      dispatchExperienceLifecycle({
+        type: EXPERIENCE_LIFECYCLE_EVENTS.TICK,
+        deltaMs: lifecycleDeltaMs,
+      });
+    }
+
+    const latestLifecycle = experienceLifecycleRef.current;
+    const simulationBlocked =
+      document.visibilityState === "hidden" ||
+      (latestLifecycle &&
+        latestLifecycle.phase !== EXPERIENCE_PHASES.RUNNING);
+    if (simulationBlocked) {
+      simulationTimingRef.current.pause(timestamp);
+      return;
+    }
+
+    simulationTimingRef.current.resume(timestamp);
+    if (simulationEpochRef.current === null) {
+      simulationEpochRef.current = timestamp;
+    }
+    const frame = simulationTimingRef.current.advance(
+      timestamp,
+      (_stepSeconds, step) => {
+        const stepTimestamp =
+          simulationEpochRef.current + step.simulatedElapsedMs;
+        updateSandboxPhysics(
+          stepTimestamp,
+          cursorRef.current,
+          handDetectedRef.current,
+          pinchStateRef.current,
+        );
+        updateFlightSimulation(stepTimestamp);
+        updateRunnerSimulation(stepTimestamp);
+        updateFullscreenOverlayGames(stepTimestamp);
+      },
+    );
+
+    // Whack-a-Mole is a wall-clock round. It counts active visible time even
+    // when simulation catch-up is capped, while paused/tracking-lost gaps do not
+    // consume the round.
+    updateGame(timestamp, frame.frameDeltaMs);
+  }
+
   function updateFrameTiming(timestamp) {
     frameCounterRef.current += 1;
     const frameId = frameCounterRef.current;
@@ -8900,11 +10180,6 @@ export default function App() {
         }
         drawCameraOverlay(null);
         updateFlightControlFromTips(null, timestamp, frameId);
-        updateSandboxPhysics(timestamp, cursorRef.current, false, false);
-        updateFlightSimulation(timestamp);
-        updateRunnerSimulation(timestamp);
-        updateFullscreenOverlayGames(timestamp);
-        updateGame(timestamp);
         return;
       }
 
@@ -8937,11 +10212,6 @@ export default function App() {
       updateCalibrationInputTestHoverState(cursorRef.current, false, frameId);
       drawCameraOverlay(null);
       updateFlightControlFromTips(null, timestamp, frameId);
-      updateSandboxPhysics(timestamp, cursorRef.current, false, false);
-      updateFlightSimulation(timestamp);
-      updateRunnerSimulation(timestamp);
-      updateFullscreenOverlayGames(timestamp);
-      updateGame(timestamp);
       return;
     }
 
@@ -9211,13 +10481,7 @@ export default function App() {
       }
     }
 
-    const sandboxGrabActive = pinchStateRef.current;
-    updateSandboxPhysics(timestamp, smoothed, true, sandboxGrabActive);
     drawCameraOverlay(hand);
-    updateFlightSimulation(timestamp);
-    updateRunnerSimulation(timestamp);
-    updateFullscreenOverlayGames(timestamp);
-    updateGame(timestamp);
   }
 
   function appendLabEventsToLog(events) {
@@ -9413,6 +10677,10 @@ export default function App() {
     const expected = sequence[0] ?? null;
     const globalTimeLimitMs = Math.max(4200, SGM_GLOBAL_BASE_TIME_MS - (difficultyLevel - 1) * 650);
 
+    beginRestartedProgressionSession(getModeById("spatial-memory"), {
+      round: nextRound,
+      difficultyLevel,
+    });
     setSpatialMemoryState((prev) => ({
       ...prev,
       active: true,
@@ -9721,6 +10989,30 @@ export default function App() {
   }
 
   useEffect(() => {
+    let animationFrameId = 0;
+    let cancelled = false;
+    simulationTimingRef.current.reset();
+    simulationEpochRef.current = null;
+    lifecycleLastTickRef.current = 0;
+
+    const simulate = (timestamp) => {
+      if (cancelled || !mountedRef.current) {
+        return;
+      }
+      runAppSimulationFrame(timestamp);
+      animationFrameId = requestAnimationFrame(simulate);
+    };
+    animationFrameId = requestAnimationFrame(simulate);
+
+    return () => {
+      cancelled = true;
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [phase]);
+
+  useEffect(() => {
     const poseOnlyTrackingPhase =
       phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB;
     const trackingReady = cameraReady && (poseOnlyTrackingPhase ? poseModelReady : modelReady);
@@ -9815,10 +11107,6 @@ export default function App() {
           });
         }
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
-        updateFlightSimulation(timestamp);
-        updateRunnerSimulation(timestamp);
-        updateFullscreenOverlayGames(timestamp);
-        updateGame(timestamp);
         return;
       }
       inferenceBusySkipCounterRef.current = 0;
@@ -9834,10 +11122,6 @@ export default function App() {
           });
         }
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
-        updateFlightSimulation(timestamp);
-        updateRunnerSimulation(timestamp);
-        updateFullscreenOverlayGames(timestamp);
-        updateGame(timestamp);
         return;
       }
       recoveryFrameSkipCounterRef.current = 0;
@@ -9854,10 +11138,6 @@ export default function App() {
           readyState: video?.readyState ?? null,
         });
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
-        updateFlightSimulation(timestamp);
-        updateRunnerSimulation(timestamp);
-        updateFullscreenOverlayGames(timestamp);
-        updateGame(timestamp);
         return;
       }
 
@@ -9986,10 +11266,6 @@ export default function App() {
       } catch (error) {
         appLog.error("Frame inference failed", { error });
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
-        updateFlightSimulation(timestamp);
-        updateRunnerSimulation(timestamp);
-        updateFullscreenOverlayGames(timestamp);
-        updateGame(timestamp);
       } finally {
         completeTrackingInference(inferenceToken);
       }
@@ -10282,6 +11558,7 @@ export default function App() {
     if (!fullscreenCameraViewport) {
       return;
     }
+    beginRestartedProgressionSession(getModeByFullscreenId("fruit-ninja"));
     const nextGame = createFruitNinjaGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
@@ -10351,6 +11628,117 @@ export default function App() {
       thickStrokeWidth: FULLSCREEN_TIP_RIPPLE_TOUCHING_STROKE_WIDTH_PX,
     },
   );
+  const activeExperienceMode = experienceModeId
+    ? getModeById(experienceModeId)
+    : null;
+  const experienceOverlay = experienceLifecycle && activeExperienceMode ? (
+    <ExperienceOverlay
+      hud={getCurrentExperienceHud()}
+      instructions={`${activeExperienceMode.objective ?? activeExperienceMode.summary} ${
+        activeExperienceMode.controlHint ?? ""
+      }`.trim()}
+      lifecycle={experienceLifecycle}
+      modeLabel={activeExperienceMode.label}
+      onExit={() => navigateToProductHome()}
+      onPause={(reason) =>
+        dispatchExperienceLifecycle({
+          type: EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
+          reason,
+        })
+      }
+      onRestart={restartCurrentExperience}
+      onResume={(reason) => {
+        if (
+          reason === EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS &&
+          trackingRequestedRef.current &&
+          !handDetectedRef.current
+        ) {
+          return;
+        }
+        dispatchExperienceLifecycle({
+          type: EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
+          reason,
+        });
+      }}
+      resultOptions={{
+        metricDefinitions: {
+          accuracyPercent: {
+            label: "Accuracy",
+            format: (value) => `${Math.round(value)}%`,
+          },
+          smoothnessPercent: {
+            label: "Smoothness",
+            format: (value) => `${Math.round(value)}%`,
+          },
+          clearTimeMs: {
+            label: "Clear time",
+            format: (value) => `${(value / 1000).toFixed(1)}s`,
+          },
+        },
+      }}
+    />
+  ) : null;
+
+  if (isProductHomePhase) {
+    return (
+      <ProductHome
+        readiness={{ status: productTrackingStatus }}
+        progression={gameProgression}
+        latestResult={latestGameResult}
+        recentModeIds={preferences.recentModeIds}
+        favoriteModeIds={preferences.favoriteModeIds}
+        onSelectMode={selectProductMode}
+        onOpenSetup={() => openProductTrackingSetup()}
+        onOpenSettings={() => openProductSettings()}
+        onToggleFavorite={(modeId) =>
+          setPreferences((current) => toggleFavoriteMode(current, modeId))
+        }
+      />
+    );
+  }
+
+  if (isProductTrackingSetupPhase) {
+    return (
+      <TrackingSetup
+        readiness={trackingReadiness}
+        videoRef={videoRef}
+        devices={cameraDevices}
+        onBack={() => navigateToProductHome()}
+        onStart={beginProductTrackingSetup}
+        onRetry={() => {
+          if (!trackingRequested) {
+            beginProductTrackingSetup();
+          } else {
+            retryCamera("manual_retry");
+          }
+        }}
+        onStop={stopProductCamera}
+        onDeviceChange={(deviceId) => {
+          setRequestedCameraDeviceId(deviceId);
+          setTrackingReadiness((current) => ({
+            ...current,
+            selectedDeviceId: deviceId,
+          }));
+        }}
+        onContinueWithoutCamera={continueWithoutProductTracking}
+        onContinue={continueFromProductTrackingSetup}
+      />
+    );
+  }
+
+  if (isProductSettingsPhase) {
+    return (
+      <SettingsPanel
+        preferences={preferences}
+        cameraActive={cameraReady}
+        onChange={updateProductPreferences}
+        onBack={() => navigateToProductHome()}
+        onReset={() => setPreferences(normalizeUserPreferences())}
+        onDeleteLocalData={deleteAllLocalProductData}
+        onStopCamera={stopProductCamera}
+      />
+    );
+  }
 
   if (isFullscreenCameraPhase) {
     return (
@@ -10725,6 +12113,8 @@ export default function App() {
               )}
               <div className="fullscreen-camera-breakout-scoreboard">
                 <span>Score {fullscreenBreakoutState?.score ?? 0}</span>
+                <span>Level {fullscreenBreakoutState?.level ?? 1}</span>
+                <span>Lives {fullscreenBreakoutState?.lives ?? 0}</span>
                 <span>
                   Bricks {fullscreenBreakoutState?.bricks?.filter((brick) => !brick.destroyed).length ?? 0}
                 </span>
@@ -10742,7 +12132,14 @@ export default function App() {
                 </div>
               ) : null}
               {isFullscreenBreakoutMode && fullscreenBreakoutState.status === "cleared" ? (
-                <div className="fullscreen-camera-breakout-banner">All bricks cleared</div>
+                <div className="fullscreen-camera-breakout-banner">
+                  Level cleared · Choose Next Level
+                </div>
+              ) : null}
+              {isFullscreenBreakoutMode && fullscreenBreakoutState.status === "gameover" ? (
+                <div className="fullscreen-camera-breakout-banner">
+                  Game over · Score {fullscreenBreakoutState.score}
+                </div>
               ) : null}
             </div>
           ) : fullscreenGridMode === "finger-pong" ? (
@@ -10797,7 +12194,7 @@ export default function App() {
                 </div>
               ) : null}
               {isFullscreenFingerPongMode &&
-              fullscreenFingerPongState?.status === "won" ? (
+              ["won", "lost"].includes(fullscreenFingerPongState?.status) ? (
                 <div className="fullscreen-camera-finger-pong-banner">
                   {fullscreenFingerPongState.message}
                 </div>
@@ -11866,11 +13263,20 @@ export default function App() {
             </svg>
           ) : null}
 
-          {fullscreenRestartControlLabel && fullscreenRestartControlState?.layout ? (
-            <div
+          {!experienceLifecycle &&
+          fullscreenRestartControlLabel &&
+          fullscreenRestartControlState?.layout ? (
+            <button
+              aria-label={fullscreenRestartControlLabel}
               className={`fullscreen-camera-restart-box ${
                 fullscreenRestartControlState.handVerified ? "" : "disabled"
               } ${fullscreenRestartControlState.holdActive ? "active" : ""}`}
+              onClick={() => {
+                if (runFullscreenRestartControlActionFromRefs()) {
+                  fullscreenRestartControlStateRef.current = null;
+                  setFullscreenRestartControlState(null);
+                }
+              }}
               style={{
                 left: `${
                   (fullscreenCameraViewport?.left ?? 0) + fullscreenRestartControlState.layout.left
@@ -11881,6 +13287,7 @@ export default function App() {
                 width: `${fullscreenRestartControlState.layout.boxWidth}px`,
                 height: `${fullscreenRestartControlState.layout.boxHeight}px`,
               }}
+              type="button"
             >
               <span className="fullscreen-camera-restart-title">
                 {fullscreenRestartControlLabel}
@@ -11893,19 +13300,23 @@ export default function App() {
               </span>
               <span className="fullscreen-camera-restart-hint">
                 {!fullscreenRestartControlState.handVerified
-                  ? "Show 5 tips"
+                  ? "Show index finger or click"
                   : fullscreenRestartControlState.holdActive
                   ? "Keep holding"
-                  : "Hold to restart"}
+                  : "Hold or click to restart"}
               </span>
-            </div>
+            </button>
           ) : null}
 
-          {!isFullscreenModeLanding && fullscreenExitControlState?.layout ? (
-            <div
+          {!experienceLifecycle &&
+          !isFullscreenModeLanding &&
+          fullscreenExitControlState?.layout ? (
+            <button
+              aria-label="Return Home"
               className={`fullscreen-camera-exit-box ${
                 fullscreenExitControlState.handVerified ? "" : "disabled"
               } ${fullscreenExitControlState.holdActive ? "active" : ""}`}
+              onClick={() => navigateToProductHome()}
               style={{
                 left: `${
                   (fullscreenCameraViewport?.left ?? 0) + fullscreenExitControlState.layout.left
@@ -11916,8 +13327,9 @@ export default function App() {
                 width: `${fullscreenExitControlState.layout.boxWidth}px`,
                 height: `${fullscreenExitControlState.layout.boxHeight}px`,
               }}
+              type="button"
             >
-              <span className="fullscreen-camera-exit-title">Exit</span>
+              <span className="fullscreen-camera-exit-title">Home</span>
               <span className="fullscreen-camera-exit-countdown">
                 {fullscreenExitControlState.handVerified && fullscreenExitControlState.holdActive
                   ? fullscreenExitControlCountdown
@@ -11925,54 +13337,31 @@ export default function App() {
               </span>
               <span className="fullscreen-camera-exit-hint">
                 {!fullscreenExitControlState.handVerified
-                  ? "Show 5 tips"
+                  ? "Show index finger or click"
                   : fullscreenExitControlState.holdActive
                   ? "Keep holding"
-                  : "Hold to exit"}
+                  : "Hold or click"}
               </span>
-            </div>
+            </button>
           ) : null}
 
           <div className="fullscreen-camera-hud">
-            {!isFullscreenModeLanding ? (
+            {!experienceLifecycle && !isFullscreenModeLanding ? (
               <div className="fullscreen-camera-hud-bottom">
                 <span
                   className={`tracking-indicator fullscreen-camera-status ${
                     fullscreenDetectedHandCount > 0 ? "ok" : "warn"
                   }`}
                 >
-                  Hands: {fullscreenDetectedHandCount} | Bodies: {fullscreenDetectedBodyCount} | FPS:{" "}
-                  {fps.toFixed(1)}
+                  {fullscreenDetectedHandCount > 0 ? "Tracking ready" : "Show your hand"}
+                  {debugEnabled
+                    ? ` · Hands ${fullscreenDetectedHandCount} · Bodies ${fullscreenDetectedBodyCount} · Inference ${fps.toFixed(1)} FPS`
+                    : ""}
                 </span>
                 <div className="fullscreen-camera-meta fullscreen-camera-actions">
                   <span className="fullscreen-camera-note">
-                    {fullscreenGridMode === "breakout-coop"
-                      ? `Breakout Co-op keeps index-finger steering on the paddle, uses support-hand pinch for a ${Math.round(BREAKOUT_COOP_SHIELD_DURATION_MS / 1000)} second shield pulse, and prism bricks split the ball while the shield recharges over about ${Math.round(BREAKOUT_COOP_SHIELD_COOLDOWN_MS / 1000)} seconds.`
-                      : fullscreenGridMode === "hand-bounce"
-                      ? "Hand Bounce turns your tracked palm into a bounce surface. The ball uses gravity-driven motion, rebounds off the side walls, and you only need to keep your hand under it."
-                      : fullscreenGridMode === "brick-dodger"
-                      ? "Brick Dodger uses the existing smoothed index-fingertip X position only. Drift across the full webcam overlay to dodge falling hazards, chase adjacent bonus pickups, and stretch the run as the descent speed ramps up."
-                      : fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
-                      ? "Find Your Grind Breakout uses small logo-colored bricks to spell the wordmark inside the blue frame, while the index fingertip steers the paddle like classic Breakout."
-                      : fullscreenGridMode === "breakout"
-                      ? `Index fingertip steers the paddle left and right. Bricks use the Rings palette, the launch countdown is ${BREAKOUT_COUNTDOWN_MS / 1000} seconds, and each capsule adds one extra ball.`
-                      : fullscreenGridMode === "finger-pong"
-                      ? `Finger Pong keeps the full webcam visible behind a one-player rally. Your bottom paddle follows smoothed horizontal fingertip motion, the opening countdown is ${FINGER_PONG_COUNTDOWN_MS / 1000} seconds, and off-center contacts steer the return angle while rallies gently speed up.`
-                      : fullscreenGridMode === "tic-tac-toe"
-                      ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lays out New Board, O Rail, the board, and X Rail from left to right, clears the board after a 1.00 second index-fingertip hold, and gives O a random opening before switching to optimal play."
-                      : fullscreenGridMode === "fruit-ninja"
-                      ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
-                      : fullscreenGridMode === "sky-patrol"
-                      ? "Index fingertip steers a fighter across a vertically scrolling 16-bit coastline. Pinch fires twin cannons, air fighters weave in from above, ground emplacements ride the terrain below, and pinching after a loss relaunches the sortie."
-                      : fullscreenGridMode === WFC_WORLD_MODE_ID
-                      ? "Fingerprint Worlds lets you seed a fantasy map with pinched terrain rules, then Wave Function Collapse fills the rest while obeying the adjacency constraints."
-                      : fullscreenGridMode === "invaders"
-                      ? "Index fingertip steers the ship with the existing fullscreen smoothing. Pinch fires on a short cooldown, enemies descend in arcade sweeps, and pinch restarts the wave after a loss."
-                      : fullscreenGridMode === "missile-command"
-                      ? `Index fingertip aims. Pinch launches interceptors from the nearest surviving base, blasts stop threats in an area, and the pace ramps over time after the ${MISSILE_COMMAND_COUNTDOWN_MS / 1000}-second opening countdown.`
-                      : fullscreenGridMode === "flappy"
-                      ? "Flappy overlay uses pinch rising edges only. Each distinct pinch flaps once, holding a pinch does not retrigger, and pinching after a crash restarts the round."
-                      : "Camera fits the window without cropping. Press `Esc` to close."}
+                    {fullscreenExperienceMode?.controlHint ?? "Move to interact"} · Esc returns
+                    home
                   </span>
                 </div>
               </div>
@@ -11980,11 +13369,17 @@ export default function App() {
             {(cameraError || modelError) && (
               <div className="fullscreen-camera-errors">
                 {cameraError && <p className="error-text">{cameraError}</p>}
+                {cameraError && (
+                  <button type="button" onClick={() => retryCamera()}>
+                    Retry camera
+                  </button>
+                )}
                 {modelError && <p className="error-text">{modelError}</p>}
               </div>
             )}
           </div>
         </div>
+        {experienceOverlay}
       </div>
     );
   }
@@ -12032,9 +13427,6 @@ export default function App() {
     );
   }
 
-  const navigationLocked = !cameraReady || !modelReady || isCalibrating || isArcCalibrating;
-  const offAxisNavigationLocked = !cameraReady || isCalibrating || isArcCalibrating;
-  const showWorkspaceNav = shouldShowWorkspaceNav(phase);
   const contentGridClassName = `content-grid ${
     isCalibrationLayoutPhase && !isBodyPosePhase ? "calibration-layout" : ""
   } ${isBodyPosePhase ? "body-layout" : ""} ${showLeftPaneResizer ? "resizable-layout" : ""}`;
@@ -12050,66 +13442,21 @@ export default function App() {
     ? Math.round(getMeasuredLeftPaneWidth())
     : undefined;
   const leftPaneResizerValueMax = showLeftPaneResizer ? Math.round(getMaxLeftPaneWidth()) : undefined;
+  const activeMode = getModeByPhase(phase);
   const activePhaseName =
-    phase === PHASES.CALIBRATION
-      ? "Calibration Input Test"
-      : phase === PHASES.SANDBOX
-      ? "Pinch Sandbox"
-      : phase === PHASES.FLIGHT
-      ? "Star Flight"
-      : phase === PHASES.RUNNER
-      ? "Track Runner"
-      : phase === PHASES.BODY_POSE
-      ? "Body Pose Lab"
-      : phase === PHASES.OFF_AXIS_LAB
-      ? "Off-Axis Forest Walk"
-      : phase === PHASES.CONVEYOR
-      ? "Conveyor Toss"
-      : phase === PHASES.ROULETTE
-      ? "Roulette Table"
-      : phase === PHASES.MINORITY_REPORT_LAB
-      ? "Minority Report Lab"
-      : phase === PHASES.SPATIAL_GESTURE_MEMORY
-      ? "Spatial Gesture Memory"
-      : phase === PHASES.GESTURE_ANALYTICS_LAB
-      ? "Gesture Analytics Lab"
-      : phase === PHASES.GESTURE_ART_LAB
-      ? "Gesture Art Lab"
-      : phase === PHASES.GESTURE_CONTROL_OS
-      ? "Gesture Control OS"
-      : "Whack-a-Mole";
+    phase === PHASES.CALIBRATION ? "Advanced Input Test" : activeMode?.label ?? "Motion Arcade";
   const activePhaseSummary =
     phase === PHASES.CALIBRATION
-      ? "Start here for setup, camera checks, and quick access to every mode."
-      : phase === PHASES.SANDBOX
-      ? "A focused pinch-and-drag test area for verifying direct manipulation."
-      : phase === PHASES.FLIGHT
-      ? "Five-finger steering playground with quick reset controls."
-      : phase === PHASES.RUNNER
-      ? "Track-switching runner with streamlined access back to the hub."
-      : phase === PHASES.BODY_POSE
-      ? "Whole-body tracking mode with pose-specific readiness details."
-      : phase === PHASES.OFF_AXIS_LAB
-      ? "Head-pose forest scene that uses pose-only tracking instead of hand readiness."
-      : phase === PHASES.CONVEYOR
-      ? "Throwing sandbox kept separate from the main navigation clusters."
-      : phase === PHASES.ROULETTE
-      ? "Table game entry kept distinct from the motion experiment labs."
-      : phase === PHASES.MINORITY_REPORT_LAB
-      ? "Multi-hand interaction lab with training and event logging tools."
-      : phase === PHASES.SPATIAL_GESTURE_MEMORY
-      ? "Memory challenge with next-round and reset actions kept up front."
-      : phase === PHASES.GESTURE_ANALYTICS_LAB
-      ? "Analysis workspace for reviewing live gesture features and performance."
-      : phase === PHASES.GESTURE_ART_LAB
-      ? "Creative canvas mode with a cleaner way to move between labs and games."
-      : phase === PHASES.GESTURE_CONTROL_OS
-      ? "Desktop simulation mode grouped under labs instead of ad hoc buttons."
-      : "Core game mode with calibration and alternate experiences available from the sidebar.";
+      ? "Optional calibration and live input diagnostics."
+      : activeMode?.objective ?? activeMode?.summary ?? "Move naturally and explore.";
 
   const currentModeActions =
     phase === PHASES.CALIBRATION
       ? [
+          {
+            label: "Home",
+            onClick: navigateToProductHome,
+          },
           {
             label: isCalibrating ? "Restart Calibration" : "Start Calibration",
             onClick: beginCalibration,
@@ -12128,34 +13475,10 @@ export default function App() {
             onClick: () => resetCalibrationInputTests("manual_button"),
             secondary: true,
           },
-          {
-            label: "Open Pinch Sandbox",
-            onClick: openSandboxScreen,
-            secondary: true,
-            disabled: navigationLocked,
-          },
-          {
-            label: "Open Fullscreen Camera",
-            onClick: openFullscreenCameraScreen,
-            secondary: true,
-            disabled: navigationLocked,
-          },
-          {
-            label: "Open Circle of Fifths Page",
-            onClick: openCircleOfFifthsPage,
-            secondary: true,
-            disabled: navigationLocked,
-          },
-          {
-            label: "Open Off-Axis Forest Walk",
-            onClick: startOffAxisLab,
-            secondary: true,
-            disabled: offAxisNavigationLocked,
-          },
         ]
       : isSandboxPhase
       ? [
-          { label: "Back to Input Test", onClick: returnToCalibrationInputTest },
+          { label: "Home", onClick: navigateToProductHome },
           {
             label: "Reset Blocks",
             onClick: () => resetSandboxBlocks("manual_button"),
@@ -12164,7 +13487,7 @@ export default function App() {
         ]
       : phase === PHASES.FLIGHT
       ? [
-          { label: "Back to Input Test", onClick: returnFromFlightSession },
+          { label: "Home", onClick: navigateToProductHome },
           {
             label: "Re-center Hand Pose",
             onClick: () => resetFlightNeutral("manual_button"),
@@ -12178,7 +13501,7 @@ export default function App() {
         ]
       : phase === PHASES.RUNNER
       ? [
-          { label: "Back to Input Test", onClick: returnFromRunnerSession },
+          { label: "Home", onClick: navigateToProductHome },
           {
             label: "Reset Runner",
             onClick: () => resetRunnerSession("manual_button"),
@@ -12187,48 +13510,49 @@ export default function App() {
         ]
       : phase === PHASES.BODY_POSE
       ? [
-          { label: "Back to Input Test", onClick: returnFromBodyPoseLab },
+          { label: "Home", onClick: navigateToProductHome },
           { label: "Restart Body Pose Lab", onClick: startBodyPoseLab, secondary: true },
         ]
       : phase === PHASES.OFF_AXIS_LAB
       ? [
-          { label: "Back to Input Test", onClick: returnFromOffAxisLab },
+          { label: "Home", onClick: navigateToProductHome },
           { label: "Restart Forest Walk", onClick: startOffAxisLab, secondary: true },
         ]
       : phase === PHASES.CONVEYOR
       ? [
-          { label: "Back to Input Test", onClick: returnFromConveyorSession },
+          { label: "Home", onClick: navigateToProductHome },
           { label: "Restart Conveyor Toss", onClick: startConveyorSession, secondary: true },
         ]
       : phase === PHASES.ROULETTE
-      ? [{ label: "Back to Input Test", onClick: returnFromRouletteSession }]
+      ? [{ label: "Home", onClick: navigateToProductHome }]
       : phase === PHASES.MINORITY_REPORT_LAB
       ? [
-          { label: "Back to Input Test", onClick: returnFromMinorityReportLab },
+          { label: "Home", onClick: navigateToProductHome },
           { label: "Reset Lab Session", onClick: startMinorityReportLab, secondary: true },
         ]
       : phase === PHASES.SPATIAL_GESTURE_MEMORY
       ? [
-          { label: "Back to Input Test", onClick: returnFromSpatialGestureMemorySession },
+          { label: "Home", onClick: navigateToProductHome },
           { label: "Next Round", onClick: startSpatialGestureMemoryRound, secondary: true },
           { label: "Reset Spatial Memory", onClick: resetSpatialGestureMemory, secondary: true },
         ]
       : phase === PHASES.GESTURE_ANALYTICS_LAB
       ? [
-          { label: "Back to Input Test", onClick: returnFromGestureAnalyticsLab },
+          { label: "Home", onClick: navigateToProductHome },
           { label: "Reset Analytics Lab", onClick: startGestureAnalyticsLab, secondary: true },
         ]
       : phase === PHASES.GESTURE_ART_LAB
       ? [
-          { label: "Back to Input Test", onClick: returnFromGestureArtLab },
+          { label: "Home", onClick: navigateToProductHome },
           { label: "Restart Gesture Art Lab", onClick: startGestureArtLab, secondary: true },
         ]
       : phase === PHASES.GESTURE_CONTROL_OS
       ? [
-          { label: "Back to Input Test", onClick: returnFromGestureControlOS },
+          { label: "Home", onClick: navigateToProductHome },
           { label: "Restart Gesture Control OS", onClick: startGestureControlOS, secondary: true },
         ]
       : [
+          { label: "Home", onClick: navigateToProductHome },
           {
             label: gameRunning ? "Restart Game" : "Start Game",
             onClick: startGameSession,
@@ -12237,134 +13561,41 @@ export default function App() {
           { label: "Recalibrate", onClick: handleRecalibrate, secondary: true },
         ];
 
-  const navigationSections = [
-    {
-      title: "Core",
-      description: "Setup and shared spaces live together at the top of the sidebar.",
-      items: [
-        {
-          label: "Input Test",
-          onClick: returnToCalibrationInputTest,
-          active: phase === PHASES.CALIBRATION,
-        },
-        {
-          label: "Pinch Sandbox",
-          onClick: openSandboxScreen,
-          active: phase === PHASES.SANDBOX,
-          disabled: navigationLocked,
-        },
-        {
-          label: "Fullscreen Camera",
-          onClick: openFullscreenCameraScreen,
-          disabled: navigationLocked,
-        },
-        {
-          label: "Whack-a-Mole",
-          onClick: startGameSession,
-          active: phase === PHASES.GAME,
-          disabled: navigationLocked || !hasSavedCalibration,
-        },
-      ],
-    },
-    {
-      title: "Games",
-      description: "Game modes are grouped separately from labs so the page reads faster.",
-      items: [
-        {
-          label: "Runner",
-          onClick: startRunnerSession,
-          active: phase === PHASES.RUNNER,
-          disabled: navigationLocked,
-        },
-        {
-          label: "Flight",
-          onClick: startFlightSession,
-          active: phase === PHASES.FLIGHT,
-          disabled: navigationLocked,
-        },
-        {
-          label: "Conveyor Toss",
-          onClick: startConveyorSession,
-          active: phase === PHASES.CONVEYOR,
-          disabled: navigationLocked,
-        },
-        {
-          label: "Roulette",
-          onClick: startRouletteSession,
-          active: phase === PHASES.ROULETTE,
-          disabled: navigationLocked,
-        },
-        {
-          label: "Spatial Memory",
-          onClick: startSpatialGestureMemorySession,
-          active: phase === PHASES.SPATIAL_GESTURE_MEMORY,
-          disabled: navigationLocked,
-        },
-      ],
-    },
-    {
-      title: "Labs",
-      description: "Experimental workspaces now sit in one consistent navigation group.",
-      items: [
-        {
-          label: "Body Pose",
-          onClick: startBodyPoseLab,
-          active: phase === PHASES.BODY_POSE,
-          disabled: navigationLocked,
-        },
-        {
-          label: "Off-Axis Forest Walk",
-          onClick: startOffAxisLab,
-          active: phase === PHASES.OFF_AXIS_LAB,
-          disabled: offAxisNavigationLocked,
-        },
-        {
-          label: "Minority Report",
-          onClick: startMinorityReportLab,
-          active: phase === PHASES.MINORITY_REPORT_LAB,
-          disabled: navigationLocked,
-        },
-        {
-          label: "Gesture Analytics",
-          onClick: startGestureAnalyticsLab,
-          active: phase === PHASES.GESTURE_ANALYTICS_LAB,
-          disabled: navigationLocked,
-        },
-        {
-          label: "Gesture Art",
-          onClick: startGestureArtLab,
-          active: phase === PHASES.GESTURE_ART_LAB,
-          disabled: navigationLocked,
-        },
-        {
-          label: "Gesture Control OS",
-          onClick: startGestureControlOS,
-          active: phase === PHASES.GESTURE_CONTROL_OS,
-          disabled: navigationLocked,
-        },
-      ],
-    },
-  ];
-
   return (
     <div className="app">
+      {experienceOverlay}
       <header className="top-bar">
-        <div className="top-bar-title-group">
-          <h1>Finger Tracking Game</h1>
-          <p className="top-bar-subtitle">
-            Cleaner navigation with one home for setup, games, and labs.
-          </p>
+        <button className="app-brand-button" onClick={navigateToProductHome} type="button">
+          <span aria-hidden="true" className="app-brand-mark">
+            M
+          </span>
+          <span>
+            <strong>Motion Arcade</strong>
+            <small>Home</small>
+          </span>
+        </button>
+        <div className="phase-pill" aria-label={`Current experience: ${activePhaseName}`}>
+          {activePhaseName}
         </div>
-        <div className="phase-pill">{activePhaseName}</div>
-        <div className={`tracking-indicator ${handDetected ? "ok" : "warn"}`}>
-          {phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB
-            ? handDetected
-              ? "Pose detected"
-              : "Pose not detected"
-            : handDetected
-            ? "Hand detected"
-            : "Hand not detected"}{" "}
-          | FPS: {fps.toFixed(1)}
+        <div className="top-bar-actions">
+          <button
+            className={`tracking-indicator tracking-status-button ${
+              handDetected ? "ok" : "warn"
+            }`}
+            onClick={openProductTrackingSetup}
+            type="button"
+          >
+            {phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB
+              ? handDetected
+                ? "Pose ready"
+                : "Show your face"
+              : handDetected
+              ? "Tracking ready"
+              : "Show your hand"}
+          </button>
+          <button className="top-bar-settings" onClick={openProductSettings} type="button">
+            Settings
+          </button>
         </div>
       </header>
 
@@ -12392,158 +13623,94 @@ export default function App() {
           </div>
 
           <div className="camera-support-panel">
-            <p className="help-text">Hold one hand up.</p>
-            <p className="help-text">
-              {phase === PHASES.RUNNER
-                ? "Use your INDEX tip to steer the runner."
-                : phase === PHASES.BODY_POSE
-                ? "Body mode: keep head, shoulders, elbows, and wrists in view."
-                : phase === PHASES.OFF_AXIS_LAB
-                ? "Forest walk mode: keep your nose and both eyes visible, then lean to look around trees."
-                : phase === PHASES.MINORITY_REPORT_LAB
-                ? "In lab mode, thumb tips drive pointers."
-                : phase === PHASES.GESTURE_ART_LAB
-                ? "Index fingertip controls the primary art attractor in real time."
-                : phase === PHASES.GESTURE_CONTROL_OS
-                ? "Pinch focuses and moves windows while the gesture engine manages desktop actions."
-                : "Use your THUMB tip as the pointer."}
-            </p>
-            <p className="help-text">
-              {phase === PHASES.RUNNER
-                ? "Pinch is disabled in runner mode."
-                : phase === PHASES.BODY_POSE
-                ? "No pinch input needed; pose keypoints are highlighted directly."
-                : phase === PHASES.OFF_AXIS_LAB
-                ? "No pinch input needed; head movement shifts the off-axis forest path."
-                : phase === PHASES.MINORITY_REPORT_LAB
-                ? "Pinch to grab/release. Swipes/push/circle and two-hand gestures trigger lab actions."
-                : phase === PHASES.CONVEYOR
-                ? "Pinch to grab spheres, then release to throw. Faster flicks add speed."
-                : phase === PHASES.GESTURE_ART_LAB
-                ? "One hand draws, two hands warp, circle clears, and push toggles freeze."
-                : phase === PHASES.GESTURE_CONTROL_OS
-                ? "Pinch drags windows, swipes switch desktops, and open-palm hold opens the window menu."
-                : 'Pinch (thumb + index) to "click".'}
-            </p>
+            <div className="experience-brief">
+              <p>{activePhaseSummary}</p>
+              <strong>
+                {activeMode?.controlHint ??
+                  (phase === PHASES.CALIBRATION
+                    ? "Point at a target, then pinch to select it."
+                    : "Move naturally to interact.")}
+              </strong>
+            </div>
 
-            <div className="status-row">
-              <span>Camera: {cameraReady ? "ready" : "waiting"}</span>
-              <span>Model: {modelReady ? "ready" : "loading"}</span>
+            <div className="status-row" aria-live="polite">
+              <span>Camera {cameraReady ? "ready" : "waiting"}</span>
+              <span>Tracking {modelReady ? "ready" : "loading"}</span>
               {(phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB) && (
-                <span>Pose model: {poseModelReady ? "ready" : "loading"}</span>
-              )}
-              <span>Runtime: {activeRuntime}</span>
-              <span>Backend: {activeBackend}</span>
-              {phase !== PHASES.BODY_POSE && phase !== PHASES.OFF_AXIS_LAB && (
-                <span>Pinch: {pinchActive ? "active" : "idle"}</span>
+                <span>Pose {poseModelReady ? "ready" : "loading"}</span>
               )}
             </div>
 
-            {cameraError && <p className="error-text">{cameraError}</p>}
+            {cameraError && (
+              <>
+                <p className="error-text">{cameraError}</p>
+                <button type="button" onClick={() => retryCamera()}>
+                  Retry camera
+                </button>
+              </>
+            )}
             {modelError && <p className="error-text">{modelError}</p>}
             {(phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB) && poseModelError && (
               <p className="error-text">{poseModelError}</p>
             )}
 
-            {showWorkspaceNav && (
-              <div className="workspace-nav">
-                <div className="workspace-summary">
-                  <span className="workspace-summary-label">Current workspace</span>
-                  <h3>{activePhaseName}</h3>
-                  <p className="small-text">{activePhaseSummary}</p>
-                  <p className="small-text">{calibrationMessage}</p>
-                  <p className="small-text">
-                    {phase === PHASES.CALIBRATION
-                      ? isArcCalibrating
-                        ? `Lazy Arc Confidence: ${Math.round(arcCalibrationProgress * 100)}% (${arcCalibrationSamples} valid frames)`
-                        : `Captured points: ${calibrationPairsCount}/${calibrationTargets.length}${
-                            isCalibrating
-                              ? ` | Sampling: ${calibrationSampleFrames}/${CALIBRATION_SAMPLE_FRAMES}`
-                              : ""
-                          }`
-                      : phase === PHASES.SANDBOX
-                      ? "Pinch over a block to grab it. Keep pinching to drag, then release to fling."
-                      : phase === PHASES.FLIGHT
-                      ? `Steering uses all five fingertips. Neutral baseline: ${
-                          flightHud.baselineReady
-                            ? "locked"
-                            : `${flightHud.baselineSamples}/${FLIGHT_BASELINE_SAMPLE_TARGET}`
-                        }.`
-                      : phase === PHASES.BODY_POSE
-                      ? "Body pose mode tracks head, eyes, shoulders, arms, torso, and webcam overlays."
-                      : phase === PHASES.OFF_AXIS_LAB
-                      ? "Off-axis mode uses your nose and both eyes to drive a layered forest scene while holding the last transform through short pose dropouts."
-                      : phase === PHASES.CONVEYOR
-                      ? "Pinch to grab a sphere, then release to throw. Faster flicks add launch speed."
-                      : phase === PHASES.MINORITY_REPORT_LAB
-                      ? "One-hand pinch grabs panels, two-hand pinch transforms the stage, and gestures log events."
-                      : phase === PHASES.GESTURE_ART_LAB
-                      ? "Index attractor, pinch thickness, openness palette, wrist hue, and two-hand warp stay active."
-                      : phase === PHASES.GESTURE_CONTROL_OS
-                      ? "Pinch drags windows, swipes switch desktops, and open-palm hold opens contextual menu actions."
-                      : "4x4 track control: move hand across the camera view to pick any converging track."}
-                  </p>
+            {phase === PHASES.CALIBRATION && calibrationMessage ? (
+              <p className="small-text" aria-live="polite">
+                {calibrationMessage}
+              </p>
+            ) : null}
+
+            <nav className="experience-actions" aria-label={`${activePhaseName} actions`}>
+              {currentModeActions.map((action) => (
+                <button
+                  key={action.label}
+                  className={action.secondary ? "secondary" : ""}
+                  type="button"
+                  onClick={action.onClick}
+                  disabled={action.disabled}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </nav>
+
+            <details className="advanced-controls">
+              <summary>Advanced tracking details</summary>
+              <dl className="tracking-details">
+                <div>
+                  <dt>Runtime</dt>
+                  <dd>{activeRuntime}</dd>
                 </div>
-
-                <div className="workspace-actions">
-                  <h3>Mode actions</h3>
-                  <div className="workspace-action-grid">
-                    {currentModeActions.map((action) => (
-                      <button
-                        key={action.label}
-                        className={action.secondary ? "secondary" : ""}
-                        type="button"
-                        onClick={action.onClick}
-                        disabled={action.disabled}
-                      >
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
+                <div>
+                  <dt>Backend</dt>
+                  <dd>{activeBackend}</dd>
                 </div>
-
-                {navigationSections.map((section) => (
-                  <section key={section.title} className="workspace-nav-section">
-                    <div className="workspace-nav-section-heading">
-                      <h3>{section.title}</h3>
-                      <p className="small-text">{section.description}</p>
-                    </div>
-                    <div className="workspace-nav-grid">
-                      {section.items.map((item) => (
-                        <button
-                          key={item.label}
-                          className={item.active ? "nav-button active" : "nav-button secondary"}
-                          type="button"
-                          onClick={item.onClick}
-                          disabled={item.disabled || item.active}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            )}
-
-            <label className="debug-toggle">
-              <input
-                type="checkbox"
-                checked={debugEnabled}
-                onChange={(event) => setDebugEnabled(event.target.checked)}
-              />
-              Debug overlay
-            </label>
-            <div className="button-row">
+                <div>
+                  <dt>Inference</dt>
+                  <dd>{fps.toFixed(1)} FPS</dd>
+                </div>
+                <div>
+                  <dt>Pinch</dt>
+                  <dd>{pinchActive ? "active" : "idle"}</dd>
+                </div>
+              </dl>
+              <label className="debug-toggle">
+                <input
+                  type="checkbox"
+                  checked={debugEnabled}
+                  onChange={(event) => setDebugEnabled(event.target.checked)}
+                />
+                Show debug overlay
+              </label>
               <button
                 className="secondary"
                 type="button"
                 disabled={!modelReady}
                 onClick={() => logTrackingExtentsSnapshot("manual_button")}
               >
-                Log Tracking Extents
+                Log tracking extents
               </button>
-            </div>
+            </details>
           </div>
         </section>
 
@@ -12705,13 +13872,13 @@ export default function App() {
           <ConveyorSphereGame
             cursor={cursor}
             pinchActive={pinchActive}
-            onBack={returnFromConveyorSession}
+            onBack={navigateToProductHome}
           />
         ) : phase === PHASES.ROULETTE ? (
           <RouletteFingerGame
             cursor={cursor}
             pinchActive={pinchActive}
-            onBack={returnFromRouletteSession}
+            onBack={navigateToProductHome}
           />
         ) : phase === PHASES.BODY_POSE ? (
           <BodyPoseLab poseStatus={poseStatus} />

@@ -182,7 +182,6 @@ export const FULLSCREEN_CAMERA_LANDING_OPTIONS = [
   },
 ];
 
-const FULLSCREEN_MENU_REQUIRED_FINGER_NAMES = ["thumb", "index", "middle", "ring", "pinky"];
 const LANDING_HAND_ROOT_CONNECTIONS = [
   [0, 1],
   [0, 5],
@@ -204,6 +203,7 @@ const BASE_PANEL_PADDING = 24;
 const BASE_PANEL_HEADING_HEIGHT = 34;
 const BASE_SECTION_GAP = 18;
 const MIN_LAYOUT_SCALE = 0.1;
+const MIN_USABLE_TILE_HEIGHT = 72;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -243,10 +243,11 @@ function getHoveredModeBox(layout, pointer) {
 }
 
 export function hasVerifiedFullscreenMenuHand(hand) {
-  return FULLSCREEN_MENU_REQUIRED_FINGER_NAMES.every((fingerName) => {
-    const tip = hand?.fingerTips?.[fingerName] ?? null;
-    return Number.isFinite(tip?.u) && Number.isFinite(tip?.v);
-  });
+  const indexTip = hand?.fingerTips?.index ?? hand?.indexTip ?? null;
+  return (
+    (Number.isFinite(indexTip?.u) && Number.isFinite(indexTip?.v)) ||
+    (Number.isFinite(indexTip?.x) && Number.isFinite(indexTip?.y))
+  );
 }
 
 export function getVerifiedFullscreenMenuHand(hands) {
@@ -391,13 +392,17 @@ export function createFullscreenModeLandingLayout(width, height) {
   const totalBasePanelsHeight =
     baseSectionLayouts.reduce((total, section) => total + section.panelHeight, 0) +
     Math.max(0, baseSectionLayouts.length - 1) * BASE_SECTION_GAP;
-  const allowVerticalOverflow = layoutWidth < 700;
+  const heightConstrainedScale =
+    availableHeight / Math.max(1, totalBasePanelsHeight);
+  const allowVerticalOverflow =
+    layoutWidth < 700 ||
+    heightConstrainedScale * BASE_TILE_HEIGHT < MIN_USABLE_TILE_HEIGHT;
   const scale = Math.max(
     MIN_LAYOUT_SCALE,
     Math.min(
       1,
       availableWidth / maxBasePanelWidth,
-      allowVerticalOverflow ? 1 : availableHeight / Math.max(1, totalBasePanelsHeight),
+      allowVerticalOverflow ? 1 : heightConstrainedScale,
     ),
   );
   const tileWidth = BASE_TILE_WIDTH * scale;

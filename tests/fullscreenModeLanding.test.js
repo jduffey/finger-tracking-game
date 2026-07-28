@@ -173,15 +173,11 @@ test("createFullscreenModeLandingLayout reserves header and footer space around 
   }
 });
 
-test("hasVerifiedFullscreenMenuHand only accepts hands with all five fingertips", () => {
+test("hasVerifiedFullscreenMenuHand accepts a stable index tip without requiring every finger", () => {
   assert.equal(
     hasVerifiedFullscreenMenuHand({
       fingerTips: {
-        thumb: { u: 0.1, v: 0.1 },
         index: { u: 0.2, v: 0.2 },
-        middle: { u: 0.3, v: 0.3 },
-        ring: { u: 0.4, v: 0.4 },
-        pinky: { u: 0.5, v: 0.5 },
       },
     }),
     true,
@@ -190,22 +186,18 @@ test("hasVerifiedFullscreenMenuHand only accepts hands with all five fingertips"
     hasVerifiedFullscreenMenuHand({
       fingerTips: {
         thumb: { u: 0.1, v: 0.1 },
-        index: { u: 0.2, v: 0.2 },
-        middle: { u: 0.3, v: 0.3 },
-        ring: { u: 0.4, v: 0.4 },
-        pinky: null,
       },
     }),
     false,
   );
+  assert.equal(hasVerifiedFullscreenMenuHand({ indexTip: { x: 120, y: 80 } }), true);
 });
 
-test("getVerifiedFullscreenMenuHand selects the first hand with all required fingertips", () => {
+test("getVerifiedFullscreenMenuHand selects the first hand with a usable index tip", () => {
   const partialHand = {
     id: "partial",
     fingerTips: {
       thumb: { u: 0.1, v: 0.1 },
-      index: { u: 0.2, v: 0.2 },
     },
   };
   const verifiedHand = {
@@ -224,9 +216,23 @@ test("getVerifiedFullscreenMenuHand selects the first hand with all required fin
   assert.equal(getVerifiedFullscreenMenuHand(null), null);
 });
 
-test("getVerifiedFullscreenMenuHandPointerInput binds hold input to the verified hand", () => {
-  const partialHand = {
-    id: "partial",
+test("short landscape landing scrolls instead of shrinking below a usable target", () => {
+  for (const [width, height] of [
+    [960, 300],
+    [800, 300],
+    [768, 320],
+    [700, 280],
+  ]) {
+    const layout = createFullscreenModeLandingLayout(width, height);
+    assert.ok(layout.boxHeight >= 72, `${width}x${height} should preserve target height`);
+    assert.ok(layout.boxWidth >= 100, `${width}x${height} should preserve target width`);
+    assert.ok(layout.scrollHeight > layout.height, `${width}x${height} should scroll vertically`);
+  }
+});
+
+test("getVerifiedFullscreenMenuHandPointerInput binds hold input to the first usable index hand", () => {
+  const firstUsableHand = {
+    id: "first-usable",
     fingerTips: {
       thumb: { u: 0.1, v: 0.1 },
       index: { u: 0.2, v: 0.2 },
@@ -244,25 +250,24 @@ test("getVerifiedFullscreenMenuHandPointerInput binds hold input to the verified
   };
 
   const input = getVerifiedFullscreenMenuHandPointerInput(
-    [partialHand, verifiedHand],
+    [firstUsableHand, verifiedHand],
     { left: 100, top: 40, width: 800, height: 600 },
     (point) => ({ x: point.u * 800 + 100, y: point.v * 600 + 40 }),
   );
 
   assert.equal(input.handVerified, true);
   assert.equal(input.pointerActive, true);
-  assert.equal(input.pointerX, 560);
-  assert.equal(input.pointerY, 240);
+  assert.equal(input.pointerX, 160);
+  assert.equal(input.pointerY, 120);
 });
 
-test("getVerifiedFullscreenMenuHandPointerInput stays inactive without a projected verified hand", () => {
+test("getVerifiedFullscreenMenuHandPointerInput stays inactive without a usable index tip", () => {
   const input = getVerifiedFullscreenMenuHandPointerInput(
     [
       {
         id: "partial",
         fingerTips: {
           thumb: { u: 0.1, v: 0.1 },
-          index: { u: 0.2, v: 0.2 },
         },
       },
     ],

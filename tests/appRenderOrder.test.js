@@ -15,13 +15,15 @@ test("App computes the fullscreen camera viewport before Tic Tac Toe cursor geom
   );
 });
 
-test("fullscreen camera HUD keeps detection status at bottom left without the mode title chip", () => {
+test("fullscreen camera HUD keeps concise detection status at bottom left and gates telemetry behind debug mode", () => {
   const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
 
   assert.equal(source.includes('<span className="fullscreen-camera-chip">{cameraPanelTitle}</span>'), false);
-  assert.ok(source.includes("Hands: {fullscreenDetectedHandCount}"));
-  assert.ok(source.includes("Bodies: {fullscreenDetectedBodyCount}"));
-  assert.ok(source.includes("{fps.toFixed(1)}"));
+  assert.ok(source.includes('fullscreenDetectedHandCount > 0 ? "Tracking ready" : "Show your hand"'));
+  assert.ok(source.includes("{debugEnabled"));
+  assert.ok(source.includes("Hands ${fullscreenDetectedHandCount}"));
+  assert.ok(source.includes("Bodies ${fullscreenDetectedBodyCount}"));
+  assert.ok(source.includes("Inference ${fps.toFixed(1)} FPS"));
 
   const bottomRowIndex = source.indexOf('className="fullscreen-camera-hud-bottom"');
   const statusIndex = source.indexOf('className={`tracking-indicator fullscreen-camera-status');
@@ -32,11 +34,12 @@ test("fullscreen camera HUD keeps detection status at bottom left without the mo
   assert.ok(actionsIndex > statusIndex);
 });
 
-test("App starts in fullscreen camera mode", () => {
+test("App starts on the product home without requesting camera access", () => {
   const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
   const phaseInitializer = source.match(/const \[phase, setPhase\] = useState\([^)]+\);/)?.[0];
 
-  assert.equal(phaseInitializer, "const [phase, setPhase] = useState(PHASES.FULLSCREEN_CAMERA);");
+  assert.equal(phaseInitializer, "const [phase, setPhase] = useState(PHASES.HOME);");
+  assert.ok(source.includes("const [trackingRequested, setTrackingRequested] = useState(false);"));
 });
 
 test("Find Your Grind breakout uses the browser viewport for its playfield", () => {
