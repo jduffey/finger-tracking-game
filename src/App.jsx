@@ -3472,7 +3472,6 @@ export default function App() {
       fullscreenBodyPoseInitPromiseRef.current = null;
       fullscreenBodyPoseInferenceBusyRef.current = false;
       fullscreenBodyPoseLastInferenceAtRef.current = 0;
-      setFullscreenModeLandingState(null);
       setFullscreenExitControlState(null);
       setFullscreenRestartControlState(null);
       setFullscreenRingTrail([]);
