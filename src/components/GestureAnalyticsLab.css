@@ -1,0 +1,49 @@
+.gesture-analytics-lab .analytics-library-notice {
+  background: rgba(31, 79, 137, 0.08);
+  border: 1px solid rgba(31, 79, 137, 0.2);
+  border-radius: 10px;
+  color: #294765;
+  line-height: 1.5;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+}
+
+.gesture-analytics-lab .analytics-library-notice.invalid,
+.gesture-analytics-lab .analytics-library-notice.unavailable {
+  background: rgba(162, 93, 15, 0.08);
+  border-color: rgba(162, 93, 15, 0.24);
+  color: #7d4b11;
+}
+
+.gesture-analytics-lab .analytics-library-recovery {
+  align-self: flex-start;
+  margin-block-start: 8px;
+  min-block-size: 44px;
+}
+
+.gesture-analytics-lab .session-controls {
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.gesture-analytics-lab .session-controls input[type="range"] {
+  min-block-size: 44px;
+  min-inline-size: min(16rem, 100%);
+}
+
+@media (max-width: 620px) {
+  .gesture-analytics-lab .session-controls,
+  .gesture-analytics-lab .session-controls > label,
+  .gesture-analytics-lab .session-controls > button,
+  .gesture-analytics-lab .session-controls input[type="range"] {
+    inline-size: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gesture-analytics-lab *,
+  .gesture-analytics-lab *::before,
+  .gesture-analytics-lab *::after {
+    transition: none !important;
+  }
+}
