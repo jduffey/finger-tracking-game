@@ -1,0 +1,314 @@
+.circle-fifths-page .circle-fifths-mobile-toolbar,
+.circle-fifths-page .circle-fifths-mobile-close {
+  display: none;
+}
+
+.circle-fifths-page .circle-fifths-back-link {
+  align-items: center;
+  display: inline-flex;
+  left: max(22px, env(safe-area-inset-left));
+  min-height: 44px;
+  top: max(22px, env(safe-area-inset-top));
+}
+
+.circle-fifths-page .circle-fifths-panel-left {
+  left: max(22px, env(safe-area-inset-left));
+  max-height: calc(100dvh - 96px);
+  overflow: auto;
+  top: max(74px, calc(env(safe-area-inset-top) + 64px));
+}
+
+.circle-fifths-page .circle-fifths-panel-right {
+  right: max(22px, env(safe-area-inset-right));
+  top: max(22px, env(safe-area-inset-top));
+}
+
+.circle-fifths-page .circle-fifths-panel-bottom-right {
+  max-height: calc(100dvh - 254px);
+  overflow: auto;
+  right: max(22px, env(safe-area-inset-right));
+}
+
+.circle-fifths-page .circle-fifths-actions > button {
+  min-height: 44px;
+}
+
+.circle-fifths-page .circle-fifths-segment-control {
+  cursor: pointer;
+  outline: none;
+  touch-action: none;
+}
+
+.circle-fifths-page .circle-fifths-segment-control:focus .circle-fifths-segment {
+  stroke: #fff3b8;
+  stroke-width: 5px;
+}
+
+.circle-fifths-page .circle-fifths-bpm-slider {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  cursor: ew-resize;
+  display: block;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.circle-fifths-page .circle-fifths-bpm-slider::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    90deg,
+    #65e4ff 0,
+    #7effc1 var(--bpm-progress),
+    rgba(255, 255, 255, 0.18) var(--bpm-progress),
+    rgba(255, 255, 255, 0.18) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  height: 14px;
+}
+
+.circle-fifths-page .circle-fifths-bpm-slider::-moz-range-track {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  height: 14px;
+}
+
+.circle-fifths-page .circle-fifths-bpm-slider::-moz-range-progress {
+  background: linear-gradient(90deg, #65e4ff, #7effc1);
+  border-radius: 999px;
+  height: 14px;
+}
+
+.circle-fifths-page .circle-fifths-bpm-slider::-webkit-slider-thumb {
+  appearance: none;
+  background: #fff7de;
+  border: 3px solid rgba(8, 16, 26, 0.94);
+  border-radius: 50%;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.38);
+  height: 28px;
+  margin-top: -8px;
+  width: 28px;
+}
+
+.circle-fifths-page .circle-fifths-bpm-slider::-moz-range-thumb {
+  background: #fff7de;
+  border: 3px solid rgba(8, 16, 26, 0.94);
+  border-radius: 50%;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.38);
+  height: 22px;
+  width: 22px;
+}
+
+.circle-fifths-page .circle-fifths-bpm-slider.hovered::-webkit-slider-runnable-track {
+  border-color: #ffe1a8;
+  box-shadow: 0 0 0 5px rgba(255, 214, 147, 0.1);
+}
+
+.circle-fifths-page .circle-fifths-bpm-slider:focus-visible,
+.circle-fifths-page .circle-fifths-back-link:focus-visible,
+.circle-fifths-page button:focus-visible {
+  outline: 3px solid #fff0a8;
+  outline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+  .circle-fifths-page {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .circle-fifths-page .circle-fifths-back-link {
+    left: max(12px, env(safe-area-inset-left));
+    min-height: 44px;
+    padding: 11px 14px;
+    top: max(10px, env(safe-area-inset-top));
+  }
+
+  .circle-fifths-page .circle-fifths-panel {
+    border-radius: 18px;
+    max-width: none;
+  }
+
+  .circle-fifths-page .circle-fifths-panel-right {
+    left: max(12px, env(safe-area-inset-left));
+    padding: 10px 14px;
+    right: max(12px, env(safe-area-inset-right));
+    text-align: right;
+    top: max(64px, calc(env(safe-area-inset-top) + 58px));
+  }
+
+  .circle-fifths-page .circle-fifths-panel-right .circle-fifths-panel-label {
+    margin-bottom: 2px;
+  }
+
+  .circle-fifths-page .circle-fifths-panel-right .circle-fifths-current-chord {
+    font-size: clamp(1.15rem, 5vw, 1.6rem);
+    margin: 0;
+  }
+
+  .circle-fifths-page .circle-fifths-panel-right .circle-fifths-copy {
+    display: none;
+  }
+
+  .circle-fifths-page .circle-fifths-panel-left,
+  .circle-fifths-page .circle-fifths-panel-bottom-right {
+    bottom: max(76px, calc(env(safe-area-inset-bottom) + 68px));
+    display: none;
+    left: max(12px, env(safe-area-inset-left));
+    max-height: min(64dvh, 560px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 18px;
+    right: max(12px, env(safe-area-inset-right));
+    text-align: left;
+    top: auto;
+  }
+
+  .circle-fifths-page
+    .circle-fifths-panel-left[data-mobile-open="true"],
+  .circle-fifths-page
+    .circle-fifths-panel-bottom-right[data-mobile-open="true"] {
+    display: block;
+  }
+
+  .circle-fifths-page .circle-fifths-mobile-close {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 50%;
+    color: #fff;
+    cursor: pointer;
+    font: inherit;
+    font-size: 1.35rem;
+    height: 44px;
+    justify-content: center;
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    width: 44px;
+  }
+
+  .circle-fifths-page .circle-fifths-panel h1 {
+    font-size: clamp(1.8rem, 8vw, 2.5rem);
+    margin-right: 42px;
+    max-width: none;
+  }
+
+  .circle-fifths-page .circle-fifths-actions > button {
+    min-height: 48px;
+    width: 100%;
+  }
+
+  .circle-fifths-page .circle-fifths-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .circle-fifths-page .circle-fifths-beat-button {
+    min-height: 104px;
+    padding: 10px;
+  }
+
+  .circle-fifths-page .circle-fifths-mobile-toolbar {
+    backdrop-filter: blur(18px);
+    background: rgba(7, 16, 24, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    display: flex;
+    gap: 6px;
+    left: 50%;
+    padding: 6px;
+    position: absolute;
+    transform: translateX(-50%);
+    z-index: 7;
+  }
+
+  .circle-fifths-page .circle-fifths-mobile-toolbar button {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: #f4f2ea;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 750;
+    min-height: 44px;
+    min-width: 96px;
+    padding: 9px 16px;
+  }
+
+  .circle-fifths-page .circle-fifths-mobile-toolbar button.active {
+    background: #fff3ce;
+    color: #101820;
+  }
+}
+
+@media (max-width: 480px) {
+  .circle-fifths-page .circle-fifths-panel-left,
+  .circle-fifths-page .circle-fifths-panel-bottom-right {
+    max-height: min(68dvh, calc(100dvh - 156px));
+  }
+
+  .circle-fifths-page .circle-fifths-copy {
+    font-size: 0.9rem;
+  }
+
+  .circle-fifths-page .circle-fifths-beat-buttons {
+    gap: 7px;
+  }
+
+  .circle-fifths-page .circle-fifths-beat-button {
+    min-height: 92px;
+    padding: 8px;
+  }
+
+  .circle-fifths-page .circle-fifths-beat-button small {
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-height: 560px) and (max-width: 900px) {
+  .circle-fifths-page .circle-fifths-panel-right {
+    left: auto;
+    max-width: min(42vw, 320px);
+  }
+
+  .circle-fifths-page .circle-fifths-panel-left,
+  .circle-fifths-page .circle-fifths-panel-bottom-right {
+    max-height: calc(100dvh - 92px - env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .circle-fifths-page .circle-fifths-segment,
+  .circle-fifths-page .circle-fifths-segment-label,
+  .circle-fifths-page .circle-fifths-beat-button {
+    transition: none;
+  }
+
+  .circle-fifths-page .circle-fifths-finger-glow {
+    display: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .circle-fifths-page .circle-fifths-panel,
+  .circle-fifths-page .circle-fifths-back-link,
+  .circle-fifths-page .circle-fifths-mobile-toolbar {
+    background: #071018;
+    border-color: rgba(255, 255, 255, 0.65);
+  }
+
+  .circle-fifths-page .circle-fifths-copy,
+  .circle-fifths-page .circle-fifths-beat-button small {
+    color: #f3f2e8;
+  }
+
+  .circle-fifths-page .circle-fifths-segment {
+    stroke: rgba(255, 255, 255, 0.62);
+  }
+}

@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { detectHands, initHandTracking } from "./handTracking.js";
+import { detectHands, initHandTracking } from "./trackingRuntimeLoader.js";
 import { createScopedLogger } from "./logger.js";
+import {
+  closeAudioContext,
+  createMediaTrackingSessionController,
+  isMediaTrackingSessionCancelledError,
+} from "./mediaTrackingSession.js";
 import {
   CIRCLE_OF_FIFTHS_SEGMENTS,
   createCircleOfFifthsLayout,
@@ -9,6 +14,8 @@ import {
   getSegmentAtPoint,
 } from "./circleOfFifths.js";
 import {
+  DRUM_BPM_MAX,
+  DRUM_BPM_MIN,
   DRUM_BEAT_PRESETS,
   DRUM_STEPS_PER_BAR,
   getDrumBeatPreset,
@@ -26,7 +33,9 @@ const PINCH_END_THRESHOLD = 0.06;
 export default function CircleOfFifthsPage() {
   const videoRef = useRef(null);
   const detectorRef = useRef(null);
-  const streamRef = useRef(null);
+  const sessionControllerRef = useRef(null);
+  const sessionOperationRef = useRef(0);
+  const mountedRef = useRef(true);
   const animationFrameRef = useRef(0);
   const processingFrameRef = useRef(false);
   const smoothedPointRef = useRef(null);
@@ -36,6 +45,8 @@ export default function CircleOfFifthsPage() {
   const bpmSliderTrackRef = useRef(null);
   const pinchActiveRef = useRef(false);
   const bpmDragActiveRef = useRef(false);
+  const directInputActiveRef = useRef(false);
+  const directChordReleaseTimerRef = useRef(0);
   const drumSchedulerIntervalRef = useRef(0);
   const drumTransportRef = useRef({
     nextNoteTime: 0,
@@ -60,6 +71,7 @@ export default function CircleOfFifthsPage() {
   const [bpmSliderHovered, setBpmSliderHovered] = useState(false);
   const [selectedBeatId, setSelectedBeatId] = useState(DRUM_BEAT_PRESETS[0]?.id ?? "motorik");
   const [drumBpm, setDrumBpm] = useState(DEFAULT_DRUM_BPM);
+  const [mobilePanel, setMobilePanel] = useState("setup");
 
   const wheelLayout = useMemo(
     () => createCircleOfFifthsLayout(viewport.width, viewport.height),
@@ -87,22 +99,27 @@ export default function CircleOfFifthsPage() {
   }, []);
 
   useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && viewport.width <= 900) {
+        setMobilePanel(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
-      cleanupTrackingSession({
-        activeChordRef,
-        animationFrameRef,
-        detectorRef,
-        processingFrameRef,
-        setFingerPoint,
-        setHoveredSegmentId,
-        setDetectedHand,
-        setPinchActive,
-        setHoveredBeatId,
-        setBpmSliderHovered,
-        smoothedPointRef,
-        streamRef,
-        videoRef,
-      });
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [viewport.width]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      sessionOperationRef.current += 1;
+      resetTrackingInteraction({ updateUi: false });
+      void sessionControllerRef.current?.stop();
+      void closeAudioContextRef(audioContextRef);
       stopDrumScheduler(drumSchedulerIntervalRef);
     };
   }, []);
@@ -120,6 +137,11 @@ export default function CircleOfFifthsPage() {
       }
 
       if (processingFrameRef.current) {
+        animationFrameRef.current = window.requestAnimationFrame(tick);
+        return;
+      }
+
+      if (directInputActiveRef.current) {
         animationFrameRef.current = window.requestAnimationFrame(tick);
         return;
       }
@@ -215,6 +237,12 @@ export default function CircleOfFifthsPage() {
           setLastChordTitle(nextSegment.title);
         }
       } catch (error) {
+        cancelled = true;
+        sessionOperationRef.current += 1;
+        resetTrackingInteraction();
+        void getSessionController().stop();
+        void closeAudioContextRef(audioContextRef);
+        stopDrumScheduler(drumSchedulerIntervalRef);
         pageLog.error("Tracking frame failed", { error });
         setErrorMessage(error instanceof Error ? error.message : "Tracking failed.");
         setStatusMessage("Tracking paused because a frame failed.");
@@ -282,9 +310,16 @@ export default function CircleOfFifthsPage() {
   async function startSession(options = {}) {
     const source = options.source ?? "manual";
     const preserveIntentOnFailure = options.preserveIntentOnFailure ?? false;
+    const operationId = sessionOperationRef.current + 1;
+    sessionOperationRef.current = operationId;
     setSessionState("starting");
     setErrorMessage("");
     setStatusMessage("Requesting camera access and warming up the hand tracker...");
+    resetTrackingInteraction();
+    stopDrumScheduler(drumSchedulerIntervalRef);
+
+    const sessionController = getSessionController();
+    const stopPreviousSession = sessionController.stop();
 
     try {
       const AudioContextCtor = window.AudioContext ?? window.webkitAudioContext;
@@ -296,53 +331,46 @@ export default function CircleOfFifthsPage() {
         audioContextRef.current = new AudioContextCtor();
       }
       if (audioContextRef.current.state !== "running") {
-        await audioContextRef.current.resume();
+        await Promise.all([stopPreviousSession, audioContextRef.current.resume()]);
+      } else {
+        await stopPreviousSession;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          facingMode: "user",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
-
-      streamRef.current = stream;
-      const videoElement = videoRef.current;
-      if (!videoElement) {
-        throw new Error("Camera element is not ready.");
+      if (!mountedRef.current || operationId !== sessionOperationRef.current) {
+        return;
       }
 
-      videoElement.srcObject = stream;
-      await waitForVideoMetadata(videoElement);
-      await videoElement.play();
+      await sessionController.start();
 
-      detectorRef.current = await initHandTracking({
-        runtime: "mediapipe",
-        maxHands: 1,
-      });
+      if (!mountedRef.current || operationId !== sessionOperationRef.current) {
+        await sessionController.stop();
+        return;
+      }
 
       setSessionState("active");
       setStatusMessage("Circle ready. Move one index finger into the wheel to play.");
+      if (viewport.width <= 900) {
+        setMobilePanel(null);
+      }
       pageLog.info("Circle of fifths session started", { source });
     } catch (error) {
-      cleanupTrackingSession({
-        activeChordRef,
-        animationFrameRef,
-        detectorRef,
-        processingFrameRef,
-        setFingerPoint,
-        setHoveredSegmentId,
-        setDetectedHand,
-        setPinchActive,
-        setHoveredBeatId,
-        setBpmSliderHovered,
-        smoothedPointRef,
-        streamRef,
-        videoRef,
-      });
+      await Promise.allSettled([stopPreviousSession, sessionController.stop()]);
+
+      if (
+        !mountedRef.current ||
+        operationId !== sessionOperationRef.current ||
+        isMediaTrackingSessionCancelledError(error)
+      ) {
+        return;
+      }
+
+      resetTrackingInteraction();
+      await closeAudioContextRef(audioContextRef);
       stopDrumScheduler(drumSchedulerIntervalRef);
+      if (!mountedRef.current || operationId !== sessionOperationRef.current) {
+        return;
+      }
+
       const message =
         error instanceof Error ? error.message : "Unable to start the camera and audio session.";
       setErrorMessage(message);
@@ -359,25 +387,169 @@ export default function CircleOfFifthsPage() {
     }
   }
 
+  function getSessionController() {
+    if (!sessionControllerRef.current) {
+      sessionControllerRef.current = createMediaTrackingSessionController({
+        requestStream: () =>
+          navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              facingMode: "user",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          }),
+        createDetector: () =>
+          initHandTracking({
+            runtime: "mediapipe",
+            maxHands: 1,
+          }),
+        getVideoElement: () => videoRef.current,
+        waitForVideoMetadata,
+        onSessionChange: (session) => {
+          detectorRef.current = session?.detector ?? null;
+        },
+        onCleanupError: (error, resourceType) => {
+          pageLog.warn("Circle session resource cleanup failed", {
+            error,
+            resourceType,
+          });
+        },
+      });
+    }
+
+    return sessionControllerRef.current;
+  }
+
+  function resetTrackingInteraction({ updateUi = true } = {}) {
+    if (animationFrameRef.current) {
+      window.cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = 0;
+    }
+
+    releaseActiveChord(activeChordRef.current, audioContextRef.current?.currentTime);
+    activeChordRef.current = null;
+    processingFrameRef.current = false;
+    smoothedPointRef.current = null;
+    pinchActiveRef.current = false;
+    bpmDragActiveRef.current = false;
+    directInputActiveRef.current = false;
+    if (directChordReleaseTimerRef.current) {
+      window.clearTimeout(directChordReleaseTimerRef.current);
+      directChordReleaseTimerRef.current = 0;
+    }
+
+    if (updateUi) {
+      setFingerPoint(null);
+      setHoveredSegmentId(null);
+      setDetectedHand(null);
+      setPinchActive(false);
+      setHoveredBeatId(null);
+      setBpmSliderHovered(false);
+    }
+  }
+
+  function beginDirectChord(segment) {
+    const audioContext = audioContextRef.current;
+    if (!segment || !audioContext || audioContext.state !== "running") {
+      setStatusMessage("Enable the camera and audio before playing a chord.");
+      if (viewport.width <= 900) {
+        setMobilePanel("setup");
+      }
+      return;
+    }
+
+    if (directChordReleaseTimerRef.current) {
+      window.clearTimeout(directChordReleaseTimerRef.current);
+      directChordReleaseTimerRef.current = 0;
+    }
+    directInputActiveRef.current = true;
+    syncContinuousChord(audioContext, activeChordRef, segment);
+    setHoveredSegmentId(segment.id);
+    setLastChordTitle(segment.title);
+    setStatusMessage(`Playing ${segment.title} with pointer or keyboard control.`);
+  }
+
+  function endDirectChord() {
+    if (!directInputActiveRef.current) {
+      return;
+    }
+
+    releaseActiveChord(activeChordRef.current, audioContextRef.current?.currentTime);
+    activeChordRef.current = null;
+    directInputActiveRef.current = false;
+    setHoveredSegmentId(null);
+    setStatusMessage("Chord released. Point, click, or use the keyboard to play another.");
+  }
+
+  function playDirectChordBriefly(segment) {
+    beginDirectChord(segment);
+    if (!directInputActiveRef.current) {
+      return;
+    }
+
+    directChordReleaseTimerRef.current = window.setTimeout(() => {
+      directChordReleaseTimerRef.current = 0;
+      endDirectChord();
+    }, 700);
+  }
+
+  const sessionAnnouncement =
+    sessionState === "active"
+      ? "Camera, hand tracking, and audio are ready."
+      : sessionState === "starting"
+        ? "Starting camera, hand tracking, and audio."
+        : sessionState === "error"
+          ? "The camera and audio session could not start."
+          : "Camera and audio are off.";
+
   return (
-    <main className="circle-fifths-page">
-      <video ref={videoRef} className="circle-fifths-video" autoPlay muted playsInline />
-      <div className="circle-fifths-vignette" />
-      <div className="circle-fifths-grid" />
+    <main aria-busy={sessionState === "starting"} className="circle-fifths-page">
+      <video
+        aria-hidden="true"
+        ref={videoRef}
+        className="circle-fifths-video"
+        autoPlay
+        muted
+        playsInline
+      />
+      <div aria-hidden="true" className="circle-fifths-vignette" />
+      <div aria-hidden="true" className="circle-fifths-grid" />
+      <p aria-live="polite" className="sr-only" role="status">
+        {sessionAnnouncement}
+      </p>
 
       <a className="circle-fifths-back-link" href="/">
-        Back to main app
+        <span aria-hidden="true">←</span> Home
       </a>
 
-      <section className="circle-fifths-panel circle-fifths-panel-left">
+      <section
+        aria-labelledby="circle-fifths-title"
+        className="circle-fifths-panel circle-fifths-panel-left"
+        data-mobile-open={mobilePanel === "setup"}
+        id="circle-fifths-setup-panel"
+      >
+        <button
+          aria-label="Close setup panel"
+          className="circle-fifths-mobile-close"
+          onClick={() => setMobilePanel(null)}
+          type="button"
+        >
+          ×
+        </button>
         <p className="circle-fifths-kicker">Standalone music page</p>
-        <h1>Finger Circle of Fifths</h1>
+        <h1 id="circle-fifths-title">Finger Circle of Fifths</h1>
         <p className="circle-fifths-copy">
           Track one hand, hover your index finger over the wheel, and each major or minor slice
           answers with a sustained synthesized chord.
         </p>
         <div className="circle-fifths-actions">
-          <button type="button" onClick={() => void handleStartSession()} disabled={sessionState === "starting"}>
+          <button
+            aria-busy={sessionState === "starting"}
+            type="button"
+            onClick={() => void handleStartSession()}
+            disabled={sessionState === "starting"}
+          >
             {sessionState === "active"
               ? "Restart Camera + Audio"
               : sessionState === "starting"
@@ -403,11 +575,20 @@ export default function CircleOfFifthsPage() {
             <span>{pinchActive ? "Active" : "Idle"}</span>
           </div>
         </div>
-        {errorMessage ? <p className="circle-fifths-error">{errorMessage}</p> : null}
+        {errorMessage ? (
+          <p className="circle-fifths-error" role="alert">
+            {errorMessage}
+          </p>
+        ) : null}
       </section>
 
-      <section className="circle-fifths-panel circle-fifths-panel-right">
-        <p className="circle-fifths-panel-label">Hover target</p>
+      <section
+        aria-labelledby="circle-fifths-hover-title"
+        className="circle-fifths-panel circle-fifths-panel-right"
+      >
+        <p className="circle-fifths-panel-label" id="circle-fifths-hover-title">
+          Current chord
+        </p>
         <p className="circle-fifths-current-chord">
           {hoveredSegment ? hoveredSegment.title : "Move into the wheel"}
         </p>
@@ -417,8 +598,23 @@ export default function CircleOfFifthsPage() {
         </p>
       </section>
 
-      <section className="circle-fifths-panel circle-fifths-panel-bottom-right">
-        <p className="circle-fifths-panel-label">Drum machine</p>
+      <section
+        aria-labelledby="circle-fifths-drums-title"
+        className="circle-fifths-panel circle-fifths-panel-bottom-right"
+        data-mobile-open={mobilePanel === "drums"}
+        id="circle-fifths-drums-panel"
+      >
+        <button
+          aria-label="Close drum machine panel"
+          className="circle-fifths-mobile-close"
+          onClick={() => setMobilePanel(null)}
+          type="button"
+        >
+          ×
+        </button>
+        <p className="circle-fifths-panel-label" id="circle-fifths-drums-title">
+          Drum machine
+        </p>
         <p className="circle-fifths-current-chord">{selectedBeat.label}</p>
         <p className="circle-fifths-copy compact">
           Pinch a beat button to switch patterns, then pinch the BPM rail and slide to change the
@@ -430,6 +626,8 @@ export default function CircleOfFifthsPage() {
             const isHovered = beat.id === hoveredBeatId;
             return (
               <button
+                aria-label={`${beat.label}: ${beat.description}`}
+                aria-pressed={isActive}
                 key={beat.id}
                 ref={(element) => {
                   if (element) {
@@ -455,30 +653,53 @@ export default function CircleOfFifthsPage() {
             <strong>BPM</strong>
             <span>{drumBpm}</span>
           </div>
-          <div
+          <input
+            aria-label={`Drum tempo, ${drumBpm} beats per minute`}
+            aria-valuetext={`${drumBpm} beats per minute`}
             ref={bpmSliderTrackRef}
             className={`circle-fifths-bpm-slider ${bpmSliderHovered ? "hovered" : ""}`}
-            onClick={(event) => {
-              setDrumBpm(
-                getDrumBpmFromSliderPosition(event.clientX, getElementRect(bpmSliderTrackRef.current)),
-              );
-            }}
-          >
-            <div className="circle-fifths-bpm-slider-fill" style={{ width: `${sliderRatio * 100}%` }} />
-            <div
-              className={`circle-fifths-bpm-slider-thumb ${bpmDragActiveRef.current ? "dragging" : ""}`}
-              style={{ left: `${sliderRatio * 100}%` }}
-            />
-          </div>
+            max={DRUM_BPM_MAX}
+            min={DRUM_BPM_MIN}
+            onChange={(event) => setDrumBpm(Number(event.target.value))}
+            style={{ "--bpm-progress": `${sliderRatio * 100}%` }}
+            type="range"
+            value={drumBpm}
+          />
         </div>
       </section>
+
+      <nav aria-label="Circle controls" className="circle-fifths-mobile-toolbar">
+        <button
+          aria-controls="circle-fifths-setup-panel"
+          aria-expanded={mobilePanel === "setup"}
+          className={mobilePanel === "setup" ? "active" : ""}
+          onClick={() => setMobilePanel(mobilePanel === "setup" ? null : "setup")}
+          type="button"
+        >
+          Setup
+        </button>
+        <button
+          aria-controls="circle-fifths-drums-panel"
+          aria-expanded={mobilePanel === "drums"}
+          className={mobilePanel === "drums" ? "active" : ""}
+          onClick={() => setMobilePanel(mobilePanel === "drums" ? null : "drums")}
+          type="button"
+        >
+          Drums
+        </button>
+      </nav>
 
       <svg
         className="circle-fifths-wheel"
         viewBox={`0 0 ${viewport.width} ${viewport.height}`}
-        aria-label="Interactive circle of fifths"
-        role="img"
+        aria-describedby="circle-fifths-wheel-description"
+        aria-label="Interactive circle of fifths chord wheel"
+        role="group"
       >
+        <desc id="circle-fifths-wheel-description">
+          Outer segments play major chords and inner segments play minor chords. After enabling
+          audio, use a pointer or focus a segment and hold Enter or Space to play.
+        </desc>
         <defs>
           <radialGradient id="circle-fifths-center-glow" cx="50%" cy="50%" r="62%">
             <stop offset="0%" stopColor="rgba(255,255,255,0.92)" />
@@ -522,7 +743,40 @@ export default function CircleOfFifthsPage() {
           const isHovered = hoveredSegmentId === segment.id;
 
           return (
-            <g key={segment.id}>
+            <g
+              aria-disabled={sessionState !== "active"}
+              aria-label={`Play ${segment.title} chord`}
+              aria-pressed={isHovered}
+              className="circle-fifths-segment-control"
+              key={segment.id}
+              onBlur={endDirectChord}
+              onClick={(event) => {
+                if (event.detail === 0) {
+                  playDirectChordBriefly(segment);
+                }
+              }}
+              onKeyDown={(event) => {
+                if ((event.key === "Enter" || event.key === " ") && !event.repeat) {
+                  event.preventDefault();
+                  beginDirectChord(segment);
+                }
+              }}
+              onKeyUp={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  endDirectChord();
+                }
+              }}
+              onPointerCancel={endDirectChord}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+                beginDirectChord(segment);
+              }}
+              onPointerUp={endDirectChord}
+              role="button"
+              tabIndex={sessionState === "active" ? 0 : -1}
+            >
               <path
                 className={`circle-fifths-segment ${segment.ring} ${isHovered ? "hovered" : ""}`}
                 d={path}
@@ -583,7 +837,11 @@ export default function CircleOfFifthsPage() {
   );
 }
 
-function waitForVideoMetadata(videoElement) {
+function waitForVideoMetadata(videoElement, signal) {
+  if (signal?.aborted) {
+    return Promise.reject(new Error("Camera startup was cancelled."));
+  }
+
   if (videoElement.readyState >= 1) {
     return Promise.resolve();
   }
@@ -597,61 +855,31 @@ function waitForVideoMetadata(videoElement) {
       cleanup();
       reject(new Error("Camera metadata failed to load."));
     };
+    const handleAbort = () => {
+      cleanup();
+      reject(new Error("Camera startup was cancelled."));
+    };
     const cleanup = () => {
       videoElement.removeEventListener("loadedmetadata", handleLoadedMetadata);
       videoElement.removeEventListener("error", handleError);
+      signal?.removeEventListener("abort", handleAbort);
     };
 
     videoElement.addEventListener("loadedmetadata", handleLoadedMetadata, { once: true });
     videoElement.addEventListener("error", handleError, { once: true });
+    signal?.addEventListener("abort", handleAbort, { once: true });
   });
 }
 
-function cleanupTrackingSession({
-  activeChordRef,
-  animationFrameRef,
-  detectorRef,
-  processingFrameRef,
-  setFingerPoint,
-  setHoveredSegmentId,
-  setDetectedHand,
-  setPinchActive,
-  setHoveredBeatId,
-  setBpmSliderHovered,
-  smoothedPointRef,
-  streamRef,
-  videoRef,
-}) {
-  if (animationFrameRef.current) {
-    window.cancelAnimationFrame(animationFrameRef.current);
-    animationFrameRef.current = 0;
-  }
-
-  releaseActiveChord(activeChordRef.current);
-  activeChordRef.current = null;
-  detectorRef.current?.dispose?.();
-  detectorRef.current = null;
-  processingFrameRef.current = false;
-  smoothedPointRef.current = null;
-
-  if (streamRef.current) {
-    for (const track of streamRef.current.getTracks()) {
-      track.stop();
-    }
-  }
-  streamRef.current = null;
-
-  if (videoRef.current) {
-    videoRef.current.pause();
-    videoRef.current.srcObject = null;
-  }
-
-  setFingerPoint(null);
-  setHoveredSegmentId(null);
-  setDetectedHand(null);
-  setPinchActive(false);
-  setHoveredBeatId(null);
-  setBpmSliderHovered(false);
+async function closeAudioContextRef(audioContextRef) {
+  const audioContext = audioContextRef.current;
+  audioContextRef.current = null;
+  await closeAudioContext(audioContext, (error, resourceType) => {
+    pageLog.warn("Circle session resource cleanup failed", {
+      error,
+      resourceType,
+    });
+  });
 }
 
 function getPinchState(pinchDistance, wasPinching) {
