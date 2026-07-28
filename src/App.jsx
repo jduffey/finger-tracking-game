@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   applyArcCalibration,
   applyAffineTransform,
@@ -147,7 +154,6 @@ import {
   createSkyPatrolGame,
   stepSkyPatrolGame,
 } from "./skyPatrolGame.js";
-import { WfcWorldRenderer } from "./wfc/WfcWorldRenderer.jsx";
 import {
   WFC_WORLD_MODE_ID,
   createWfcWorldGame,
@@ -252,18 +258,9 @@ import {
   deriveOffAxisHeadState,
 } from "./offAxisHeadTracking.js";
 import { createScopedLogger } from "./logger.js";
-import MinorityReportLab from "./components/MinorityReportLab.jsx";
-import BodyPoseLab from "./components/BodyPoseLab.jsx";
-import OffAxisChamberLab from "./components/OffAxisChamberLab.jsx";
-import RouletteFingerGame from "./components/RouletteFingerGame.jsx";
-import ConveyorSphereGame from "./components/ConveyorSphereGame.jsx";
 import FullscreenLandingPage, {
   WebcamBackground,
 } from "./components/FullscreenLandingPage.jsx";
-import SpatialGestureMemory from "./components/SpatialGestureMemory.jsx";
-import GestureAnalyticsLab from "./components/GestureAnalyticsLab.jsx";
-import GestureArtLab from "./components/GestureArtLab.jsx";
-import GestureControlOS from "./components/GestureControlOS.jsx";
 import ProductHome from "./components/ProductHome.jsx";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import TrackingSetup from "./components/TrackingSetup.jsx";
@@ -342,6 +339,46 @@ import {
   reduceSpatialMemoryExperience,
   toSpatialMemoryLegacyState,
 } from "./spatialMemoryExperience.js";
+
+const BodyPoseLab = lazy(() => import("./components/BodyPoseLab.jsx"));
+const ConveyorSphereGame = lazy(
+  () => import("./components/ConveyorSphereGame.jsx"),
+);
+const GestureAnalyticsLab = lazy(
+  () => import("./components/GestureAnalyticsLab.jsx"),
+);
+const GestureArtLab = lazy(
+  () => import("./components/GestureArtLab.jsx"),
+);
+const GestureControlOS = lazy(
+  () => import("./components/GestureControlOS.jsx"),
+);
+const MinorityReportLab = lazy(
+  () => import("./components/MinorityReportLab.jsx"),
+);
+const OffAxisChamberLab = lazy(
+  () => import("./components/OffAxisChamberLab.jsx"),
+);
+const RouletteFingerGame = lazy(
+  () => import("./components/RouletteFingerGame.jsx"),
+);
+const SpatialGestureMemory = lazy(
+  () => import("./components/SpatialGestureMemory.jsx"),
+);
+const WfcWorldRenderer = lazy(() =>
+  import("./wfc/WfcWorldRenderer.jsx").then((module) => ({
+    default: module.WfcWorldRenderer,
+  })),
+);
+
+function LazyExperienceFallback({ label = "Loading experience…" }) {
+  return (
+    <div className="lazy-experience-fallback" role="status">
+      <span aria-hidden="true" className="lazy-experience-spinner" />
+      <strong>{label}</strong>
+    </div>
+  );
+}
 
 const PHASES = APP_PHASES;
 
@@ -12001,16 +12038,20 @@ export default function App() {
 
   if (phase === PHASES.GESTURE_ART_LAB) {
     return (
-      <GestureArtLab
-        key={gestureArtSessionKey}
-        hands={gestureArtHands}
-        handDetected={handDetected}
-        onBack={navigateToProductHome}
-        onOpenSetup={() => {
-          setPendingModeId("gesture-art");
-          openProductTrackingSetup();
-        }}
-      />
+      <Suspense
+        fallback={<LazyExperienceFallback label="Opening Light Painting…" />}
+      >
+        <GestureArtLab
+          key={gestureArtSessionKey}
+          hands={gestureArtHands}
+          handDetected={handDetected}
+          onBack={navigateToProductHome}
+          onOpenSetup={() => {
+            setPendingModeId("gesture-art");
+            openProductTrackingSetup();
+          }}
+        />
+      </Suspense>
     );
   }
 
@@ -13139,14 +13180,20 @@ export default function App() {
               ) : null}
             </div>
           ) : fullscreenGridMode === WFC_WORLD_MODE_ID ? (
-            <WfcWorldRenderer
-              game={fullscreenWfcWorldState}
-              style={fullscreenCameraViewport?.style ?? undefined}
-              onMouseDown={handleFullscreenWfcWorldMouseDown}
-              onMouseMove={handleFullscreenWfcWorldMouseMove}
-              onMouseUp={stopFullscreenWfcWorldMouseInput}
-              onMouseLeave={stopFullscreenWfcWorldMouseInput}
-            />
+            <Suspense
+              fallback={
+                <LazyExperienceFallback label="Building World Painter…" />
+              }
+            >
+              <WfcWorldRenderer
+                game={fullscreenWfcWorldState}
+                style={fullscreenCameraViewport?.style ?? undefined}
+                onMouseDown={handleFullscreenWfcWorldMouseDown}
+                onMouseMove={handleFullscreenWfcWorldMouseMove}
+                onMouseUp={stopFullscreenWfcWorldMouseInput}
+                onMouseLeave={stopFullscreenWfcWorldMouseInput}
+              />
+            </Suspense>
           ) : fullscreenGridMode === "invaders" ? (
             <div
               className="fullscreen-camera-invaders"
@@ -13881,42 +13928,46 @@ export default function App() {
   if (isMinorityReportLabPhase) {
     return (
       <div className="app fullscreen-camera-app minority-report-app">
-        <MinorityReportLab
-          immersive
-          cameraAspectRatio={cameraAspectRatio}
-          cameraObjectFit={cameraObjectFit}
-          cameraOverlayRef={overlayCanvasRef}
-          cameraStageRef={cameraWrapRef}
-          cameraVideoRef={videoRef}
-          cameraError={cameraError}
-          modelError={modelError}
-          fps={fps}
-          engineOutput={labEngineOutput}
-          eventLog={labEventLog}
-          detectionStatus={{
-            handsCount: labEngineOutput.hands.length,
-            inferenceBusy: inferenceBusyRef.current,
-            handDetected,
-          }}
-          confidenceThreshold={labConfidenceThreshold}
-          showSkeleton={labShowSkeleton}
-          showTrails={labShowTrails}
-          personalizationEnabled={labPersonalizationEnabled}
-          onConfidenceThresholdChange={setLabConfidenceThreshold}
-          onShowSkeletonChange={setLabShowSkeleton}
-          onShowTrailsChange={setLabShowTrails}
-          onPersonalizationEnabledChange={setLabPersonalizationEnabled}
-          trainingState={labTrainingState}
-          sampleCounts={labSampleCounts}
-          onRecordGesture={startLabGestureRecording}
-          onDeleteLastSample={deleteLastLabSample}
-          onClearSamples={clearLabSamples}
-          onExportSamples={exportLabSamples}
-          onImportSamples={importLabSamples}
-          onClearEventLog={clearLabEventLog}
-          onBack={returnFromMinorityReportLab}
-          onReset={startMinorityReportLab}
-        />
+        <Suspense
+          fallback={<LazyExperienceFallback label="Opening Gesture HUD…" />}
+        >
+          <MinorityReportLab
+            immersive
+            cameraAspectRatio={cameraAspectRatio}
+            cameraObjectFit={cameraObjectFit}
+            cameraOverlayRef={overlayCanvasRef}
+            cameraStageRef={cameraWrapRef}
+            cameraVideoRef={videoRef}
+            cameraError={cameraError}
+            modelError={modelError}
+            fps={fps}
+            engineOutput={labEngineOutput}
+            eventLog={labEventLog}
+            detectionStatus={{
+              handsCount: labEngineOutput.hands.length,
+              inferenceBusy: inferenceBusyRef.current,
+              handDetected,
+            }}
+            confidenceThreshold={labConfidenceThreshold}
+            showSkeleton={labShowSkeleton}
+            showTrails={labShowTrails}
+            personalizationEnabled={labPersonalizationEnabled}
+            onConfidenceThresholdChange={setLabConfidenceThreshold}
+            onShowSkeletonChange={setLabShowSkeleton}
+            onShowTrailsChange={setLabShowTrails}
+            onPersonalizationEnabledChange={setLabPersonalizationEnabled}
+            trainingState={labTrainingState}
+            sampleCounts={labSampleCounts}
+            onRecordGesture={startLabGestureRecording}
+            onDeleteLastSample={deleteLastLabSample}
+            onClearSamples={clearLabSamples}
+            onExportSamples={exportLabSamples}
+            onImportSamples={importLabSamples}
+            onClearEventLog={clearLabEventLog}
+            onBack={returnFromMinorityReportLab}
+            onReset={startMinorityReportLab}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -14228,7 +14279,8 @@ export default function App() {
           />
         )}
 
-        {phase === PHASES.CALIBRATION ? (
+        <Suspense fallback={<LazyExperienceFallback />}>
+          {phase === PHASES.CALIBRATION ? (
           <section className="card panel calibration-panel">
             <h2>Calibration Input Test</h2>
             <p className="small-text">
@@ -14503,7 +14555,8 @@ export default function App() {
               )}
             </div>
           </section>
-        )}
+          )}
+        </Suspense>
       </div>
 
       {phase !== PHASES.MINORITY_REPORT_LAB &&
