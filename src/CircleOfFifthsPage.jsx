@@ -2257,12 +2257,16 @@ function persistAutostartIntent() {
     return;
   }
 
-  window.sessionStorage.setItem(
-    AUTOSTART_SESSION_KEY,
-    JSON.stringify({
-      issuedAt: Date.now(),
-    }),
-  );
+  try {
+    window.sessionStorage.setItem(
+      AUTOSTART_SESSION_KEY,
+      JSON.stringify({
+        issuedAt: Date.now(),
+      }),
+    );
+  } catch (error) {
+    pageLog.warn("Could not save Jam Studio restart intent", { error });
+  }
 }
 
 function consumeAutostartIntent() {
@@ -2270,8 +2274,14 @@ function consumeAutostartIntent() {
     return false;
   }
 
-  const rawIntent = window.sessionStorage.getItem(AUTOSTART_SESSION_KEY);
-  window.sessionStorage.removeItem(AUTOSTART_SESSION_KEY);
+  let rawIntent;
+  try {
+    rawIntent = window.sessionStorage.getItem(AUTOSTART_SESSION_KEY);
+    window.sessionStorage.removeItem(AUTOSTART_SESSION_KEY);
+  } catch (error) {
+    pageLog.warn("Could not read Jam Studio restart intent", { error });
+    return false;
+  }
   if (!rawIntent) {
     return false;
   }

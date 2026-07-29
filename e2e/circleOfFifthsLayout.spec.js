@@ -83,3 +83,33 @@ test("Jam Studio uses centered document flow and collapsible controls on phones"
   });
   await expectNoHorizontalOverflow(page);
 });
+
+test("Jam Studio remains usable when session storage is unavailable", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      get() {
+        throw new DOMException(
+          "Synthetic session storage denial.",
+          "SecurityError",
+        );
+      },
+    });
+  });
+
+  await page.goto("/circle-of-fifths.html");
+
+  await expect(
+    page.getByRole("heading", { name: "Jam Studio", level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("group", {
+      name: "Interactive circle of fifths chord wheel",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Enable Camera + Audio" }),
+  ).toBeVisible();
+});
