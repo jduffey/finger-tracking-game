@@ -23,6 +23,24 @@ test("getFullscreenRestartControlLabel returns labels for terminal fullscreen mo
     "Restart Rally",
   );
   assert.equal(
+    getFullscreenRestartControlLabel("finger-pong", {
+      fingerPong: { status: "lost" },
+    }),
+    "Restart Rally",
+  );
+  assert.equal(
+    getFullscreenRestartControlLabel("breakout", {
+      breakout: { status: "cleared" },
+    }),
+    "Next Level",
+  );
+  assert.equal(
+    getFullscreenRestartControlLabel("find-your-grind-breakout", {
+      breakout: { status: "gameover" },
+    }),
+    "Restart Breakout",
+  );
+  assert.equal(
     getFullscreenRestartControlLabel("fruit-ninja", {
       fruitNinja: { status: "gameover" },
     }),
@@ -58,6 +76,12 @@ test("getFullscreenRestartControlLabel stays hidden during active rounds and mod
   assert.equal(
     getFullscreenRestartControlLabel("finger-pong", {
       fingerPong: { status: "playing" },
+    }),
+    null,
+  );
+  assert.equal(
+    getFullscreenRestartControlLabel("breakout", {
+      breakout: { status: "playing" },
     }),
     null,
   );

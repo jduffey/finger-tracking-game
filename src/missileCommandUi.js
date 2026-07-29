@@ -1,4 +1,9 @@
-import { MISSILE_COMMAND_INTERCEPT_COOLDOWN_MS } from "./missileCommandGame.js";
+import {
+  MISSILE_COMMAND_INTERCEPT_COOLDOWN_MS,
+  MISSILE_COMMAND_INTERCEPT_ENERGY_COST,
+  MISSILE_COMMAND_MAX_AMMO,
+  MISSILE_COMMAND_MAX_ENERGY,
+} from "./missileCommandGame.js";
 
 export function getMissileCommandSceneClassName() {
   return "fullscreen-camera-missile-command retro-defense";
@@ -99,10 +104,16 @@ export function getMissileCommandCrosshairUi(state, aimPoint, handDetected) {
       : getFallbackAimPoint(state);
   const hasBases = getAliveBases(state.structures).length > 0;
   const cooldown = getMissileCommandCooldownUi(state);
+  const ammo = state.ammo ?? MISSILE_COMMAND_MAX_AMMO;
+  const energy = state.energy ?? MISSILE_COMMAND_MAX_ENERGY;
   const stateName = !handDetected || !aimPoint
     ? "no-hand"
     : !hasBases
     ? "no-bases"
+    : ammo <= 0
+    ? "no-ammo"
+    : energy < MISSILE_COMMAND_INTERCEPT_ENERGY_COST
+    ? "recharging"
     : cooldown.isCoolingDown
     ? "cooling"
     : "ready";
@@ -111,6 +122,8 @@ export function getMissileCommandCrosshairUi(state, aimPoint, handDetected) {
     cooling: "Reloading",
     "no-hand": "No hand",
     "no-bases": "No bases",
+    "no-ammo": "No ammo",
+    recharging: "Charging",
   };
 
   return {
@@ -193,12 +206,15 @@ export function getMissileCommandThreatUi(threat) {
   );
   const progress = clamp(traveledDistance / totalDistance, 0, 1);
   const urgency = progress >= 0.82 ? "critical" : progress >= 0.58 ? "urgent" : "distant";
+  const type = threat?.type ?? "standard";
 
   return {
     progress: Number(progress.toFixed(3)),
     urgency,
-    trailClassName: `fullscreen-camera-missile-trail hostile ${urgency}`,
-    headClassName: `fullscreen-camera-missile-head hostile shape-diamond ${urgency}`,
+    type,
+    hitPoints: threat?.hitPoints ?? 1,
+    trailClassName: `fullscreen-camera-missile-trail hostile ${urgency} ${type}`,
+    headClassName: `fullscreen-camera-missile-head hostile shape-diamond ${urgency} ${type}`,
   };
 }
 
@@ -240,6 +256,8 @@ export function getMissileCommandTacticalMetrics(state) {
     bases,
     cities,
     pressure,
+    wave: state?.wave ?? 1,
+    totalWaves: state?.totalWaves ?? 1,
     items: [
       { id: "score", label: "Score", value: score },
       { id: "intercepts", label: "Hits", value: intercepts },
@@ -247,6 +265,86 @@ export function getMissileCommandTacticalMetrics(state) {
       { id: "bases", label: "Bases", value: bases },
       { id: "cities", label: "Cities", value: cities },
       { id: "pressure", label: "Pressure", value: pressure },
+    ],
+  };
+}
+
+export function getMissileCommandResourceUi(state) {
+  const maxAmmo = Math.max(1, state?.maxAmmo ?? MISSILE_COMMAND_MAX_AMMO);
+  const ammo = clamp(state?.ammo ?? maxAmmo, 0, maxAmmo);
+  const maxEnergy = Math.max(1, state?.maxEnergy ?? MISSILE_COMMAND_MAX_ENERGY);
+  const energy = clamp(state?.energy ?? maxEnergy, 0, maxEnergy);
+  const canFire =
+    state?.status === "playing" &&
+    getAliveBases(state?.structures).length > 0 &&
+    ammo > 0 &&
+    energy >= MISSILE_COMMAND_INTERCEPT_ENERGY_COST &&
+    (state?.cooldownMs ?? 0) <= 0;
+  return {
+    ammo,
+    maxAmmo,
+    ammoRatio: Number((ammo / maxAmmo).toFixed(3)),
+    energy: Math.round(energy),
+    maxEnergy,
+    energyRatio: Number((energy / maxEnergy).toFixed(3)),
+    shotEnergyCost: MISSILE_COMMAND_INTERCEPT_ENERGY_COST,
+    canFire,
+    state:
+      ammo <= 0
+        ? "empty"
+        : energy < MISSILE_COMMAND_INTERCEPT_ENERGY_COST
+          ? "charging"
+          : canFire
+            ? "ready"
+            : "waiting",
+  };
+}
+
+export function getMissileCommandWaveUi(state) {
+  const wave = Math.max(1, state?.wave ?? 1);
+  const totalWaves = Math.max(wave, state?.totalWaves ?? wave);
+  const limit = Math.max(1, state?.waveThreatLimit ?? 1);
+  const resolved = clamp(state?.waveThreatsResolved ?? 0, 0, limit);
+  return {
+    wave,
+    totalWaves,
+    name: state?.waveConfig?.name ?? `Wave ${wave}`,
+    progress: Number((resolved / limit).toFixed(3)),
+    threatsRemaining: Math.max(0, limit - resolved),
+    specialThreats: (state?.threats ?? []).filter(
+      (threat) => threat.type && threat.type !== "standard",
+    ).length,
+    phase:
+      state?.status === "intermission"
+        ? "calm"
+        : state?.status === "game_over"
+          ? "complete"
+          : state?.status === "countdown"
+            ? "briefing"
+            : "defending",
+  };
+}
+
+export function getMissileCommandIntermissionUi(state) {
+  if (state?.status !== "intermission" || !state.lastWaveRecap) {
+    return {
+      visible: false,
+      title: "",
+      remainingMs: 0,
+      stats: [],
+    };
+  }
+  const recap = state.lastWaveRecap;
+  return {
+    visible: true,
+    title: recap.perfect ? "Perfect wave" : "Sky secured",
+    remainingMs: Math.max(0, state.intermissionMs ?? 0),
+    nextWave: Math.min(state.totalWaves ?? state.wave + 1, state.wave + 1),
+    stats: [
+      { label: "Intercepts", value: recap.threatsStopped },
+      { label: "Cities", value: recap.citiesSurviving },
+      { label: "City bonus", value: recap.cityBonus },
+      { label: "Perfect bonus", value: recap.perfectBonus },
     ],
   };
 }
@@ -294,13 +392,22 @@ export function getMissileCommandGameOverUi(state, restartLabel = "Restart Defen
     };
   }
 
+  const result = state.result;
   return {
     visible: true,
-    title: "Defense lost",
-    stats: [
-      { label: "Score", value: state.score ?? 0 },
-      { label: "Intercepts", value: state.threatsStopped ?? 0 },
-    ],
+    title: result?.outcome === "victory" ? "Defense complete" : "Defense lost",
+    stats: result
+      ? [
+          { label: "Score", value: result.score },
+          { label: "Waves", value: `${result.wavesCleared}/${result.totalWaves}` },
+          { label: "Cities", value: result.citiesSurviving },
+          { label: "Accuracy", value: `${result.accuracy}%` },
+        ]
+      : [
+          { label: "Score", value: state.score ?? 0 },
+          { label: "Intercepts", value: state.threatsStopped ?? 0 },
+        ],
+    medals: result?.medals ?? [],
     restartText: `Hold ${restartLabel}`,
   };
 }

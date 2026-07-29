@@ -10,6 +10,7 @@ import {
   SKY_PATROL_LEGEND_FADE_MS,
   SKY_PATROL_START_PROMPT_MS,
   getSkyPatrolProjectileUi,
+  getSkyPatrolPowerUpUi,
   getSkyPatrolRadarBlips,
   getSkyPatrolTargetHealthPips,
   getSkyPatrolThreatUi,
@@ -154,6 +155,15 @@ function drawAtlasSprite(ctx, renderer, spriteKey, centerX, centerY, targetWidth
 }
 
 function getEnemySpriteKey(enemy) {
+  if (enemy?.kind === "ace") {
+    return "bossBomber";
+  }
+  if (enemy?.kind === "bomber") {
+    return "enemyBomber";
+  }
+  if (enemy?.kind === "interceptor") {
+    return "enemyInterceptor";
+  }
   const variantIndex = Math.floor(hashSpriteSeed(enemy?.id ?? enemy?.x ?? 0) * SKY_PATROL_ENEMY_SPRITE_KEYS.length);
   return SKY_PATROL_ENEMY_SPRITE_KEYS[variantIndex] ?? SKY_PATROL_ENEMY_SPRITE_KEYS[0];
 }
@@ -553,6 +563,24 @@ function drawGroundTargetSite(ctx, target) {
 }
 
 function drawHealthPips(ctx, entity, y) {
+  if (entity.isBoss || entity.kind === "ace") {
+    const maxHp = Math.max(1, entity.maxHp ?? 1);
+    const healthRatio = clamp((entity.hp ?? maxHp) / maxHp, 0, 1);
+    const barWidth = Math.min(220, Math.max(120, (entity.width ?? 80) * 1.35));
+    const barHeight = 7;
+    const left = roundPixel(entity.x - barWidth / 2);
+    const top = roundPixel(y - 2);
+    ctx.fillStyle = "rgba(8, 15, 24, 0.82)";
+    ctx.fillRect(left, top, roundPixel(barWidth), barHeight);
+    ctx.fillStyle = healthRatio <= 0.5 ? "#ff5370" : "#ffd166";
+    ctx.fillRect(
+      left + 1,
+      top + 1,
+      Math.max(0, roundPixel((barWidth - 2) * healthRatio)),
+      barHeight - 2,
+    );
+    return;
+  }
   const pips = getSkyPatrolTargetHealthPips(entity);
   if (pips.length <= 1) {
     return;
@@ -728,6 +756,124 @@ function drawScoreBurst(ctx, burst, tileSize) {
   ctx.restore();
 }
 
+function drawThreatTelegraph(ctx, telegraph, layout) {
+  const durationMs = Math.max(1, telegraph.durationMs ?? 1);
+  const progress = clamp((telegraph.ageMs ?? 0) / durationMs, 0, 1);
+  const x = clamp(telegraph.x ?? layout.width / 2, 18, layout.width - 18);
+  const width = telegraph.kind === "ace" ? 94 : telegraph.kind === "bomber" ? 68 : 44;
+  const pulse = 0.45 + Math.abs(Math.sin(progress * Math.PI * 7)) * 0.45;
+
+  ctx.save();
+  ctx.globalAlpha = Math.max(0.16, (1 - progress * 0.72) * pulse);
+  ctx.fillStyle = telegraph.kind === "ace" ? "#ff5370" : "#ffd166";
+  ctx.fillRect(roundPixel(x - width / 2), 10, roundPixel(width), 4);
+  ctx.fillRect(roundPixel(x - 2), 10, 4, 13);
+  if (typeof ctx.fillText === "function" && telegraph.label) {
+    ctx.font = `${Math.max(9, roundPixel(layout.tileSize * 0.52))}px monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(telegraph.label, roundPixel(x), 29);
+  }
+  ctx.restore();
+}
+
+function drawPowerUp(ctx, powerUp, renderer) {
+  const ui = getSkyPatrolPowerUpUi(powerUp);
+  const spriteKey =
+    ui.type === "shield"
+      ? "powerShield"
+      : ui.type === "overdrive"
+        ? "powerStar"
+        : ui.type === "repair"
+          ? "powerP"
+          : "powerB";
+  if (
+    drawAtlasSprite(
+      ctx,
+      renderer,
+      spriteKey,
+      powerUp.x,
+      powerUp.y,
+      powerUp.width * 1.12,
+      powerUp.height * 1.12,
+      {
+        shadowColor: ui.color,
+        shadowBlur: 14,
+      },
+    )
+  ) {
+    return;
+  }
+
+  const { left, top, width, height } = getEntityBounds(powerUp);
+  fillPixelPath(
+    ctx,
+    [
+      { x: left + width / 2, y: top },
+      { x: left + width, y: top + height / 2 },
+      { x: left + width / 2, y: top + height },
+      { x: left, y: top + height / 2 },
+    ],
+    ui.color,
+    "#172033",
+  );
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(
+    roundPixel(left + width * 0.38),
+    roundPixel(top + height * 0.38),
+    Math.max(3, roundPixel(width * 0.24)),
+    Math.max(3, roundPixel(height * 0.24)),
+  );
+}
+
+function drawCheckpointBanner(ctx, state) {
+  if (state.status !== "checkpoint" || !state.lastMissionRecap) {
+    return;
+  }
+  const { layout, lastMissionRecap: recap } = state;
+  const bannerWidth = Math.min(layout.width - 32, 420);
+  const bannerHeight = 112;
+  const left = roundPixel((layout.width - bannerWidth) / 2);
+  const top = roundPixel(layout.height * 0.35);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(9, 24, 43, 0.88)";
+  ctx.fillRect(left, top, roundPixel(bannerWidth), bannerHeight);
+  drawPixelStrokeRect(
+    ctx,
+    left,
+    top,
+    roundPixel(bannerWidth),
+    bannerHeight,
+    recap.clean ? "#9ff28c" : "#72ddf7",
+  );
+  if (typeof ctx.fillText === "function") {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = `700 ${Math.max(16, roundPixel(layout.tileSize * 0.9))}px monospace`;
+    ctx.fillText(
+      recap.clean ? "CLEAN CHECKPOINT" : "CHECKPOINT",
+      roundPixel(layout.width / 2),
+      top + 29,
+    );
+    ctx.fillStyle = "#d9f5ff";
+    ctx.font = `${Math.max(11, roundPixel(layout.tileSize * 0.62))}px monospace`;
+    ctx.fillText(
+      `${recap.name} · ${recap.accuracy}% accuracy · +${recap.checkpointBonus}`,
+      roundPixel(layout.width / 2),
+      top + 63,
+    );
+    ctx.fillStyle = "#9ff28c";
+    ctx.fillText(
+      "Repair, shield, and wingman resupplied",
+      roundPixel(layout.width / 2),
+      top + 88,
+    );
+  }
+  ctx.restore();
+}
+
 function drawSkyPatrolFrame(renderer, state) {
   const ctx = renderer.ctx;
   const canvas = renderer.canvas;
@@ -747,6 +893,9 @@ function drawSkyPatrolFrame(renderer, state) {
   drawTerrain(ctx, renderer, state);
   drawCloudLayer(ctx, renderer, state);
 
+  for (const telegraph of state.threatTelegraphs ?? []) {
+    drawThreatTelegraph(ctx, telegraph, state.layout);
+  }
   for (const target of state.groundTargets ?? []) {
     drawEntityShadow(ctx, target, state.layout);
     drawGroundTarget(ctx, target);
@@ -761,6 +910,9 @@ function drawSkyPatrolFrame(renderer, state) {
   for (const shot of state.enemyShots ?? []) {
     drawProjectile(ctx, shot, renderer);
   }
+  for (const powerUp of state.powerUps ?? []) {
+    drawPowerUp(ctx, powerUp, renderer);
+  }
   if (state.ship) {
     drawEntityShadow(ctx, state.ship, state.layout);
     ctx.save();
@@ -768,6 +920,37 @@ function drawSkyPatrolFrame(renderer, state) {
       ctx.globalAlpha = 0.58;
     }
     drawPlayerShip(ctx, state.ship, renderer);
+    if ((state.wingmanActiveMs ?? 0) > 0) {
+      const wingmanWidth = state.ship.width * 0.54;
+      const wingmanHeight = state.ship.height * 0.54;
+      for (const side of [-1, 1]) {
+        drawPlayerShip(
+          ctx,
+          {
+            ...state.ship,
+            x: state.ship.x + side * state.ship.width * 0.68,
+            y: state.ship.y + state.ship.height * 0.28,
+            width: wingmanWidth,
+            height: wingmanHeight,
+            bank: side * 0.18,
+          },
+          renderer,
+        );
+      }
+    }
+    if ((state.shieldCharges ?? 0) > 0) {
+      const shieldWidth = roundPixel(state.ship.width * 1.22);
+      const shieldHeight = roundPixel(state.ship.height * 1.12);
+      ctx.fillStyle = "rgba(114, 221, 247, 0.34)";
+      drawPixelStrokeRect(
+        ctx,
+        roundPixel(state.ship.x - shieldWidth / 2),
+        roundPixel(state.ship.y - shieldHeight / 2),
+        shieldWidth,
+        shieldHeight,
+        "rgba(114, 221, 247, 0.72)",
+      );
+    }
     ctx.restore();
   }
   for (const explosion of state.explosions ?? []) {
@@ -776,6 +959,7 @@ function drawSkyPatrolFrame(renderer, state) {
   for (const burst of state.scoreBursts ?? []) {
     drawScoreBurst(ctx, burst, state.layout.tileSize);
   }
+  drawCheckpointBanner(ctx, state);
   if ((state.damageFlashMs ?? 0) > 0) {
     const flashProgress = clamp(state.damageFlashMs / 320, 0, 1);
     ctx.fillStyle = `rgba(255, 104, 78, ${0.22 * flashProgress})`;
@@ -788,6 +972,8 @@ export function getSkyPatrolHudState(state) {
     return null;
   }
 
+  const shotsFired = state.shotsFired ?? state.stats?.shotsFired ?? 0;
+  const shotsHit = state.shotsHit ?? state.stats?.shotsHit ?? 0;
   return {
     score: state.score ?? 0,
     targetsDestroyed: state.targetsDestroyed ?? 0,
@@ -803,12 +989,36 @@ export function getSkyPatrolHudState(state) {
     gunCharge: state.gunCharge ?? 1,
     gunCooldownMs: state.gunCooldownMs ?? 0,
     gunStatus: state.gunStatus ?? "ready",
+    mission: state.mission ?? 1,
+    totalMissions: state.totalMissions ?? 1,
+    missionName: state.missionConfig?.name ?? `Mission ${state.mission ?? 1}`,
+    missionGoalText: state.missionConfig?.goalText ?? "",
+    missionProgress: state.missionProgress ?? 0,
+    missionGoal: state.missionConfig?.targetGoal ?? 0,
+    bossMission: Boolean(state.missionConfig?.boss),
+    comboCount: state.comboCount ?? 0,
+    comboExpiresMs: state.comboExpiresMs ?? 0,
+    accuracy:
+      shotsFired > 0
+        ? Math.min(100, Math.round((shotsHit / shotsFired) * 100))
+        : 0,
+    shieldCharges: state.shieldCharges ?? 0,
+    wingmanCharges: state.wingmanCharges ?? 0,
+    wingmanActiveMs: state.wingmanActiveMs ?? 0,
+    overdriveMs: state.overdriveMs ?? 0,
+    powerUpCount: state.powerUps?.length ?? 0,
+    startSafetyMs: state.startSafetyMs ?? 0,
+    checkpointMs: state.checkpointMs ?? 0,
+    lastMissionRecap: state.lastMissionRecap ?? null,
+    outcome: state.outcome ?? null,
+    result: state.result ?? null,
     incomingIndicators: getSkyPatrolIncomingIndicators(state),
     legendFaded: (state.elapsedMs ?? 0) >= SKY_PATROL_LEGEND_FADE_MS,
     radarBlips: getSkyPatrolRadarBlips(state),
     startPromptVisible:
       (state.status ?? "playing") === "playing" &&
-      (state.elapsedMs ?? 0) < SKY_PATROL_START_PROMPT_MS,
+      ((state.startSafetyMs ?? 0) > 0 ||
+        (state.elapsedMs ?? 0) < SKY_PATROL_START_PROMPT_MS),
     status: state.status ?? "playing",
     message: state.message ?? "",
   };
@@ -833,6 +1043,27 @@ export function areSkyPatrolHudStatesEqual(a, b) {
     a.gunCharge === b.gunCharge &&
     a.gunCooldownMs === b.gunCooldownMs &&
     a.gunStatus === b.gunStatus &&
+    a.mission === b.mission &&
+    a.totalMissions === b.totalMissions &&
+    a.missionName === b.missionName &&
+    a.missionGoalText === b.missionGoalText &&
+    a.missionProgress === b.missionProgress &&
+    a.missionGoal === b.missionGoal &&
+    a.bossMission === b.bossMission &&
+    a.comboCount === b.comboCount &&
+    a.comboExpiresMs === b.comboExpiresMs &&
+    a.accuracy === b.accuracy &&
+    a.shieldCharges === b.shieldCharges &&
+    a.wingmanCharges === b.wingmanCharges &&
+    a.wingmanActiveMs === b.wingmanActiveMs &&
+    a.overdriveMs === b.overdriveMs &&
+    a.powerUpCount === b.powerUpCount &&
+    a.startSafetyMs === b.startSafetyMs &&
+    a.checkpointMs === b.checkpointMs &&
+    JSON.stringify(a.lastMissionRecap ?? null) ===
+      JSON.stringify(b.lastMissionRecap ?? null) &&
+    a.outcome === b.outcome &&
+    JSON.stringify(a.result ?? null) === JSON.stringify(b.result ?? null) &&
     JSON.stringify(a.incomingIndicators ?? []) === JSON.stringify(b.incomingIndicators ?? []) &&
     a.legendFaded === b.legendFaded &&
     JSON.stringify(a.radarBlips ?? []) === JSON.stringify(b.radarBlips ?? []) &&

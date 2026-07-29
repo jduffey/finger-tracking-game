@@ -1,4 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  GESTURE_ANALYTICS_LIBRARY_VERSION,
+  GESTURE_ANALYTICS_LIMITS,
+  createGestureAnalyticsSession,
+  mergeGestureAnalyticsLibraries,
+  parseGestureAnalyticsLibraryJSON,
+  readGestureAnalyticsLibrary,
+  serializeGestureAnalyticsLibrary,
+  writeGestureAnalyticsLibrary,
+} from "../gestureAnalyticsSessions.js";
+import "./GestureAnalyticsLab.css";
 
 const HEATMAP_COLS = 24;
 const HEATMAP_ROWS = 16;
@@ -259,10 +270,63 @@ function formatPct(value) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+function calculateSessionMetrics(session) {
+  const sessionFrames = session?.frames ?? [];
+  if (sessionFrames.length < 2) {
+    return createEmptyMetrics();
+  }
+  const elapsedMs = Math.max(
+    1,
+    sessionFrames.at(-1).t - sessionFrames[0].t,
+  );
+  return calculateMetrics(sessionFrames, elapsedMs);
+}
+
+function hydrateSessionLibrary(library) {
+  return (library?.sessions ?? []).map((session) => ({
+    ...session,
+    metrics: calculateSessionMetrics(session),
+  }));
+}
+
+function createPersistableLibrary(sessions) {
+  return {
+    version: GESTURE_ANALYTICS_LIBRARY_VERSION,
+    updatedAt: new Date().toISOString(),
+    sessions: sessions.map(({ metrics: _metrics, ...session }) => session),
+  };
+}
+
+function downloadJson(json, fileName) {
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
+  const initialLibraryReadRef = useRef(null);
+  if (!initialLibraryReadRef.current) {
+    initialLibraryReadRef.current = readGestureAnalyticsLibrary();
+  }
   const [frames, setFrames] = useState([]);
   const [recording, setRecording] = useState(false);
-  const [sessionLibrary, setSessionLibrary] = useState([]);
+  const [sessionLibrary, setSessionLibrary] = useState(() =>
+    hydrateSessionLibrary(initialLibraryReadRef.current.library),
+  );
+  const [libraryStatus, setLibraryStatus] = useState(
+    initialLibraryReadRef.current.status,
+  );
+  const [libraryFeedback, setLibraryFeedback] = useState(() =>
+    initialLibraryReadRef.current.status === "invalid"
+      ? "Saved analytics data could not be read and was left untouched."
+      : "Saved sessions stay in this browser until you export or delete them.",
+  );
   const [replaySessionId, setReplaySessionId] = useState("");
   const [compareSessionId, setCompareSessionId] = useState("");
   const [replayCursor, setReplayCursor] = useState(0);
@@ -270,6 +334,7 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
 
   const replayRafRef = useRef(0);
   const replayStartRef = useRef(0);
+  const importInputRef = useRef(null);
 
   useEffect(() => {
     if (isReplaying || !recording || !Number.isFinite(liveTimestamp)) {
@@ -285,7 +350,12 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
             pinchDistance: hand?.pinchDistance ?? null,
             fingerTips: hand?.fingerTips ?? null,
             landmarks: Array.isArray(hand?.landmarks)
-              ? hand.landmarks.map((point) => ({ u: point.u, v: point.v }))
+              ? hand.landmarks.map((point) =>
+                  Number.isFinite(point?.u) &&
+                  Number.isFinite(point?.v)
+                    ? { u: point.u, v: point.v }
+                    : null,
+                )
               : [],
           })),
         },
@@ -352,20 +422,61 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
     return () => cancelAnimationFrame(replayRafRef.current);
   }, [isReplaying, replayCursor, replayFrames]);
 
+  function persistSessions(nextSessions, successMessage) {
+    setSessionLibrary(nextSessions);
+    if (libraryStatus === "invalid") {
+      setLibraryFeedback(
+        `${successMessage} It is available for this visit only. Confirm replacement of the unreadable local archive before saving.`,
+      );
+      return { ok: false, reason: "write_blocked" };
+    }
+    const result = writeGestureAnalyticsLibrary(
+      createPersistableLibrary(nextSessions),
+    );
+    setLibraryStatus(result.ok ? "saved" : "unavailable");
+    setLibraryFeedback(
+      result.ok
+        ? successMessage
+        : `${successMessage} It is available for this visit, but browser storage could not be updated.`,
+    );
+    return result;
+  }
+
+  function replaceUnreadableLibrary() {
+    const result = writeGestureAnalyticsLibrary(
+      createPersistableLibrary(sessionLibrary),
+    );
+    setLibraryStatus(result.ok ? "saved" : "unavailable");
+    setLibraryFeedback(
+      result.ok
+        ? "Replaced the unreadable archive with the sessions visible now."
+        : "The unreadable archive could not be replaced because browser storage is unavailable.",
+    );
+  }
+
   function saveSession() {
     if (frames.length < 5) {
       return;
     }
     const id = `session-${Date.now()}`;
-    const elapsedMs = Math.max(1, frames[frames.length - 1].t - frames[0].t);
-    const snapshot = {
+    const created = createGestureAnalyticsSession({
+      frames,
       id,
       name: `Session ${sessionLibrary.length + 1}`,
-      createdAt: new Date().toISOString(),
-      frames,
-      metrics: calculateMetrics(frames, elapsedMs),
+    });
+    if (!created.ok) {
+      setLibraryFeedback(created.message);
+      return;
+    }
+    const snapshot = {
+      ...created.session,
+      metrics: calculateSessionMetrics(created.session),
     };
-    setSessionLibrary((previous) => [snapshot, ...previous]);
+    const nextSessions = [snapshot, ...sessionLibrary].slice(
+      0,
+      GESTURE_ANALYTICS_LIMITS.maxSessions,
+    );
+    persistSessions(nextSessions, `Saved ${snapshot.name} locally.`);
     setReplaySessionId(id);
   }
 
@@ -375,15 +486,90 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
       source: isReplaySessionSelected ? "replay" : "live",
       metrics: visibleMetrics,
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `gesture-analytics-${Date.now()}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+    downloadJson(
+      JSON.stringify(payload, null, 2),
+      `gesture-analytics-metrics-${Date.now()}.json`,
+    );
+    setLibraryFeedback("Exported the visible metrics summary.");
+  }
+
+  function exportSessionArchive() {
+    const result = serializeGestureAnalyticsLibrary(
+      createPersistableLibrary(sessionLibrary),
+    );
+    if (!result.ok) {
+      setLibraryFeedback(result.message);
+      return;
+    }
+    downloadJson(
+      result.json,
+      `gesture-analytics-sessions-${Date.now()}.json`,
+    );
+    setLibraryFeedback(
+      "Exported a portable archive containing the selected tracking samples.",
+    );
+  }
+
+  async function importSessionArchive(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    let json;
+    try {
+      json = await file.text();
+    } catch {
+      setLibraryFeedback("The selected archive could not be read.");
+      return;
+    }
+    const parsed = parseGestureAnalyticsLibraryJSON(json);
+    if (!parsed.ok) {
+      setLibraryFeedback(parsed.message);
+      return;
+    }
+    const merged = mergeGestureAnalyticsLibraries(
+      createPersistableLibrary(sessionLibrary),
+      parsed.library,
+    );
+    if (!merged.ok) {
+      setLibraryFeedback(merged.message);
+      return;
+    }
+    const nextSessions = hydrateSessionLibrary(merged.library);
+    persistSessions(
+      nextSessions,
+      `Imported ${merged.importedCount} ${
+        merged.importedCount === 1 ? "session" : "sessions"
+      }.`,
+    );
+  }
+
+  function deleteSelectedSession() {
+    if (!replaySession) {
+      return;
+    }
+    const nextSessions = sessionLibrary.filter(
+      ({ id }) => id !== replaySession.id,
+    );
+    persistSessions(
+      nextSessions,
+      `Deleted ${replaySession.name} from this browser.`,
+    );
+    setReplaySessionId("");
+    setCompareSessionId((current) =>
+      current === replaySession.id ? "" : current,
+    );
+    setReplayCursor(0);
+    setIsReplaying(false);
+  }
+
+  function clearSessionLibrary() {
+    persistSessions([], "Cleared every saved analytics session.");
+    setReplaySessionId("");
+    setCompareSessionId("");
+    setReplayCursor(0);
+    setIsReplaying(false);
   }
 
   const replayProgress = replayDurationMs > 0 ? replayCursor / replayDurationMs : 0;
@@ -405,6 +591,20 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
         MediaPipe Hands behavioral instrumentation mode with real-time metrics, heatmap, rolling
         timeline, session recording, replay, and side-by-side session comparison.
       </p>
+      <p className={`analytics-library-notice ${libraryStatus}`} role="note">
+        Local diagnostic tool · Camera images are never stored. Exported
+        archives contain sampled hand coordinates, so review them before
+        sharing. {libraryFeedback}
+      </p>
+      {libraryStatus === "invalid" ? (
+        <button
+          className="analytics-library-recovery"
+          onClick={replaceUnreadableLibrary}
+          type="button"
+        >
+          Replace unreadable local archive
+        </button>
+      ) : null}
 
       <div className="button-row">
         <button
@@ -429,6 +629,28 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
         <button type="button" className="secondary" onClick={exportMetricsJson}>
           Export Metrics JSON
         </button>
+        <button
+          className="secondary"
+          disabled={sessionLibrary.length === 0}
+          onClick={exportSessionArchive}
+          type="button"
+        >
+          Export Session Archive
+        </button>
+        <button
+          className="secondary"
+          onClick={() => importInputRef.current?.click()}
+          type="button"
+        >
+          Import Session Archive
+        </button>
+        <input
+          accept="application/json,.json"
+          className="hidden-input"
+          onChange={(event) => void importSessionArchive(event)}
+          ref={importInputRef}
+          type="file"
+        />
       </div>
 
       <div className="analytics-grid">
@@ -460,6 +682,8 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
           {isReplaying ? "Pause Replay" : "Play Replay"}
         </button>
         <input
+          aria-label="Replay position"
+          aria-valuetext={`${Math.round(replayProgress * 100)}%`}
           type="range"
           min="0"
           max="1"
@@ -471,6 +695,22 @@ export default function GestureAnalyticsLab({ liveHands, liveTimestamp, fps }) {
             setReplayCursor(clamp(ratio, 0, 1) * replayDurationMs);
           }}
         />
+        <button
+          className="secondary"
+          disabled={!replaySession}
+          onClick={deleteSelectedSession}
+          type="button"
+        >
+          Delete selected
+        </button>
+        <button
+          className="secondary"
+          disabled={sessionLibrary.length === 0}
+          onClick={clearSessionLibrary}
+          type="button"
+        >
+          Clear saved sessions
+        </button>
       </div>
 
       <div className="session-controls">

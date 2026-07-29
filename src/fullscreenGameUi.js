@@ -1,5 +1,15 @@
 const FULLSCREEN_INDEX_ONLY_TRACKING_MODES = new Set(["tip-ripples"]);
 const FULLSCREEN_ONE_HAND_ONLY_MODES = new Set(["tic-tac-toe"]);
+const FULLSCREEN_EIGHT_HAND_TRACKING_MODES = new Set(["voronoi"]);
+const FULLSCREEN_FOUR_HAND_TRACKING_MODES = new Set([
+  "square",
+  "hex",
+  "rings",
+  "pulse",
+  "tip-ripples",
+  "static",
+  "hand-bounce",
+]);
 const FULLSCREEN_HAND_SKELETON_MODES = new Set(["tic-tac-toe"]);
 const FULLSCREEN_NEON_HAND_OUTLINE_MODES = new Set(["sky-patrol"]);
 
@@ -24,11 +34,27 @@ export function shouldShowFullscreenInvadersBanner(state) {
 }
 
 export function getFullscreenTrackedHandLimit(mode, fallback = 2) {
-  return FULLSCREEN_ONE_HAND_ONLY_MODES.has(mode)
-    ? 1
-    : Number.isFinite(fallback) && fallback > 0
-    ? fallback
-    : 1;
+  if (FULLSCREEN_ONE_HAND_ONLY_MODES.has(mode)) {
+    return 1;
+  }
+
+  if (FULLSCREEN_EIGHT_HAND_TRACKING_MODES.has(mode)) {
+    return 8;
+  }
+
+  if (FULLSCREEN_FOUR_HAND_TRACKING_MODES.has(mode)) {
+    return 4;
+  }
+
+  return Number.isFinite(fallback) && fallback > 0 ? fallback : 1;
+}
+
+export function getFullscreenDetectorHandLimit(mode, fallback = 4) {
+  if (FULLSCREEN_EIGHT_HAND_TRACKING_MODES.has(mode)) {
+    return 8;
+  }
+
+  return Number.isFinite(fallback) && fallback > 0 ? Math.floor(fallback) : 1;
 }
 
 export function shouldShowFullscreenHandSkeleton(mode) {

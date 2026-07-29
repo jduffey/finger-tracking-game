@@ -1,0 +1,334 @@
+.pose-quest {
+  background:
+    radial-gradient(circle at 100% 0, rgba(111, 111, 255, 0.17), transparent 28rem),
+    #101827;
+  border-color: rgba(195, 205, 255, 0.17);
+  border-radius: 22px;
+  color: #f7f8ff;
+  gap: 18px;
+  padding: clamp(20px, 3vw, 34px);
+}
+
+.pose-quest *,
+.pose-quest *::before,
+.pose-quest *::after {
+  box-sizing: border-box;
+}
+
+.pose-quest-header {
+  align-items: start;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+}
+
+.pose-quest-kicker {
+  color: #91f4ce;
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  margin-bottom: 7px;
+  text-transform: uppercase;
+}
+
+.pose-quest-header h2 {
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+  margin: 0;
+}
+
+.pose-quest-header p,
+.pose-quest-intro p,
+.pose-quest-result p,
+.pose-quest-challenge p {
+  color: #adb9ce;
+  line-height: 1.55;
+  margin: 10px 0 0;
+}
+
+.pose-quest-detection {
+  background: rgba(255, 191, 95, 0.1);
+  border: 1px solid rgba(255, 191, 95, 0.24);
+  border-radius: 999px;
+  color: #ffd89b;
+  flex: 0 0 auto;
+  font-size: 0.76rem;
+  font-weight: 850;
+  max-inline-size: min(280px, 42vw);
+  padding: 9px 12px;
+  text-align: center;
+}
+
+.pose-quest-detection.ready {
+  background: rgba(108, 242, 190, 0.1);
+  border-color: rgba(108, 242, 190, 0.24);
+  color: #baffdf;
+}
+
+.pose-quest-intro,
+.pose-quest-result {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  min-block-size: 280px;
+  justify-content: center;
+  padding: 28px;
+  text-align: center;
+}
+
+.pose-quest-intro > span,
+.pose-quest-result > span {
+  align-items: center;
+  background: linear-gradient(145deg, #91f4ce, #7f91ff);
+  border-radius: 16px;
+  color: #09120f;
+  display: flex;
+  font-size: 1.5rem;
+  font-weight: 900;
+  height: 52px;
+  justify-content: center;
+  width: 52px;
+}
+
+.pose-quest h3 {
+  font-size: clamp(1.2rem, 3vw, 1.8rem);
+  margin: 16px 0 0;
+}
+
+.pose-quest button {
+  background: #91f4ce;
+  border: 1px solid #91f4ce;
+  border-radius: 11px;
+  color: #09120f;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 850;
+  min-block-size: 44px;
+  padding: 10px 15px;
+}
+
+.pose-quest-intro button,
+.pose-quest-result button {
+  margin-top: 22px;
+}
+
+.pose-quest button.secondary {
+  background: transparent;
+  border-color: rgba(247, 248, 255, 0.25);
+  color: #f7f8ff;
+}
+
+.pose-quest button.quiet {
+  background: transparent;
+  border-color: transparent;
+  color: #adb9ce;
+}
+
+.pose-quest button:focus-visible,
+.pose-quest summary:focus-visible {
+  outline: 3px solid #ffe082;
+  outline-offset: 3px;
+}
+
+.pose-quest-active {
+  display: grid;
+  gap: 14px;
+}
+
+.pose-quest-progress-copy {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.pose-quest-progress-copy > span {
+  color: #91f4ce;
+  font-size: 0.74rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.pose-quest-overall-progress {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.pose-quest-overall-progress > span {
+  background: linear-gradient(90deg, #91f4ce, #7f91ff);
+  display: block;
+  height: 100%;
+  transition: width 180ms ease;
+}
+
+.pose-quest-challenge {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  display: grid;
+  gap: clamp(20px, 4vw, 38px);
+  grid-template-columns: auto minmax(0, 1fr);
+  min-block-size: 250px;
+  padding: clamp(20px, 4vw, 34px);
+}
+
+.pose-quest-hold {
+  align-items: center;
+  background:
+    radial-gradient(circle, #121c2d 53%, transparent 55%),
+    conic-gradient(
+      #91f4ce calc(var(--pose-hold, 0) * 1turn),
+      rgba(255, 255, 255, 0.1) 0
+    );
+  border: 1px solid rgba(145, 244, 206, 0.22);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  height: clamp(112px, 16vw, 164px);
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  width: clamp(112px, 16vw, 164px);
+}
+
+.pose-quest-silhouette {
+  fill: rgba(145, 244, 206, 0.14);
+  height: 70%;
+  stroke: #baffdf;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 5;
+  width: 70%;
+}
+
+.pose-quest-silhouette-joint {
+  fill: #ffe082;
+  stroke: none;
+}
+
+.pose-quest-hold-value {
+  background: #121c2d;
+  border-radius: 999px;
+  bottom: 9px;
+  color: #f7f8ff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  left: 50%;
+  min-inline-size: 42px;
+  padding: 3px 6px;
+  position: absolute;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.pose-quest-challenge h3 {
+  margin-top: 0;
+}
+
+.pose-quest-challenge ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+}
+
+.pose-quest-challenge li {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 999px;
+  color: #9facc1;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 7px 10px;
+  text-transform: capitalize;
+}
+
+.pose-quest-challenge li.visible {
+  background: rgba(145, 244, 206, 0.1);
+  border-color: rgba(145, 244, 206, 0.25);
+  color: #c7ffe9;
+}
+
+.pose-quest-challenge li > span {
+  margin-right: 5px;
+}
+
+.pose-quest-hold-note {
+  font-size: 0.78rem;
+}
+
+.pose-quest-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pose-quest-diagnostics {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: #adb9ce;
+  padding-top: 8px;
+}
+
+.pose-quest-diagnostics summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+  min-block-size: 44px;
+  padding-block: 12px;
+}
+
+.pose-quest .body-pose-status-grid div,
+.pose-quest .body-part-list div {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.pose-quest .body-pose-status-grid strong,
+.pose-quest .body-pose-status-grid span,
+.pose-quest .body-part-list div {
+  color: #dce4f3;
+}
+
+.pose-quest .body-part-list .active {
+  border-color: rgba(145, 244, 206, 0.35);
+  color: #baffdf;
+}
+
+@media (max-width: 640px) {
+  .pose-quest-header,
+  .pose-quest-progress-copy {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pose-quest-challenge {
+    grid-template-columns: 1fr;
+  }
+
+  .pose-quest-hold {
+    justify-self: center;
+  }
+
+  .pose-quest-actions,
+  .pose-quest-actions button {
+    inline-size: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pose-quest *,
+  .pose-quest *::before,
+  .pose-quest *::after {
+    transition: none !important;
+  }
+}

@@ -1,0 +1,440 @@
+.gesture-art-studio {
+  --studio-panel: rgba(8, 14, 26, 0.9);
+  --studio-border: rgba(213, 232, 255, 0.18);
+  background:
+    radial-gradient(circle at 18% 12%, rgba(76, 115, 255, 0.16), transparent 32rem),
+    #030712;
+  color: #f6f8ff;
+  height: 100dvh;
+  overflow: hidden;
+  position: relative;
+}
+
+.gesture-art-header {
+  align-items: center;
+  background: linear-gradient(180deg, rgba(3, 7, 18, 0.92), rgba(3, 7, 18, 0.42));
+  display: flex;
+  gap: 14px;
+  inset: 0 0 auto;
+  justify-content: space-between;
+  padding:
+    max(12px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    16px
+    max(16px, env(safe-area-inset-left));
+  pointer-events: none;
+  position: absolute;
+  z-index: 4;
+}
+
+.gesture-art-header > * {
+  pointer-events: auto;
+}
+
+.gesture-art-header > div:nth-child(2) {
+  display: grid;
+  margin-right: auto;
+}
+
+.gesture-art-header > div:nth-child(2) span {
+  color: #7ff2c5;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.gesture-art-header > div:nth-child(2) strong {
+  font-size: 1rem;
+}
+
+.gesture-art-home,
+.gesture-art-header-actions button,
+.gesture-art-tools button {
+  border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
+  min-height: 44px;
+}
+
+.gesture-art-home,
+.gesture-art-header-actions button {
+  background: rgba(12, 20, 36, 0.78);
+  border: 1px solid var(--studio-border);
+  color: #f6f8ff;
+  font-weight: 800;
+  padding: 9px 14px;
+}
+
+.gesture-art-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.gesture-art-canvas-shell {
+  cursor: crosshair;
+  height: 100%;
+  outline: none;
+  overflow: hidden;
+  position: relative;
+  touch-action: none;
+  width: 100%;
+}
+
+.gesture-art-canvas-shell:focus-visible {
+  box-shadow: inset 0 0 0 4px #8fffd5;
+}
+
+.gesture-art-canvas {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.gesture-art-canvas-hint,
+.gesture-art-status {
+  backdrop-filter: blur(12px);
+  background: rgba(6, 12, 24, 0.64);
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  font-size: 0.78rem;
+  margin: 0;
+  max-width: min(70vw, 680px);
+  padding: 8px 13px;
+  pointer-events: none;
+  position: absolute;
+}
+
+.gesture-art-canvas-hint {
+  left: max(18px, env(safe-area-inset-left));
+}
+
+.gesture-art-status {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.gesture-art-tools {
+  backdrop-filter: blur(22px);
+  background: var(--studio-panel);
+  border: 1px solid var(--studio-border);
+  border-radius: 22px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  display: grid;
+  gap: 14px;
+  max-height: calc(100dvh - 106px);
+  opacity: 0;
+  overflow: auto;
+  padding: 18px;
+  pointer-events: none;
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  top: max(84px, calc(env(safe-area-inset-top) + 72px));
+  transform: translateX(24px);
+  transition: opacity 160ms ease, transform 160ms ease;
+  width: min(350px, calc(100vw - 32px));
+  z-index: 5;
+}
+
+.gesture-art-tools[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.gesture-art-tools-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.gesture-art-tools-heading > div {
+  display: grid;
+}
+
+.gesture-art-tools-heading span {
+  color: #93a6c8;
+  font-size: 0.72rem;
+}
+
+.gesture-art-tools-close {
+  background: transparent;
+  border: 1px solid var(--studio-border);
+  color: #fff;
+  display: none;
+  font-size: 1.35rem;
+  width: 44px;
+}
+
+.gesture-art-presets {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.gesture-art-presets legend {
+  color: #aab9d3;
+  font-size: 0.72rem;
+  font-weight: 800;
+  margin-bottom: 7px;
+}
+
+.gesture-art-presets > div {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.gesture-art-tools button {
+  background: #17253e;
+  border: 1px solid rgba(190, 216, 255, 0.18);
+  color: #f6f8ff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 8px 10px;
+}
+
+.gesture-art-tools button.selected,
+.gesture-art-tools button.primary {
+  background: #88f0c8;
+  border-color: #88f0c8;
+  color: #07120f;
+}
+
+.gesture-art-tools button.danger {
+  color: #ffc8c8;
+}
+
+.gesture-art-tools button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.gesture-art-ranges {
+  display: grid;
+  gap: 9px;
+}
+
+.gesture-art-ranges label {
+  display: grid;
+  gap: 5px;
+}
+
+.gesture-art-ranges label > span {
+  color: #b7c4dc;
+  display: flex;
+  font-size: 0.75rem;
+  justify-content: space-between;
+}
+
+.gesture-art-ranges output {
+  color: #fff;
+  font-weight: 800;
+}
+
+.gesture-art-ranges input {
+  accent-color: #88f0c8;
+  min-height: 30px;
+  width: 100%;
+}
+
+.gesture-art-palette {
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: 20px;
+  overflow: hidden;
+}
+
+.gesture-art-action-grid {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.gesture-art-action-grid .primary {
+  grid-column: 1 / -1;
+}
+
+.gesture-art-loop-controls {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.gesture-art-loop-controls .gesture-art-video-export,
+.gesture-art-loop-status,
+.gesture-art-loop-privacy {
+  grid-column: 1 / -1;
+}
+
+.gesture-art-loop-status,
+.gesture-art-loop-privacy {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.gesture-art-loop-status {
+  color: #c8d6ed;
+  min-height: 2.05em;
+}
+
+.gesture-art-loop-privacy {
+  color: #8fffd5;
+}
+
+.gesture-art-gallery {
+  border-top: 1px solid var(--studio-border);
+  padding-top: 12px;
+}
+
+.gesture-art-gallery summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 850;
+  min-height: 40px;
+  padding: 8px 0;
+}
+
+.gesture-art-gallery p {
+  color: #aebbd2;
+  font-size: 0.75rem;
+  margin: 4px 0;
+}
+
+.gesture-art-gallery ul {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.gesture-art-gallery li {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border-radius: 12px;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: 38px minmax(0, 1fr) auto auto;
+  padding: 7px;
+}
+
+.gesture-art-gallery-swatch {
+  border-radius: 9px;
+  height: 38px;
+}
+
+.gesture-art-gallery li > div {
+  display: grid;
+  min-width: 0;
+}
+
+.gesture-art-gallery li strong {
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gesture-art-gallery li small {
+  color: #91a0bb;
+  font-size: 0.65rem;
+}
+
+.gesture-art-gallery li button {
+  min-height: 38px;
+  padding: 6px 8px;
+}
+
+.gesture-art-home:focus-visible,
+.gesture-art-header button:focus-visible,
+.gesture-art-tools button:focus-visible,
+.gesture-art-tools summary:focus-visible,
+.gesture-art-tools input:focus-visible {
+  outline: 3px solid #8fffd5;
+  outline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  .gesture-art-header > div:nth-child(2) span {
+    display: none;
+  }
+
+  .gesture-art-header-actions .secondary {
+    display: none;
+  }
+
+  .gesture-art-tools {
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
+    bottom: 0;
+    left: 0;
+    max-height: min(76dvh, 680px);
+    right: 0;
+    top: auto;
+    transform: translateY(28px);
+    width: 100%;
+  }
+
+  .gesture-art-tools[data-open="true"] {
+    transform: translateY(0);
+  }
+
+  .gesture-art-tools-close {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+  }
+
+  .gesture-art-canvas-hint {
+    bottom: max(70px, calc(env(safe-area-inset-bottom) + 62px));
+    left: 12px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .gesture-art-status {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gesture-art-tools {
+    transition: none;
+  }
+}
+
+html[data-reduced-motion="true"] .gesture-art-tools {
+  transition: none;
+}
+
+html[data-low-sensory="true"] .gesture-art-studio {
+  background: #030712;
+}
+
+html[data-low-sensory="true"] .gesture-art-header {
+  background: rgba(3, 7, 18, 0.9);
+}
+
+html[data-low-sensory="true"] .gesture-art-canvas-hint,
+html[data-low-sensory="true"] .gesture-art-status,
+html[data-low-sensory="true"] .gesture-art-tools {
+  backdrop-filter: none;
+}
+
+html[data-low-sensory="true"] .gesture-art-tools {
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
+  transition: none;
+}
+
+@media (prefers-contrast: more) {
+  .gesture-art-tools,
+  .gesture-art-home,
+  .gesture-art-header-actions button {
+    background: #050b16;
+    border-color: rgba(255, 255, 255, 0.62);
+  }
+}

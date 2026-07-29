@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { FULLSCREEN_MODE_LANDING_HOLD_MS } from "../src/fullscreenModeLanding.js";
+import { FULLSCREEN_HOLD_CONTROL_MS } from "../src/fullscreenHoldControl.js";
 import {
   createFullscreenRestartControlLayout,
   createFullscreenRestartControlState,
@@ -68,7 +68,7 @@ test("stepFullscreenRestartControl waits for a verified hand before starting the
   assert.equal(held.holdActive, true);
   assert.equal(held.holdMs, 0);
 
-  const stepsToRestart = Math.ceil((FULLSCREEN_MODE_LANDING_HOLD_MS / 1000) * 60);
+  const stepsToRestart = Math.ceil((FULLSCREEN_HOLD_CONTROL_MS / 1000) * 60);
   for (let index = 0; index < stepsToRestart + 2; index += 1) {
     held = stepFullscreenRestartControl(held, 1 / 60, {
       handVerified: true,
@@ -110,6 +110,29 @@ test("stepFullscreenRestartControl clears the hold when the pointer leaves the b
   assert.equal(cleared.holdActive, false);
   assert.equal(cleared.holdMs, 0);
   assert.equal(cleared.shouldRestart, false);
+});
+
+test("stepFullscreenRestartControl honors the player's dwell duration", () => {
+  const base = createFullscreenRestartControlState(1280, 720);
+  const pointer = getBoxCenter(base.layout);
+  const input = {
+    handVerified: true,
+    holdDurationMs: 250,
+    pointerActive: true,
+    pointerX: pointer.x,
+    pointerY: pointer.y,
+  };
+
+  const started = stepFullscreenRestartControl(base, 1 / 60, input);
+  let progressed = started;
+  for (let step = 0; step < 4; step += 1) {
+    progressed = stepFullscreenRestartControl(progressed, 0.05, input);
+  }
+  const completed = stepFullscreenRestartControl(progressed, 0.05, input);
+
+  assert.equal(progressed.shouldRestart, false);
+  assert.equal(completed.holdMs, 250);
+  assert.equal(completed.shouldRestart, true);
 });
 
 test("stepFullscreenRestartControl does not count points that are outside the visible box", () => {

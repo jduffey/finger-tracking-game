@@ -5,6 +5,7 @@ const breakoutLog = createScopedLogger("breakoutGame");
 export const BREAKOUT_COUNTDOWN_MS = 3_000;
 export const BREAKOUT_BRICK_SCORE = 100;
 export const BREAKOUT_CAPSULE_SCORE = 200;
+export const BREAKOUT_STARTING_LIVES = 3;
 export const BREAKOUT_BRICK_COLORS = ["#ff0000", "#ff8d00", "#ffdb00", "#00d619", "#009fff"];
 export const FIND_YOUR_GRIND_BREAKOUT_MODE_ID = "find-your-grind-breakout";
 export const FIND_YOUR_GRIND_LOGO_COLORS = {
@@ -20,8 +21,8 @@ const BREAKOUT_PADDLE_LERP_PER_SECOND = 14;
 const BREAKOUT_LAUNCH_SPEED_RATIO = 0.42;
 const BREAKOUT_EXTRA_BALL_SPEED_RATIO = 0.45;
 const BREAKOUT_CAPSULE_SPEED_RATIO = 0.22;
-const FIND_YOUR_GRIND_LOGO_ASPECT_RATIO = 576 / 398;
 const FIND_YOUR_GRIND_LETTER_GAP_COLUMNS = 1;
+const FIND_YOUR_GRIND_BRICK_WIDTH_SCALE = 2;
 
 const FIND_YOUR_GRIND_GLYPHS = {
   D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
@@ -156,6 +157,10 @@ function getWordColumnCount(word) {
   }, 0);
 }
 
+function getFindYourGrindBrickWidth(cellSize) {
+  return cellSize * FIND_YOUR_GRIND_BRICK_WIDTH_SCALE;
+}
+
 function addLogoBrick(bricks, createBrickId, { x, y, width, height, color, role }) {
   bricks.push({
     id: `find-your-grind-${createBrickId()}`,
@@ -173,16 +178,18 @@ function addLogoBrick(bricks, createBrickId, { x, y, width, height, color, role 
 }
 
 function addBitmapBricks(bricks, createBrickId, { bitmap, left, top, cellSize, cellGap, color, role }) {
-  const pitch = cellSize + cellGap;
+  const brickWidth = getFindYourGrindBrickWidth(cellSize);
+  const pitchX = brickWidth + cellGap;
+  const pitchY = cellSize + cellGap;
   bitmap.forEach((row, rowIndex) => {
     Array.from(row).forEach((pixel, columnIndex) => {
       if (pixel !== "1") {
         return;
       }
       addLogoBrick(bricks, createBrickId, {
-        x: left + columnIndex * pitch,
-        y: top + rowIndex * pitch,
-        width: cellSize,
+        x: left + columnIndex * pitchX,
+        y: top + rowIndex * pitchY,
+        width: brickWidth,
         height: cellSize,
         color,
         role,
@@ -192,7 +199,8 @@ function addBitmapBricks(bricks, createBrickId, { bitmap, left, top, cellSize, c
 }
 
 function addWordBricks(bricks, createBrickId, { word, left, top, cellSize, cellGap, color }) {
-  const pitch = cellSize + cellGap;
+  const brickWidth = getFindYourGrindBrickWidth(cellSize);
+  const pitchX = brickWidth + cellGap;
   let columnOffset = 0;
   for (const letter of word) {
     const glyph = FIND_YOUR_GRIND_GLYPHS[letter];
@@ -201,7 +209,7 @@ function addWordBricks(bricks, createBrickId, { word, left, top, cellSize, cellG
     }
     addBitmapBricks(bricks, createBrickId, {
       bitmap: glyph,
-      left: left + columnOffset * pitch,
+      left: left + columnOffset * pitchX,
       top,
       cellSize,
       cellGap,
@@ -213,15 +221,17 @@ function addWordBricks(bricks, createBrickId, { word, left, top, cellSize, cellG
 }
 
 function addLogoBorderBricks(bricks, createBrickId, { left, top, width, height, cellSize, cellGap }) {
-  const pitch = cellSize + cellGap;
-  const right = left + width - cellSize;
+  const brickWidth = getFindYourGrindBrickWidth(cellSize);
+  const pitchX = brickWidth + cellGap;
+  const pitchY = cellSize + cellGap;
+  const right = left + width - brickWidth;
   const bottom = top + height - cellSize;
 
-  for (let x = left; x <= right + 0.5; x += pitch) {
+  for (let x = left; x <= right + 0.5; x += pitchX) {
     addLogoBrick(bricks, createBrickId, {
       x,
       y: top,
-      width: cellSize,
+      width: brickWidth,
       height: cellSize,
       color: FIND_YOUR_GRIND_LOGO_COLORS.blue,
       role: "border",
@@ -229,18 +239,18 @@ function addLogoBorderBricks(bricks, createBrickId, { left, top, width, height, 
     addLogoBrick(bricks, createBrickId, {
       x,
       y: bottom,
-      width: cellSize,
+      width: brickWidth,
       height: cellSize,
       color: FIND_YOUR_GRIND_LOGO_COLORS.blue,
       role: "border",
     });
   }
 
-  for (let y = top + pitch; y <= bottom - pitch + 0.5; y += pitch) {
+  for (let y = top + pitchY; y <= bottom - pitchY + 0.5; y += pitchY) {
     addLogoBrick(bricks, createBrickId, {
       x: left,
       y,
-      width: cellSize,
+      width: brickWidth,
       height: cellSize,
       color: FIND_YOUR_GRIND_LOGO_COLORS.blue,
       role: "border",
@@ -248,7 +258,7 @@ function addLogoBorderBricks(bricks, createBrickId, { left, top, width, height, 
     addLogoBrick(bricks, createBrickId, {
       x: right,
       y,
-      width: cellSize,
+      width: brickWidth,
       height: cellSize,
       color: FIND_YOUR_GRIND_LOGO_COLORS.blue,
       role: "border",
@@ -259,16 +269,35 @@ function addLogoBorderBricks(bricks, createBrickId, { left, top, width, height, 
 export function createFindYourGrindBreakoutBricks(layout, rng = Math.random) {
   const frameTop = clamp(layout.height * 0.16, 96, 128);
   const maxFrameHeight = Math.max(120, layout.paddleY - frameTop - layout.ballRadius * 8);
-  const frameHeight = Math.min(
-    layout.height * 0.54,
-    maxFrameHeight,
-    (layout.width * 0.84) / FIND_YOUR_GRIND_LOGO_ASPECT_RATIO,
+  const frameHeight = maxFrameHeight;
+  const frameMarginX = clamp(layout.width * 0.03, 12, 32);
+  const frameWidth = layout.width - frameMarginX * 2;
+  const frameLeft = frameMarginX;
+  const grindColumnCount =
+    getWordColumnCount("GRIND") +
+    FIND_YOUR_GRIND_LETTER_GAP_COLUMNS +
+    getBitmapColumnCount(FIND_YOUR_GRIND_HOUSE_MARK);
+  const widestTextColumnCount = Math.max(
+    getWordColumnCount("FIND"),
+    getWordColumnCount("YOUR"),
+    grindColumnCount,
   );
-  const frameWidth = frameHeight * FIND_YOUR_GRIND_LOGO_ASPECT_RATIO;
-  const frameLeft = (layout.width - frameWidth) / 2;
-  const cellSize = Math.floor(clamp(Math.min(frameWidth / 44, frameHeight / 31), 7, 15));
-  const cellGap = Math.max(1, Math.round(cellSize * 0.14));
-  const pitch = cellSize + cellGap;
+  const horizontalCellBudget =
+    widestTextColumnCount * FIND_YOUR_GRIND_BRICK_WIDTH_SCALE +
+    Math.max(0, widestTextColumnCount - 1) * 0.14;
+  let cellSize = Math.floor(clamp(Math.min(frameWidth / horizontalCellBudget, frameHeight / 31), 3, 15));
+  let cellGap = Math.max(1, Math.round(cellSize * 0.14));
+  let brickWidth = getFindYourGrindBrickWidth(cellSize);
+  let pitchX = brickWidth + cellGap;
+  while (
+    cellSize > 3 &&
+    getColumnSpanWidth(widestTextColumnCount, brickWidth, cellGap) + pitchX * 2 > frameWidth
+  ) {
+    cellSize -= 1;
+    cellGap = Math.max(1, Math.round(cellSize * 0.14));
+    brickWidth = getFindYourGrindBrickWidth(cellSize);
+    pitchX = brickWidth + cellGap;
+  }
   const lineHeight = getColumnSpanWidth(7, cellSize, cellGap);
   const lineGap = Math.round(cellSize * 1.3);
   const textBlockHeight = lineHeight * 3 + lineGap * 2;
@@ -298,7 +327,7 @@ export function createFindYourGrindBreakoutBricks(layout, rng = Math.random) {
       line.word === "GRIND"
         ? wordColumnCount + FIND_YOUR_GRIND_LETTER_GAP_COLUMNS + markColumnCount
         : wordColumnCount;
-    const wordWidth = getColumnSpanWidth(totalColumnCount, cellSize, cellGap);
+    const wordWidth = getColumnSpanWidth(totalColumnCount, brickWidth, cellGap);
     const wordLeft = frameLeft + (frameWidth - wordWidth) / 2;
     addWordBricks(bricks, createBrickId, {
       word: line.word,
@@ -310,7 +339,7 @@ export function createFindYourGrindBreakoutBricks(layout, rng = Math.random) {
     });
 
     if (line.word === "GRIND") {
-      const markLeft = wordLeft + getColumnSpanWidth(wordColumnCount, cellSize, cellGap) + pitch;
+      const markLeft = wordLeft + getColumnSpanWidth(wordColumnCount, brickWidth, cellGap) + pitchX;
       const markTop =
         line.top + lineHeight - getColumnSpanWidth(FIND_YOUR_GRIND_HOUSE_MARK.length, cellSize, cellGap);
       addBitmapBricks(bricks, createBrickId, {
@@ -439,6 +468,9 @@ function createBreakoutState(layout, bricks, variant = "classic") {
     capsules: [],
     bricks,
     score: 0,
+    lives: BREAKOUT_STARTING_LIVES,
+    level: 1,
+    variant,
     status: "countdown",
     countdownMs: BREAKOUT_COUNTDOWN_MS,
     nextBallId: 2,
@@ -466,6 +498,41 @@ export function createFindYourGrindBreakoutGame(width, height, rng = Math.random
     createFindYourGrindBreakoutBricks(layout, rng),
     FIND_YOUR_GRIND_BREAKOUT_MODE_ID,
   );
+}
+
+function createBreakoutBricksForVariant(layout, variant, rng) {
+  return variant === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
+    ? createFindYourGrindBreakoutBricks(layout, rng)
+    : createBreakoutBricks(layout, rng);
+}
+
+export function restartBreakoutGame(state, rng = Math.random) {
+  if (!state?.layout) {
+    return state;
+  }
+
+  const variant =
+    state.variant === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
+      ? FIND_YOUR_GRIND_BREAKOUT_MODE_ID
+      : "classic";
+  const restarted = createBreakoutState(
+    state.layout,
+    createBreakoutBricksForVariant(state.layout, variant, rng),
+    variant,
+  );
+
+  if (state.status !== "cleared") {
+    return restarted;
+  }
+
+  return {
+    ...restarted,
+    score: Number.isFinite(state.score) ? state.score : 0,
+    lives: Number.isFinite(state.lives)
+      ? Math.max(1, state.lives)
+      : BREAKOUT_STARTING_LIVES,
+    level: (Number.isFinite(state.level) ? state.level : 1) + 1,
+  };
 }
 
 export function stepBreakoutGame(state, dtSeconds, paddleTargetX, rng = Math.random) {
@@ -510,6 +577,15 @@ export function stepBreakoutGame(state, dtSeconds, paddleTargetX, rng = Math.ran
           : ball,
       ),
       message: "Cleared",
+    };
+  }
+
+  if (nextState.status === "gameover") {
+    return {
+      ...nextState,
+      balls: [],
+      capsules: [],
+      message: "Round over",
     };
   }
 
@@ -675,12 +751,33 @@ export function stepBreakoutGame(state, dtSeconds, paddleTargetX, rng = Math.ran
   }
 
   if (activeBalls.length === 0) {
+    const lives = Math.max(
+      0,
+      (Number.isFinite(nextState.lives) ? nextState.lives : BREAKOUT_STARTING_LIVES) - 1,
+    );
+    if (lives === 0) {
+      return {
+        ...nextState,
+        bricks: nextBricks,
+        balls: [],
+        capsules: [],
+        score,
+        lives,
+        nextBallId,
+        nextCapsuleId,
+        status: "gameover",
+        countdownMs: 0,
+        message: "Round over",
+      };
+    }
+
     return createRoundReset({
       ...nextState,
       bricks: nextBricks,
       balls: [],
       capsules: [],
       score,
+      lives,
       nextBallId,
       nextCapsuleId,
       status: "playing",

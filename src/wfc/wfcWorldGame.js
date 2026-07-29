@@ -2,21 +2,187 @@ import { FINGERPRINT_WORLD_TILES } from "./wfcTiles.js";
 import {
   createWfcState,
   getWfcGrid,
+  isWfcGridValid,
   runWfc,
   setWfcConstraint,
   stepWfc,
 } from "./wfcSolver.js";
+import {
+  WFC_WORLD_BLANK_TEMPLATE_ID,
+  getWfcWorldStarterTemplate,
+} from "./wfcWorldTemplates.js";
 
 export const WFC_WORLD_MODE_ID = "fingerprint-worlds";
 export const WFC_WORLD_COLS = 39;
 export const WFC_WORLD_ROWS = 24;
 export const WFC_WORLD_COLLAPSE_STEP_MS = 5;
+export const WFC_WORLD_SEED_MAX_LENGTH = 48;
+export const WFC_WORLD_FALLBACK_SEED = "quiet-meadow-001";
 const WFC_WORLD_CONFLICT_MS = 900;
 const WFC_HEX_WIDTH_RATIO = Math.sqrt(3) / 2;
 const WFC_HEX_ROW_STEP_RATIO = 0.75;
+const WFC_WORLD_SEED_ADJECTIVES = Object.freeze([
+  "amber",
+  "bright",
+  "cloud",
+  "fern",
+  "golden",
+  "moss",
+  "quiet",
+  "silver",
+  "sunlit",
+  "wild",
+]);
+const WFC_WORLD_SEED_PLACES = Object.freeze([
+  "brook",
+  "canyon",
+  "grove",
+  "island",
+  "meadow",
+  "ridge",
+  "valley",
+  "wilds",
+]);
+
+export const WFC_WORLD_GOAL = Object.freeze({
+  id: "shape-a-living-world",
+  title: "Shape a living world",
+  description:
+    "Place a few terrain rules, grow the world, and discover how much variety your choices create.",
+  completionCondition: "Generate a valid, fully resolved world.",
+  suggestedRuleCount: 3,
+  suggestedTerrainCount: 4,
+});
+
+export const WFC_WORLD_PALETTE_ACCESSIBILITY = Object.freeze({
+  grass: Object.freeze({
+    ariaLabel: "Grass terrain",
+    symbol: "G",
+    pattern: "open dots",
+    description: "Flexible meadow terrain that can border every terrain type.",
+  }),
+  water: Object.freeze({
+    ariaLabel: "Water terrain",
+    symbol: "W",
+    pattern: "horizontal waves",
+    description: "Water that joins grass, more water, or a bridge.",
+  }),
+  forest: Object.freeze({
+    ariaLabel: "Forest terrain",
+    symbol: "F",
+    pattern: "dense chevrons",
+    description: "Woodland that grows beside grass, forest, or mountain.",
+  }),
+  mountain: Object.freeze({
+    ariaLabel: "Peak terrain",
+    symbol: "M",
+    pattern: "triangular ridges",
+    description: "High ground that borders grass, forest, or other peaks.",
+  }),
+  castle: Object.freeze({
+    ariaLabel: "Castle landmark",
+    symbol: "C",
+    pattern: "square battlements",
+    description: "A rare landmark that needs grass on every side.",
+  }),
+  bridge: Object.freeze({
+    ariaLabel: "Bridge landmark",
+    symbol: "B",
+    pattern: "crossed planks",
+    description: "A rare crossing that connects water between grassy banks.",
+  }),
+});
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+export function normalizeWfcWorldSeed(
+  value,
+  fallback = WFC_WORLD_FALLBACK_SEED,
+) {
+  const normalized =
+    typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+  if (normalized) {
+    return normalized.slice(0, WFC_WORLD_SEED_MAX_LENGTH);
+  }
+  const normalizedFallback =
+    typeof fallback === "string"
+      ? fallback.trim().replace(/\s+/g, " ")
+      : "";
+  return (
+    normalizedFallback.slice(0, WFC_WORLD_SEED_MAX_LENGTH) ||
+    WFC_WORLD_FALLBACK_SEED
+  );
+}
+
+function normalizeRandomValue(value) {
+  return Number.isFinite(value)
+    ? clamp(value, 0, 0.9999999999999999)
+    : 0.5;
+}
+
+export function createWfcWorldSeed(rng = Math.random) {
+  const adjective =
+    WFC_WORLD_SEED_ADJECTIVES[
+      Math.floor(
+        normalizeRandomValue(rng()) * WFC_WORLD_SEED_ADJECTIVES.length,
+      )
+    ];
+  const place =
+    WFC_WORLD_SEED_PLACES[
+      Math.floor(
+        normalizeRandomValue(rng()) * WFC_WORLD_SEED_PLACES.length,
+      )
+    ];
+  const suffix = String(
+    100 + Math.floor(normalizeRandomValue(rng()) * 900),
+  );
+  return `${adjective}-${place}-${suffix}`;
+}
+
+function hashWfcWorldSeed(seed) {
+  let hash = 0x811c9dc5;
+  const text = normalizeWfcWorldSeed(seed);
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+function getWfcWorldRandomValue(seedHash, cursor) {
+  let value =
+    seedHash ^
+    Math.imul((Math.max(0, cursor) + 1) >>> 0, 0x9e3779b9);
+  value ^= value >>> 16;
+  value = Math.imul(value, 0x85ebca6b);
+  value ^= value >>> 13;
+  value = Math.imul(value, 0xc2b2ae35);
+  value ^= value >>> 16;
+  return (value >>> 0) / 0x100000000;
+}
+
+function createWfcWorldRandomSource(game, injectedRng) {
+  let cursor = Math.max(
+    0,
+    Number.isInteger(game?.randomCursor) ? game.randomCursor : 0,
+  );
+  if (typeof injectedRng === "function") {
+    return {
+      next: injectedRng,
+      getCursor: () => cursor,
+    };
+  }
+  const seedHash = hashWfcWorldSeed(game?.seed);
+  return {
+    next: () => {
+      const value = getWfcWorldRandomValue(seedHash, cursor);
+      cursor += 1;
+      return value;
+    },
+    getCursor: () => cursor,
+  };
 }
 
 function isPointInRect(rect, x, y) {
@@ -119,8 +285,15 @@ export function createWfcWorldLayout(width, height) {
   const palette = FINGERPRINT_WORLD_TILES.map((tile, index) => {
     const col = index % paletteColumns;
     const row = Math.floor(index / paletteColumns);
+    const accessibility = WFC_WORLD_PALETTE_ACCESSIBILITY[tile.id];
     return {
       ...tile,
+      ariaLabel: accessibility?.ariaLabel ?? `${tile.label} terrain`,
+      accessibility: {
+        ...accessibility,
+        shortcut: String(index + 1),
+        selectedAnnouncement: `${tile.label} selected`,
+      },
       left: panelLeft + col * (paletteTileWidth + tileGap),
       top: paletteTop + row * (paletteTileHeight + tileGap),
       width: paletteTileWidth,
@@ -240,22 +413,114 @@ export function getWfcWorldPaletteTileAtPoint(layout, pointerX, pointerY) {
   return layout?.palette?.find((tile) => isPointInRect(tile, pointerX, pointerY)) ?? null;
 }
 
-export function createWfcWorldGame(width, height) {
+export function createWfcWorldGame(
+  width,
+  height,
+  {
+    seed = createWfcWorldSeed(),
+    templateId = WFC_WORLD_BLANK_TEMPLATE_ID,
+  } = {},
+) {
   const layout = createWfcWorldLayout(width, height);
+  const template =
+    getWfcWorldStarterTemplate(templateId) ??
+    getWfcWorldStarterTemplate(WFC_WORLD_BLANK_TEMPLATE_ID);
+  const wfc = createConstrainedWfc(
+    layout.cols,
+    layout.rows,
+    template.constraints,
+  );
   return {
     layout,
-    wfc: createWfcState({ cols: layout.cols, rows: layout.rows }),
+    wfc,
     phase: "seeding",
-    selectedTileId: "grass",
+    selectedTileId: template.defaultTileId,
     hoverCell: null,
     paintDragActive: false,
     lastPaintedCell: null,
-    constraints: [],
+    constraints: wfc.constraints,
     previousPinchActive: false,
     collapseAccumulatorMs: 0,
     conflictMs: 0,
     generation: 0,
-    message: "Pinch map cells to place rules, then pinch Generate.",
+    seed: normalizeWfcWorldSeed(seed),
+    templateId: template.id,
+    randomCursor: 0,
+    message:
+      template.id === WFC_WORLD_BLANK_TEMPLATE_ID
+        ? "Pinch map cells to place rules, then pinch Generate."
+        : `${template.name} is ready. Adjust its rules or generate the world.`,
+  };
+}
+
+export function setWfcWorldSeed(game, seed) {
+  if (!game?.layout) {
+    return game;
+  }
+  const normalizedSeed = normalizeWfcWorldSeed(seed, game.seed);
+  const wfc = createConstrainedWfc(
+    game.layout.cols,
+    game.layout.rows,
+    game.constraints,
+  );
+  return {
+    ...game,
+    wfc,
+    phase: wfc.status === "contradiction" ? "conflict" : "seeding",
+    hoverCell: null,
+    paintDragActive: false,
+    lastPaintedCell: null,
+    previousPinchActive: false,
+    collapseAccumulatorMs: 0,
+    conflictMs:
+      wfc.status === "contradiction" ? WFC_WORLD_CONFLICT_MS : 0,
+    seed: normalizedSeed,
+    randomCursor: 0,
+    message:
+      wfc.status === "contradiction"
+        ? "Those rules conflict. Clear or move one rule."
+        : `Seed ${normalizedSeed} is ready. Generate to reproduce this setup.`,
+  };
+}
+
+export function applyWfcWorldTemplate(
+  game,
+  templateId,
+  { seed = game?.seed } = {},
+) {
+  if (!game?.layout) {
+    return game;
+  }
+  const template = getWfcWorldStarterTemplate(templateId);
+  if (!template) {
+    return game;
+  }
+  const wfc = createConstrainedWfc(
+    game.layout.cols,
+    game.layout.rows,
+    template.constraints,
+  );
+  return {
+    ...game,
+    wfc,
+    phase: "seeding",
+    selectedTileId: template.defaultTileId,
+    hoverCell: null,
+    paintDragActive: false,
+    lastPaintedCell: null,
+    constraints: wfc.constraints,
+    previousPinchActive: false,
+    collapseAccumulatorMs: 0,
+    conflictMs: 0,
+    generation: 0,
+    seed: normalizeWfcWorldSeed(seed, game.seed),
+    templateId: template.id,
+    randomCursor: 0,
+    snapshot: null,
+    message:
+      template.id === WFC_WORLD_BLANK_TEMPLATE_ID
+        ? "Blank canvas ready. Place terrain rules, then generate."
+        : `${template.name} is ready. Adjust its rules or generate the world.`,
   };
 }
 
@@ -313,7 +578,9 @@ export function startWfcWorldCollapse(game) {
     phase: wfc.status === "complete" ? "complete" : "collapsing",
     collapseAccumulatorMs: 0,
     generation: game.generation + 1,
-    message: "Wave Function Collapse is filling the world.",
+    seed: normalizeWfcWorldSeed(game.seed),
+    randomCursor: 0,
+    message: `Seed ${normalizeWfcWorldSeed(game.seed)} is filling the world.`,
   };
 }
 
@@ -331,6 +598,8 @@ export function clearWfcWorld(game) {
     constraints: [],
     collapseAccumulatorMs: 0,
     conflictMs: 0,
+    templateId: WFC_WORLD_BLANK_TEMPLATE_ID,
+    randomCursor: 0,
     message: "World cleared. Pinch cells to place new rules.",
   };
 }
@@ -340,12 +609,13 @@ function runAnimatedCollapse(game, dtMs, rng) {
     return game;
   }
   let wfc = game.wfc;
+  const randomSource = createWfcWorldRandomSource(game, rng);
   let accumulator = game.collapseAccumulatorMs + dtMs;
   let steps = Math.floor(accumulator / WFC_WORLD_COLLAPSE_STEP_MS);
   accumulator -= steps * WFC_WORLD_COLLAPSE_STEP_MS;
 
   while (steps > 0 && wfc.status !== "complete" && wfc.status !== "contradiction") {
-    wfc = stepWfc(wfc, rng);
+    wfc = stepWfc(wfc, randomSource.next);
     steps -= 1;
   }
 
@@ -355,7 +625,8 @@ function runAnimatedCollapse(game, dtMs, rng) {
       wfc,
       phase: "complete",
       collapseAccumulatorMs: 0,
-      message: "World complete. Pinch Generate to watch new choices.",
+      randomCursor: randomSource.getCursor(),
+      message: `World complete from seed ${normalizeWfcWorldSeed(game.seed)}.`,
     };
   }
   if (wfc.status === "contradiction") {
@@ -365,6 +636,7 @@ function runAnimatedCollapse(game, dtMs, rng) {
       phase: "conflict",
       conflictMs: WFC_WORLD_CONFLICT_MS,
       collapseAccumulatorMs: 0,
+      randomCursor: randomSource.getCursor(),
       message: "The generator found a conflict. Move one rule or generate again.",
     };
   }
@@ -373,6 +645,7 @@ function runAnimatedCollapse(game, dtMs, rng) {
     ...game,
     wfc,
     collapseAccumulatorMs: accumulator,
+    randomCursor: randomSource.getCursor(),
   };
 }
 
@@ -387,7 +660,7 @@ function runWfcWorldControl(game, controlId, rng) {
   }
 }
 
-export function stepWfcWorldGame(game, dtSeconds, input = {}, rng = Math.random) {
+export function stepWfcWorldGame(game, dtSeconds, input = {}, rng) {
   if (!game?.layout) {
     return game;
   }
@@ -467,12 +740,231 @@ export function getWfcWorldGrid(game) {
   return getWfcGrid(game?.wfc);
 }
 
-export function completeWfcWorldNow(game, rng = Math.random) {
-  const completeWfc = runWfc(game?.wfc, { maxSteps: game?.layout?.cols * game?.layout?.rows * 4, rng });
+export function completeWfcWorldNow(game, rng) {
+  const randomSource = createWfcWorldRandomSource(game, rng);
+  const completeWfc = runWfc(game?.wfc, {
+    maxSteps: game?.layout?.cols * game?.layout?.rows * 4,
+    rng: randomSource.next,
+  });
   return {
     ...game,
     wfc: completeWfc,
     phase: completeWfc.status === "complete" ? "complete" : "conflict",
-    message: completeWfc.status === "complete" ? "World complete." : "The rules conflict.",
+    randomCursor: randomSource.getCursor(),
+    message:
+      completeWfc.status === "complete"
+        ? `World complete from seed ${normalizeWfcWorldSeed(game?.seed)}.`
+        : "The rules conflict.",
+  };
+}
+
+function getWfcWorldTileCounts(grid) {
+  const counts = Object.fromEntries(FINGERPRINT_WORLD_TILES.map((tile) => [tile.id, 0]));
+  let resolvedCells = 0;
+  for (const row of grid) {
+    for (const tileId of row ?? []) {
+      if (Object.hasOwn(counts, tileId)) {
+        counts[tileId] += 1;
+        resolvedCells += 1;
+      }
+    }
+  }
+  return { counts, resolvedCells };
+}
+
+function getWfcWorldQualityTier(score) {
+  if (score >= 90) {
+    return { id: "masterpiece", label: "World masterpiece" };
+  }
+  if (score >= 75) {
+    return { id: "thriving", label: "Thriving world" };
+  }
+  if (score >= 55) {
+    return { id: "distinctive", label: "Distinctive world" };
+  }
+  if (score >= 30) {
+    return { id: "emerging", label: "Emerging world" };
+  }
+  return { id: "sketch", label: "World sketch" };
+}
+
+export function getWfcWorldQualitySummary(game) {
+  const grid = getWfcWorldGrid(game);
+  const totalCells = Math.max(1, (game?.layout?.cols ?? 0) * (game?.layout?.rows ?? 0));
+  const { counts, resolvedCells } = getWfcWorldTileCounts(grid);
+  const terrainTypes = FINGERPRINT_WORLD_TILES.filter((tile) => counts[tile.id] > 0).length;
+  const landmarkCount = counts.castle + counts.bridge;
+  const constraintCount = Array.isArray(game?.constraints) ? game.constraints.length : 0;
+  const coverage = clamp(resolvedCells / totalCells, 0, 1);
+  const diversity = terrainTypes / FINGERPRINT_WORLD_TILES.length;
+  const landmarkRichness = clamp(landmarkCount / 5, 0, 1);
+  const authorship = clamp(constraintCount / 6, 0, 1);
+  const complete = game?.phase === "complete" && resolvedCells === totalCells;
+  const valid = complete && isWfcGridValid(grid);
+  const score = Math.round(
+    coverage * 40 +
+      diversity * 30 +
+      landmarkRichness * 15 +
+      authorship * 15,
+  );
+  const tier = getWfcWorldQualityTier(score);
+  const dominantTile =
+    resolvedCells > 0
+      ? FINGERPRINT_WORLD_TILES.reduce(
+          (best, tile) =>
+            counts[tile.id] > (counts[best?.id] ?? -1) ? tile : best,
+          null,
+        )
+      : null;
+
+  return {
+    complete,
+    valid,
+    score,
+    tier: tier.id,
+    tierLabel: tier.label,
+    totalCells,
+    resolvedCells,
+    coverage,
+    terrainTypes,
+    landmarkCount,
+    constraintCount,
+    dominantTerrainId: dominantTile?.id ?? null,
+    dominantTerrainLabel: dominantTile?.label ?? null,
+    tileCounts: counts,
+  };
+}
+
+export function getWfcWorldProgress(game) {
+  const quality = getWfcWorldQualitySummary(game);
+  const phase = game?.phase ?? "seeding";
+  let stage = "seed";
+  let stageLabel = "Place terrain rules";
+  let instruction = "Choose a terrain, then paint a few anchor cells.";
+  let overallPercent = Math.min(
+    24,
+    Math.round((quality.constraintCount / WFC_WORLD_GOAL.suggestedRuleCount) * 24),
+  );
+
+  if (phase === "collapsing") {
+    stage = "grow";
+    stageLabel = "Grow the world";
+    instruction = "The world is resolving your rules into a complete landscape.";
+    overallPercent = 25 + Math.round(quality.coverage * 74);
+  } else if (phase === "complete") {
+    stage = "complete";
+    stageLabel = "World complete";
+    instruction = "Save this world, share it, or generate another variation.";
+    overallPercent = 100;
+  } else if (phase === "conflict") {
+    stage = "repair";
+    stageLabel = "Repair a conflict";
+    instruction = "Move or clear one rule so neighboring terrain can agree.";
+  } else if (quality.constraintCount > 0) {
+    stageLabel = "Ready to grow";
+    instruction = "Add another anchor or choose Generate to grow the world.";
+  }
+
+  return {
+    goalId: WFC_WORLD_GOAL.id,
+    phase,
+    stage,
+    stageLabel,
+    instruction,
+    overallPercent: clamp(overallPercent, 0, 100),
+    resolvedPercent: Math.round(quality.coverage * 100),
+    resolvedCells: quality.resolvedCells,
+    totalCells: quality.totalCells,
+    constraintCount: quality.constraintCount,
+    suggestedRuleCount: WFC_WORLD_GOAL.suggestedRuleCount,
+    terrainTypes: quality.terrainTypes,
+    suggestedTerrainCount: WFC_WORLD_GOAL.suggestedTerrainCount,
+    generation: Math.max(0, Math.floor(game?.generation ?? 0)),
+    complete: quality.complete,
+    needsAttention: phase === "conflict",
+  };
+}
+
+export function getWfcWorldGoalModel(game) {
+  const progress = getWfcWorldProgress(game);
+  return {
+    ...WFC_WORLD_GOAL,
+    status: progress.complete
+      ? "complete"
+      : progress.needsAttention
+        ? "needs-attention"
+        : "in-progress",
+    progress,
+    milestones: [
+      {
+        id: "seed",
+        label: "Place 3 terrain rules",
+        current: Math.min(progress.constraintCount, WFC_WORLD_GOAL.suggestedRuleCount),
+        target: WFC_WORLD_GOAL.suggestedRuleCount,
+        complete: progress.constraintCount >= WFC_WORLD_GOAL.suggestedRuleCount,
+      },
+      {
+        id: "grow",
+        label: "Resolve the whole map",
+        current: progress.resolvedCells,
+        target: progress.totalCells,
+        complete: progress.complete,
+      },
+      {
+        id: "discover",
+        label: "Discover 4 terrain types",
+        current: Math.min(progress.terrainTypes, WFC_WORLD_GOAL.suggestedTerrainCount),
+        target: WFC_WORLD_GOAL.suggestedTerrainCount,
+        complete: progress.terrainTypes >= WFC_WORLD_GOAL.suggestedTerrainCount,
+      },
+    ],
+  };
+}
+
+export function getWfcWorldResult(game) {
+  const quality = getWfcWorldQualitySummary(game);
+  if (!quality.complete) {
+    return null;
+  }
+
+  const terrainLabel =
+    quality.terrainTypes === 1 ? "1 terrain type" : `${quality.terrainTypes} terrain types`;
+  const landmarkLabel =
+    quality.landmarkCount === 1 ? "1 landmark" : `${quality.landmarkCount} landmarks`;
+
+  return {
+    modeId: WFC_WORLD_MODE_ID,
+    outcome: quality.valid ? "complete" : "invalid",
+    score: quality.score,
+    title: quality.tierLabel,
+    summary: `${terrainLabel}, ${landmarkLabel}, and ${quality.constraintCount} placed rules shaped this world.`,
+    generation: Math.max(0, Math.floor(game?.generation ?? 0)),
+    quality,
+    metrics: [
+      {
+        id: "quality",
+        label: "World quality",
+        value: quality.score,
+        displayValue: `${quality.score}/100`,
+      },
+      {
+        id: "terrain-variety",
+        label: "Terrain variety",
+        value: quality.terrainTypes,
+        displayValue: `${quality.terrainTypes}/${FINGERPRINT_WORLD_TILES.length}`,
+      },
+      {
+        id: "landmarks",
+        label: "Landmarks",
+        value: quality.landmarkCount,
+        displayValue: String(quality.landmarkCount),
+      },
+      {
+        id: "rules",
+        label: "Your rules",
+        value: quality.constraintCount,
+        displayValue: String(quality.constraintCount),
+      },
+    ],
   };
 }

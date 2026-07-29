@@ -17,9 +17,8 @@ import {
   flattenTwoHandWindow,
   wrapAngleDelta,
 } from "./featureExtract.js";
+import { getPinchThresholds } from "../inputPreferences.js";
 
-const PINCH_START_THRESHOLD = 0.045;
-const PINCH_END_THRESHOLD = 0.06;
 const STALE_HAND_FRAME_LIMIT = 8;
 
 function clamp(value, min, max) {
@@ -309,6 +308,7 @@ export function createGestureEngine(options = {}) {
     const personalizer = updateInput?.personalizer ?? null;
     const personalizationEnabled = Boolean(updateInput?.personalizationEnabled);
     const inputHands = Array.isArray(updateInput?.hands) ? updateInput.hands : [];
+    const pinchThresholds = getPinchThresholds(updateInput?.pinchThreshold);
     const events = [];
 
     const activeHandIds = new Set();
@@ -329,8 +329,8 @@ export function createGestureEngine(options = {}) {
 
       const previousPinch = current.pinchActive;
       const pinchDistance = feature.pinchDistance;
-      const pinchStart = pinchDistance <= PINCH_START_THRESHOLD;
-      const pinchEnd = pinchDistance >= PINCH_END_THRESHOLD;
+      const pinchStart = pinchDistance <= pinchThresholds.start;
+      const pinchEnd = pinchDistance >= pinchThresholds.end;
       let pinchActive = previousPinch;
       if (!pinchActive && pinchStart) {
         pinchActive = true;
@@ -339,7 +339,16 @@ export function createGestureEngine(options = {}) {
       }
 
       current.pinchActive = pinchActive;
-      current.pinchConfidence = clamp(1 - normalizeRange(pinchDistance, PINCH_START_THRESHOLD, PINCH_END_THRESHOLD * 1.4), 0, 1);
+      current.pinchConfidence = clamp(
+        1 -
+          normalizeRange(
+            pinchDistance,
+            pinchThresholds.start,
+            pinchThresholds.end * 1.4,
+          ),
+        0,
+        1,
+      );
       current.feature = {
         ...feature,
         pinchActive,

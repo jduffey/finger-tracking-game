@@ -2,6 +2,75 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
+import {
+  MEDIAPIPE_HANDS_ASSET_NAMES,
+  MEDIAPIPE_HANDS_SOLUTION_PATH,
+} from "./src/trackingAssetConfig.js";
+
+const MEDIAPIPE_HANDS_PACKAGE_DIR = path.resolve(
+  __dirname,
+  "node_modules/@mediapipe/hands",
+);
+
+function getMediapipeContentType(fileName) {
+  if (fileName.endsWith(".js")) {
+    return "text/javascript; charset=utf-8";
+  }
+  if (fileName.endsWith(".wasm")) {
+    return "application/wasm";
+  }
+  return "application/octet-stream";
+}
+
+function createSelfHostedMediapipePlugin() {
+  const publicPrefix = `${MEDIAPIPE_HANDS_SOLUTION_PATH}/`;
+  const assetNames = new Set(MEDIAPIPE_HANDS_ASSET_NAMES);
+
+  return {
+    name: "motion-arcade-self-host-mediapipe",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const requestPath = req.url?.split("?")[0] ?? "";
+        if (!requestPath.startsWith(publicPrefix)) {
+          next();
+          return;
+        }
+
+        const fileName = decodeURIComponent(requestPath.slice(publicPrefix.length));
+        if (!assetNames.has(fileName) || path.basename(fileName) !== fileName) {
+          res.statusCode = 404;
+          res.end("Not found");
+          return;
+        }
+
+        const sourcePath = path.join(MEDIAPIPE_HANDS_PACKAGE_DIR, fileName);
+        if (!fs.existsSync(sourcePath)) {
+          res.statusCode = 404;
+          res.end("Tracking asset unavailable");
+          return;
+        }
+
+        res.statusCode = 200;
+        res.setHeader("content-type", getMediapipeContentType(fileName));
+        res.setHeader("cache-control", "public, max-age=31536000, immutable");
+        fs.createReadStream(sourcePath).pipe(res);
+      });
+    },
+    generateBundle() {
+      for (const fileName of MEDIAPIPE_HANDS_ASSET_NAMES) {
+        const sourcePath = path.join(MEDIAPIPE_HANDS_PACKAGE_DIR, fileName);
+        if (!fs.existsSync(sourcePath)) {
+          this.error(`Missing MediaPipe hands asset: ${fileName}`);
+        }
+        this.emitFile({
+          type: "asset",
+          fileName: `${MEDIAPIPE_HANDS_SOLUTION_PATH.slice(1)}/${fileName}`,
+          source: fs.readFileSync(sourcePath),
+        });
+      }
+    },
+  };
+}
 
 function createVerboseLogWriterPlugin() {
   let logStream = null;
@@ -168,8 +237,8 @@ function resolveVendorChunk(id) {
 export default defineConfig(({ command }) => ({
   plugins:
     command === "serve"
-      ? [react(), createVerboseLogWriterPlugin()]
-      : [react()],
+      ? [react(), createSelfHostedMediapipePlugin(), createVerboseLogWriterPlugin()]
+      : [react(), createSelfHostedMediapipePlugin()],
   build: {
     chunkSizeWarningLimit: 550,
     rollupOptions: {

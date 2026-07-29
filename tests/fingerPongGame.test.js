@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import {
   FINGER_PONG_COUNTDOWN_MS,
   FINGER_PONG_MAX_SCORE,
+  FINGER_PONG_WIN_MARGIN,
   createFingerPongGame,
   createFingerPongLayout,
+  hasWonFingerPongMatch,
   stepFingerPongGame,
 } from "../src/fingerPongGame.js";
 
@@ -167,4 +169,159 @@ test("stepFingerPongGame awards points on top exit and resets on player miss", (
   assert.equal(afterMiss.opponentScore, 1);
   assert.equal(afterMiss.status, "countdown");
   assert.equal(afterMiss.rallyCount, 0);
+});
+
+test("stepFingerPongGame ends the match when the player reaches the target score", () => {
+  const layout = createFingerPongLayout(960, 720);
+  const state = {
+    layout,
+    player: { x: layout.width * 0.5, y: layout.playerPaddleY },
+    opponent: { x: layout.width * 0.5, y: layout.opponentPaddleY },
+    ball: {
+      x: layout.width * 0.5,
+      y: -layout.ballRadius - 2,
+      vx: 0,
+      vy: -180,
+      radius: layout.ballRadius,
+    },
+    score: FINGER_PONG_MAX_SCORE - 1,
+    opponentScore: 2,
+    rallyCount: 4,
+    bestRally: 4,
+    status: "playing",
+    countdownMs: 0,
+    message: "",
+  };
+
+  const won = stepFingerPongGame(state, 1 / 60, state.player.x);
+  assert.equal(won.score, FINGER_PONG_MAX_SCORE);
+  assert.equal(won.status, "won");
+  assert.equal(won.countdownMs, 0);
+  assert.equal(won.message, "Match won");
+});
+
+test("stepFingerPongGame ends the match when the opponent reaches the target score", () => {
+  const layout = createFingerPongLayout(960, 720);
+  const state = {
+    layout,
+    player: { x: layout.width * 0.5, y: layout.playerPaddleY },
+    opponent: { x: layout.width * 0.5, y: layout.opponentPaddleY },
+    ball: {
+      x: layout.width * 0.5,
+      y: layout.height + layout.ballRadius + 2,
+      vx: 0,
+      vy: 180,
+      radius: layout.ballRadius,
+    },
+    score: 2,
+    opponentScore: FINGER_PONG_MAX_SCORE - 1,
+    rallyCount: 3,
+    bestRally: 3,
+    status: "playing",
+    countdownMs: 0,
+    message: "",
+  };
+
+  const lost = stepFingerPongGame(state, 1 / 60, state.player.x);
+  assert.equal(lost.opponentScore, FINGER_PONG_MAX_SCORE);
+  assert.equal(lost.status, "lost");
+  assert.equal(lost.countdownMs, 0);
+  assert.equal(lost.message, "Opponent wins");
+
+  const frozen = stepFingerPongGame(lost, 0.05, layout.width);
+  assert.equal(frozen.status, "lost");
+  assert.equal(frozen.opponentScore, lost.opponentScore);
+  assert.deepEqual(frozen.ball, lost.ball);
+});
+
+test("Finger Pong requires a two-point margin once the match reaches deuce", () => {
+  assert.equal(FINGER_PONG_WIN_MARGIN, 2);
+  assert.equal(hasWonFingerPongMatch(7, 6), false);
+  assert.equal(hasWonFingerPongMatch(8, 6), true);
+  assert.equal(hasWonFingerPongMatch(11, 10), false);
+  assert.equal(hasWonFingerPongMatch(12, 10), true);
+
+  const layout = createFingerPongLayout(960, 720);
+  const deucePoint = {
+    layout,
+    player: { x: layout.width * 0.5, y: layout.playerPaddleY },
+    opponent: { x: layout.width * 0.5, y: layout.opponentPaddleY },
+    ball: {
+      x: layout.width * 0.5,
+      y: -layout.ballRadius - 2,
+      vx: 0,
+      vy: -180,
+      radius: layout.ballRadius,
+    },
+    score: 6,
+    opponentScore: 6,
+    rallyCount: 5,
+    bestRally: 5,
+    server: "player",
+    status: "playing",
+    countdownMs: 0,
+    message: "",
+  };
+
+  const advantage = stepFingerPongGame(
+    deucePoint,
+    1 / 60,
+    deucePoint.player.x,
+  );
+  assert.equal(advantage.score, 7);
+  assert.equal(advantage.status, "countdown");
+
+  const matchPoint = {
+    ...advantage,
+    status: "playing",
+    countdownMs: 0,
+    ball: {
+      ...advantage.ball,
+      y: -layout.ballRadius - 2,
+      vy: -180,
+    },
+  };
+  const won = stepFingerPongGame(matchPoint, 1 / 60, matchPoint.player.x);
+  assert.equal(won.score, 8);
+  assert.equal(won.status, "won");
+});
+
+test("Finger Pong alternates automatic serves and switches every point at deuce", () => {
+  const layout = createFingerPongLayout(960, 720);
+  const base = {
+    ...createFingerPongGame(layout.width, layout.height),
+    status: "playing",
+    countdownMs: 0,
+  };
+  const scorePoint = (state) =>
+    stepFingerPongGame(
+      {
+        ...state,
+        status: "playing",
+        countdownMs: 0,
+        ball: {
+          ...state.ball,
+          y: -layout.ballRadius - 2,
+          vy: -180,
+        },
+      },
+      1 / 60,
+      state.player.x,
+    );
+
+  const onePoint = scorePoint(base);
+  assert.equal(onePoint.server, "player");
+  assert.ok(onePoint.ball.vy < 0);
+
+  const twoPoints = scorePoint(onePoint);
+  assert.equal(twoPoints.server, "opponent");
+  assert.ok(twoPoints.ball.vy > 0);
+
+  const deuce = scorePoint({
+    ...base,
+    score: 6,
+    opponentScore: 6,
+  });
+  assert.equal(deuce.server, "opponent");
+  assert.ok(deuce.ball.vy > 0);
 });
