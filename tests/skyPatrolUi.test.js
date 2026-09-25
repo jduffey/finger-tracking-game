@@ -10,17 +10,11 @@ import {
   getSkyPatrolIncomingIndicators,
   getSkyPatrolLegendUi,
   getSkyPatrolLifeIcons,
-  getSkyPatrolCheckpointUi,
-  getSkyPatrolComboUi,
-  getSkyPatrolMissionUi,
-  getSkyPatrolOnboardingUi,
-  getSkyPatrolPowerUpUi,
   getSkyPatrolRadarBlips,
   getSkyPatrolDepthCue,
   getSkyPatrolProjectileUi,
   getSkyPatrolStartPromptUi,
   getSkyPatrolTargetHealthPips,
-  getSkyPatrolTelegraphUi,
   getSkyPatrolThreatUi,
 } from "../src/skyPatrolUi.js";
 
@@ -164,13 +158,6 @@ test("getSkyPatrolLegendUi compresses and fades the training legend after launch
 
   assert.equal(lateLegend.visible, true);
   assert.equal(lateLegend.faded, true);
-
-  const missionLegend = getSkyPatrolLegendUi({
-    status: "playing",
-    elapsedMs: 1200,
-    mission: 1,
-  });
-  assert.equal(missionLegend.items.at(-1).id, "wingman");
 });
 
 test("getSkyPatrolRadarBlips maps active threats into a mini radar strip", () => {
@@ -235,152 +222,4 @@ test("getSkyPatrolStartPromptUi shows a short launch prompt only while play begi
   assert.match(openingPrompt.detail, /Pinch/);
   assert.equal(latePrompt.visible, false);
   assert.equal(getSkyPatrolStartPromptUi({ status: "gameover", elapsedMs: 900 }).visible, false);
-});
-
-test("getSkyPatrolHudItems replaces target cruft with mission and combo context", () => {
-  const items = getSkyPatrolHudItems({
-    mission: 2,
-    totalMissions: 4,
-    missionName: "Island Shield",
-    missionProgress: 5,
-    missionGoal: 8,
-    comboCount: 3,
-    score: 1260,
-    lives: 2,
-    fireReady: true,
-  });
-
-  assert.deepEqual(
-    items.map((item) => item.id),
-    ["score", "lives", "mission", "goal", "combo", "fire"],
-  );
-  assert.deepEqual(
-    items.map((item) => item.value),
-    [1260, 2, "2/4", "5/8", "3x", "Ready"],
-  );
-});
-
-test("Sky Patrol mission and checkpoint helpers present goals and recap", () => {
-  const mission = getSkyPatrolMissionUi({
-    mission: 3,
-    totalMissions: 4,
-    status: "playing",
-    missionProgress: 7,
-    missionConfig: {
-      name: "Runway Breaker",
-      goalText: "Destroy 10 threats",
-      targetGoal: 10,
-    },
-  });
-
-  assert.deepEqual(mission, {
-    mission: 3,
-    totalMissions: 4,
-    name: "Runway Breaker",
-    goalText: "Destroy 10 threats",
-    progress: 7,
-    goal: 10,
-    progressRatio: 0.7,
-    boss: false,
-    phase: "active",
-  });
-
-  const checkpoint = getSkyPatrolCheckpointUi({
-    status: "checkpoint",
-    mission: 2,
-    totalMissions: 4,
-    lastMissionRecap: {
-      name: "Island Shield",
-      scoreEarned: 1900,
-      accuracy: 76,
-      checkpointBonus: 1180,
-      clean: true,
-    },
-  });
-
-  assert.equal(checkpoint.visible, true);
-  assert.equal(checkpoint.title, "Clean checkpoint");
-  assert.equal(checkpoint.nextMissionText, "Mission 3 incoming");
-  assert.deepEqual(checkpoint.stats[2], {
-    label: "Accuracy",
-    value: "76%",
-  });
-});
-
-test("Sky Patrol helpers explain telegraphs, power-ups, combos, and launch safety", () => {
-  assert.deepEqual(
-    getSkyPatrolTelegraphUi({
-      id: "warning-1",
-      kind: "ace",
-      label: "Boss incoming",
-      x: 400,
-      ageMs: 450,
-      durationMs: 900,
-    }),
-    {
-      id: "warning-1",
-      label: "Boss incoming",
-      kind: "ace",
-      x: 400,
-      urgency: 0.5,
-      boss: true,
-    },
-  );
-  assert.equal(getSkyPatrolPowerUpUi({ type: "shield" }).detail, "Blocks one hit");
-  assert.equal(
-    getSkyPatrolPowerUpUi({ type: "overdrive" }).detail,
-    "Faster fire and slower heat",
-  );
-  assert.deepEqual(getSkyPatrolComboUi({ comboCount: 4, comboExpiresMs: 1200 }), {
-    visible: true,
-    count: 4,
-    label: "4x strike chain",
-    multiplier: 1.24,
-    remainingMs: 1200,
-  });
-
-  const onboarding = getSkyPatrolOnboardingUi({
-    status: "playing",
-    startSafetyMs: 1450,
-    missionConfig: {
-      name: "Coastal Sweep",
-      goalText: "Destroy 6 threats",
-      targetGoal: 6,
-    },
-  });
-  assert.equal(onboarding.visible, true);
-  assert.equal(onboarding.objective, "Destroy 6 threats");
-  assert.match(onboarding.safetyLabel, /1.5s/);
-});
-
-test("getSkyPatrolGameOverUi presents a structured campaign result", () => {
-  const ui = getSkyPatrolGameOverUi({
-    status: "gameover",
-    result: {
-      outcome: "victory",
-      score: 8200,
-      missionsCleared: 4,
-      totalMissions: 4,
-      targetsDestroyed: 25,
-      accuracy: 68,
-      bestCombo: 7,
-      powerUpsCollected: 3,
-    },
-  });
-
-  assert.equal(ui.title, "Patrol complete");
-  assert.equal(ui.outcome, "victory");
-  assert.equal(ui.restartText, "Hold Fly Again");
-  assert.deepEqual(ui.stats[1], { label: "Missions", value: "4/4" });
-  assert.deepEqual(ui.stats[3], { label: "Accuracy", value: "68%" });
-});
-
-test("getSkyPatrolThreatUi distinguishes the expanded air archetypes", () => {
-  assert.deepEqual(getSkyPatrolThreatUi({ kind: "interceptor" }), {
-    role: "air",
-    shape: "air-dart",
-    archetype: "Interceptor",
-  });
-  assert.equal(getSkyPatrolThreatUi({ kind: "bomber" }).shape, "air-heavy");
-  assert.equal(getSkyPatrolThreatUi({ kind: "ace" }).role, "boss");
 });

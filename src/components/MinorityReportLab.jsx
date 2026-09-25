@@ -278,8 +278,8 @@ export default function MinorityReportLab(props) {
     cameraOverlayRef,
     cameraStageRef,
     cameraVideoRef,
-    cameraActive = false,
-    trackingErrorPresentation,
+    cameraError,
+    modelError,
     fps,
     engineOutput,
     eventLog,
@@ -303,8 +303,6 @@ export default function MinorityReportLab(props) {
     immersive = false,
     onBack,
     onReset,
-    onRetryTracking,
-    onStopCamera,
   } = props;
 
   const stageShellRef = useRef(null);
@@ -1071,17 +1069,12 @@ export default function MinorityReportLab(props) {
           <div className="button-row compact">
             {onBack ? (
               <button type="button" className="secondary" onClick={onBack}>
-                Home
+                Back to Input Test
               </button>
             ) : null}
             {onReset ? (
               <button type="button" className="secondary" onClick={onReset}>
                 Reset Lab Session
-              </button>
-            ) : null}
-            {cameraActive && onStopCamera ? (
-              <button type="button" className="secondary" onClick={onStopCamera}>
-                Camera on · Turn off
               </button>
             ) : null}
             <button
@@ -1094,35 +1087,16 @@ export default function MinorityReportLab(props) {
               {isDebugPanelVisible ? "Hide Detector Panel" : "Show Detector Panel"}
             </button>
           </div>
-          {trackingErrorPresentation ? (
-            <div className="minority-lab-errors" role="alert">
-              <div className="error-text minority-lab-error">
-                <strong>{trackingErrorPresentation.title}</strong>
-                <span>{trackingErrorPresentation.message}</span>
-              </div>
-              <div className="button-row compact">
-                {onRetryTracking ? (
-                  <button type="button" onClick={onRetryTracking}>
-                    {trackingErrorPresentation.primaryAction}
-                  </button>
-                ) : null}
-                {cameraActive && onStopCamera ? (
-                  <button type="button" className="secondary" onClick={onStopCamera}>
-                    Turn camera off
-                  </button>
-                ) : null}
-              </div>
+          {cameraError || modelError ? (
+            <div className="minority-lab-errors">
+              {cameraError ? <p className="error-text minority-lab-error">{cameraError}</p> : null}
+              {modelError ? <p className="error-text minority-lab-error">{modelError}</p> : null}
             </div>
           ) : null}
         </div>
       ) : (
         <div className="minority-lab-header">
           <h2>Minority Report Lab</h2>
-          {cameraActive && onStopCamera ? (
-            <button type="button" className="secondary" onClick={onStopCamera}>
-              Camera on · Turn off
-            </button>
-          ) : null}
           <button
             type="button"
             className="secondary"

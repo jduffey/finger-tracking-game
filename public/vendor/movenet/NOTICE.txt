@@ -1,5 +1,0 @@
-MoveNet TensorFlow.js model artifacts
-Copyright 2021 Google LLC
-
-Original model sources and exact artifact checksums are recorded in
-provenance.json in this directory.

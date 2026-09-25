@@ -4,7 +4,6 @@ const fingerPongLog = createScopedLogger("fingerPongGame");
 
 export const FINGER_PONG_COUNTDOWN_MS = 2_500;
 export const FINGER_PONG_MAX_SCORE = 7;
-export const FINGER_PONG_WIN_MARGIN = 2;
 
 const FINGER_PONG_MAX_FRAME_SECONDS = 0.05;
 const FINGER_PONG_MAX_STEP_SECONDS = 1 / 45;
@@ -47,51 +46,19 @@ function getBallSpeedMultiplier(rallyCount) {
   );
 }
 
-function createBall(
-  layout,
-  verticalDirection = -1,
-  horizontalDirection = -1,
-) {
+function createBall(layout, direction = -1) {
   const baseSpeed = getBaseBallSpeed(layout);
   const horizontalSpeed = baseSpeed * 0.24;
   return {
     x: layout.width / 2,
     y: layout.height / 2,
-    vx: horizontalSpeed * horizontalDirection,
-    vy:
-      Math.sqrt(
-        Math.max(
-          baseSpeed * baseSpeed - horizontalSpeed * horizontalSpeed,
-          baseSpeed * baseSpeed * 0.68,
-        ),
-      ) * verticalDirection,
+    vx: horizontalSpeed * direction,
+    vy: -Math.sqrt(Math.max(baseSpeed * baseSpeed - horizontalSpeed * horizontalSpeed, baseSpeed * baseSpeed * 0.68)),
     radius: layout.ballRadius,
   };
 }
 
-function getServeDirection(score, opponentScore) {
-  const safeScore = Math.max(0, Number.isFinite(score) ? score : 0);
-  const safeOpponentScore = Math.max(
-    0,
-    Number.isFinite(opponentScore) ? opponentScore : 0,
-  );
-  const totalPoints = safeScore + safeOpponentScore;
-  const deuce = safeScore >= FINGER_PONG_MAX_SCORE - 1 &&
-    safeOpponentScore >= FINGER_PONG_MAX_SCORE - 1;
-  const serveTurn = deuce ? totalPoints : Math.floor(totalPoints / 2);
-  return serveTurn % 2 === 0 ? -1 : 1;
-}
-
-export function hasWonFingerPongMatch(score, opponentScore) {
-  return (
-    Number.isFinite(score) &&
-    Number.isFinite(opponentScore) &&
-    score >= FINGER_PONG_MAX_SCORE &&
-    score - opponentScore >= FINGER_PONG_WIN_MARGIN
-  );
-}
-
-function createRoundState(layout) {
+function createRoundState(layout, direction = -1) {
   return {
     player: {
       x: layout.width / 2,
@@ -101,28 +68,19 @@ function createRoundState(layout) {
       x: layout.width / 2,
       y: layout.opponentPaddleY,
     },
-    ball: createBall(layout),
+    ball: createBall(layout, direction),
     score: 0,
     opponentScore: 0,
     rallyCount: 0,
     bestRally: 0,
-    server: "player",
     status: "countdown",
     countdownMs: FINGER_PONG_COUNTDOWN_MS,
     message: "3",
   };
 }
 
-function resetRound(state, reason) {
-  const serveDirection = getServeDirection(state.score, state.opponentScore);
-  const nextBall = createBall(
-    state.layout,
-    serveDirection,
-    (state.score + state.opponentScore) % 2 === 0 ? -1 : 1,
-  );
-  const playerWon = hasWonFingerPongMatch(state.score, state.opponentScore);
-  const opponentWon = hasWonFingerPongMatch(state.opponentScore, state.score);
-  const roundFinished = playerWon || opponentWon;
+function resetRound(state, reason, direction = -1) {
+  const nextBall = createBall(state.layout, direction);
   return {
     ...state,
     player: {
@@ -135,17 +93,14 @@ function resetRound(state, reason) {
     },
     ball: nextBall,
     rallyCount: 0,
-    server: serveDirection < 0 ? "player" : "opponent",
-    status: playerWon ? "won" : opponentWon ? "lost" : "countdown",
-    countdownMs: roundFinished ? 0 : FINGER_PONG_COUNTDOWN_MS,
+    status: state.score >= FINGER_PONG_MAX_SCORE ? "won" : "countdown",
+    countdownMs: state.score >= FINGER_PONG_MAX_SCORE ? 0 : FINGER_PONG_COUNTDOWN_MS,
     message:
-      playerWon
-        ? "Match won"
-        : opponentWon
-          ? "Opponent wins"
+      state.score >= FINGER_PONG_MAX_SCORE
+        ? "Perfect rally"
         : reason === "player_miss"
-          ? "Opponent point"
-          : "Your point",
+          ? "Reset"
+          : "Point",
   };
 }
 
@@ -227,7 +182,7 @@ function stepFingerPongGameSubstep(state, dtSeconds, paddleTargetX) {
     },
   };
 
-  if (nextState.status === "won" || nextState.status === "lost") {
+  if (nextState.status === "won") {
     return nextState;
   }
 
@@ -237,12 +192,7 @@ function stepFingerPongGameSubstep(state, dtSeconds, paddleTargetX) {
       ...nextState,
       countdownMs,
       status: countdownMs <= 0 ? "playing" : "countdown",
-      message:
-        countdownMs <= 0
-          ? nextState.server === "player"
-            ? "Serve up"
-            : "Receive"
-          : String(Math.max(1, Math.ceil(countdownMs / 1000))),
+      message: countdownMs <= 0 ? "Return it" : String(Math.max(1, Math.ceil(countdownMs / 1000))),
     };
   }
 
@@ -308,8 +258,10 @@ function stepFingerPongGameSubstep(state, dtSeconds, paddleTargetX) {
         ...nextState,
         score,
         bestRally: Math.max(nextState.bestRally, nextState.rallyCount),
+        message: score >= FINGER_PONG_MAX_SCORE ? "Perfect rally" : "Point",
       },
       "player_point",
+      score % 2 === 0 ? -1 : 1,
     );
   }
 
@@ -321,6 +273,7 @@ function stepFingerPongGameSubstep(state, dtSeconds, paddleTargetX) {
         bestRally: Math.max(nextState.bestRally, nextState.rallyCount),
       },
       "player_miss",
+      -1,
     );
   }
 

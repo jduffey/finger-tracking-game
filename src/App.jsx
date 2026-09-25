@@ -1,11 +1,4 @@
-import {
-  Suspense,
-  lazy,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   applyArcCalibration,
   applyAffineTransform,
@@ -19,10 +12,16 @@ import {
   solveAffineFromPairs,
 } from "./calibration.js";
 import {
+  buildGridHoles,
   computeRunnerTrackGridLayout,
+  GAME_DURATION_MS,
   getRunnerTrackIndexFromNormalized,
   getRunnerTrackOffsetFromIndex,
+  isPointInCircle,
+  MOLE_VISIBLE_MS,
+  pickRandomHole,
   pickDistinctRandomChoice,
+  randomSpawnDelay,
   shouldCollectRunnerCoin,
 } from "./gameLogic.js";
 import {
@@ -31,15 +30,6 @@ import {
   stepBrickDodgerGame,
 } from "./brickDodgerGame.js";
 import {
-  getBrickDodgerLaneTelegraphUi,
-  getBrickDodgerMultiplierUi,
-  getBrickDodgerPickupUi,
-  getBrickDodgerResultUi,
-  getBrickDodgerSlowTimeUi,
-  getBrickDodgerStageRecapUi,
-  getBrickDodgerStageUi,
-} from "./brickDodgerUi.js";
-import {
   BREAKOUT_BRICK_COLORS,
   BREAKOUT_BRICK_SCORE,
   BREAKOUT_CAPSULE_SCORE,
@@ -47,7 +37,6 @@ import {
   FIND_YOUR_GRIND_BREAKOUT_MODE_ID,
   createBreakoutGame,
   createFindYourGrindBreakoutGame,
-  restartBreakoutGame,
   stepBreakoutGame,
 } from "./breakoutGame.js";
 import {
@@ -61,54 +50,16 @@ import {
 import { selectBreakoutCoopSupportHand } from "./fullscreenBreakoutCoopInput.js";
 import {
   FINGER_PONG_COUNTDOWN_MS,
+  FINGER_PONG_MAX_SCORE,
   createFingerPongGame,
   stepFingerPongGame,
 } from "./fingerPongGame.js";
-import { getFingerPongMatchUi } from "./fingerPongUi.js";
 import {
-  STAR_FLIGHT_COURSES,
-  STAR_FLIGHT_COURSE_IDS,
-  advanceStarFlightCourseClock,
-  createStarFlightCourseProgress,
-  createStarFlightGate,
-  didStarFlightGateCrossPassPlane,
-  evaluateStarFlightGate,
-  getStarFlightCourse,
-  getStarFlightCourseResult,
-  recordStarFlightGate,
-  updateStarFlightGateDrift,
-} from "./starFlightCourse.js";
-import {
-  createFullscreenHandBounceDailyGame,
   createFullscreenHandBounceGame,
-  restartFullscreenHandBounceGame as restartFullscreenHandBounceCampaign,
   stepFullscreenHandBounceGame,
 } from "./fullscreenHandBounceGame.js";
+import { createFlappyGame, flapFlappyGame, stepFlappyGame } from "./flappyGame.js";
 import {
-  getFullscreenHandBounceCheckpointUi,
-  getFullscreenHandBounceHudUi,
-  getFullscreenHandBounceLegendUi,
-  getFullscreenHandBouncePowerUi,
-  getFullscreenHandBounceResultUi,
-  getFullscreenHandBounceStageUi,
-  getFullscreenHandBounceTargetUi,
-} from "./fullscreenHandBounceUi.js";
-import {
-  WHACK_A_MOLE_ACTIONS,
-  WHACK_A_MOLE_PHASES,
-  createDailyWhackAMoleSeed,
-  createWhackAMoleGame,
-  getWhackAMoleSummary,
-  reduceWhackAMoleGame,
-} from "./whackAMoleGame.js";
-import {
-  createFlappyDailyChallengeGame,
-  createFlappyGame,
-  flapFlappyGame,
-  stepFlappyGame,
-} from "./flappyGame.js";
-import {
-  getFullscreenDetectorHandLimit,
   getFullscreenTrackedHandLimit,
   getFullscreenTrackedFingerNames,
   shouldShowFullscreenNeonHandOutline,
@@ -120,7 +71,18 @@ import {
   getTipRippleStrokeWidth,
   getTouchingTipRippleStrokeWidth,
 } from "./tipRipples.js";
-import { getVerifiedFullscreenHandPointerInput } from "./fullscreenHandPointer.js";
+import {
+  FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID,
+  FULLSCREEN_LANDING_MODE,
+  FULLSCREEN_MODE_LANDING_HOLD_MS,
+  createFullscreenLandingHandSkeleton,
+  createFullscreenModeLandingState,
+  getVerifiedFullscreenMenuHandPointerInput,
+  hasVerifiedFullscreenMenuHand,
+  resetFullscreenModeLandingHold,
+  selectFullscreenModeLandingMode,
+  stepFullscreenModeLanding,
+} from "./fullscreenModeLanding.js";
 import {
   areFullscreenExitControlStatesEqual,
   createFullscreenExitControlState,
@@ -135,7 +97,6 @@ import { runFullscreenOverlayGameUpdates } from "./fullscreenOverlayGames.js";
 import {
   MISSILE_COMMAND_COUNTDOWN_MS,
   MISSILE_COMMAND_THREAT_SCORE,
-  createMissileCommandDailyGame,
   createMissileCommandGame,
   getMissileCommandExplosionRadius,
   launchMissileCommandInterceptor,
@@ -150,14 +111,11 @@ import {
   getMissileCommandInterceptorUi,
   getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
-  getMissileCommandIntermissionUi,
-  getMissileCommandResourceUi,
   getMissileCommandSceneClassName,
   getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
   getMissileCommandThreatUi,
   getMissileCommandTacticalMetrics,
-  getMissileCommandWaveUi,
 } from "./missileCommandUi.js";
 import {
   SPACE_INVADERS_ENEMY_SCORE,
@@ -166,19 +124,14 @@ import {
 } from "./spaceInvadersGame.js";
 import {
   SKY_PATROL_STARTING_LIVES,
-  createSkyPatrolDailyGame,
   createSkyPatrolGame,
-  restartSkyPatrolGame,
   stepSkyPatrolGame,
 } from "./skyPatrolGame.js";
+import { WfcWorldRenderer } from "./wfc/WfcWorldRenderer.jsx";
 import {
   WFC_WORLD_MODE_ID,
-  clearWfcWorld,
   createWfcWorldGame,
   createWfcWorldStepInput,
-  getWfcWorldGoalModel,
-  selectWfcWorldTile,
-  startWfcWorldCollapse,
   stepWfcWorldGame,
 } from "./wfc/wfcWorldGame.js";
 import {
@@ -194,15 +147,11 @@ import {
 } from "./skyPatrolHandOverlay.js";
 import {
   getSkyPatrolFireCooldownUi,
-  getSkyPatrolCheckpointUi,
-  getSkyPatrolComboUi,
   getSkyPatrolGameOverUi,
   getSkyPatrolGunCooldownUi,
   getSkyPatrolHudItems,
   getSkyPatrolLegendUi,
   getSkyPatrolLifeIcons,
-  getSkyPatrolMissionUi,
-  getSkyPatrolOnboardingUi,
   getSkyPatrolStartPromptUi,
 } from "./skyPatrolUi.js";
 import {
@@ -228,31 +177,21 @@ import {
   getTicTacToeWinningLineUi,
 } from "./ticTacToeUi.js";
 import {
+  FRUIT_NINJA_BASE_SCORE,
   FRUIT_NINJA_BLADE_TRAIL_MS,
-  createFruitNinjaDailyGame,
+  FRUIT_NINJA_BOMB_PENALTY,
+  FRUIT_NINJA_COMBO_BONUS,
+  FRUIT_NINJA_GAME_OVER_LIVES,
   createFruitNinjaGame,
-  restartFruitNinjaGame,
   stepFruitNinjaGame,
 } from "./fruitNinjaGame.js";
-import {
-  getFruitNinjaBombWarnings,
-  getFruitNinjaComboUi,
-  getFruitNinjaHud,
-  getFruitNinjaLegendItems,
-  getFruitNinjaPowerUi,
-  getFruitNinjaPrecisionUi,
-  getFruitNinjaRecapUi,
-  getFruitNinjaRoundUi,
-  getFruitNinjaSceneClassName,
-  getFruitNinjaTargetUi,
-} from "./fruitNinjaUi.js";
 import {
   detectHands,
   getCurrentBackend,
   getCurrentRuntime,
   getLastDetectionMeta,
   initHandTracking,
-} from "./trackingRuntimeLoader.js";
+} from "./handTracking.js";
 import { assignStableHandLabels } from "./handLabeling.js";
 import { getHandOverlayStyle } from "./handOverlayStyles.js";
 import {
@@ -266,137 +205,36 @@ import {
   shouldUseImmersiveAppLayout,
 } from "./cameraLayout.js";
 import {
-  CAMERA_INTERRUPTION_RETRY_DELAY_MS,
-  attachCameraStreamToVideo,
   getCameraVideoKeepAliveAction,
   getStaleInferenceKeepAliveAction,
-  observeCameraStreamInterruptions,
-  releaseCameraStream,
   shouldRunTrackingKeepAlive,
 } from "./trackingKeepAlive.js";
-import {
-  detectPose,
-  detectPoses,
-  getLastPoseMeta,
-  getPoseRuntime,
-  initPoseTracking,
-} from "./trackingRuntimeLoader.js";
-import {
-  FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
-  FULLSCREEN_HAND_SKELETON_MAX_HANDS,
-  createFullscreenBodySkeletonOverlay,
-  createFullscreenHandSkeletonOverlay,
-} from "./fullscreenBodySkeletonOverlay.js";
+import { detectPose, getLastPoseMeta, getPoseRuntime, initPoseTracking } from "./poseTracking.js";
 import {
   createEmptyOffAxisState,
   createHeldOffAxisState,
   deriveOffAxisHeadState,
 } from "./offAxisHeadTracking.js";
 import { createScopedLogger } from "./logger.js";
-import WebcamBackground from "./components/WebcamBackground.jsx";
-import ProductHome from "./components/ProductHome.jsx";
+import MinorityReportLab from "./components/MinorityReportLab.jsx";
+import BodyPoseLab from "./components/BodyPoseLab.jsx";
+import OffAxisChamberLab from "./components/OffAxisChamberLab.jsx";
+import RouletteFingerGame from "./components/RouletteFingerGame.jsx";
+import ConveyorSphereGame from "./components/ConveyorSphereGame.jsx";
+import FullscreenLandingPage, {
+  WebcamBackground,
+} from "./components/FullscreenLandingPage.jsx";
+import SpatialGestureMemory from "./components/SpatialGestureMemory.jsx";
+import GestureAnalyticsLab from "./components/GestureAnalyticsLab.jsx";
+import GestureArtLab from "./components/GestureArtLab.jsx";
+import GestureControlOS from "./components/GestureControlOS.jsx";
 import { createGestureEngine } from "./gestures/gestureEngine.js";
-import {
-  APP_PHASES,
-  PRODUCT_AREAS,
-  TRACKING_PROFILES,
-  getModeByFullscreenId,
-  getModeById,
-  getModeByPhase,
-  getModeByPath,
-  listModes,
-} from "./modeRegistry.js";
-import {
-  getProductHomeAreaFromPath,
-  getProductHomePathForArea,
-} from "./productHomeModel.js";
-import {
-  TRACKING_READINESS_STATES,
-  assessTrackingHandFraming,
-  createTrackingInteractionCheck,
-  createTrackingReadinessState,
-  getCameraErrorPresentation,
-  reduceTrackingReadiness,
-  updateTrackingInteractionCheck,
-} from "./trackingReadiness.js";
-import {
-  TRACKING_RECOVERY_PHASES,
-  advanceTrackingRecoveryGate,
-  createTrackingRecoveryGate,
-  getTrackingRecoveryStatus,
-} from "./trackingRecoveryGate.js";
-import {
-  EXPERIENCE_LIFECYCLE_EVENTS,
-  EXPERIENCE_PAUSE_REASONS,
-  EXPERIENCE_PHASES,
-  createExperienceLifecycle,
-  transitionExperienceLifecycle,
-} from "./experienceLifecycle.js";
-import {
-  applyPreferenceDocumentState,
-  clearUserPreferences,
-  loadUserPreferences,
-  normalizeUserPreferences,
-  recordRecentMode,
-  saveUserPreferences,
-  toggleFavoriteMode,
-} from "./userPreferences.js";
-import {
-  adaptHandsForCamera,
-  adaptPoseForCamera,
-  adaptPosesForCamera,
-  expandPointerRangeForSeatedPlay,
-  getCursorSmoothingAlpha,
-  getPinchThresholds,
-  selectPreferredHand,
-} from "./inputPreferences.js";
-import { createAudioFeedback } from "./audioFeedback.js";
-import { createGameProgressionStore } from "./gameProgressionStorage.js";
-import { ACHIEVEMENT_DEFINITIONS } from "./achievementCatalog.js";
-import {
-  createFullscreenGameResult,
-  createSpatialMemoryResult,
-  createWhackAMoleResult,
-} from "./gameResultAdapters.js";
-import { formatExperienceDuration } from "./experienceResult.js";
-import { clearCreativeAssets } from "./creativeAssetStorage.js";
-import { clearLocalProductStorage } from "./localDataCleanup.js";
-import {
-  beginMeasuredProductExperience,
-  resetMeasuredProductExperiences,
-} from "./productExperienceMetricsIntegration.js";
-import {
-  assessDeviceCapabilities,
-  collectDeviceCapabilitySignals,
-  getCapabilityLaunchRecommendation,
-} from "./deviceCapabilities.js";
-import {
-  QUALITY_LEVELS,
-  createDynamicQualityController,
-  getDynamicQualityBudget,
-  updateDynamicQuality,
-} from "./dynamicQuality.js";
+import { shouldShowWorkspaceNav } from "./workspaceNavigation.js";
 import {
   RESIZABLE_LEFT_PANE_HANDLE_WIDTH_PX,
   RESIZABLE_LEFT_PANE_MIN_WIDTH_PX,
   clampResizableLeftPaneWidth,
 } from "./layoutSizing.js";
-import { resizeFullscreenGameState } from "./viewportStateTransform.js";
-import { createFixedStepSessionTiming } from "./sessionTiming.js";
-import {
-  MOTION_VISUALIZER_EFFECTS,
-  applyMotionVisualizerPreset,
-  createMotionVisualizerPreset,
-  deleteMotionVisualizerPreset,
-  getMotionVisualizerPalette,
-  getMotionVisualizerPulseDurationMs,
-  getMotionVisualizerTrailDurationMs,
-  isMotionVisualizerEffect,
-  loadMotionVisualizerState,
-  normalizeMotionVisualizerState,
-  saveMotionVisualizerState,
-  toggleMotionVisualizerFavorite,
-} from "./motionVisualizer.js";
 import {
   ALL_GESTURE_IDS,
   GESTURE_DEFINITIONS,
@@ -404,83 +242,29 @@ import {
   isTwoHandGesture,
 } from "./gestures/constants.js";
 import { createGesturePersonalization } from "./gestures/personalization.js";
-import {
-  SPATIAL_MEMORY_ACTIONS,
-  SPATIAL_MEMORY_PHASES,
-  createSpatialMemoryExperience,
-  reduceSpatialMemoryExperience,
-  toSpatialMemoryLegacyState,
-} from "./spatialMemoryExperience.js";
 
-const BodyPoseLab = lazy(() => import("./components/BodyPoseLab.jsx"));
-const ExperienceOverlay = lazy(
-  () => import("./components/ExperienceOverlay.jsx"),
-);
-const SettingsPanel = lazy(
-  () => import("./components/SettingsPanel.jsx"),
-);
-const TrackingSetup = lazy(
-  () => import("./components/TrackingSetup.jsx"),
-);
-const ConveyorSphereGame = lazy(
-  () => import("./components/ConveyorSphereGame.jsx"),
-);
-const GestureAnalyticsLab = lazy(
-  () => import("./components/GestureAnalyticsLab.jsx"),
-);
-const GestureArtLab = lazy(
-  () => import("./components/GestureArtLab.jsx"),
-);
-const GestureControlOS = lazy(
-  () => import("./components/GestureControlOS.jsx"),
-);
-const MinorityReportLab = lazy(
-  () => import("./components/MinorityReportLab.jsx"),
-);
-const OffAxisChamberLab = lazy(
-  () => import("./components/OffAxisChamberLab.jsx"),
-);
-const RouletteFingerGame = lazy(
-  () => import("./components/RouletteFingerGame.jsx"),
-);
-const WhackAMoleExperience = lazy(
-  () => import("./components/WhackAMoleExperience.jsx"),
-);
-const SpatialGestureMemory = lazy(
-  () => import("./components/SpatialGestureMemory.jsx"),
-);
-const ArcadeRunExperience = lazy(
-  () => import("./components/ArcadeRunExperience.jsx"),
-);
-const MotionVisualizerControls = lazy(() =>
-  import("./components/MotionVisualizerControls.jsx").then((module) => ({
-    default: module.MotionVisualizerControls,
-  })),
-);
-const WfcWorldRenderer = lazy(() =>
-  import("./wfc/WfcWorldRenderer.jsx").then((module) => ({
-    default: module.WfcWorldRenderer,
-  })),
-);
-const WfcWorldProjectPanel = lazy(() =>
-  import("./wfc/WfcWorldProjectPanel.jsx").then((module) => ({
-    default: module.WfcWorldProjectPanel,
-  })),
-);
+const PHASES = {
+  CALIBRATION: "CALIBRATION",
+  FULLSCREEN_CAMERA: "FULLSCREEN_CAMERA",
+  SANDBOX: "SANDBOX",
+  FLIGHT: "FLIGHT",
+  RUNNER: "RUNNER",
+  BODY_POSE: "BODY_POSE",
+  OFF_AXIS_LAB: "OFF_AXIS_LAB",
+  MINORITY_REPORT_LAB: "MINORITY_REPORT_LAB",
+  CONVEYOR: "CONVEYOR",
+  ROULETTE: "ROULETTE",
+  SPATIAL_GESTURE_MEMORY: "SPATIAL_GESTURE_MEMORY",
+  GESTURE_ANALYTICS_LAB: "GESTURE_ANALYTICS_LAB",
+  GESTURE_ART_LAB: "GESTURE_ART_LAB",
+  GESTURE_CONTROL_OS: "GESTURE_CONTROL_OS",
+  GAME: "GAME",
+};
 
-function LazyExperienceFallback({ label = "Loading experience…" }) {
-  return (
-    <div className="lazy-experience-fallback" role="status">
-      <span aria-hidden="true" className="lazy-experience-spinner" />
-      <strong>{label}</strong>
-    </div>
-  );
-}
-
-const PHASES = APP_PHASES;
-const ARCADE_RUN_STORAGE_KEY = "motionArcade.arcadeRun";
-
+const PINCH_START_THRESHOLD = 0.045;
+const PINCH_END_THRESHOLD = 0.06;
 const PINCH_DEBOUNCE_MS = 250;
+const CURSOR_ALPHA = 0.35;
 const CURSOR_TRAIL_DURATION_MS = 1000;
 const CURSOR_TRAIL_SAMPLE_INTERVAL_MS = 34;
 const CURSOR_TRAIL_MIN_DISTANCE_PX = 6;
@@ -503,36 +287,17 @@ const FULLSCREEN_RING_LAYERS = [
   { diameter: 152, color: "#00d619" },
   { diameter: 188, color: "#009fff" },
 ];
+const FULLSCREEN_TIP_RIPPLE_COLORS = [
+  FULLSCREEN_RING_LAYERS[1]?.color ?? "#ff8d00",
+  FULLSCREEN_RING_LAYERS[2]?.color ?? "#ffdb00",
+  FULLSCREEN_RING_LAYERS[3]?.color ?? "#00d619",
+  FULLSCREEN_RING_LAYERS[4]?.color ?? "#009fff",
+  FULLSCREEN_RING_LAYERS[0]?.color ?? "#ff0000",
+];
 const FULLSCREEN_VORONOI_DOT_RADIUS = 4.5;
 const CIRCLE_OF_FIFTHS_AUTOSTART_SESSION_KEY = "circle-of-fifths-autostart";
 const DESKTOP_LAYOUT_BREAKPOINT_PX = 980;
 const LEFT_PANE_RESIZE_KEYBOARD_STEP_PX = 24;
-let fallbackProgressionSessionSequence = 0;
-
-function createProgressionSessionId() {
-  if (globalThis.crypto?.randomUUID) {
-    return `session-${globalThis.crypto.randomUUID()}`;
-  }
-  fallbackProgressionSessionSequence += 1;
-  return `session-${Date.now()}-${fallbackProgressionSessionSequence}`;
-}
-
-function initializeOrResizeFullscreenGame(mode, currentState, templateState) {
-  if (
-    !currentState?.layout ||
-    !templateState?.layout ||
-    (currentState.variant &&
-      templateState.variant &&
-      currentState.variant !== templateState.variant)
-  ) {
-    return templateState;
-  }
-  return resizeFullscreenGameState(
-    mode,
-    currentState,
-    templateState.layout,
-  );
-}
 
 function clipPolygonToHalfPlane(polygon, normalX, normalY, offset) {
   if (!Array.isArray(polygon) || polygon.length === 0) {
@@ -752,13 +517,13 @@ const SANDBOX_MATERIAL_COLORS = {
 };
 const FLIGHT_FINGER_ORDER = ["thumb", "index", "middle", "ring", "pinky"];
 const FLIGHT_BASELINE_SAMPLE_TARGET = 34;
+const FLIGHT_FORWARD_SPEED = 310;
 const FLIGHT_STEER_ACCEL = 560;
 const FLIGHT_DRAG_PER_60FPS = 0.9;
 const FLIGHT_MAX_SHIP_OFFSET_X = 170;
 const FLIGHT_MAX_SHIP_OFFSET_Y = 120;
 const FLIGHT_STAR_COUNT = 170;
 const FLIGHT_RING_COUNT = 7;
-const FLIGHT_BOOST_SPEED_MULTIPLIER = 1.38;
 const FLIGHT_NEAR_Z = 26;
 const FLIGHT_FAR_Z = 1480;
 const FLIGHT_WORLD_HALF_WIDTH = 520;
@@ -812,24 +577,14 @@ const RUNNER_COIN_COLOR_STEPS = [
     glowOuter: "rgba(255, 204, 64, 0.08)",
   },
 ];
-const TRACKING_DEFAULT_HAND_LIMIT = 2;
-const TRACKING_DEFAULT_DETECTOR_MAX_HANDS = 4;
-const FULLSCREEN_BODY_SKELETON_INTERVAL_MS = 33;
-const FULLSCREEN_BODY_SKELETON_MODES = new Set(["voronoi"]);
-
-function getTrackingDetectorMaxHandsForContext(phase, fullscreenMode) {
-  if (phase !== PHASES.FULLSCREEN_CAMERA) {
-    return TRACKING_DEFAULT_DETECTOR_MAX_HANDS;
-  }
-
-  return getFullscreenDetectorHandLimit(fullscreenMode, TRACKING_DEFAULT_DETECTOR_MAX_HANDS);
-}
-
+const TRACKING_MAX_HANDS = 2;
 const LAB_DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
 const LAB_EVENT_LOG_LIMIT = 220;
 const LAB_TRAIN_CAPTURE_FRAMES = 24;
 const LAB_TRAIN_COUNTDOWN_SECONDS = 3;
 const SGM_STORAGE_KEY = "spatial_gesture_memory_stats_v1";
+const SGM_STEP_TIMEOUT_MS = 3600;
+const SGM_GLOBAL_BASE_TIME_MS = 10000;
 const SGM_GESTURE_POOL_EARLY = [
   GESTURE_IDS.SWIPE_LEFT,
   GESTURE_IDS.SWIPE_RIGHT,
@@ -1024,24 +779,16 @@ function getCameraObjectFitForPhase(phase) {
   return shouldUseContainedCameraFit(phase) ? "contain" : "cover";
 }
 
-function pruneCursorTrail(
-  trail,
-  now,
-  durationMs = FULLSCREEN_RING_TRAIL_DURATION_MS,
-) {
-  return trail.filter((point) => now - point.timestamp <= durationMs);
+function pruneCursorTrail(trail, now) {
+  return trail.filter((point) => now - point.timestamp <= FULLSCREEN_RING_TRAIL_DURATION_MS);
 }
 
 function pruneTrackedCursorTrail(trail, now) {
   return trail.filter((point) => now - point.timestamp <= CURSOR_TRAIL_DURATION_MS);
 }
 
-function prunePulseBursts(
-  bursts,
-  now,
-  durationMs = FULLSCREEN_PULSE_RING_DURATION_MS,
-) {
-  return bursts.filter((burst) => now - burst.startTime <= durationMs);
+function prunePulseBursts(bursts, now) {
+  return bursts.filter((burst) => now - burst.startTime <= FULLSCREEN_PULSE_RING_DURATION_MS);
 }
 
 function createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio) {
@@ -1146,6 +893,11 @@ function randomChoice(values) {
   }
   const index = Math.floor(Math.random() * values.length);
   return values[index] ?? values[0];
+}
+
+function formatSgmStepLabel(step) {
+  const ids = Array.isArray(step) ? step : [step];
+  return ids.map((gestureId) => GESTURE_LABEL_BY_ID[gestureId] ?? gestureId).join(" + ");
 }
 
 function createInitialSpatialMemoryStats() {
@@ -1265,7 +1017,6 @@ function createEmptyPoseStatus() {
     detected: false,
     score: 0,
     keypointsCount: 0,
-    keypoints: [],
     handsCount: 0,
     fingerCount: 0,
     fingertipCount: 0,
@@ -1359,7 +1110,7 @@ function summarizeExtentForLog(extent, canvasWidth, canvasHeight) {
 
   return {
     samples: extent.count,
-    normalized,
+    mirroredNormalized: normalized,
     canvasPixels: pixels,
   };
 }
@@ -1555,18 +1306,16 @@ function createFlightStars() {
   return stars;
 }
 
-function createFlightRings(
-  courseId = STAR_FLIGHT_COURSE_IDS.CADET,
-) {
+function createFlightRings() {
   const rings = [];
   const spacing = (FLIGHT_FAR_Z - 280) / Math.max(1, FLIGHT_RING_COUNT);
   for (let index = 0; index < FLIGHT_RING_COUNT; index += 1) {
-    rings.push(
-      createStarFlightGate(courseId, {
-        id: `flight-gate-${index + 1}`,
-        z: 280 + index * spacing + randomBetween(-90, 90),
-      }),
-    );
+    rings.push({
+      x: randomBetween(-170, 170),
+      y: randomBetween(-108, 108),
+      z: 280 + index * spacing + randomBetween(-90, 90),
+      radius: randomBetween(34, 66),
+    });
   }
   return rings;
 }
@@ -1686,7 +1435,6 @@ export default function App() {
   const appLog = useMemo(() => createScopedLogger("app"), []);
   const gestureEngineRef = useRef(null);
   const personalizationRef = useRef(null);
-  const audioFeedbackRef = useRef(null);
 
   if (!gestureEngineRef.current) {
     gestureEngineRef.current = createGestureEngine({
@@ -1698,100 +1446,12 @@ export default function App() {
       logger: createScopedLogger("gesturePersonalization"),
     });
   }
-  if (!audioFeedbackRef.current) {
-    audioFeedbackRef.current = createAudioFeedback();
-  }
 
   const [viewport, setViewport] = useState(() => ({
     width: window.innerWidth,
     height: window.innerHeight,
   }));
-  const [phase, setPhase] = useState(PHASES.HOME);
-  const [productHomeArea, setProductHomeArea] = useState(
-    () => getProductHomeAreaFromPath(window.location.pathname) ?? "all",
-  );
-  const [trackingRequested, setTrackingRequested] = useState(false);
-  const [pendingModeId, setPendingModeId] = useState(null);
-  const [preferences, setPreferences] = useState(() => loadUserPreferences());
-  const preferencesRef = useRef(preferences);
-  preferencesRef.current = preferences;
-  const [motionVisualizerState, setMotionVisualizerState] = useState(() =>
-    loadMotionVisualizerState(),
-  );
-  const motionVisualizerStateRef = useRef(motionVisualizerState);
-  motionVisualizerStateRef.current = motionVisualizerState;
-  const [motionVisualizerControlsCollapsed, setMotionVisualizerControlsCollapsed] =
-    useState(false);
-  const [motionVisualizerStatus, setMotionVisualizerStatus] = useState(
-    "Motion Visualizer ready.",
-  );
-  const [deviceCapabilities, setDeviceCapabilities] = useState(() =>
-    assessDeviceCapabilities(collectDeviceCapabilitySignals()),
-  );
-  const dynamicQualityControllerRef = useRef(null);
-  if (!dynamicQualityControllerRef.current) {
-    dynamicQualityControllerRef.current = createDynamicQualityController({
-      capabilities: deviceCapabilities,
-    });
-  }
-  const [dynamicQualityLevel, setDynamicQualityLevel] = useState(
-    dynamicQualityControllerRef.current.level,
-  );
-  const dynamicQualityBudget = useMemo(() => {
-    const requestedLevel =
-      preferences.performanceMode === "battery"
-        ? QUALITY_LEVELS.LOW
-        : preferences.performanceMode === "quality"
-          ? QUALITY_LEVELS.HIGH
-          : dynamicQualityLevel;
-    return getDynamicQualityBudget(requestedLevel, {
-      reducedMotion: preferences.reducedMotion,
-      limitEffects: preferences.lowSensory,
-    });
-  }, [
-    dynamicQualityLevel,
-    preferences.lowSensory,
-    preferences.performanceMode,
-    preferences.reducedMotion,
-  ]);
-  const capabilityRecommendation = useMemo(
-    () =>
-      getCapabilityLaunchRecommendation(deviceCapabilities, {
-        trackingRequired: true,
-        pointerFallback: true,
-      }),
-    [deviceCapabilities],
-  );
-  const progressionStoreRef = useRef(null);
-  if (!progressionStoreRef.current) {
-    progressionStoreRef.current = createGameProgressionStore({
-      achievementDefinitions: ACHIEVEMENT_DEFINITIONS,
-    });
-  }
-  const [gameProgression, setGameProgression] = useState(() =>
-    progressionStoreRef.current.getState(),
-  );
-  const [latestGameResult, setLatestGameResult] = useState(null);
-  const [arcadeRunIncomingResult, setArcadeRunIncomingResult] =
-    useState(null);
-  const [experienceLifecycle, setExperienceLifecycle] = useState(null);
-  const [experienceModeId, setExperienceModeId] = useState(null);
-  const [trackingRecoveryGate, setTrackingRecoveryGate] = useState(() =>
-    createTrackingRecoveryGate(),
-  );
-  const previousAudioLifecycleRef = useRef({
-    attempt: null,
-    modeId: null,
-    phase: null,
-  });
-  const [trackingReadiness, setTrackingReadiness] = useState(() =>
-    createTrackingReadinessState(),
-  );
-  const [trackingInteractionCheck, setTrackingInteractionCheck] = useState(() =>
-    createTrackingInteractionCheck(),
-  );
-  const [cameraDevices, setCameraDevices] = useState([]);
-  const [requestedCameraDeviceId, setRequestedCameraDeviceId] = useState("");
+  const [phase, setPhase] = useState(PHASES.FULLSCREEN_CAMERA);
   const [leftPaneWidth, setLeftPaneWidth] = useState(null);
   const [isLeftPaneResizing, setIsLeftPaneResizing] = useState(false);
 
@@ -1800,7 +1460,6 @@ export default function App() {
   const [cameraAspectRatio, setCameraAspectRatio] = useState(4 / 3);
   const [modelReady, setModelReady] = useState(false);
   const [modelError, setModelError] = useState("");
-  const [modelRetryAttempt, setModelRetryAttempt] = useState(0);
   const [activeBackend, setActiveBackend] = useState("n/a");
   const [activeRuntime, setActiveRuntime] = useState(INITIAL_TRACKING_RUNTIME);
 
@@ -1839,9 +1498,6 @@ export default function App() {
       successRate: persisted.totalRounds > 0 ? persisted.completedRounds / persisted.totalRounds : 0,
     };
   });
-  const [spatialMemoryExperience, setSpatialMemoryExperience] = useState(() =>
-    createSpatialMemoryExperience(),
-  );
   const [analyticsHands, setAnalyticsHands] = useState([]);
   const [analyticsTimestamp, setAnalyticsTimestamp] = useState(0);
   const [gestureAnalyticsLabSessionKey, setGestureAnalyticsLabSessionKey] = useState(0);
@@ -1850,12 +1506,8 @@ export default function App() {
   const [gestureControlOSSessionKey, setGestureControlOSSessionKey] = useState(0);
   const [fullscreenIndexPoints, setFullscreenIndexPoints] = useState([]);
   const [fullscreenTipPoints, setFullscreenTipPoints] = useState([]);
-  const [fullscreenBodyPoses, setFullscreenBodyPoses] = useState([]);
-  const [fullscreenSkeletonHands, setFullscreenSkeletonHands] = useState([]);
-  const [fullscreenDetectedHandCount, setFullscreenDetectedHandCount] = useState(0);
-  const [fullscreenGridMode, setFullscreenGridMode] = useState(
-    () => motionVisualizerState.effect,
-  );
+  const [fullscreenGridMode, setFullscreenGridMode] = useState(FULLSCREEN_LANDING_MODE);
+  const [fullscreenModeLandingState, setFullscreenModeLandingState] = useState(null);
   const [fullscreenExitControlState, setFullscreenExitControlState] = useState(null);
   const [fullscreenRestartControlState, setFullscreenRestartControlState] = useState(null);
   const [fullscreenRingTrail, setFullscreenRingTrail] = useState([]);
@@ -1871,7 +1523,6 @@ export default function App() {
   const [fullscreenFruitNinjaState, setFullscreenFruitNinjaState] = useState(null);
   const [fullscreenSkyPatrolHud, setFullscreenSkyPatrolHud] = useState(null);
   const [fullscreenWfcWorldState, setFullscreenWfcWorldState] = useState(null);
-  const [fullscreenWfcProjectOpen, setFullscreenWfcProjectOpen] = useState(false);
   const [fullscreenInvadersState, setFullscreenInvadersState] = useState(null);
   const [fullscreenFlappyState, setFullscreenFlappyState] = useState(null);
   const [fullscreenMissileCommandState, setFullscreenMissileCommandState] = useState(null);
@@ -1904,8 +1555,6 @@ export default function App() {
   const [sandboxBlocks, setSandboxBlocks] = useState([]);
   const [sandboxGrabbedBlockId, setSandboxGrabbedBlockId] = useState(null);
   const [flightHud, setFlightHud] = useState({
-    courseId: STAR_FLIGHT_COURSE_IDS.CADET,
-    courseStatus: "active",
     yaw: 0,
     pitch: 0,
     roll: 0,
@@ -1913,16 +1562,6 @@ export default function App() {
     baselineReady: false,
     baselineSamples: 0,
     distance: 0,
-    boostActive: false,
-    gatesAttempted: 0,
-    gatesHit: 0,
-    gatesMissed: 0,
-    score: 0,
-    streak: 0,
-    bestStreak: 0,
-    elapsedMs: 0,
-    lastGateRating: "",
-    lastGateMessage: "Line up the first gate",
   });
   const [runnerHud, setRunnerHud] = useState({
     coins: 0,
@@ -1932,15 +1571,18 @@ export default function App() {
     trackSpacingPx: 0,
   });
 
-  const [whackAMoleState, setWhackAMoleState] = useState(() =>
-    createWhackAMoleGame(),
-  );
+  const [score, setScore] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(Math.ceil(GAME_DURATION_MS / 1000));
+  const [gameRunning, setGameRunning] = useState(false);
+  const [activeMoleIndex, setActiveMoleIndex] = useState(null);
+  const [holes, setHoles] = useState([]);
 
   const videoRef = useRef(null);
   const overlayCanvasRef = useRef(null);
   const cameraWrapRef = useRef(null);
   const contentGridRef = useRef(null);
   const cameraPaneRef = useRef(null);
+  const boardRef = useRef(null);
   const inputTestStageRef = useRef(null);
   const sandboxStageRef = useRef(null);
   const flightStageRef = useRef(null);
@@ -1955,37 +1597,12 @@ export default function App() {
   });
 
   const detectorRef = useRef(null);
-  const detectorMaxHandsRef = useRef(TRACKING_DEFAULT_DETECTOR_MAX_HANDS);
-  const detectorModelTypeRef = useRef(dynamicQualityBudget.modelPreference);
-  const detectorReconfigurationSeqRef = useRef(0);
   const poseDetectorRef = useRef(null);
   const poseInitPromiseRef = useRef(null);
-  const fullscreenBodyPosesRef = useRef([]);
-  const fullscreenBodyPoseDetectorRef = useRef(null);
-  const fullscreenBodyPoseInitPromiseRef = useRef(null);
-  const fullscreenBodyPoseInferenceBusyRef = useRef(false);
-  const fullscreenBodyPoseLastInferenceAtRef = useRef(0);
   const streamRef = useRef(null);
   const attachedVideoElementRef = useRef(null);
-  const cameraRetryRef = useRef(null);
-  const routeInitializedRef = useRef(false);
-  const pendingLaunchContextRef = useRef(null);
-  const activeLaunchContextRef = useRef({});
-  const arcadeRunLaunchRequestRef = useRef(null);
-  const activeProgressionSessionRef = useRef(null);
-  const experienceLifecycleRef = useRef(null);
-  const experienceModeIdRef = useRef(null);
-  const trackingRequestedRef = useRef(trackingRequested);
-  const trackingInteractionCheckRef = useRef(trackingInteractionCheck);
-  const simulationTimingRef = useRef(null);
-  if (!simulationTimingRef.current) {
-    simulationTimingRef.current = createFixedStepSessionTiming();
-  }
-  const simulationEpochRef = useRef(null);
-  const lifecycleLastTickRef = useRef(0);
   const rafRef = useRef(0);
   const inferenceBusyRef = useRef(false);
-  const dynamicQualityBudgetRef = useRef(dynamicQualityBudget);
   const activeInferenceTokenRef = useRef(0);
   const lastInferenceStartedAtRef = useRef(0);
   const lastInferenceCompletedAtRef = useRef(0);
@@ -1995,19 +1612,10 @@ export default function App() {
   const phaseRef = useRef(phase);
   const poseStatusRef = useRef(poseStatus);
   const spatialMemoryRef = useRef(spatialMemoryState);
-  const spatialMemoryExperienceRef = useRef(spatialMemoryExperience);
   const viewportRef = useRef(viewport);
   const transformRef = useRef(transform);
   const cursorRef = useRef(cursor);
   const rawCursorRef = useRef(rawCursor);
-  const fallbackPointerRef = useRef({
-    active: false,
-    justPressed: false,
-    pointerType: "mouse",
-    pressed: false,
-    x: window.innerWidth / 2,
-    y: window.innerHeight / 2,
-  });
   const cursorTrailRef = useRef([]);
   const cursorTrailLastSampleAtRef = useRef(0);
   const fullscreenRingTrailRef = useRef([]);
@@ -2016,6 +1624,11 @@ export default function App() {
   const fullscreenPulseLastEmitByIdRef = useRef({});
   const fullscreenTipRippleStartedAtRef = useRef(0);
   const fullscreenGridModeRef = useRef(fullscreenGridMode);
+  const fullscreenModeLandingStateRef = useRef(null);
+  const fullscreenModeLandingViewportRef = useRef(null);
+  const fullscreenModeLandingLastTickRef = useRef(0);
+  const fullscreenModeLandingScrollTopRef = useRef(0);
+  const fullscreenLandingAppActiveRef = useRef(true);
   const fullscreenExitControlStateRef = useRef(null);
   const fullscreenExitControlViewportRef = useRef(null);
   const fullscreenExitControlLastTickRef = useRef(0);
@@ -2122,10 +1735,6 @@ export default function App() {
     distance: 0,
     stars: [],
     rings: [],
-    gateSerial: FLIGHT_RING_COUNT,
-    courseProgress: createStarFlightCourseProgress(
-      STAR_FLIGHT_COURSE_IDS.CADET,
-    ),
   });
   const flightControlRef = useRef({
     yaw: 0,
@@ -2155,126 +1764,25 @@ export default function App() {
   const runnerHudLastUpdateRef = useRef(0);
   const runnerGeometryLogKeyRef = useRef("");
 
-  const whackAMoleStateRef = useRef(whackAMoleState);
+  const holesRef = useRef(holes);
+  const hitZonesRef = useRef([]);
+  const lastHoleIndexRef = useRef(-1);
+
+  const gameRunningRef = useRef(gameRunning);
+  const gameStartTimeRef = useRef(0);
+  const nextSpawnAtRef = useRef(Number.POSITIVE_INFINITY);
+  const activeMoleRef = useRef(null);
+  const timeLeftRef = useRef(timeLeft);
 
   const currentTarget = useMemo(
     () => calibrationTargets[calibrationTargetIndex] ?? null,
     [calibrationTargets, calibrationTargetIndex],
   );
   const isFullscreenCameraPhase = phase === PHASES.FULLSCREEN_CAMERA;
-  const isProductHomePhase = phase === PHASES.HOME;
-  const isProductTrackingSetupPhase = phase === PHASES.TRACKING_SETUP;
-  const isProductSettingsPhase = phase === PHASES.SETTINGS;
-  const arcadeRunModes = useMemo(() => listModes(), []);
-  const arcadeRunCapabilityOptions = useMemo(
-    () => ({
-      playerCount: 1,
-      pointerAvailable: true,
-      preferredInput: cameraReady && modelReady ? "tracking" : "pointer",
-      availableTrackingProfiles:
-        cameraReady && modelReady
-          ? Object.values(TRACKING_PROFILES)
-          : [],
-      excludeModeIds: ["arcade-run"],
-    }),
-    [cameraReady, modelReady],
-  );
-  const productTrackingStatus =
-    trackingReadiness.status === TRACKING_READINESS_STATES.READY
-      ? "ready"
-      : [
-            TRACKING_READINESS_STATES.DENIED,
-            TRACKING_READINESS_STATES.DISMISSED,
-            TRACKING_READINESS_STATES.NO_DEVICE,
-            TRACKING_READINESS_STATES.DEVICE_BUSY,
-            TRACKING_READINESS_STATES.UNSUPPORTED,
-            TRACKING_READINESS_STATES.INSECURE,
-            TRACKING_READINESS_STATES.MODEL_ERROR,
-            TRACKING_READINESS_STATES.ERROR,
-            TRACKING_READINESS_STATES.INTERRUPTED,
-          ].includes(trackingReadiness.status)
-        ? "error"
-        : trackingRequested
-          ? "loading"
-          : "idle";
-  const productCameraActive = trackingRequested && cameraReady;
-  const activeTrackingErrorPresentation = trackingRequested
-    ? getCameraErrorPresentation(trackingReadiness.status) ??
-      (cameraError
-        ? {
-            title: "The camera needs attention",
-            message:
-              "Camera input is unavailable right now. Retry it or turn the camera off to keep exploring.",
-            primaryAction: "Retry camera",
-          }
-        : modelError
-          ? {
-              title: "Hand tracking needs attention",
-              message:
-                "Tracked input is unavailable right now. Retry the model or use another available input.",
-              primaryAction: "Retry tracking",
-            }
-          : poseModelError &&
-              (phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB)
-            ? {
-                title: "Body tracking needs attention",
-                message:
-                  "The body model could not start. Retry it or return Home without exposing diagnostic details.",
-                primaryAction: "Retry body tracking",
-              }
-            : null)
-    : null;
-  const trackingRecoveryRequired = Boolean(
-    experienceModeId &&
-      trackingRequested &&
-      getModeById(experienceModeId)?.trackingProfile !==
-        TRACKING_PROFILES.NONE,
-  );
-  const trackingRecoveryStatus = getTrackingRecoveryStatus(
-    trackingRecoveryGate,
-  );
   const isMinorityReportLabPhase = phase === PHASES.MINORITY_REPORT_LAB;
   const isImmersiveAppPhase = shouldUseImmersiveAppLayout(phase);
-  const fullscreenExperienceMode = getModeByFullscreenId(fullscreenGridMode);
-  const isMotionVisualizerMode =
-    isFullscreenCameraPhase &&
-    isMotionVisualizerEffect(fullscreenGridMode);
-  const motionVisualizerPalette = getMotionVisualizerPalette(
-    motionVisualizerState.palette,
-  );
-  const motionVisualizerRingLayers = useMemo(
-    () =>
-      FULLSCREEN_RING_LAYERS.map((layer, index) => ({
-        ...layer,
-        color:
-          motionVisualizerPalette.colors[
-            index % motionVisualizerPalette.colors.length
-          ],
-      })),
-    [motionVisualizerPalette],
-  );
-  const motionVisualizerTrailDurationMs =
-    getMotionVisualizerTrailDurationMs(motionVisualizerState);
-  const motionVisualizerPulseDurationMs =
-    getMotionVisualizerPulseDurationMs(motionVisualizerState);
-  const motionVisualizerStageStyle = isMotionVisualizerMode
-    ? {
-        "--visualizer-background": motionVisualizerPalette.background,
-        "--visualizer-line": motionVisualizerPalette.line,
-        "--visualizer-color-1": motionVisualizerPalette.colors[0],
-        "--visualizer-color-2": motionVisualizerPalette.colors[1],
-        "--visualizer-color-3": motionVisualizerPalette.colors[2],
-        "--visualizer-color-4": motionVisualizerPalette.colors[3],
-        "--visualizer-color-5": motionVisualizerPalette.colors[4],
-        "--visualizer-camera-opacity":
-          motionVisualizerState.cameraOpacity / 100,
-        "--visualizer-layer-opacity":
-          0.28 + motionVisualizerState.intensity * 0.0072,
-        "--visualizer-glow-strength": `${
-          2 + motionVisualizerState.intensity * 0.13
-        }px`,
-      }
-    : undefined;
+  const isFullscreenModeLanding =
+    isFullscreenCameraPhase && fullscreenGridMode === FULLSCREEN_LANDING_MODE;
   const isFullscreenBreakoutGridMode =
     fullscreenGridMode === "breakout" ||
     fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID;
@@ -2296,9 +1804,6 @@ export default function App() {
     isFullscreenCameraPhase &&
     fullscreenGridMode === "finger-pong" &&
     Boolean(fullscreenFingerPongState);
-  const fullscreenFingerPongMatchUi = getFingerPongMatchUi(
-    fullscreenFingerPongState,
-  );
   const isFullscreenFruitNinjaMode =
     isFullscreenCameraPhase &&
     fullscreenGridMode === "fruit-ninja" &&
@@ -2326,7 +1831,6 @@ export default function App() {
   const fullscreenRestartControlLabel = getFullscreenRestartControlLabel(fullscreenGridMode, {
     handBounce: fullscreenHandBounceState,
     brickDodger: fullscreenBrickDodgerState,
-    breakout: fullscreenBreakoutState,
     fingerPong: fullscreenFingerPongState,
     fruitNinja: fullscreenFruitNinjaState,
     skyPatrol: fullscreenSkyPatrolHud,
@@ -2385,18 +1889,22 @@ export default function App() {
     pinchActive,
     draggingCellIndex: fullscreenTicTacToeDraggingCellIndex,
   });
+  const fullscreenModeLandingHoldProgress = clampValue(
+    (fullscreenModeLandingState?.holdMs ?? 0) / FULLSCREEN_MODE_LANDING_HOLD_MS,
+    0,
+    1,
+  );
+  const fullscreenModeLandingLayout = fullscreenModeLandingState?.layout ?? null;
   const fullscreenExitControlCountdown = (
     Math.max(
       0,
-      preferences.dwellDurationMs -
-        (fullscreenExitControlState?.holdMs ?? 0),
+      FULLSCREEN_MODE_LANDING_HOLD_MS - (fullscreenExitControlState?.holdMs ?? 0),
     ) / 1000
   ).toFixed(2);
   const fullscreenRestartControlCountdown = (
     Math.max(
       0,
-      preferences.dwellDurationMs -
-        (fullscreenRestartControlState?.holdMs ?? 0),
+      FULLSCREEN_MODE_LANDING_HOLD_MS - (fullscreenRestartControlState?.holdMs ?? 0),
     ) / 1000
   ).toFixed(2);
   const isSandboxPhase = phase === PHASES.SANDBOX;
@@ -2451,14 +1959,8 @@ export default function App() {
       ? inputTestHoveredCell
       : -1;
   const isBodyPosePhase = phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB;
-  const hideInactiveCameraPane =
-    !trackingRequested &&
-    phase !== PHASES.CALIBRATION &&
-    Boolean(getModeByPhase(phase)?.supportsPointerFallback);
   const showLeftPaneResizer =
-    !hideInactiveCameraPane &&
-    !isBodyPosePhase &&
-    viewport.width > DESKTOP_LAYOUT_BREAKPOINT_PX;
+    !isBodyPosePhase && viewport.width > DESKTOP_LAYOUT_BREAKPOINT_PX;
 
   const getContentGridWidth = () =>
     contentGridRef.current?.getBoundingClientRect().width ?? viewport.width;
@@ -2535,7 +2037,7 @@ export default function App() {
     }
   };
 
-  const cameraObjectFit = getCameraObjectFitForPhase(phase);
+  const cameraObjectFit = isFullscreenModeLanding ? "cover" : getCameraObjectFitForPhase(phase);
   const fullscreenCameraViewport = useMemo(() => {
     if (!isFullscreenCameraPhase) {
       return null;
@@ -2543,31 +2045,11 @@ export default function App() {
 
     const stageWidth = viewport.width;
     const stageHeight = viewport.height;
-    if (isMotionVisualizerMode) {
-      return {
-        left: 0,
-        top: 0,
-        width: stageWidth,
-        height: stageHeight,
-        style: {
-          left: "0px",
-          top: "0px",
-          width: `${stageWidth}px`,
-          height: `${stageHeight}px`,
-        },
-      };
-    }
     const aspectRatio =
       Number.isFinite(cameraAspectRatio) && cameraAspectRatio > 0 ? cameraAspectRatio : 4 / 3;
     return createFullscreenCameraViewport(stageWidth, stageHeight, aspectRatio);
-  }, [
-    cameraAspectRatio,
-    isFullscreenCameraPhase,
-    isMotionVisualizerMode,
-    viewport.height,
-    viewport.width,
-  ]);
-  const fullscreenBrowserViewport = useMemo(() => {
+  }, [cameraAspectRatio, isFullscreenCameraPhase, viewport.height, viewport.width]);
+  const fullscreenCameraLandingViewport = useMemo(() => {
     if (!isFullscreenCameraPhase) {
       return null;
     }
@@ -2585,10 +2067,6 @@ export default function App() {
       },
     };
   }, [isFullscreenCameraPhase, viewport.height, viewport.width]);
-  const fullscreenBreakoutViewport =
-    fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
-      ? fullscreenBrowserViewport
-      : fullscreenCameraViewport;
   const fullscreenTicTacToeCursorPoint =
     isFullscreenTicTacToeMode &&
     fullscreenCameraViewport &&
@@ -2706,62 +2184,6 @@ export default function App() {
       y: clampValue(cursor.y - fullscreenCameraViewport.top, 0, fullscreenCameraViewport.height),
     };
   }, [cursor.x, cursor.y, fullscreenCameraViewport, handDetected, isFullscreenMissileCommandMode]);
-  const fullscreenBrickDodgerStageUi = useMemo(
-    () => getBrickDodgerStageUi(fullscreenBrickDodgerState),
-    [fullscreenBrickDodgerState],
-  );
-  const fullscreenBrickDodgerTelegraphs = useMemo(
-    () => getBrickDodgerLaneTelegraphUi(fullscreenBrickDodgerState),
-    [fullscreenBrickDodgerState],
-  );
-  const fullscreenBrickDodgerMultiplierUi = useMemo(
-    () => getBrickDodgerMultiplierUi(fullscreenBrickDodgerState),
-    [fullscreenBrickDodgerState],
-  );
-  const fullscreenBrickDodgerSlowTimeUi = useMemo(
-    () => getBrickDodgerSlowTimeUi(fullscreenBrickDodgerState),
-    [fullscreenBrickDodgerState],
-  );
-  const fullscreenBrickDodgerStageRecapUi = useMemo(
-    () => getBrickDodgerStageRecapUi(fullscreenBrickDodgerState),
-    [fullscreenBrickDodgerState],
-  );
-  const fullscreenBrickDodgerResultUi = useMemo(
-    () => getBrickDodgerResultUi(fullscreenBrickDodgerState),
-    [fullscreenBrickDodgerState],
-  );
-  const fullscreenHandBounceHudUi = useMemo(
-    () => getFullscreenHandBounceHudUi(fullscreenHandBounceState),
-    [fullscreenHandBounceState],
-  );
-  const fullscreenHandBounceStageUi = useMemo(
-    () => getFullscreenHandBounceStageUi(fullscreenHandBounceState),
-    [fullscreenHandBounceState],
-  );
-  const fullscreenHandBounceTargetUi = useMemo(
-    () => getFullscreenHandBounceTargetUi(fullscreenHandBounceState),
-    [fullscreenHandBounceState],
-  );
-  const fullscreenHandBouncePowerUi = useMemo(
-    () => getFullscreenHandBouncePowerUi(fullscreenHandBounceState),
-    [fullscreenHandBounceState],
-  );
-  const fullscreenHandBounceCheckpointUi = useMemo(
-    () => getFullscreenHandBounceCheckpointUi(fullscreenHandBounceState),
-    [fullscreenHandBounceState],
-  );
-  const fullscreenHandBounceResultUi = useMemo(
-    () => getFullscreenHandBounceResultUi(fullscreenHandBounceState),
-    [fullscreenHandBounceState],
-  );
-  const fullscreenHandBounceLegendUi = useMemo(
-    () => getFullscreenHandBounceLegendUi(),
-    [],
-  );
-  const fullscreenWfcWorldGoalUi = useMemo(
-    () => getWfcWorldGoalModel(fullscreenWfcWorldState),
-    [fullscreenWfcWorldState],
-  );
   const fullscreenMissileLaunchPreview = useMemo(
     () => getMissileCommandLaunchPreview(fullscreenMissileCommandState, fullscreenMissileAimPoint),
     [fullscreenMissileAimPoint, fullscreenMissileCommandState],
@@ -2789,18 +2211,6 @@ export default function App() {
   );
   const fullscreenMissileTacticalMetrics = useMemo(
     () => getMissileCommandTacticalMetrics(fullscreenMissileCommandState),
-    [fullscreenMissileCommandState],
-  );
-  const fullscreenMissileResourceUi = useMemo(
-    () => getMissileCommandResourceUi(fullscreenMissileCommandState),
-    [fullscreenMissileCommandState],
-  );
-  const fullscreenMissileWaveUi = useMemo(
-    () => getMissileCommandWaveUi(fullscreenMissileCommandState),
-    [fullscreenMissileCommandState],
-  );
-  const fullscreenMissileIntermissionUi = useMemo(
-    () => getMissileCommandIntermissionUi(fullscreenMissileCommandState),
     [fullscreenMissileCommandState],
   );
   const fullscreenMissileCountdownUi = useMemo(
@@ -2838,62 +2248,6 @@ export default function App() {
   const fullscreenSkyPatrolStartPromptUi = useMemo(
     () => getSkyPatrolStartPromptUi(fullscreenSkyPatrolHud),
     [fullscreenSkyPatrolHud],
-  );
-  const fullscreenSkyPatrolMissionUi = useMemo(
-    () => getSkyPatrolMissionUi(fullscreenSkyPatrolHud),
-    [fullscreenSkyPatrolHud],
-  );
-  const fullscreenSkyPatrolCheckpointUi = useMemo(
-    () => getSkyPatrolCheckpointUi(fullscreenSkyPatrolHud),
-    [fullscreenSkyPatrolHud],
-  );
-  const fullscreenSkyPatrolComboUi = useMemo(
-    () => getSkyPatrolComboUi(fullscreenSkyPatrolHud),
-    [fullscreenSkyPatrolHud],
-  );
-  const fullscreenSkyPatrolOnboardingUi = useMemo(
-    () => getSkyPatrolOnboardingUi(fullscreenSkyPatrolHud),
-    [fullscreenSkyPatrolHud],
-  );
-  const fullscreenFruitNinjaRoundUi = useMemo(
-    () => getFruitNinjaRoundUi(fullscreenFruitNinjaState),
-    [fullscreenFruitNinjaState],
-  );
-  const fullscreenFruitNinjaHudUi = useMemo(
-    () =>
-      getFruitNinjaHud(
-        fullscreenFruitNinjaState,
-        typeof performance === "undefined" ? 0 : performance.now(),
-      ),
-    [fullscreenFruitNinjaState],
-  );
-  const fullscreenFruitNinjaBombWarnings = useMemo(
-    () => getFruitNinjaBombWarnings(fullscreenFruitNinjaState),
-    [fullscreenFruitNinjaState],
-  );
-  const fullscreenFruitNinjaComboUi = useMemo(
-    () =>
-      getFruitNinjaComboUi(
-        fullscreenFruitNinjaState,
-        typeof performance === "undefined" ? 0 : performance.now(),
-      ),
-    [fullscreenFruitNinjaState],
-  );
-  const fullscreenFruitNinjaPrecisionUi = useMemo(
-    () => getFruitNinjaPrecisionUi(fullscreenFruitNinjaState?.lastSlice),
-    [fullscreenFruitNinjaState?.lastSlice],
-  );
-  const fullscreenFruitNinjaPowerUi = useMemo(
-    () => getFruitNinjaPowerUi(fullscreenFruitNinjaState),
-    [fullscreenFruitNinjaState],
-  );
-  const fullscreenFruitNinjaRecapUi = useMemo(
-    () => getFruitNinjaRecapUi(fullscreenFruitNinjaState, "Restart Round"),
-    [fullscreenFruitNinjaState],
-  );
-  const fullscreenFruitNinjaLegendItems = useMemo(
-    () => getFruitNinjaLegendItems(),
-    [],
   );
 
   const fullscreenHexGridMetrics = useMemo(() => {
@@ -3012,10 +2366,7 @@ export default function App() {
         }
         return {
           key: point.id,
-          color:
-            motionVisualizerPalette.colors[
-              index % motionVisualizerPalette.colors.length
-            ],
+          color: BREAKOUT_BRICK_COLORS[index % BREAKOUT_BRICK_COLORS.length],
           polygon,
         };
       })
@@ -3032,28 +2383,7 @@ export default function App() {
       width,
       height,
     };
-  }, [
-    fullscreenCameraViewport,
-    fullscreenTipPoints,
-    motionVisualizerPalette,
-  ]);
-
-  const fullscreenBodySkeletonOverlay = useMemo(
-    () =>
-      createFullscreenBodySkeletonOverlay(fullscreenBodyPoses, fullscreenCameraViewport, {
-        keypointThreshold: POSE_KEYPOINT_THRESHOLD,
-        maxPeople: FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
-      }),
-    [fullscreenBodyPoses, fullscreenCameraViewport],
-  );
-  const fullscreenHandSkeletonOverlay = useMemo(
-    () =>
-      createFullscreenHandSkeletonOverlay(fullscreenSkeletonHands, fullscreenCameraViewport, {
-        maxHands: FULLSCREEN_HAND_SKELETON_MAX_HANDS,
-      }),
-    [fullscreenSkeletonHands, fullscreenCameraViewport],
-  );
-  const fullscreenDetectedBodyCount = fullscreenBodySkeletonOverlay?.people.length ?? 0;
+  }, [fullscreenCameraViewport, fullscreenTipPoints]);
 
   async function attachStreamToVideoElement(video, reason) {
     const stream = streamRef.current;
@@ -3061,10 +2391,12 @@ export default function App() {
       return false;
     }
 
-    const previousAttachedVideoElement = attachedVideoElementRef.current;
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
 
     try {
-      await attachCameraStreamToVideo({ video, stream });
+      await video.play();
     } catch (error) {
       appLog.warn("Video playback could not be resumed for active camera element", {
         reason,
@@ -3077,13 +2409,6 @@ export default function App() {
       );
     }
 
-    if (
-      previousAttachedVideoElement &&
-      previousAttachedVideoElement !== video &&
-      previousAttachedVideoElement.srcObject === stream
-    ) {
-      previousAttachedVideoElement.srcObject = null;
-    }
     attachedVideoElementRef.current = video;
 
     const primaryTrack = stream.getVideoTracks()[0];
@@ -3117,62 +2442,6 @@ export default function App() {
     return true;
   }
 
-  function resetTrackingInteractionCheck() {
-    const next = createTrackingInteractionCheck();
-    trackingInteractionCheckRef.current = next;
-    setTrackingInteractionCheck(next);
-  }
-
-  function publishTrackingInteractionSample(sample) {
-    if (phaseRef.current !== PHASES.TRACKING_SETUP) {
-      return;
-    }
-    const next = updateTrackingInteractionCheck(
-      trackingInteractionCheckRef.current,
-      sample,
-    );
-    trackingInteractionCheckRef.current = next;
-    setTrackingInteractionCheck(next);
-  }
-
-  function clearCameraTrackingReadiness() {
-    activeInferenceTokenRef.current += 1;
-    inferenceBusyRef.current = false;
-    inferenceBusySkipCounterRef.current = 0;
-    lastInferenceStartedAtRef.current = 0;
-    lastInferenceCompletedAtRef.current = 0;
-    lastTrackingKeepAliveAtRef.current = 0;
-    lastValidHandTimestampRef.current = 0;
-    handGraceFrameCounterRef.current = 0;
-    lastFrameTimeRef.current = 0;
-    fpsRef.current = 0;
-    handLabelMemoryRef.current = { byLabel: {} };
-    fullscreenHandsRef.current = [];
-    fullscreenPrimaryHandIdRef.current = null;
-    fullscreenBodyPosesRef.current = [];
-    handDetectedRef.current = false;
-    pinchStateRef.current = false;
-    resetTrackingInteractionCheck();
-    poseStatusRef.current = createEmptyPoseStatus();
-    setCameraReady(false);
-    setHandDetected(false);
-    setPinchActive(false);
-    setFps(0);
-    setFullscreenDetectedHandCount(0);
-    setFullscreenIndexPoints([]);
-    setFullscreenTipPoints([]);
-    setFullscreenBodyPoses([]);
-    setFullscreenSkeletonHands([]);
-    setPoseStatus(createEmptyPoseStatus());
-  }
-
-  function retryCamera(reason = "manual_retry") {
-    const retry = cameraRetryRef.current;
-    if (typeof retry === "function") {
-      retry(reason);
-    }
-  }
-
   function getTrackingTimestamp() {
     return typeof performance !== "undefined" && typeof performance.now === "function"
       ? performance.now()
@@ -3196,122 +2465,6 @@ export default function App() {
 
   function isCurrentTrackingInference(inferenceToken) {
     return activeInferenceTokenRef.current === inferenceToken;
-  }
-
-  function publishFullscreenBodyPoses(poses) {
-    const safePoses = adaptPosesForCamera(
-      Array.isArray(poses)
-        ? poses.slice(0, FULLSCREEN_BODY_SKELETON_MAX_PEOPLE)
-        : [],
-      preferencesRef.current.mirrorCamera,
-    );
-    fullscreenBodyPosesRef.current = safePoses;
-    setFullscreenBodyPoses(safePoses);
-  }
-
-  async function ensureFullscreenBodyPoseDetectorInitialized(reason = "fullscreen_body_skeleton") {
-    if (fullscreenBodyPoseDetectorRef.current) {
-      return true;
-    }
-
-    if (fullscreenBodyPoseInitPromiseRef.current) {
-      await fullscreenBodyPoseInitPromiseRef.current;
-      return Boolean(fullscreenBodyPoseDetectorRef.current);
-    }
-
-    const requestedBackend = getCurrentBackend() === "cpu" ? "cpu" : "webgl";
-    fullscreenBodyPoseInitPromiseRef.current = (async () => {
-      let detector = null;
-      try {
-        appLog.info("Initializing fullscreen body skeleton detector", {
-          reason,
-          requestedBackend,
-        });
-        detector = await initPoseTracking({
-          runtime: "tfjs",
-          backend: requestedBackend,
-          maxPoses: FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
-        });
-        if (
-          phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
-          !FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridModeRef.current) ||
-          !mountedRef.current
-        ) {
-          detector.dispose?.();
-          detector = null;
-          return;
-        }
-        fullscreenBodyPoseDetectorRef.current = detector;
-        detector = null;
-      } catch (error) {
-        appLog.warn("Fullscreen body skeleton detector failed to initialize", { error });
-      } finally {
-        detector?.dispose?.();
-        fullscreenBodyPoseInitPromiseRef.current = null;
-      }
-    })();
-
-    await fullscreenBodyPoseInitPromiseRef.current;
-    return Boolean(fullscreenBodyPoseDetectorRef.current);
-  }
-
-  function scheduleFullscreenBodyPoseDetection(timestamp) {
-    if (
-      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
-      !FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridModeRef.current)
-    ) {
-      if (fullscreenBodyPosesRef.current.length > 0) {
-        publishFullscreenBodyPoses([]);
-      }
-      if (fullscreenBodyPoseDetectorRef.current) {
-        fullscreenBodyPoseDetectorRef.current.dispose?.();
-        fullscreenBodyPoseDetectorRef.current = null;
-      }
-      fullscreenBodyPoseInferenceBusyRef.current = false;
-      return;
-    }
-
-    const video = videoRef.current;
-    if (!video || video.readyState < 2) {
-      return;
-    }
-
-    const detector = fullscreenBodyPoseDetectorRef.current;
-    if (!detector) {
-      if (!fullscreenBodyPoseInitPromiseRef.current) {
-        void ensureFullscreenBodyPoseDetectorInitialized("fullscreen_body_skeleton_ready");
-      }
-      return;
-    }
-
-    if (
-      fullscreenBodyPoseInferenceBusyRef.current ||
-      timestamp - fullscreenBodyPoseLastInferenceAtRef.current <
-        FULLSCREEN_BODY_SKELETON_INTERVAL_MS
-    ) {
-      return;
-    }
-
-    fullscreenBodyPoseInferenceBusyRef.current = true;
-    fullscreenBodyPoseLastInferenceAtRef.current = timestamp;
-    void detectPoses(detector, video, {
-      maxPoses: FULLSCREEN_BODY_SKELETON_MAX_PEOPLE,
-    })
-      .then((poses) => {
-        if (
-          phaseRef.current === PHASES.FULLSCREEN_CAMERA &&
-          FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridModeRef.current) &&
-          mountedRef.current
-        ) {
-          publishFullscreenBodyPoses(poses);
-        }
-      })
-      .catch((error) => {
-        appLog.warn("Fullscreen body skeleton pose detection failed", { error });
-      })
-      .finally(() => {
-        fullscreenBodyPoseInferenceBusyRef.current = false;
-      });
   }
 
   function releaseStaleTrackingInference(timestamp, staleAction) {
@@ -3352,20 +2505,6 @@ export default function App() {
       attachedVideoElement: attachedVideoElementRef.current,
     });
 
-    if (videoAction.shouldRecover) {
-      appLog.warn("Tracking keep-alive detected an interrupted camera stream", videoAction);
-      clearCameraTrackingReadiness();
-      setTrackingReadiness((current) =>
-        reduceTrackingReadiness(current, {
-          type: "TRACK_INTERRUPTED",
-          error: new Error("Camera stream interrupted"),
-        }),
-      );
-      setCameraError("Camera connection was interrupted. Reconnecting…");
-      retryCamera(`keep_alive_${videoAction.reason}`);
-      return;
-    }
-
     if (videoAction.shouldAttach) {
       appLog.info("Tracking keep-alive refreshing camera playback", videoAction);
       void attachStreamToVideoElement(video, `keep_alive_${videoAction.reason}`).catch((error) => {
@@ -3373,9 +2512,11 @@ export default function App() {
           videoAction,
           error,
         });
-        clearCameraTrackingReadiness();
-        setCameraError("Camera playback was interrupted. Reconnecting…");
-        retryCamera(`keep_alive_playback_${videoAction.reason}`);
+        setCameraError(
+          error instanceof Error
+            ? error.message
+            : "Camera video playback could not be restarted.",
+        );
       });
     } else if (videoAction.reason !== "healthy") {
       appLog.debug("Tracking keep-alive skipped camera refresh", videoAction);
@@ -3414,8 +2555,51 @@ export default function App() {
   }, [appLog]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return undefined;
+    }
+
+    const markLandingAppActive = () => {
+      fullscreenLandingAppActiveRef.current = document.visibilityState !== "hidden";
+      fullscreenModeLandingLastTickRef.current = 0;
+    };
+
+    const clearLandingHold = () => {
+      fullscreenLandingAppActiveRef.current = false;
+      fullscreenModeLandingLastTickRef.current = 0;
+      setFullscreenModeLandingState((previous) => {
+        const sourceState = previous ?? fullscreenModeLandingStateRef.current;
+        if (!sourceState) {
+          fullscreenModeLandingStateRef.current = null;
+          return previous;
+        }
+        const nextState = resetFullscreenModeLandingHold(sourceState);
+        fullscreenModeLandingStateRef.current = nextState;
+        return nextState;
+      });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        clearLandingHold();
+        return;
+      }
+      markLandingAppActive();
+    };
+
+    window.addEventListener("blur", clearLandingHold);
+    window.addEventListener("focus", markLandingAppActive);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("blur", clearLandingHold);
+      window.removeEventListener("focus", markLandingAppActive);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
     appLog.info("Phase changed", { phase });
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [appLog, phase]);
 
   useEffect(() => {
@@ -3454,8 +2638,6 @@ export default function App() {
       flightBaselineSamplesRef.current = [];
       flightHudLastUpdateRef.current = 0;
       setFlightHud({
-        courseId: STAR_FLIGHT_COURSE_IDS.CADET,
-        courseStatus: "active",
         yaw: 0,
         pitch: 0,
         roll: 0,
@@ -3463,16 +2645,6 @@ export default function App() {
         baselineReady: false,
         baselineSamples: 0,
         distance: 0,
-        boostActive: false,
-        gatesAttempted: 0,
-        gatesHit: 0,
-        gatesMissed: 0,
-        score: 0,
-        streak: 0,
-        bestStreak: 0,
-        elapsedMs: 0,
-        lastGateRating: "",
-        lastGateMessage: "Line up the first gate",
       });
     }
     if (phase !== PHASES.RUNNER) {
@@ -3515,25 +2687,8 @@ export default function App() {
     if (phase !== PHASES.BODY_POSE && phase !== PHASES.OFF_AXIS_LAB) {
       setPoseStatus(createEmptyPoseStatus());
     }
-    if (
-      phase !== PHASES.SPATIAL_GESTURE_MEMORY &&
-      spatialMemoryExperienceRef.current?.active
-    ) {
-      const stoppedExperience = reduceSpatialMemoryExperience(
-        spatialMemoryExperienceRef.current,
-        {
-          type: SPATIAL_MEMORY_ACTIONS.RESET,
-          round: spatialMemoryExperienceRef.current.round,
-        },
-      );
-      spatialMemoryExperienceRef.current = stoppedExperience;
-      setSpatialMemoryExperience(stoppedExperience);
-      const stoppedLegacy = toSpatialMemoryLegacyState(
-        stoppedExperience,
-        spatialMemoryRef.current,
-      );
-      spatialMemoryRef.current = stoppedLegacy;
-      setSpatialMemoryState(stoppedLegacy);
+    if (phase !== PHASES.SPATIAL_GESTURE_MEMORY && spatialMemoryRef.current?.active) {
+      setSpatialMemoryState((prev) => ({ ...prev, active: false }));
     }
     if (phase !== PHASES.GESTURE_ART_LAB) {
       setGestureArtHands([]);
@@ -3541,17 +2696,7 @@ export default function App() {
     if (phase !== PHASES.FULLSCREEN_CAMERA) {
       setFullscreenIndexPoints([]);
       setFullscreenTipPoints([]);
-      setFullscreenBodyPoses([]);
-      setFullscreenSkeletonHands([]);
-      setFullscreenDetectedHandCount(0);
-      fullscreenBodyPosesRef.current = [];
-      if (fullscreenBodyPoseDetectorRef.current) {
-        fullscreenBodyPoseDetectorRef.current.dispose?.();
-        fullscreenBodyPoseDetectorRef.current = null;
-      }
-      fullscreenBodyPoseInitPromiseRef.current = null;
-      fullscreenBodyPoseInferenceBusyRef.current = false;
-      fullscreenBodyPoseLastInferenceAtRef.current = 0;
+      setFullscreenModeLandingState(null);
       setFullscreenExitControlState(null);
       setFullscreenRestartControlState(null);
       setFullscreenRingTrail([]);
@@ -3575,19 +2720,8 @@ export default function App() {
   }, [fullscreenGridMode]);
 
   useEffect(() => {
-    if (
-      !isMotionVisualizerEffect(fullscreenGridMode) ||
-      motionVisualizerStateRef.current.effect === fullscreenGridMode
-    ) {
-      return;
-    }
-    const next = saveMotionVisualizerState({
-      ...motionVisualizerStateRef.current,
-      effect: fullscreenGridMode,
-    });
-    motionVisualizerStateRef.current = next;
-    setMotionVisualizerState(next);
-  }, [fullscreenGridMode]);
+    fullscreenModeLandingStateRef.current = fullscreenModeLandingState;
+  }, [fullscreenModeLandingState]);
 
   useEffect(() => {
     fullscreenExitControlStateRef.current = fullscreenExitControlState;
@@ -3596,6 +2730,10 @@ export default function App() {
   useEffect(() => {
     fullscreenRestartControlStateRef.current = fullscreenRestartControlState;
   }, [fullscreenRestartControlState]);
+
+  useEffect(() => {
+    fullscreenModeLandingViewportRef.current = fullscreenCameraLandingViewport;
+  }, [fullscreenCameraLandingViewport]);
 
   useEffect(() => {
     fullscreenExitControlViewportRef.current = fullscreenCameraViewport;
@@ -3642,8 +2780,8 @@ export default function App() {
   }, [fullscreenInvadersState]);
 
   useEffect(() => {
-    fullscreenBreakoutViewportRef.current = fullscreenBreakoutViewport;
-  }, [fullscreenBreakoutViewport]);
+    fullscreenBreakoutViewportRef.current = fullscreenCameraViewport;
+  }, [fullscreenCameraViewport]);
 
   useEffect(() => {
     fullscreenBreakoutCoopViewportRef.current = fullscreenCameraViewport;
@@ -3695,21 +2833,14 @@ export default function App() {
     }
 
     const handleKeyDown = (event) => {
-      if (event.key !== "Escape" || event.defaultPrevented) {
-        return;
-      }
-      const lifecycle = experienceLifecycleRef.current;
-      if (
-        lifecycle?.phase === EXPERIENCE_PHASES.RUNNING ||
-        lifecycle?.phase === EXPERIENCE_PHASES.COUNTDOWN
-      ) {
-        event.preventDefault();
-        dispatchExperienceLifecycle({
-          type: EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
-          reason: EXPERIENCE_PAUSE_REASONS.MANUAL,
-        });
-      } else if (!lifecycle) {
-        navigateToProductHome();
+      if (event.key === "Escape") {
+        if (phase === PHASES.FULLSCREEN_CAMERA) {
+          returnFromFullscreenCameraScreen();
+          return;
+        }
+        if (phase === PHASES.MINORITY_REPORT_LAB) {
+          returnFromMinorityReportLab();
+        }
       }
     };
 
@@ -3722,6 +2853,33 @@ export default function App() {
   useEffect(() => {
     if (
       phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode !== FULLSCREEN_LANDING_MODE ||
+      !fullscreenCameraLandingViewport
+    ) {
+      fullscreenModeLandingLastTickRef.current = 0;
+      fullscreenModeLandingScrollTopRef.current = 0;
+      if (fullscreenModeLandingStateRef.current) {
+        fullscreenModeLandingStateRef.current = null;
+        setFullscreenModeLandingState(null);
+      }
+      return undefined;
+    }
+
+    const nextLandingState = createFullscreenModeLandingState(
+      fullscreenCameraLandingViewport.width,
+      fullscreenCameraLandingViewport.height,
+    );
+    fullscreenModeLandingLastTickRef.current = 0;
+    fullscreenModeLandingScrollTopRef.current = 0;
+    fullscreenModeLandingStateRef.current = nextLandingState;
+    setFullscreenModeLandingState(nextLandingState);
+    return undefined;
+  }, [fullscreenCameraLandingViewport, fullscreenGridMode, phase]);
+
+  useEffect(() => {
+    if (
+      phase !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridMode === FULLSCREEN_LANDING_MODE ||
       !fullscreenCameraViewport
     ) {
       fullscreenExitControlLastTickRef.current = 0;
@@ -3780,24 +2938,9 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame =
-      activeLaunchContextRef.current.challenge === "daily"
-        ? createFullscreenHandBounceDailyGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
-            {
-              dayKey: activeLaunchContextRef.current.dayKey,
-              date: activeLaunchContextRef.current.dayKey,
-            },
-          )
-        : createFullscreenHandBounceGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
-          );
-    const nextGame = initializeOrResizeFullscreenGame(
-      "hand-bounce",
-      fullscreenHandBounceStateRef.current,
-      templateGame,
+    const nextGame = createFullscreenHandBounceGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
     );
     fullscreenHandBounceLastTickRef.current = 0;
     fullscreenHandBounceStateRef.current = nextGame;
@@ -3819,14 +2962,9 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame = createBrickDodgerGame(
+    const nextGame = createBrickDodgerGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
-    );
-    const nextGame = initializeOrResizeFullscreenGame(
-      "brick-dodger",
-      fullscreenBrickDodgerStateRef.current,
-      templateGame,
     );
     fullscreenBrickDodgerLastTickRef.current = 0;
     fullscreenBrickDodgerStateRef.current = nextGame;
@@ -3839,7 +2977,7 @@ export default function App() {
       phase !== PHASES.FULLSCREEN_CAMERA ||
       (fullscreenGridMode !== "breakout" &&
         fullscreenGridMode !== FIND_YOUR_GRIND_BREAKOUT_MODE_ID) ||
-      !fullscreenBreakoutViewport
+      !fullscreenCameraViewport
     ) {
       fullscreenBreakoutLastTickRef.current = 0;
       if (fullscreenBreakoutStateRef.current) {
@@ -3849,26 +2987,21 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame =
+    const nextGame =
       fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
         ? createFindYourGrindBreakoutGame(
-            fullscreenBreakoutViewport.width,
-            fullscreenBreakoutViewport.height,
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
           )
-          : createBreakoutGame(
-            fullscreenBreakoutViewport.width,
-            fullscreenBreakoutViewport.height,
+        : createBreakoutGame(
+            fullscreenCameraViewport.width,
+            fullscreenCameraViewport.height,
           );
-    const nextGame = initializeOrResizeFullscreenGame(
-      fullscreenGridMode,
-      fullscreenBreakoutStateRef.current,
-      templateGame,
-    );
     fullscreenBreakoutLastTickRef.current = 0;
     fullscreenBreakoutStateRef.current = nextGame;
     setFullscreenBreakoutState(nextGame);
     return undefined;
-  }, [fullscreenBreakoutViewport, fullscreenGridMode, phase]);
+  }, [fullscreenCameraViewport, fullscreenGridMode, phase]);
 
   useEffect(() => {
     if (
@@ -3887,14 +3020,9 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame = createBreakoutCoopGame(
+    const nextGame = createBreakoutCoopGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
-    );
-    const nextGame = initializeOrResizeFullscreenGame(
-      "breakout-coop",
-      fullscreenBreakoutCoopStateRef.current,
-      templateGame,
     );
     fullscreenBreakoutCoopLastTickRef.current = 0;
     fullscreenBreakoutCoopPrimaryPinchLatchRef.current = false;
@@ -3919,21 +3047,9 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame =
-      activeLaunchContextRef.current.challenge === "daily"
-        ? createFruitNinjaDailyGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
-            activeLaunchContextRef.current.dayKey,
-          )
-        : createFruitNinjaGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
-          );
-    const nextGame = initializeOrResizeFullscreenGame(
-      "fruit-ninja",
-      fullscreenFruitNinjaStateRef.current,
-      templateGame,
+    const nextGame = createFruitNinjaGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
     );
     fullscreenFruitNinjaLastTickRef.current = 0;
     fullscreenFruitNinjaStateRef.current = nextGame;
@@ -3977,23 +3093,9 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame =
-      activeLaunchContextRef.current.challenge === "daily"
-        ? createSkyPatrolDailyGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
-            {
-              dayKey: activeLaunchContextRef.current.dayKey,
-            },
-          )
-        : createSkyPatrolGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
-          );
-    const nextGame = initializeOrResizeFullscreenGame(
-      "sky-patrol",
-      fullscreenSkyPatrolStateRef.current,
-      templateGame,
+    const nextGame = createSkyPatrolGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
     );
     fullscreenSkyPatrolLastTickRef.current = 0;
     publishFullscreenSkyPatrolState(nextGame);
@@ -4018,24 +3120,13 @@ export default function App() {
         fullscreenWfcWorldStateRef.current = null;
         setFullscreenWfcWorldState(null);
       }
-      setFullscreenWfcProjectOpen(false);
       return undefined;
     }
 
-    const templateGame = createWfcWorldGame(
+    const nextGame = createWfcWorldGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
     );
-    const previousGame = fullscreenWfcWorldStateRef.current;
-    const nextGame = previousGame
-      ? {
-          ...previousGame,
-          layout: templateGame.layout,
-          hoverCell: null,
-          paintDragActive: false,
-          lastPaintedCell: null,
-        }
-      : templateGame;
     fullscreenWfcWorldLastTickRef.current = 0;
     fullscreenWfcWorldMouseInputRef.current = {
       pointerActive: false,
@@ -4063,14 +3154,9 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame = createSpaceInvadersGame(
+    const nextGame = createSpaceInvadersGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
-    );
-    const nextGame = initializeOrResizeFullscreenGame(
-      "invaders",
-      fullscreenInvadersStateRef.current,
-      templateGame,
     );
     fullscreenInvadersLastTickRef.current = 0;
     fullscreenInvadersStateRef.current = nextGame;
@@ -4092,14 +3178,9 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame = createFingerPongGame(
+    const nextGame = createFingerPongGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
-    );
-    const nextGame = initializeOrResizeFullscreenGame(
-      "finger-pong",
-      fullscreenFingerPongStateRef.current,
-      templateGame,
     );
     fullscreenFingerPongLastTickRef.current = 0;
     fullscreenFingerPongStateRef.current = nextGame;
@@ -4121,23 +3202,9 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame =
-      activeLaunchContextRef.current.challenge === "daily"
-        ? createFlappyDailyChallengeGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
-            {
-              dayKey: activeLaunchContextRef.current.dayKey,
-            },
-          )
-        : createFlappyGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
-          );
-    const nextGame = initializeOrResizeFullscreenGame(
-      "flappy",
-      fullscreenFlappyStateRef.current,
-      templateGame,
+    const nextGame = createFlappyGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
     );
     fullscreenFlappyLastTickRef.current = 0;
     fullscreenFlappyStateRef.current = nextGame;
@@ -4159,23 +3226,9 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame =
-      activeLaunchContextRef.current.challenge === "daily"
-        ? createMissileCommandDailyGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
-            {
-              dayKey: activeLaunchContextRef.current.dayKey,
-            },
-          )
-        : createMissileCommandGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
-          );
-    const nextGame = initializeOrResizeFullscreenGame(
-      "missile-command",
-      fullscreenMissileCommandStateRef.current,
-      templateGame,
+    const nextGame = createMissileCommandGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
     );
     fullscreenMissileCommandLastTickRef.current = 0;
     fullscreenMissileCommandStateRef.current = nextGame;
@@ -4197,14 +3250,9 @@ export default function App() {
       return undefined;
     }
 
-    const templateGame = createTicTacToeGame(
+    const nextGame = createTicTacToeGame(
       fullscreenCameraViewport.width,
       fullscreenCameraViewport.height,
-    );
-    const nextGame = initializeOrResizeFullscreenGame(
-      "tic-tac-toe",
-      fullscreenTicTacToeStateRef.current,
-      templateGame,
     );
     fullscreenTicTacToeLastTickRef.current = 0;
     fullscreenTicTacToeStateRef.current = nextGame;
@@ -4295,11 +3343,7 @@ export default function App() {
         x: point.x,
         y: point.y,
       }));
-    const pruned = pruneCursorTrail(
-      fullscreenRingTrailRef.current,
-      now,
-      motionVisualizerTrailDurationMs,
-    );
+    const pruned = pruneCursorTrail(fullscreenRingTrailRef.current, now);
     const elapsed = now - fullscreenRingTrailLastSampleAtRef.current;
 
     if (normalizedPoints.length === 0) {
@@ -4324,18 +3368,12 @@ export default function App() {
         },
       ],
       now,
-      motionVisualizerTrailDurationMs,
     );
     fullscreenRingTrailRef.current = nextTrail;
     setFullscreenRingTrail(nextTrail);
     setFullscreenRingTrailNow(now);
     return undefined;
-  }, [
-    fullscreenGridMode,
-    fullscreenIndexPoints,
-    fullscreenRingTrail.length,
-    motionVisualizerTrailDurationMs,
-  ]);
+  }, [fullscreenGridMode, fullscreenIndexPoints, fullscreenRingTrail.length]);
 
   useEffect(() => {
     if (fullscreenGridMode !== "rings" || fullscreenRingTrail.length === 0) {
@@ -4345,11 +3383,7 @@ export default function App() {
     let frameId = 0;
     const tick = () => {
       const now = performance.now();
-      const pruned = pruneCursorTrail(
-        fullscreenRingTrailRef.current,
-        now,
-        motionVisualizerTrailDurationMs,
-      );
+      const pruned = pruneCursorTrail(fullscreenRingTrailRef.current, now);
       fullscreenRingTrailRef.current = pruned;
       setFullscreenRingTrailNow(now);
       setFullscreenRingTrail((previous) => (previous.length === pruned.length ? previous : pruned));
@@ -4364,11 +3398,7 @@ export default function App() {
         window.cancelAnimationFrame(frameId);
       }
     };
-  }, [
-    fullscreenGridMode,
-    fullscreenRingTrail.length,
-    motionVisualizerTrailDurationMs,
-  ]);
+  }, [fullscreenGridMode, fullscreenRingTrail.length]);
 
   useEffect(() => {
     if (fullscreenGridMode !== "pulse" || !fullscreenCameraViewport) {
@@ -4381,11 +3411,7 @@ export default function App() {
     }
 
     const now = performance.now();
-    const pruned = prunePulseBursts(
-      fullscreenPulseBurstsRef.current,
-      now,
-      motionVisualizerPulseDurationMs,
-    );
+    const pruned = prunePulseBursts(fullscreenPulseBurstsRef.current, now);
     const nextBursts = [...pruned];
     const nextLastEmitById = { ...fullscreenPulseLastEmitByIdRef.current };
     const largestRingRadius =
@@ -4430,13 +3456,7 @@ export default function App() {
     setFullscreenPulseBursts(nextBursts);
     setFullscreenPulseNow(now);
     return undefined;
-  }, [
-    fullscreenCameraViewport,
-    fullscreenGridMode,
-    fullscreenIndexPoints,
-    fullscreenPulseBursts.length,
-    motionVisualizerPulseDurationMs,
-  ]);
+  }, [fullscreenCameraViewport, fullscreenGridMode, fullscreenIndexPoints, fullscreenPulseBursts.length]);
 
   useEffect(() => {
     if (fullscreenGridMode !== "pulse" || fullscreenPulseBursts.length === 0) {
@@ -4446,11 +3466,7 @@ export default function App() {
     let frameId = 0;
     const tick = () => {
       const now = performance.now();
-      const pruned = prunePulseBursts(
-        fullscreenPulseBurstsRef.current,
-        now,
-        motionVisualizerPulseDurationMs,
-      );
+      const pruned = prunePulseBursts(fullscreenPulseBurstsRef.current, now);
       fullscreenPulseBurstsRef.current = pruned;
       setFullscreenPulseNow(now);
       setFullscreenPulseBursts((previous) => (previous.length === pruned.length ? previous : pruned));
@@ -4465,11 +3481,7 @@ export default function App() {
         window.cancelAnimationFrame(frameId);
       }
     };
-  }, [
-    fullscreenGridMode,
-    fullscreenPulseBursts.length,
-    motionVisualizerPulseDurationMs,
-  ]);
+  }, [fullscreenGridMode, fullscreenPulseBursts.length]);
 
   useEffect(() => {
     if (fullscreenGridMode !== "tip-ripples") {
@@ -4593,31 +3605,13 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    appLog.debug("Whack-a-Mole state changed", {
-      phase: whackAMoleState.phase,
-      score: whackAMoleState.score,
-      timeLeft: Math.ceil((whackAMoleState.remainingMs ?? 0) / 1000),
-      target: whackAMoleState.target?.holeIndex ?? null,
+    appLog.debug("Game scoreboard state changed", {
+      score,
+      timeLeft,
+      gameRunning,
+      activeMoleIndex,
     });
-  }, [appLog, whackAMoleState]);
-
-  useEffect(() => {
-    recordActiveProgressionResult();
-  }, [
-    whackAMoleState,
-    spatialMemoryState,
-    fullscreenBrickDodgerState,
-    fullscreenBreakoutCoopState,
-    fullscreenBreakoutState,
-    fullscreenFingerPongState,
-    fullscreenFlappyState,
-    fullscreenFruitNinjaState,
-    fullscreenHandBounceState,
-    fullscreenInvadersState,
-    fullscreenMissileCommandState,
-    fullscreenSkyPatrolHud,
-    fullscreenTicTacToeState,
-  ]);
+  }, [appLog, score, timeLeft, gameRunning, activeMoleIndex]);
 
   useEffect(() => {
     appLog.debug("Debug overlay state changed", { debugEnabled });
@@ -4626,10 +3620,6 @@ export default function App() {
   useEffect(() => {
     spatialMemoryRef.current = spatialMemoryState;
   }, [spatialMemoryState]);
-
-  useEffect(() => {
-    spatialMemoryExperienceRef.current = spatialMemoryExperience;
-  }, [spatialMemoryExperience]);
 
   useEffect(() => {
     appLog.debug("Calibration transform state changed", {
@@ -4642,511 +3632,6 @@ export default function App() {
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
-
-  useEffect(() => {
-    const normalized = saveUserPreferences(preferences);
-    applyPreferenceDocumentState(normalized);
-    audioFeedbackRef.current.configure(normalized);
-  }, [preferences]);
-
-  useEffect(() => {
-    const unlockAudio = () => {
-      audioFeedbackRef.current.unlock();
-      window.removeEventListener("pointerdown", unlockAudio, true);
-      window.removeEventListener("keydown", unlockAudio, true);
-    };
-    window.addEventListener("pointerdown", unlockAudio, true);
-    window.addEventListener("keydown", unlockAudio, true);
-    return () => {
-      window.removeEventListener("pointerdown", unlockAudio, true);
-      window.removeEventListener("keydown", unlockAudio, true);
-    };
-  }, []);
-
-  useEffect(() => {
-    const isNativeControl = (target) =>
-      target instanceof Element &&
-      Boolean(
-        target.closest(
-          "button, a, input, select, textarea, summary, [role='button'], [role='link']",
-        ),
-      );
-    const publishMotionVisualizerFallbackPoint = (x, y) => {
-      if (
-        phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
-        !isMotionVisualizerEffect(fullscreenGridModeRef.current)
-      ) {
-        return;
-      }
-      const point = {
-        id: "pointer",
-        handId: "pointer",
-        fingerName: "index",
-        label: "Pointer",
-        x: clampValue(x, 0, viewportRef.current.width),
-        y: clampValue(y, 0, viewportRef.current.height),
-      };
-      setFullscreenIndexPoints([point]);
-      setFullscreenTipPoints([point]);
-    };
-    const updateFallbackPoint = (event) => {
-      if (
-        trackingRequestedRef.current ||
-        !Number.isFinite(event.clientX) ||
-        !Number.isFinite(event.clientY)
-      ) {
-        return false;
-      }
-      fallbackPointerRef.current = {
-        ...fallbackPointerRef.current,
-        active: true,
-        pointerType: event.pointerType || "mouse",
-        x: event.clientX,
-        y: event.clientY,
-      };
-      cursorRef.current = {
-        x: event.clientX,
-        y: event.clientY,
-      };
-      publishMotionVisualizerFallbackPoint(event.clientX, event.clientY);
-      return true;
-    };
-    const handleFallbackPointerMove = (event) => {
-      updateFallbackPoint(event);
-    };
-    const handleFallbackPointerDown = (event) => {
-      if (
-        event.button !== 0 ||
-        !updateFallbackPoint(event) ||
-        isNativeControl(event.target)
-      ) {
-        return;
-      }
-      fallbackPointerRef.current = {
-        ...fallbackPointerRef.current,
-        justPressed:
-          fallbackPointerRef.current.justPressed ||
-          !fallbackPointerRef.current.pressed,
-        pressed: true,
-      };
-    };
-    const releaseFallbackPointer = (event) => {
-      if (trackingRequestedRef.current) {
-        return;
-      }
-      const pointerType =
-        event?.pointerType || fallbackPointerRef.current.pointerType;
-      fallbackPointerRef.current = {
-        ...fallbackPointerRef.current,
-        active:
-          pointerType === "mouse" && fallbackPointerRef.current.active,
-        pressed: false,
-      };
-    };
-    const resetFallbackPointer = () => {
-      fallbackPointerRef.current = {
-        ...fallbackPointerRef.current,
-        active: false,
-        justPressed: false,
-        pressed: false,
-      };
-    };
-    const handleFallbackKeyDown = (event) => {
-      const shortcutIndex = Number.parseInt(event.key, 10) - 1;
-      if (
-        phaseRef.current === PHASES.FULLSCREEN_CAMERA &&
-        isMotionVisualizerEffect(fullscreenGridModeRef.current) &&
-        !isNativeControl(event.target) &&
-        shortcutIndex >= 0 &&
-        shortcutIndex < MOTION_VISUALIZER_EFFECTS.length
-      ) {
-        event.preventDefault();
-        const effect = MOTION_VISUALIZER_EFFECTS[shortcutIndex];
-        const next = saveMotionVisualizerState({
-          ...motionVisualizerStateRef.current,
-          effect: effect.id,
-        });
-        motionVisualizerStateRef.current = next;
-        setMotionVisualizerState(next);
-        fullscreenGridModeRef.current = effect.id;
-        setFullscreenGridMode(effect.id);
-        setMotionVisualizerStatus(`${effect.label} effect selected.`);
-        return;
-      }
-      if (
-        trackingRequestedRef.current ||
-        phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
-        isNativeControl(event.target)
-      ) {
-        return;
-      }
-      const movementByKey = {
-        ArrowDown: [0, 1],
-        ArrowLeft: [-1, 0],
-        ArrowRight: [1, 0],
-        ArrowUp: [0, -1],
-      };
-      const movement = movementByKey[event.key];
-      if (movement) {
-        event.preventDefault();
-        const step = event.shiftKey ? 72 : 28;
-        const nextPoint = clampPoint(
-          {
-            x: fallbackPointerRef.current.x + movement[0] * step,
-            y: fallbackPointerRef.current.y + movement[1] * step,
-          },
-          viewportRef.current.width,
-          viewportRef.current.height,
-        );
-        fallbackPointerRef.current = {
-          ...fallbackPointerRef.current,
-          active: true,
-          pointerType: "keyboard",
-          x: nextPoint.x,
-          y: nextPoint.y,
-        };
-        cursorRef.current = nextPoint;
-        publishMotionVisualizerFallbackPoint(nextPoint.x, nextPoint.y);
-        return;
-      }
-      if ((event.key === " " || event.key === "Enter") && !event.repeat) {
-        event.preventDefault();
-        fallbackPointerRef.current = {
-          ...fallbackPointerRef.current,
-          active: true,
-          justPressed: true,
-          pointerType: "keyboard",
-          pressed: true,
-        };
-      }
-    };
-    const handleFallbackKeyUp = (event) => {
-      if (event.key !== " " && event.key !== "Enter") {
-        return;
-      }
-      fallbackPointerRef.current = {
-        ...fallbackPointerRef.current,
-        pressed: false,
-      };
-    };
-
-    window.addEventListener("pointermove", handleFallbackPointerMove, {
-      passive: true,
-    });
-    window.addEventListener("pointerdown", handleFallbackPointerDown, true);
-    window.addEventListener("pointerup", releaseFallbackPointer, true);
-    window.addEventListener("pointercancel", releaseFallbackPointer, true);
-    window.addEventListener("mousemove", handleFallbackPointerMove, {
-      passive: true,
-    });
-    window.addEventListener("mousedown", handleFallbackPointerDown, true);
-    window.addEventListener("mouseup", releaseFallbackPointer, true);
-    window.addEventListener("blur", resetFallbackPointer);
-    window.addEventListener("keydown", handleFallbackKeyDown);
-    window.addEventListener("keyup", handleFallbackKeyUp);
-    return () => {
-      window.removeEventListener("pointermove", handleFallbackPointerMove);
-      window.removeEventListener("pointerdown", handleFallbackPointerDown, true);
-      window.removeEventListener("pointerup", releaseFallbackPointer, true);
-      window.removeEventListener(
-        "pointercancel",
-        releaseFallbackPointer,
-        true,
-      );
-      window.removeEventListener("mousemove", handleFallbackPointerMove);
-      window.removeEventListener("mousedown", handleFallbackPointerDown, true);
-      window.removeEventListener("mouseup", releaseFallbackPointer, true);
-      window.removeEventListener("blur", resetFallbackPointer);
-      window.removeEventListener("keydown", handleFallbackKeyDown);
-      window.removeEventListener("keyup", handleFallbackKeyUp);
-    };
-  }, []);
-
-  useEffect(
-    () => () => {
-      audioFeedbackRef.current.dispose();
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const current = {
-      attempt: experienceLifecycle?.attempt ?? null,
-      modeId: experienceModeId,
-      phase: experienceLifecycle?.phase ?? null,
-    };
-    const previous = previousAudioLifecycleRef.current;
-    let cue = null;
-
-    if (
-      current.phase === EXPERIENCE_PHASES.RESULTS &&
-      previous.phase !== EXPERIENCE_PHASES.RESULTS
-    ) {
-      cue = "success";
-    } else if (
-      current.phase === EXPERIENCE_PHASES.PAUSED &&
-      previous.phase !== EXPERIENCE_PHASES.PAUSED
-    ) {
-      cue = "pause";
-    } else if (
-      previous.phase === EXPERIENCE_PHASES.PAUSED &&
-      (current.phase === EXPERIENCE_PHASES.COUNTDOWN ||
-        current.phase === EXPERIENCE_PHASES.RUNNING)
-    ) {
-      cue = "resume";
-    } else if (
-      current.phase &&
-      (previous.modeId !== current.modeId ||
-        previous.attempt !== current.attempt) &&
-      (current.phase === EXPERIENCE_PHASES.COUNTDOWN ||
-        current.phase === EXPERIENCE_PHASES.RUNNING)
-    ) {
-      cue = "start";
-    }
-
-    previousAudioLifecycleRef.current = current;
-    if (cue) {
-      audioFeedbackRef.current.play(cue);
-    }
-  }, [
-    experienceLifecycle?.attempt,
-    experienceLifecycle?.phase,
-    experienceModeId,
-  ]);
-
-  useEffect(() => {
-    dynamicQualityBudgetRef.current = dynamicQualityBudget;
-    const root = document.documentElement;
-    root.dataset.qualityLevel = dynamicQualityBudget.level;
-    root.style.setProperty(
-      "--dynamic-effect-density",
-      dynamicQualityBudget.effectDensity,
-    );
-    root.style.setProperty(
-      "--dynamic-particle-limit",
-      dynamicQualityBudget.particleLimit,
-    );
-  }, [dynamicQualityBudget]);
-
-  useEffect(() => {
-    setDeviceCapabilities(
-      assessDeviceCapabilities(collectDeviceCapabilitySignals()),
-    );
-  }, [viewport.height, viewport.width]);
-
-  useEffect(() => {
-    trackingRequestedRef.current = trackingRequested;
-  }, [trackingRequested]);
-
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      const hidden = document.visibilityState === "hidden";
-      if (
-        hidden &&
-        experienceModeIdRef.current === "whack-a-mole"
-      ) {
-        applyWhackAMoleAction({
-          type: WHACK_A_MOLE_ACTIONS.PAUSE,
-          now: performance.now(),
-        });
-      }
-      const transition = dispatchExperienceLifecycle({
-        type:
-          hidden
-            ? EXPERIENCE_LIFECYCLE_EVENTS.PAUSE
-            : EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
-        reason: EXPERIENCE_PAUSE_REASONS.VISIBILITY,
-      });
-      if (
-        !hidden &&
-        experienceModeIdRef.current === "whack-a-mole" &&
-        transition?.state?.phase !== EXPERIENCE_PHASES.PAUSED
-      ) {
-        applyWhackAMoleAction({
-          type: WHACK_A_MOLE_ACTIONS.RESUME,
-          now: performance.now(),
-        });
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    setTrackingRecoveryGate((current) =>
-      advanceTrackingRecoveryGate(current, {
-        required: trackingRecoveryRequired,
-        detected: handDetected,
-        now: globalThis.performance?.now?.() ?? Date.now(),
-      }),
-    );
-  }, [handDetected, trackingRecoveryRequired]);
-
-  useEffect(() => {
-    if (
-      ![
-        TRACKING_RECOVERY_PHASES.LOSS_GRACE,
-        TRACKING_RECOVERY_PHASES.REACQUIRING,
-      ].includes(trackingRecoveryGate.phase)
-    ) {
-      return undefined;
-    }
-    const interval = window.setInterval(() => {
-      setTrackingRecoveryGate((current) =>
-        advanceTrackingRecoveryGate(current, {
-          required: trackingRecoveryRequired,
-          detected: handDetected,
-          now: globalThis.performance?.now?.() ?? Date.now(),
-        }),
-      );
-    }, 100);
-    return () => window.clearInterval(interval);
-  }, [
-    handDetected,
-    trackingRecoveryGate.phase,
-    trackingRecoveryRequired,
-  ]);
-
-  useEffect(() => {
-    const metricsSession =
-      activeProgressionSessionRef.current?.productMetricsSession;
-    const metricsTimestamp =
-      globalThis.performance?.now?.() ?? Date.now();
-    if (!experienceModeId || !trackingRecoveryRequired) {
-      void metricsSession?.endTrackingLoss(metricsTimestamp);
-      const transition = dispatchExperienceLifecycle({
-        type: EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
-        reason: EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS,
-      });
-      if (
-        experienceModeId === "whack-a-mole" &&
-        transition?.state?.phase !== EXPERIENCE_PHASES.PAUSED
-      ) {
-        applyWhackAMoleAction({
-          type: WHACK_A_MOLE_ACTIONS.RESUME,
-          now: performance.now(),
-        });
-      }
-      return;
-    }
-    if (
-      trackingRecoveryGate.phase ===
-      TRACKING_RECOVERY_PHASES.LOSS_GRACE
-    ) {
-      return;
-    }
-    if (
-      experienceModeId === "whack-a-mole" &&
-      trackingRecoveryStatus.shouldPause
-    ) {
-      applyWhackAMoleAction({
-        type: WHACK_A_MOLE_ACTIONS.PAUSE,
-        now: performance.now(),
-      });
-    }
-    if (trackingRecoveryStatus.shouldPause) {
-      void metricsSession?.beginTrackingLoss(metricsTimestamp);
-    } else {
-      void metricsSession?.endTrackingLoss(metricsTimestamp);
-    }
-    const transition = dispatchExperienceLifecycle({
-      type: trackingRecoveryStatus.shouldPause
-        ? EXPERIENCE_LIFECYCLE_EVENTS.PAUSE
-        : EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
-      reason: EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS,
-    });
-    if (
-      experienceModeId === "whack-a-mole" &&
-      !trackingRecoveryStatus.shouldPause &&
-      transition?.state?.phase !== EXPERIENCE_PHASES.PAUSED
-    ) {
-      applyWhackAMoleAction({
-        type: WHACK_A_MOLE_ACTIONS.RESUME,
-        now: performance.now(),
-      });
-    }
-  }, [
-    experienceLifecycle?.attempt,
-    experienceModeId,
-    trackingRecoveryGate.phase,
-    trackingRecoveryRequired,
-  ]);
-
-  useEffect(
-    () =>
-      progressionStoreRef.current.subscribe((progress) => {
-        setGameProgression(progress);
-      }),
-    [],
-  );
-
-  useEffect(() => {
-    const navigateFromLocation = () => {
-      const path = window.location.pathname;
-      if (path === "/settings") {
-        openProductSettings({ updateHistory: false });
-        return;
-      }
-      const homeArea = getProductHomeAreaFromPath(path);
-      if (homeArea) {
-        navigateToProductHome({
-          area: homeArea,
-          updateHistory: false,
-        });
-        return;
-      }
-      const mode = getModeByPath(path);
-      if (mode) {
-        selectProductMode(mode, { updateHistory: false });
-        return;
-      }
-      navigateToProductHome({ updateHistory: false });
-    };
-
-    if (!routeInitializedRef.current) {
-      routeInitializedRef.current = true;
-      navigateFromLocation();
-    }
-    window.addEventListener("popstate", navigateFromLocation);
-    return () => {
-      window.removeEventListener("popstate", navigateFromLocation);
-    };
-  }, [cameraReady, modelReady, trackingReadiness.status]);
-
-  useEffect(() => {
-    if (!trackingRequested) {
-      setTrackingReadiness(createTrackingReadinessState());
-      resetTrackingInteractionCheck();
-      return;
-    }
-    if (!cameraReady || !modelReady) {
-      return;
-    }
-
-    setTrackingReadiness((current) => {
-      let next = reduceTrackingReadiness(current, {
-        type: "HAND_DETECTED",
-        detected: handDetected,
-      });
-      next = reduceTrackingReadiness(next, {
-        type: "POINTER_READY",
-        ready: trackingInteractionCheck.pointerReady,
-      });
-      return reduceTrackingReadiness(next, {
-        type: "PINCH_READY",
-        ready: trackingInteractionCheck.pinchReady,
-      });
-    });
-  }, [
-    cameraReady,
-    handDetected,
-    modelReady,
-    trackingInteractionCheck.pinchReady,
-    trackingInteractionCheck.pointerReady,
-    trackingRequested,
-  ]);
 
   useEffect(() => {
     poseStatusRef.current = poseStatus;
@@ -5225,8 +3710,16 @@ export default function App() {
   }, [sandboxGrabbedBlockId]);
 
   useEffect(() => {
-    whackAMoleStateRef.current = whackAMoleState;
-  }, [whackAMoleState]);
+    holesRef.current = holes;
+  }, [holes]);
+
+  useEffect(() => {
+    gameRunningRef.current = gameRunning;
+  }, [gameRunning]);
+
+  useEffect(() => {
+    timeLeftRef.current = timeLeft;
+  }, [timeLeft]);
 
   useEffect(() => {
     appLog.info("Attempting to load saved calibration on startup");
@@ -5358,283 +3851,52 @@ export default function App() {
 
   useEffect(() => {
     mountedRef.current = true;
-    if (!trackingRequested) {
-      cameraRetryRef.current = null;
-      return () => {
-        mountedRef.current = false;
-      };
-    }
-
     appLog.info("Camera initialization effect started");
-    setTrackingReadiness((current) =>
-      reduceTrackingReadiness(current, { type: "START_REQUEST" }),
-    );
 
-    let cancelled = false;
-    let requestInFlight = false;
-    let requestSequence = 0;
-    let automaticRetryAttempts = 0;
-    let retryTimerId = 0;
-    let observedStream = null;
-    let stopObservingCameraStream = () => {};
-
-    const clearRetryTimer = () => {
-      if (retryTimerId) {
-        window.clearTimeout(retryTimerId);
-        retryTimerId = 0;
-      }
-    };
-
-    const releaseStream = (stream) => {
-      if (!stream) {
-        return;
-      }
-
-      if (observedStream === stream) {
-        stopObservingCameraStream();
-        stopObservingCameraStream = () => {};
-        observedStream = null;
-      }
-
-      const releaseResult = releaseCameraStream({
-        stream,
-        videoElements: [videoRef.current, attachedVideoElementRef.current],
-      });
-      if (streamRef.current === stream) {
-        streamRef.current = null;
-      }
-      if (
-        !attachedVideoElementRef.current ||
-        !streamRef.current ||
-        attachedVideoElementRef.current.srcObject !== streamRef.current
-      ) {
-        attachedVideoElementRef.current = null;
-      }
-      appLog.info("Released camera stream", releaseResult);
-    };
-
-    const scheduleInterruptedRetry = (reason) => {
-      clearRetryTimer();
-      retryTimerId = window.setTimeout(() => {
-        retryTimerId = 0;
-        cameraRetryRef.current?.(`interrupted_${reason}`);
-      }, CAMERA_INTERRUPTION_RETRY_DELAY_MS);
-    };
-
-    const handleStreamInterruption = (stream, reason) => {
-      if (cancelled || streamRef.current !== stream) {
-        return;
-      }
-
-      appLog.warn("Camera stream was interrupted", { reason });
-      clearCameraTrackingReadiness();
-      setTrackingReadiness((current) =>
-        reduceTrackingReadiness(current, {
-          type: "TRACK_INTERRUPTED",
-          error: new Error(`Camera stream interrupted: ${reason}`),
-        }),
-      );
-      releaseStream(stream);
-      if (automaticRetryAttempts >= 1) {
-        setCameraError(
-          "Camera connection was interrupted and could not reconnect. Select Retry camera to try again.",
-        );
-        return;
-      }
-
-      setCameraError("Camera connection was interrupted. Reconnecting…");
-      scheduleInterruptedRetry(reason);
-    };
-
-    const requestCamera = async (reason) => {
-      if (cancelled || requestInFlight) {
-        return false;
-      }
-
-      requestInFlight = true;
-      const requestId = requestSequence + 1;
-      requestSequence = requestId;
-      let candidateStream = null;
-
+    const initCamera = async () => {
       try {
-        const captureResolution =
-          dynamicQualityBudgetRef.current.captureResolution;
-        appLog.info("Requesting webcam access", {
-          reason,
-          captureResolution,
-          qualityLevel: dynamicQualityBudgetRef.current.level,
-        });
+        appLog.info("Requesting webcam access");
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error("This browser does not support webcam access.");
         }
 
-        candidateStream = await navigator.mediaDevices.getUserMedia({
+        const stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
           video: {
-            ...(requestedCameraDeviceId
-              ? { deviceId: { exact: requestedCameraDeviceId } }
-              : { facingMode: "user" }),
-            width: { ideal: captureResolution.width },
-            height: { ideal: captureResolution.height },
+            facingMode: "user",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
           },
         });
 
-        if (cancelled || requestSequence !== requestId || !mountedRef.current) {
-          appLog.warn("Camera stream obtained after lifecycle changed; closing tracks", {
-            reason,
-          });
-          releaseCameraStream({ stream: candidateStream });
-          return false;
+        if (!mountedRef.current) {
+          appLog.warn("Camera stream obtained but component was unmounted; closing tracks");
+          stream.getTracks().forEach((track) => track.stop());
+          return;
         }
 
-        streamRef.current = candidateStream;
-        observedStream = candidateStream;
-        stopObservingCameraStream = observeCameraStreamInterruptions(
-          candidateStream,
-          (interruptionReason) => {
-            handleStreamInterruption(candidateStream, interruptionReason);
-          },
-        );
-
+        streamRef.current = stream;
         const video = videoRef.current;
-        if (!video) {
-          throw new Error("Camera preview is unavailable.");
+        if (video) {
+          await attachStreamToVideoElement(video, "camera_init");
+        } else {
+          appLog.warn("Video ref was unavailable after webcam stream setup");
         }
-        await attachStreamToVideoElement(video, reason);
-
-        const readyAction = getCameraVideoKeepAliveAction({
-          video,
-          stream: candidateStream,
-          attachedVideoElement: attachedVideoElementRef.current,
-        });
-        if (readyAction.shouldRecover || readyAction.shouldAttach) {
-          throw new Error(
-            readyAction.shouldRecover
-              ? "Camera stream ended before playback became ready."
-              : "Camera playback did not become ready.",
-          );
-        }
-        if (cancelled || requestSequence !== requestId || streamRef.current !== candidateStream) {
-          releaseStream(candidateStream);
-          return false;
-        }
-
-        automaticRetryAttempts = 0;
-        setCameraError("");
         setCameraReady(true);
-        setTrackingReadiness((current) =>
-          reduceTrackingReadiness(current, {
-            type: "CAMERA_READY",
-            deviceId: candidateStream.getVideoTracks?.()[0]?.getSettings?.().deviceId ?? "",
-          }),
-        );
-        if (navigator.mediaDevices?.enumerateDevices) {
-          void navigator.mediaDevices
-            .enumerateDevices()
-            .then((devices) => {
-              if (!cancelled) {
-                setCameraDevices(devices.filter((device) => device.kind === "videoinput"));
-              }
-            })
-            .catch(() => {});
-        }
-        appLog.info("Camera is ready", { reason });
-        return true;
       } catch (error) {
-        if (candidateStream) {
-          releaseStream(candidateStream);
-        }
-        if (!cancelled && requestSequence === requestId) {
-          clearCameraTrackingReadiness();
-          const errorMessage =
-            error instanceof Error
-              ? error.message
-              : "Camera access failed. Check browser permissions.";
-          appLog.error("Camera initialization failed", { reason, error });
-          let permissionState = null;
-          if (
-            (error?.name === "NotAllowedError" ||
-              error?.name === "PermissionDeniedError") &&
-            navigator.permissions?.query
-          ) {
-            try {
-              const permission = await navigator.permissions.query({
-                name: "camera",
-              });
-              permissionState = permission?.state ?? null;
-            } catch {
-              // Some browsers expose Permissions API without camera queries.
-            }
-          }
-          setTrackingReadiness((current) =>
-            reduceTrackingReadiness(current, {
-              type: "CAMERA_ERROR",
-              error,
-              permissionState,
-            }),
-          );
-          setCameraError(
-            reason === "camera_init"
-              ? `${errorMessage} Select Retry camera to try again.`
-              : `Camera reconnection failed: ${errorMessage} Select Retry camera to try again.`,
-          );
-        }
-        return false;
-      } finally {
-        if (requestSequence === requestId) {
-          requestInFlight = false;
-        }
-      }
-    };
-
-    cameraRetryRef.current = (reason = "manual_retry") => {
-      if (cancelled) {
-        return;
-      }
-      if (requestInFlight) {
-        if (reason === "manual_retry") {
-          setCameraError("A camera request is already in progress.");
-        }
-        return;
-      }
-
-      const isAutomaticRetry = reason !== "manual_retry";
-      if (isAutomaticRetry && automaticRetryAttempts >= 1) {
-        clearCameraTrackingReadiness();
+        appLog.error("Camera initialization failed", { error });
         setCameraError(
-          "Camera connection was interrupted and could not reconnect. Select Retry camera to try again.",
+          error instanceof Error
+            ? error.message
+            : "Camera access failed. Check browser permissions.",
         );
-        return;
       }
-
-      if (isAutomaticRetry) {
-        automaticRetryAttempts += 1;
-      } else {
-        automaticRetryAttempts = 0;
-      }
-
-      clearRetryTimer();
-      releaseStream(streamRef.current);
-      clearCameraTrackingReadiness();
-      setTrackingReadiness((current) =>
-        reduceTrackingReadiness(current, { type: "START_REQUEST" }),
-      );
-      setCameraError(
-        isAutomaticRetry
-          ? "Camera connection was interrupted. Reconnecting…"
-          : "Retrying camera…",
-      );
-      void requestCamera(reason);
     };
 
-    void requestCamera("camera_init");
+    initCamera();
 
     return () => {
       appLog.info("Camera initialization cleanup started");
-      cancelled = true;
-      requestSequence += 1;
-      cameraRetryRef.current = null;
-      clearRetryTimer();
       mountedRef.current = false;
       if (rafRef.current) {
         appLog.debug("Cancelling RAF during camera cleanup", { rafId: rafRef.current });
@@ -5644,47 +3906,27 @@ export default function App() {
         appLog.info("Stopping webcam tracks during cleanup", {
           trackCount: streamRef.current.getTracks().length,
         });
-        releaseStream(streamRef.current);
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
       }
       attachedVideoElementRef.current = null;
     };
-  }, [appLog, requestedCameraDeviceId, trackingRequested]);
+  }, [appLog]);
 
   useEffect(() => {
-    if (!trackingRequested) {
-      setModelReady(false);
-      setModelError("");
-      return undefined;
-    }
-
     let cancelled = false;
     appLog.info("Hand-tracking model initialization effect started");
-    setModelReady(false);
-    setModelError("");
-    setTrackingReadiness((current) =>
-      reduceTrackingReadiness(current, { type: "MODEL_LOADING" }),
-    );
 
     const initModel = async () => {
       try {
-        const initialMaxHands = getTrackingDetectorMaxHandsForContext(
-          phaseRef.current,
-          fullscreenGridModeRef.current,
-        );
-        const requestedModelType =
-          dynamicQualityBudgetRef.current.modelPreference;
         const preferredConfig =
           INITIAL_TRACKING_RUNTIME === "mediapipe"
-            ? {
-                runtime: "mediapipe",
-                modelType: requestedModelType,
-                maxHands: initialMaxHands,
-              }
+            ? { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_MAX_HANDS }
             : {
                 runtime: "tfjs",
                 backend: "webgl",
-                modelType: requestedModelType,
-                maxHands: initialMaxHands,
+                modelType: "full",
+                maxHands: TRACKING_MAX_HANDS,
               };
 
         appLog.info("Initializing hand-tracking detector", {
@@ -5706,8 +3948,8 @@ export default function App() {
           detector = await initHandTracking({
             runtime: "tfjs",
             backend: "webgl",
-            modelType: requestedModelType,
-            maxHands: initialMaxHands,
+            modelType: "full",
+            maxHands: TRACKING_MAX_HANDS,
           });
         }
 
@@ -5717,8 +3959,6 @@ export default function App() {
           return;
         }
         detectorRef.current = detector;
-        detectorMaxHandsRef.current = preferredConfig.maxHands;
-        detectorModelTypeRef.current = preferredConfig.modelType;
         const runtime = getCurrentRuntime() || preferredConfig.runtime;
         const backend =
           getCurrentBackend() || (runtime === "mediapipe" ? "n/a" : preferredConfig.backend || "webgl");
@@ -5726,18 +3966,12 @@ export default function App() {
         setActiveBackend(backend);
         appLog.info("Hand-tracking detector is ready");
         setModelReady(true);
-        setTrackingReadiness((current) =>
-          reduceTrackingReadiness(current, { type: "MODEL_READY" }),
-        );
       } catch (error) {
         appLog.error("Failed to initialize hand-tracking detector", { error });
         setModelError(
           error instanceof Error
             ? error.message
             : "Failed to initialize hand tracking model.",
-        );
-        setTrackingReadiness((current) =>
-          reduceTrackingReadiness(current, { type: "MODEL_ERROR", error }),
         );
       }
     };
@@ -5753,121 +3987,7 @@ export default function App() {
         detectorRef.current = null;
       }
     };
-  }, [appLog, modelRetryAttempt, trackingRequested]);
-
-  useEffect(() => {
-    if (!modelReady || !detectorRef.current) {
-      return;
-    }
-
-    const requestedMaxHands = getTrackingDetectorMaxHandsForContext(
-      phase,
-      fullscreenGridMode,
-    );
-    const requestedModelType =
-      dynamicQualityBudget.modelPreference;
-    if (
-      detectorMaxHandsRef.current === requestedMaxHands &&
-      detectorModelTypeRef.current === requestedModelType
-    ) {
-      return;
-    }
-
-    let cancelled = false;
-    const requestId = detectorReconfigurationSeqRef.current + 1;
-    detectorReconfigurationSeqRef.current = requestId;
-
-    const reconfigureHandDetector = async () => {
-      const currentRuntime = getCurrentRuntime() || activeRuntime || INITIAL_TRACKING_RUNTIME;
-      const currentBackend = getCurrentBackend() || activeBackend || "webgl";
-      const requestedConfig =
-        currentRuntime === "mediapipe"
-          ? {
-              runtime: "mediapipe",
-              modelType: requestedModelType,
-              maxHands: requestedMaxHands,
-            }
-          : {
-              runtime: "tfjs",
-              backend: currentBackend === "cpu" ? "cpu" : "webgl",
-              modelType: requestedModelType,
-              maxHands: requestedMaxHands,
-            };
-
-      recoveringDetectorRef.current = true;
-      appLog.info("Reconfiguring hand-tracking detector hand capacity", {
-        requestedRuntime: requestedConfig.runtime,
-        requestedBackend: requestedConfig.backend ?? "n/a",
-        previousMaxHands: detectorMaxHandsRef.current,
-        previousModelType: detectorModelTypeRef.current,
-        requestedMaxHands,
-        requestedModelType,
-        fullscreenGridMode,
-      });
-
-      try {
-        const previousDetector = detectorRef.current;
-        const nextDetector = await initHandTracking(requestedConfig);
-
-        if (cancelled || detectorReconfigurationSeqRef.current !== requestId) {
-          nextDetector?.dispose?.();
-          return;
-        }
-
-        detectorRef.current = nextDetector;
-        detectorMaxHandsRef.current = requestedMaxHands;
-        detectorModelTypeRef.current = requestedModelType;
-        if (previousDetector && previousDetector !== nextDetector) {
-          previousDetector.dispose?.();
-        }
-        setActiveRuntime(getCurrentRuntime() || requestedConfig.runtime);
-        setActiveBackend(
-          getCurrentBackend() ||
-            requestedConfig.backend ||
-            (requestedConfig.runtime === "mediapipe" ? "n/a" : "unknown"),
-        );
-        setModelError("");
-        appLog.info("Hand-tracking detector capacity reconfigured", {
-          activeRuntime: getCurrentRuntime(),
-          activeBackend: getCurrentBackend(),
-          activeMaxHands: requestedMaxHands,
-          activeModelType: requestedModelType,
-        });
-      } catch (error) {
-        if (!cancelled && detectorReconfigurationSeqRef.current === requestId) {
-          appLog.error("Failed to reconfigure hand-tracking detector capacity", {
-            requestedRuntime: requestedConfig.runtime,
-            requestedBackend: requestedConfig.backend ?? "n/a",
-            requestedMaxHands,
-            error,
-          });
-          setModelError(
-            error instanceof Error
-              ? error.message
-              : "Failed to reconfigure hand tracking model.",
-          );
-        }
-      } finally {
-        if (detectorReconfigurationSeqRef.current === requestId) {
-          recoveringDetectorRef.current = false;
-        }
-      }
-    };
-
-    void reconfigureHandDetector();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    activeBackend,
-    activeRuntime,
-    appLog,
-    dynamicQualityBudget.modelPreference,
-    fullscreenGridMode,
-    modelReady,
-    phase,
-  ]);
+  }, [appLog]);
 
   useEffect(() => {
     appLog.debug("Starting camera overlay canvas sync effect");
@@ -5931,11 +4051,79 @@ export default function App() {
         phase,
         error,
       });
-      clearCameraTrackingReadiness();
-      setCameraError("Camera playback was interrupted. Reconnecting…");
-      retryCamera("phase_video_swap_playback");
+      setCameraError(
+        error instanceof Error
+          ? error.message
+          : "Camera video playback could not be started.",
+      );
     });
   }, [cameraReady, phase]);
+
+  useEffect(() => {
+    if (phase !== PHASES.GAME) {
+      appLog.debug("Skipping board layout effect because phase is not GAME", { phase });
+      return undefined;
+    }
+    appLog.debug("Starting board layout effect");
+
+    const updateBoardLayout = () => {
+      const board = boardRef.current;
+      if (!board) {
+        appLog.debug("Skipped board layout update due to missing board ref");
+        return;
+      }
+      const rect = board.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        appLog.debug("Skipped board layout update due to zero-sized board rect", {
+          width: rect.width,
+          height: rect.height,
+        });
+        return;
+      }
+
+      const localHoles = buildGridHoles(rect.width, rect.height, 3, 3);
+      setHoles(localHoles);
+      holesRef.current = localHoles;
+      hitZonesRef.current = localHoles.map((hole) => ({
+        x: rect.left + hole.x,
+        y: rect.top + hole.y,
+        r: hole.r * 0.9,
+      }));
+      appLog.debug("Board layout updated", {
+        rect: {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+        },
+        holeCount: localHoles.length,
+      });
+    };
+
+    updateBoardLayout();
+
+    const board = boardRef.current;
+    if (!board || !window.ResizeObserver) {
+      appLog.warn("ResizeObserver unavailable for board layout; using window resize fallback");
+      window.addEventListener("resize", updateBoardLayout);
+      return () => {
+        appLog.debug("Cleaning up board layout fallback listener");
+        window.removeEventListener("resize", updateBoardLayout);
+      };
+    }
+
+    const observer = new ResizeObserver(updateBoardLayout);
+    observer.observe(board);
+    window.addEventListener("resize", updateBoardLayout);
+    window.addEventListener("scroll", updateBoardLayout, true);
+
+    return () => {
+      appLog.debug("Cleaning up board layout observers/listeners");
+      observer.disconnect();
+      window.removeEventListener("resize", updateBoardLayout);
+      window.removeEventListener("scroll", updateBoardLayout, true);
+    };
+  }, [appLog, phase]);
 
   useEffect(() => {
     if (phase !== PHASES.CALIBRATION) {
@@ -6206,10 +4394,6 @@ export default function App() {
         poseDetectorRef.current.dispose?.();
         poseDetectorRef.current = null;
       }
-      if (fullscreenBodyPoseDetectorRef.current) {
-        fullscreenBodyPoseDetectorRef.current.dispose?.();
-        fullscreenBodyPoseDetectorRef.current = null;
-      }
     };
   }, []);
 
@@ -6263,12 +4447,6 @@ export default function App() {
   function getRecoveryConfig(attempt, reason) {
     const currentRuntime = getCurrentRuntime() || activeRuntime;
     const currentBackend = getCurrentBackend() || activeBackend;
-    const requestedModelType =
-      dynamicQualityBudgetRef.current.modelPreference;
-    const requestedMaxHands = getTrackingDetectorMaxHandsForContext(
-      phaseRef.current,
-      fullscreenGridModeRef.current,
-    );
 
     // Keep MediaPipe as the sticky runtime once it has been reached.
     if (currentRuntime === "mediapipe") {
@@ -6277,49 +4455,32 @@ export default function App() {
         return {
           runtime: "tfjs",
           backend: "webgl",
-          modelType: requestedModelType,
-          maxHands: requestedMaxHands,
+          modelType: "full",
+          maxHands: TRACKING_MAX_HANDS,
         };
       }
-      return {
-        runtime: "mediapipe",
-        modelType: requestedModelType,
-        maxHands: requestedMaxHands,
-      };
+      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_MAX_HANDS };
     }
 
     // TFJS invalid-keypoint corruption should switch straight to MediaPipe.
     if (reason === "continuous_invalid_landmarks") {
-      return {
-        runtime: "mediapipe",
-        modelType: requestedModelType,
-        maxHands: requestedMaxHands,
-      };
+      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_MAX_HANDS };
     }
 
     if (attempt === 1) {
       return {
         runtime: "tfjs",
         backend: currentBackend === "cpu" ? "cpu" : "webgl",
-        modelType: requestedModelType,
-        maxHands: requestedMaxHands,
+        modelType: "full",
+        maxHands: TRACKING_MAX_HANDS,
       };
     }
 
     if (attempt === 2) {
-      return {
-        runtime: "mediapipe",
-        modelType: requestedModelType,
-        maxHands: requestedMaxHands,
-      };
+      return { runtime: "mediapipe", modelType: "full", maxHands: TRACKING_MAX_HANDS };
     }
 
-    return {
-      runtime: "tfjs",
-      backend: "cpu",
-      modelType: requestedModelType,
-      maxHands: requestedMaxHands,
-    };
+    return { runtime: "tfjs", backend: "cpu", modelType: "full", maxHands: TRACKING_MAX_HANDS };
   }
 
   async function recoverDetectorFromInvalidLandmarks(reason, details) {
@@ -6349,8 +4510,6 @@ export default function App() {
       const previousDetector = detectorRef.current;
       const nextDetector = await initHandTracking(requestedConfig);
       detectorRef.current = nextDetector;
-      detectorMaxHandsRef.current = requestedConfig.maxHands;
-      detectorModelTypeRef.current = requestedConfig.modelType;
       if (previousDetector && previousDetector !== nextDetector) {
         previousDetector.dispose?.();
       }
@@ -6434,735 +4593,6 @@ export default function App() {
     });
   }
 
-  function updateProductPath(path, { replace = false } = {}) {
-    if (!path || window.location.pathname === path) {
-      return;
-    }
-
-    const method = replace ? "replaceState" : "pushState";
-    window.history[method]({}, "", path);
-  }
-
-  function replaceExperienceLifecycle(nextLifecycle, nextModeId = experienceModeIdRef.current) {
-    experienceLifecycleRef.current = nextLifecycle;
-    experienceModeIdRef.current = nextModeId;
-    setExperienceLifecycle(nextLifecycle);
-    setExperienceModeId(nextModeId);
-  }
-
-  function dispatchExperienceLifecycle(event) {
-    const current = experienceLifecycleRef.current;
-    if (!current) {
-      return null;
-    }
-    const transition = transitionExperienceLifecycle(current, event);
-    if (transition.state !== current) {
-      replaceExperienceLifecycle(transition.state);
-    }
-    return transition;
-  }
-
-  function abandonActiveProgressionSession(reason = "left_experience") {
-    const activeSession = activeProgressionSessionRef.current;
-    if (!activeSession) {
-      return null;
-    }
-
-    activeProgressionSessionRef.current = null;
-    void activeSession.productMetricsSession?.abandon(performance.now());
-    try {
-      return progressionStoreRef.current.abandonSession({
-        sessionId: activeSession.sessionId,
-        endedAt: new Date().toISOString(),
-        context: { reason },
-      });
-    } catch (error) {
-      appLog.warn("Could not close local progression session", {
-        error,
-        modeId: activeSession.modeId,
-        reason,
-      });
-      return null;
-    }
-  }
-
-  function beginProgressionSession(mode, context = {}) {
-    const canRecord =
-      mode?.supportsResults &&
-      (mode.entryKind === "fullscreen-mode" ||
-        mode.id === "whack-a-mole" ||
-        mode.id === "spatial-memory");
-    if (!canRecord) {
-      abandonActiveProgressionSession("opened_non_scored_experience");
-      setLatestGameResult(null);
-      replaceExperienceLifecycle(null, null);
-      return null;
-    }
-
-    abandonActiveProgressionSession("started_another_experience");
-    const previousModeProgress =
-      progressionStoreRef.current.getState().modes?.[mode.id];
-    const productMetricsSession = beginMeasuredProductExperience({
-      modeId: mode.id,
-      tutorial:
-        mode.id === "whack-a-mole" &&
-        (previousModeProgress?.sessionsPlayed ?? 0) === 0,
-    });
-    const startedAt = new Date().toISOString();
-    const session = {
-      sessionId: createProgressionSessionId(),
-      modeId: mode.id,
-      fullscreenMode: mode.fullscreenMode ?? null,
-      productMetricsSession,
-      startedAt,
-      startedAtMs: performance.now(),
-    };
-    activeProgressionSessionRef.current = session;
-    setLatestGameResult(null);
-    replaceExperienceLifecycle(
-      createExperienceLifecycle({
-        autoStart: true,
-        countdownMs: 0,
-        resumeCountdownMs: 1_000,
-      }),
-      mode.id,
-    );
-    progressionStoreRef.current.beginSession({
-      sessionId: session.sessionId,
-      modeId: session.modeId,
-      startedAt,
-      context: {
-        input: cameraReady && modelReady ? "tracking" : "pointer",
-        ...context,
-      },
-    });
-    return session;
-  }
-
-  function getActiveProgressionResult() {
-    const session = activeProgressionSessionRef.current;
-    if (!session) {
-      return null;
-    }
-
-    const endedAt = new Date().toISOString();
-    const durationMs = Math.max(0, performance.now() - session.startedAtMs);
-    if (session.modeId === "whack-a-mole") {
-      return createWhackAMoleResult({
-        summary: getWhackAMoleSummary(whackAMoleStateRef.current),
-        sessionId: session.sessionId,
-        startedAt: session.startedAt,
-        endedAt,
-        durationMs,
-      });
-    }
-    if (session.modeId === "spatial-memory") {
-      return createSpatialMemoryResult({
-        state: spatialMemoryState,
-        sessionId: session.sessionId,
-        startedAt: session.startedAt,
-        endedAt,
-        durationMs,
-      });
-    }
-
-    const stateByFullscreenMode = {
-      "sky-patrol": fullscreenSkyPatrolStateRef.current,
-      "fruit-ninja": fullscreenFruitNinjaStateRef.current,
-      "missile-command": fullscreenMissileCommandStateRef.current,
-      "brick-dodger": fullscreenBrickDodgerStateRef.current,
-      "hand-bounce": fullscreenHandBounceStateRef.current,
-      breakout: fullscreenBreakoutStateRef.current,
-      "find-your-grind-breakout": fullscreenBreakoutStateRef.current,
-      "breakout-coop": fullscreenBreakoutCoopStateRef.current,
-      "finger-pong": fullscreenFingerPongStateRef.current,
-      "tic-tac-toe": fullscreenTicTacToeStateRef.current,
-      invaders: fullscreenInvadersStateRef.current,
-      flappy: fullscreenFlappyStateRef.current,
-    };
-    return createFullscreenGameResult({
-      fullscreenMode: session.fullscreenMode,
-      state: stateByFullscreenMode[session.fullscreenMode],
-      sessionId: session.sessionId,
-      startedAt: session.startedAt,
-      endedAt,
-      durationMs,
-    });
-  }
-
-  function recordActiveProgressionResult() {
-    const activeSession = activeProgressionSessionRef.current;
-    const result = getActiveProgressionResult();
-    if (!activeSession || !result) {
-      return null;
-    }
-
-    const recorded = progressionStoreRef.current.recordResult(result);
-    const arcadeRunRequest =
-      activeLaunchContextRef.current?.arcadeRunRequest ??
-      arcadeRunLaunchRequestRef.current;
-    if (arcadeRunRequest) {
-      void import("./arcadeRunIntegration.js")
-        .then(({ createArcadeRunResultEnvelope }) => {
-          setArcadeRunIncomingResult(
-            createArcadeRunResultEnvelope(
-              arcadeRunRequest,
-              recorded.result,
-            ),
-          );
-        })
-        .catch((error) => {
-          appLog.warn("Could not attach this result to Arcade Run", {
-            error,
-            modeId: result.modeId,
-          });
-        });
-    }
-    activeProgressionSessionRef.current = null;
-    void activeSession.productMetricsSession?.complete(performance.now());
-    setLatestGameResult(recorded.result);
-    dispatchExperienceLifecycle({
-      type: EXPERIENCE_LIFECYCLE_EVENTS.FINISH,
-      result: {
-        ...recorded.result,
-        isPersonalBest: recorded.personalBests.some(
-          ({ metricId, value }) => metricId === "score" && value > 0,
-        ),
-        personalBestMetricIds: recorded.personalBests.map(
-          ({ metricId }) => metricId,
-        ),
-      },
-    });
-    return recorded;
-  }
-
-  function beginRestartedProgressionSession(mode, context = {}) {
-    void activeProgressionSessionRef.current?.productMetricsSession?.recordRetry();
-    if (!recordActiveProgressionResult()) {
-      abandonActiveProgressionSession("restarted");
-    }
-    return beginProgressionSession(mode, { restart: true, ...context });
-  }
-
-  function handleArcadeRunSessionChange(session, event = {}) {
-    try {
-      if (!session || session.status === "complete") {
-        window.localStorage.removeItem(ARCADE_RUN_STORAGE_KEY);
-      } else {
-        window.localStorage.setItem(
-          ARCADE_RUN_STORAGE_KEY,
-          JSON.stringify(session),
-        );
-      }
-    } catch (error) {
-      appLog.warn("Could not save Arcade Run progress", { error });
-    }
-
-    if (
-      event.type === "run-returned-from-game" ||
-      event.type === "run-returned-without-result"
-    ) {
-      arcadeRunLaunchRequestRef.current = null;
-    }
-  }
-
-  function handleArcadeRunLaunch(request) {
-    const mode = getModeById(request?.modeId);
-    if (!mode) {
-      appLog.warn("Arcade Run requested an unknown mode", {
-        modeId: request?.modeId,
-      });
-      return;
-    }
-
-    arcadeRunLaunchRequestRef.current = request;
-    const launchContext = {
-      arcadeRunRequest: request,
-      ...(request.dailyChallenge && mode.dailyChallenge
-        ? {
-            challenge: "daily",
-            dayKey: request.dailyChallenge.dayKey,
-          }
-        : {}),
-    };
-    selectProductMode(mode, {
-      allowWithoutTracking: request.inputMethod !== "tracking",
-      launchContext,
-    });
-  }
-
-  function handleArcadeRunComplete({ session }) {
-    void import("./arcadeRunIntegration.js")
-      .then(({ createArcadeRunProgressionResult }) => {
-        const result = createArcadeRunProgressionResult(session);
-        if (!result) {
-          return;
-        }
-        const recorded = progressionStoreRef.current.recordResult(result);
-        setLatestGameResult(recorded.result);
-        arcadeRunLaunchRequestRef.current = null;
-        setArcadeRunIncomingResult(null);
-      })
-      .catch((error) => {
-        appLog.warn("Could not record Arcade Run results", { error });
-      });
-  }
-
-  function returnToArcadeRun({ updateHistory = true } = {}) {
-    if (!recordActiveProgressionResult()) {
-      abandonActiveProgressionSession("returned_to_arcade_run");
-    }
-    stopGameSession();
-    replaceExperienceLifecycle(null, null);
-    setPendingModeId(null);
-    pendingLaunchContextRef.current = null;
-    activeLaunchContextRef.current = {};
-    setPhase(PHASES.ARCADE_RUN);
-    phaseRef.current = PHASES.ARCADE_RUN;
-    if (updateHistory) {
-      updateProductPath("/play/arcade-run");
-    }
-  }
-
-  function exitCurrentExperience() {
-    if (
-      activeLaunchContextRef.current?.arcadeRunRequest ||
-      arcadeRunLaunchRequestRef.current
-    ) {
-      returnToArcadeRun();
-      return;
-    }
-    navigateToProductHome();
-  }
-
-  function navigateToProductHome({
-    updateHistory = true,
-    area = "all",
-  } = {}) {
-    if (!recordActiveProgressionResult()) {
-      abandonActiveProgressionSession("returned_home");
-    }
-    stopGameSession();
-    replaceExperienceLifecycle(null, null);
-    setPendingModeId(null);
-    pendingLaunchContextRef.current = null;
-    activeLaunchContextRef.current = {};
-    arcadeRunLaunchRequestRef.current = null;
-    setProductHomeArea(area);
-    setPhase(PHASES.HOME);
-    phaseRef.current = PHASES.HOME;
-    if (updateHistory) {
-      updateProductPath(getProductHomePathForArea(area));
-    }
-  }
-
-  function openProductTrackingSetup({ updateHistory = true } = {}) {
-    if (!recordActiveProgressionResult()) {
-      abandonActiveProgressionSession("opened_tracking_setup");
-    }
-    replaceExperienceLifecycle(null, null);
-    resetTrackingInteractionCheck();
-    setTrackingReadiness((current) =>
-      reduceTrackingReadiness(current, { type: "RESET_INTERACTION" }),
-    );
-    setPhase(PHASES.TRACKING_SETUP);
-    phaseRef.current = PHASES.TRACKING_SETUP;
-    if (updateHistory) {
-      updateProductPath("/setup");
-    }
-  }
-
-  function openProductSettings({ updateHistory = true } = {}) {
-    if (!recordActiveProgressionResult()) {
-      abandonActiveProgressionSession("opened_settings");
-    }
-    replaceExperienceLifecycle(null, null);
-    setPhase(PHASES.SETTINGS);
-    phaseRef.current = PHASES.SETTINGS;
-    if (updateHistory) {
-      updateProductPath("/settings");
-    }
-  }
-
-  function launchRegisteredModeNow(
-    mode,
-    { updateHistory = true, launchContext = {} } = {},
-  ) {
-    if (!mode) {
-      navigateToProductHome({ updateHistory });
-      return;
-    }
-
-    setPendingModeId(null);
-    pendingLaunchContextRef.current = null;
-    activeLaunchContextRef.current =
-      launchContext && typeof launchContext === "object"
-        ? { ...launchContext }
-        : {};
-    if (
-      !mode.hiddenFromLibrary &&
-      [PRODUCT_AREAS.PLAY, PRODUCT_AREAS.CREATE, PRODUCT_AREAS.LABS].includes(mode.area)
-    ) {
-      setPreferences((current) => recordRecentMode(current, mode.id));
-    }
-    if (updateHistory) {
-      updateProductPath(mode.path);
-    }
-
-    if (mode.entryKind === "page" && mode.href) {
-      window.location.assign(mode.href);
-      return;
-    }
-
-    if (mode.entryKind === "fullscreen-mode" && mode.fullscreenMode) {
-      beginProgressionSession(mode, activeLaunchContextRef.current);
-      openFullscreenCameraScreen();
-      const fullscreenMode =
-        mode.id === "visualizer"
-          ? motionVisualizerStateRef.current.effect
-          : mode.fullscreenMode;
-      fullscreenGridModeRef.current = fullscreenMode;
-      setFullscreenGridMode(fullscreenMode);
-      return;
-    }
-
-    switch (mode.id) {
-      case "home":
-        navigateToProductHome({ updateHistory: false });
-        break;
-      case "tracking-setup":
-        openProductTrackingSetup({ updateHistory: false });
-        break;
-      case "whack-a-mole":
-        startGameSession();
-        break;
-      case "spatial-memory":
-        startSpatialGestureMemorySession();
-        break;
-      case "track-runner":
-        startRunnerSession();
-        break;
-      case "star-flight":
-        startFlightSession();
-        break;
-      case "conveyor-toss":
-        startConveyorSession();
-        break;
-      case "pinch-sandbox":
-        openSandboxScreen();
-        break;
-      case "probability-table":
-        startRouletteSession();
-        break;
-      case "pose-quest":
-        startBodyPoseLab();
-        break;
-      case "forest-discovery":
-        startOffAxisLab();
-        break;
-      case "spatial-desk":
-        startGestureControlOS();
-        break;
-      case "spatial-investigation":
-        startMinorityReportLab();
-        break;
-      case "gesture-analytics":
-        startGestureAnalyticsLab();
-        break;
-      case "gesture-art":
-        startGestureArtLab();
-        break;
-      default:
-        if (mode.phase) {
-          setPhase(mode.phase);
-          phaseRef.current = mode.phase;
-        } else {
-          navigateToProductHome({ updateHistory: false });
-        }
-    }
-  }
-
-  function selectProductMode(
-    modeOrId,
-    {
-      updateHistory = true,
-      allowWithoutTracking = false,
-      launchContext = {},
-    } = {},
-  ) {
-    const mode =
-      typeof modeOrId === "string" ? getModeById(modeOrId) : modeOrId;
-    if (!mode) {
-      return;
-    }
-
-    const needsTracking =
-      mode.trackingProfile && mode.trackingProfile !== TRACKING_PROFILES.NONE;
-    if (
-      needsTracking &&
-      !allowWithoutTracking &&
-      (
-        !cameraReady ||
-        !modelReady ||
-        trackingReadiness.status !== TRACKING_READINESS_STATES.READY
-      )
-    ) {
-      setPendingModeId(mode.id);
-      pendingLaunchContextRef.current =
-        launchContext && typeof launchContext === "object"
-          ? { ...launchContext }
-          : {};
-      if (updateHistory) {
-        updateProductPath(mode.path);
-      }
-      openProductTrackingSetup({ updateHistory: false });
-      return;
-    }
-
-    launchRegisteredModeNow(mode, { updateHistory, launchContext });
-  }
-
-  function beginProductTrackingSetup() {
-    setCameraError("");
-    setModelError("");
-    resetTrackingInteractionCheck();
-    setTrackingRequested(true);
-  }
-
-  function retryProductTrackingSetup() {
-    setCameraError("");
-    setModelError("");
-    resetTrackingInteractionCheck();
-
-    if (!trackingRequested) {
-      setTrackingRequested(true);
-      return;
-    }
-
-    if (
-      trackingReadiness.status === TRACKING_READINESS_STATES.MODEL_ERROR ||
-      Boolean(modelError)
-    ) {
-      setModelReady(false);
-      setModelRetryAttempt((attempt) => attempt + 1);
-      return;
-    }
-
-    retryCamera("manual_retry");
-  }
-
-  function retryActiveTrackingError() {
-    if (
-      poseModelError &&
-      !cameraError &&
-      !modelError &&
-      (phaseRef.current === PHASES.BODY_POSE ||
-        phaseRef.current === PHASES.OFF_AXIS_LAB)
-    ) {
-      void ensurePoseDetectorInitialized("manual_retry");
-      return;
-    }
-    retryProductTrackingSetup();
-  }
-
-  function continueFromProductTrackingSetup() {
-    if (trackingReadiness.status !== TRACKING_READINESS_STATES.READY) {
-      return;
-    }
-    if (pendingModeId) {
-      selectProductMode(pendingModeId, {
-        updateHistory: false,
-        allowWithoutTracking: false,
-        launchContext: pendingLaunchContextRef.current ?? {},
-      });
-      return;
-    }
-    navigateToProductHome();
-  }
-
-  function continueWithoutProductTracking() {
-    const pendingMode = pendingModeId ? getModeById(pendingModeId) : null;
-    setTrackingRequested(false);
-    if (pendingMode?.supportsPointerFallback) {
-      launchRegisteredModeNow(pendingMode, {
-        updateHistory: false,
-        launchContext: pendingLaunchContextRef.current ?? {},
-      });
-      return;
-    }
-    navigateToProductHome({
-      updateHistory: window.location.pathname !== "/",
-    });
-  }
-
-  function stopProductCamera() {
-    setTrackingRequested(false);
-    setCameraError("");
-    setModelError("");
-    setCameraDevices([]);
-    resetTrackingInteractionCheck();
-    setTrackingReadiness((current) =>
-      reduceTrackingReadiness(current, { type: "STOP" }),
-    );
-  }
-
-  function updateProductPreferences(nextPreferences) {
-    setPreferences(normalizeUserPreferences(nextPreferences));
-  }
-
-  function persistMotionVisualizerState(nextState) {
-    const normalized = saveMotionVisualizerState(nextState);
-    motionVisualizerStateRef.current = normalized;
-    setMotionVisualizerState(normalized);
-    if (
-      phaseRef.current === PHASES.FULLSCREEN_CAMERA &&
-      isMotionVisualizerEffect(fullscreenGridModeRef.current) &&
-      fullscreenGridModeRef.current !== normalized.effect
-    ) {
-      fullscreenGridModeRef.current = normalized.effect;
-      setFullscreenGridMode(normalized.effect);
-    }
-    return normalized;
-  }
-
-  function updateMotionVisualizerSettings(patch) {
-    const next = persistMotionVisualizerState(
-      normalizeMotionVisualizerState({
-        ...motionVisualizerStateRef.current,
-        ...patch,
-      }),
-    );
-    if (patch?.effect) {
-      const effect = MOTION_VISUALIZER_EFFECTS.find(
-        (candidate) => candidate.id === next.effect,
-      );
-      setMotionVisualizerStatus(
-        `${effect?.label ?? "Visualizer"} effect selected.`,
-      );
-    } else {
-      setMotionVisualizerStatus("Remix controls updated.");
-    }
-  }
-
-  function toggleCurrentMotionVisualizerFavorite() {
-    const current = motionVisualizerStateRef.current;
-    const wasFavorite = current.favoriteEffects.includes(current.effect);
-    persistMotionVisualizerState(
-      toggleMotionVisualizerFavorite(current, current.effect),
-    );
-    const effect = MOTION_VISUALIZER_EFFECTS.find(
-      (candidate) => candidate.id === current.effect,
-    );
-    setMotionVisualizerStatus(
-      wasFavorite
-        ? `${effect?.label ?? "Effect"} removed from favorites.`
-        : `${effect?.label ?? "Effect"} added to favorites.`,
-    );
-  }
-
-  function applySelectedMotionVisualizerPreset(presetId) {
-    const before = motionVisualizerStateRef.current;
-    const next = applyMotionVisualizerPreset(before, presetId);
-    persistMotionVisualizerState(next);
-    setMotionVisualizerStatus(
-      next === before ? "That saved look is unavailable." : "Look applied.",
-    );
-  }
-
-  function saveCurrentMotionVisualizerPreset() {
-    const next = createMotionVisualizerPreset(
-      motionVisualizerStateRef.current,
-    );
-    persistMotionVisualizerState(next);
-    setMotionVisualizerStatus(
-      `${next.savedPresets.at(-1)?.label ?? "Look"} saved on this device.`,
-    );
-  }
-
-  function deleteSelectedMotionVisualizerPreset(presetId) {
-    const current = motionVisualizerStateRef.current;
-    const exists = current.savedPresets.some(
-      (preset) => preset.id === presetId,
-    );
-    persistMotionVisualizerState(
-      deleteMotionVisualizerPreset(current, presetId),
-    );
-    setMotionVisualizerStatus(
-      exists ? "Saved look deleted." : "That saved look is unavailable.",
-    );
-  }
-
-  async function exportMotionVisualizerArtwork() {
-    try {
-      const {
-        createMotionVisualizerSnapshotFilename,
-        createMotionVisualizerSnapshotSvg,
-      } = await import("./motionVisualizerSnapshot.js");
-      const exportViewport = fullscreenCameraViewport ?? {
-        width: viewportRef.current.width,
-        height: viewportRef.current.height,
-      };
-      const svg = createMotionVisualizerSnapshotSvg({
-        settings: motionVisualizerStateRef.current,
-        width: exportViewport.width,
-        height: exportViewport.height,
-        indexPoints: fullscreenIndexPoints,
-        tipPoints: fullscreenTipPoints,
-      });
-      const url = URL.createObjectURL(
-        new Blob([svg], { type: "image/svg+xml;charset=utf-8" }),
-      );
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = createMotionVisualizerSnapshotFilename(
-        motionVisualizerStateRef.current.effect,
-      );
-      document.body.append(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 0);
-      setMotionVisualizerStatus(
-        "Artwork exported without camera imagery.",
-      );
-    } catch (error) {
-      appLog.warn("Could not export Motion Visualizer artwork", { error });
-      setMotionVisualizerStatus(
-        "Artwork export failed. Please try again.",
-      );
-    }
-  }
-
-  function deleteAllLocalProductData() {
-    clearCalibration();
-    clearUserPreferences();
-    const localStorageCleanup = clearLocalProductStorage();
-    if (localStorageCleanup.failed.length > 0) {
-      appLog.warn("Could not remove every local product record", {
-        failedKeyCount: localStorageCleanup.failed.length,
-      });
-    }
-    void resetMeasuredProductExperiences();
-    void clearCreativeAssets();
-    personalizationRef.current.clearSamples?.();
-    setLabSampleCounts(personalizationRef.current.getSampleCounts());
-    activeProgressionSessionRef.current = null;
-    arcadeRunLaunchRequestRef.current = null;
-    progressionStoreRef.current.clear();
-    setArcadeRunIncomingResult(null);
-    setLatestGameResult(null);
-    setTransform(null);
-    transformRef.current = null;
-    setHasSavedCalibration(false);
-    setSpatialMemoryState(createInitialSpatialMemoryState());
-    setSpatialMemoryExperience(createSpatialMemoryExperience());
-    setGestureAnalyticsLabSessionKey((current) => current + 1);
-    setGestureArtSessionKey((current) => current + 1);
-    setPreferences(normalizeUserPreferences());
-    const resetVisualizer = normalizeMotionVisualizerState();
-    motionVisualizerStateRef.current = resetVisualizer;
-    setMotionVisualizerState(resetVisualizer);
-  }
-
   function openSandboxScreen() {
     appLog.info("Opening pinch drag sandbox screen");
     stopGameSession();
@@ -7185,6 +4615,7 @@ export default function App() {
     isCalibratingRef.current = false;
     calibrationSampleRef.current = null;
     setCalibrationSampleFrames(0);
+    setFullscreenGridMode(FULLSCREEN_LANDING_MODE);
     setPhase(PHASES.FULLSCREEN_CAMERA);
     phaseRef.current = PHASES.FULLSCREEN_CAMERA;
     setCalibrationMessage(
@@ -7205,16 +4636,19 @@ export default function App() {
   }
 
   function returnFromFullscreenCameraScreen() {
-    appLog.info("Returning from fullscreen camera to product home");
-    navigateToProductHome();
+    appLog.info("Returning from fullscreen camera to calibration input test");
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
   }
 
   function returnToFullscreenCameraMenu(reason = "manual_mode_select") {
-    appLog.info("Returning from fullscreen experience to product home", {
+    appLog.info("Returning to fullscreen camera menu", {
       reason,
       previousMode: fullscreenGridModeRef.current,
     });
-    navigateToProductHome();
+    fullscreenGridModeRef.current = FULLSCREEN_LANDING_MODE;
+    setFullscreenGridMode(FULLSCREEN_LANDING_MODE);
   }
 
   function updateSandboxPhysics(timestamp, pointerPoint, hasHand, grabNow) {
@@ -7575,17 +5009,7 @@ export default function App() {
     const baseline = flightBaselineRef.current;
     const control = flightControlRef.current;
     const state = flightStateRef.current;
-    const courseProgress =
-      state.courseProgress ??
-      createStarFlightCourseProgress(STAR_FLIGHT_COURSE_IDS.CADET);
-    const boostActive =
-      Boolean(pinchStateRef.current) &&
-      baseline.ready &&
-      control.hasControl &&
-      courseProgress.status === "active";
     const nextHud = {
-      courseId: courseProgress.courseId,
-      courseStatus: courseProgress.status,
       yaw: roundMetric(control.yaw, 3) ?? 0,
       pitch: roundMetric(control.pitch, 3) ?? 0,
       roll: roundMetric(control.roll, 3) ?? 0,
@@ -7593,38 +5017,16 @@ export default function App() {
       baselineReady: baseline.ready,
       baselineSamples: baseline.sampleCount,
       distance: roundMetric(state.distance, 1) ?? 0,
-      boostActive,
-      gatesAttempted: courseProgress.gatesAttempted,
-      gatesHit: courseProgress.gatesHit,
-      gatesMissed: courseProgress.gatesMissed,
-      score: courseProgress.score,
-      streak: courseProgress.streak,
-      bestStreak: courseProgress.bestStreak,
-      elapsedMs: Math.round(courseProgress.elapsedMs),
-      lastGateRating: courseProgress.lastGateRating,
-      lastGateMessage: courseProgress.lastGateMessage,
     };
     setFlightHud((previous) => {
       if (
-        previous.courseId === nextHud.courseId &&
-        previous.courseStatus === nextHud.courseStatus &&
         previous.yaw === nextHud.yaw &&
         previous.pitch === nextHud.pitch &&
         previous.roll === nextHud.roll &&
         previous.confidence === nextHud.confidence &&
         previous.baselineReady === nextHud.baselineReady &&
         previous.baselineSamples === nextHud.baselineSamples &&
-        previous.distance === nextHud.distance &&
-        previous.boostActive === nextHud.boostActive &&
-        previous.gatesAttempted === nextHud.gatesAttempted &&
-        previous.gatesHit === nextHud.gatesHit &&
-        previous.gatesMissed === nextHud.gatesMissed &&
-        previous.score === nextHud.score &&
-        previous.streak === nextHud.streak &&
-        previous.bestStreak === nextHud.bestStreak &&
-        previous.elapsedMs === nextHud.elapsedMs &&
-        previous.lastGateRating === nextHud.lastGateRating &&
-        previous.lastGateMessage === nextHud.lastGateMessage
+        previous.distance === nextHud.distance
       ) {
         return previous;
       }
@@ -7632,18 +5034,7 @@ export default function App() {
     });
   }
 
-  function resetFlightSession(
-    reason = "manual_reset",
-    courseId =
-      flightStateRef.current?.courseProgress?.courseId ??
-      STAR_FLIGHT_COURSE_IDS.CADET,
-  ) {
-    const course = getStarFlightCourse(courseId);
-    const startedAtMs = performance.now();
-    const courseProgress = createStarFlightCourseProgress(
-      course.id,
-      startedAtMs,
-    );
+  function resetFlightSession(reason = "manual_reset") {
     flightStateRef.current = {
       initialized: true,
       lastTimestamp: 0,
@@ -7656,9 +5047,7 @@ export default function App() {
       yaw: 0,
       distance: 0,
       stars: createFlightStars(),
-      rings: createFlightRings(course.id),
-      gateSerial: FLIGHT_RING_COUNT,
-      courseProgress,
+      rings: createFlightRings(),
     };
     flightControlRef.current = {
       yaw: 0,
@@ -7672,8 +5061,6 @@ export default function App() {
     flightBaselineSamplesRef.current = [];
     flightHudLastUpdateRef.current = 0;
     setFlightHud({
-      courseId: course.id,
-      courseStatus: courseProgress.status,
       yaw: 0,
       pitch: 0,
       roll: 0,
@@ -7681,20 +5068,9 @@ export default function App() {
       baselineReady: false,
       baselineSamples: 0,
       distance: 0,
-      boostActive: false,
-      gatesAttempted: 0,
-      gatesHit: 0,
-      gatesMissed: 0,
-      score: 0,
-      streak: 0,
-      bestStreak: 0,
-      elapsedMs: 0,
-      lastGateRating: "",
-      lastGateMessage: courseProgress.lastGateMessage,
     });
     appLog.info("Flight session reset", {
       reason,
-      courseId: course.id,
       starCount: flightStateRef.current.stars.length,
       ringCount: flightStateRef.current.rings.length,
     });
@@ -7972,14 +5348,6 @@ export default function App() {
       ctx.fillRect(projectedX - size * 0.5, projectedY - size * 0.5, size, size);
     }
 
-    const nearestRing = state.rings.reduce(
-      (nearest, ring) =>
-        ring.z > FLIGHT_NEAR_Z &&
-        (!nearest || ring.z < nearest.z)
-          ? ring
-          : nearest,
-      null,
-    );
     const sortedRings = [...state.rings].sort((a, b) => b.z - a.z);
     for (const ring of sortedRings) {
       const depth = Math.max(FLIGHT_NEAR_Z, ring.z);
@@ -7990,22 +5358,11 @@ export default function App() {
         continue;
       }
       const alpha = clampValue(1 - depth / FLIGHT_FAR_Z, 0.18, 0.84);
-      const isNextGate = ring === nearestRing;
-      ctx.lineWidth = clampValue(
-        (ring.radius / depth) * (isNextGate ? 190 : 150),
-        isNextGate ? 2 : 1.2,
-        isNextGate ? 7.2 : 5.4,
-      );
-      ctx.strokeStyle = isNextGate
-        ? `rgba(255, 218, 111, ${Math.min(1, alpha + 0.16)})`
-        : `rgba(80, 221, 255, ${alpha})`;
+      ctx.lineWidth = clampValue((ring.radius / depth) * 150, 1.2, 5.4);
+      ctx.strokeStyle = `rgba(80, 221, 255, ${alpha})`;
       ctx.beginPath();
       ctx.arc(projectedX, projectedY, projectedRadius, 0, Math.PI * 2);
       ctx.stroke();
-      if (isNextGate && projectedRadius >= 8) {
-        ctx.fillStyle = `rgba(255, 218, 111, ${alpha * 0.08})`;
-        ctx.fill();
-      }
     }
 
     ctx.strokeStyle = "rgba(170, 225, 255, 0.48)";
@@ -8025,10 +5382,7 @@ export default function App() {
     ctx.rotate(state.roll * 0.9);
     ctx.scale(shipScale, shipScale);
 
-    const thrusterLength =
-      22 +
-      Math.abs(control.pitch) * 16 +
-      (pinchStateRef.current && control.hasControl ? 20 : 0);
+    const thrusterLength = 22 + Math.abs(control.pitch) * 16;
     ctx.strokeStyle = "rgba(125, 219, 255, 0.74)";
     ctx.lineWidth = 4;
     ctx.beginPath();
@@ -8092,42 +5446,7 @@ export default function App() {
     );
     state.lastTimestamp = timestamp;
     const control = flightControlRef.current;
-    const courseProgress =
-      state.courseProgress ??
-      createStarFlightCourseProgress(
-        STAR_FLIGHT_COURSE_IDS.CADET,
-        timestamp,
-      );
-    if (!flightBaselineRef.current.ready || !control.hasControl) {
-      state.courseProgress = courseProgress;
-      drawFlightScene();
-      publishFlightHud(timestamp);
-      return;
-    }
-
-    const courseTimestamp =
-      courseProgress.startedAtMs +
-      courseProgress.elapsedMs +
-      dtSeconds * 1_000;
-    state.courseProgress = advanceStarFlightCourseClock(
-      courseProgress,
-      courseTimestamp,
-    );
-    const course = getStarFlightCourse(state.courseProgress.courseId);
-    if (state.courseProgress.status === "complete") {
-      drawFlightScene();
-      publishFlightHud(timestamp);
-      return;
-    }
-
     const drag = Math.pow(FLIGHT_DRAG_PER_60FPS, dtSeconds * 60);
-    const boostActive =
-      Boolean(pinchStateRef.current) &&
-      flightBaselineRef.current.ready &&
-      control.hasControl;
-    const forwardSpeed =
-      course.forwardSpeed *
-      (boostActive ? FLIGHT_BOOST_SPEED_MULTIPLIER : 1);
 
     state.shipVx = (state.shipVx + control.yaw * FLIGHT_STEER_ACCEL * dtSeconds) * drag;
     state.shipVy = (state.shipVy + control.pitch * FLIGHT_STEER_ACCEL * dtSeconds) * drag;
@@ -8147,13 +5466,10 @@ export default function App() {
     state.roll = lerpValue(state.roll, targetRoll, 0.13);
     state.pitch = lerpValue(state.pitch, targetPitch, 0.13);
     state.yaw = lerpValue(state.yaw, targetYaw, 0.13);
-    state.distance += forwardSpeed * dtSeconds;
+    state.distance += FLIGHT_FORWARD_SPEED * dtSeconds;
 
     for (const star of state.stars) {
-      star.z -=
-        forwardSpeed *
-        dtSeconds *
-        (1 + Math.abs(control.pitch) * 0.14);
+      star.z -= FLIGHT_FORWARD_SPEED * dtSeconds * (1 + Math.abs(control.pitch) * 0.14);
       if (star.z < FLIGHT_NEAR_Z) {
         star.z = FLIGHT_FAR_Z;
         star.x = randomBetween(-FLIGHT_WORLD_HALF_WIDTH, FLIGHT_WORLD_HALF_WIDTH);
@@ -8162,42 +5478,12 @@ export default function App() {
     }
 
     for (const ring of state.rings) {
-      const previousZ = ring.z;
-      ring.z -= forwardSpeed * dtSeconds;
-      const driftedGate = updateStarFlightGateDrift(
-        ring,
-        course.id,
-        state.courseProgress.elapsedMs,
-      );
-      ring.x = driftedGate.x;
-      ring.y = driftedGate.y;
-
-      if (
-        didStarFlightGateCrossPassPlane(previousZ, ring.z) &&
-        state.courseProgress.status === "active"
-      ) {
-        const evaluation = evaluateStarFlightGate({
-          courseId: course.id,
-          gate: ring,
-          shipX: state.shipX,
-          shipY: state.shipY,
-        });
-        state.courseProgress = recordStarFlightGate(
-          state.courseProgress,
-          evaluation,
-          state.courseProgress.startedAtMs +
-            state.courseProgress.elapsedMs,
-        );
-        ring.lastOutcome = evaluation.rating;
-      }
-
+      ring.z -= FLIGHT_FORWARD_SPEED * dtSeconds;
       if (ring.z < FLIGHT_NEAR_Z) {
-        state.gateSerial += 1;
-        const nextGate = createStarFlightGate(course.id, {
-          id: `flight-gate-${state.gateSerial}`,
-          z: FLIGHT_FAR_Z + randomBetween(120, 380),
-        });
-        Object.assign(ring, nextGate);
+        ring.z = FLIGHT_FAR_Z + randomBetween(120, 380);
+        ring.x = randomBetween(-180, 180);
+        ring.y = randomBetween(-116, 116);
+        ring.radius = randomBetween(34, 66);
       }
     }
 
@@ -8448,7 +5734,7 @@ export default function App() {
   }
 
   function returnFromMinorityReportLab() {
-    appLog.info("Returning from Minority Report Lab to product home");
+    appLog.info("Returning from Minority Report Lab to calibration input test");
     labTrainingSessionRef.current = null;
     setLabTrainingState((previous) =>
       previous.active
@@ -8458,7 +5744,9 @@ export default function App() {
           }
         : previous,
     );
-    navigateToProductHome();
+    setPhase(PHASES.CALIBRATION);
+    phaseRef.current = PHASES.CALIBRATION;
+    setCalibrationMessage("Back on Calibration Input Test.");
   }
 
   function startGestureAnalyticsLab() {
@@ -8860,84 +6148,17 @@ export default function App() {
   }
 
   function stopGameSession() {
-    const summary = getWhackAMoleSummary(whackAMoleStateRef.current);
     appLog.info("Stopping game session", {
-      wasRunning: summary.gameRunning,
-      score: summary.score,
-      timeLeft: summary.timeLeft,
+      wasRunning: gameRunningRef.current,
+      activeMole: activeMoleRef.current,
+      score,
+      timeLeft: timeLeftRef.current,
     });
-    const nextState = createWhackAMoleGame({
-      seed: whackAMoleStateRef.current?.seed,
-      config: whackAMoleStateRef.current?.config,
-    });
-    whackAMoleStateRef.current = nextState;
-    setWhackAMoleState(nextState);
-  }
-
-  function applyWhackAMoleAction(action) {
-    const nextState = reduceWhackAMoleGame(
-      whackAMoleStateRef.current,
-      action,
-    );
-    whackAMoleStateRef.current = nextState;
-    setWhackAMoleState(nextState);
-    return nextState;
-  }
-
-  function handleWhackAMoleAction(action) {
-    const previousState = whackAMoleStateRef.current;
-    if (
-      action?.type === WHACK_A_MOLE_ACTIONS.START &&
-      (previousState?.phase === WHACK_A_MOLE_PHASES.RESULT ||
-        activeProgressionSessionRef.current?.modeId !== "whack-a-mole")
-    ) {
-      beginRestartedProgressionSession(
-        getModeById("whack-a-mole"),
-        activeLaunchContextRef.current,
-      );
-    }
-
-    if (action?.type === WHACK_A_MOLE_ACTIONS.RESUME) {
-      const transition = dispatchExperienceLifecycle({
-        type: EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
-        reason: EXPERIENCE_PAUSE_REASONS.MANUAL,
-      });
-      if (transition?.state?.phase === EXPERIENCE_PHASES.PAUSED) {
-        return previousState;
-      }
-    }
-
-    const nextState = applyWhackAMoleAction(action);
-    if (
-      action?.type === WHACK_A_MOLE_ACTIONS.HIT_HOLE &&
-      nextState !== previousState &&
-      nextState.lastAction
-    ) {
-      const succeeded = nextState.lastAction.kind === "hit";
-      const inputMethod =
-        action.source === "keyboard"
-          ? "keyboard"
-          : trackingRequestedRef.current
-            ? "gesture"
-            : "pointer";
-      const metricsSession =
-        activeProgressionSessionRef.current?.productMetricsSession;
-      void metricsSession?.recordSelection({
-        inputMethod,
-        succeeded,
-      });
-      if (succeeded) {
-        void metricsSession?.recordFirstSuccess(action.now);
-        void metricsSession?.finishTutorial("completed");
-      }
-    }
-    if (action?.type === WHACK_A_MOLE_ACTIONS.PAUSE) {
-      dispatchExperienceLifecycle({
-        type: EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
-        reason: EXPERIENCE_PAUSE_REASONS.MANUAL,
-      });
-    }
-    return nextState;
+    gameRunningRef.current = false;
+    setGameRunning(false);
+    activeMoleRef.current = null;
+    setActiveMoleIndex(null);
+    nextSpawnAtRef.current = Number.POSITIVE_INFINITY;
   }
 
   function startRouletteSession() {
@@ -8975,12 +6196,18 @@ export default function App() {
 
   function startGameSession() {
     appLog.info("Starting game session requested", {
+      hasTransform: Boolean(transformRef.current),
       currentPhase: phaseRef.current,
-      launchContext: activeLaunchContextRef.current,
     });
-    abandonActiveProgressionSession("opened_whack_briefing");
-    setLatestGameResult(null);
-    replaceExperienceLifecycle(null, null);
+    if (!transformRef.current) {
+      setPhase(PHASES.CALIBRATION);
+      phaseRef.current = PHASES.CALIBRATION;
+      setCalibrationMessage("Calibration is required before starting the game.");
+      appLog.warn("Cannot start game session without calibration transform");
+      return;
+    }
+
+    const now = performance.now();
 
     setPhase(PHASES.GAME);
     phaseRef.current = PHASES.GAME;
@@ -8989,42 +6216,22 @@ export default function App() {
     resetArcCalibrationSession("start_game");
     calibrationSampleRef.current = null;
     setCalibrationSampleFrames(0);
-    const daily =
-      activeLaunchContextRef.current?.challenge === "daily";
-    const seed = daily
-      ? createDailyWhackAMoleSeed(
-          activeLaunchContextRef.current?.dayKey ?? new Date(),
-          "standard",
-        )
-      : `whack-a-mole:practice:${Date.now()}`;
-    const nextState = createWhackAMoleGame({ seed });
-    whackAMoleStateRef.current = nextState;
-    setWhackAMoleState(nextState);
-    appLog.info("Game session started", {
-      daily,
-      seed,
-      durationMs: nextState.config.roundDurationMs,
-    });
-  }
+    setScore(0);
+    setTimeLeft(Math.ceil(GAME_DURATION_MS / 1000));
+    timeLeftRef.current = Math.ceil(GAME_DURATION_MS / 1000);
+    setActiveMoleIndex(null);
+    activeMoleRef.current = null;
+    lastHoleIndexRef.current = -1;
 
-  function restartWhackAMoleSession() {
-    beginRestartedProgressionSession(
-      getModeById("whack-a-mole"),
-      activeLaunchContextRef.current,
-    );
-    const currentState = whackAMoleStateRef.current;
-    const idleState = createWhackAMoleGame({
-      seed: currentState?.seed,
-      config: currentState?.config,
+    gameStartTimeRef.current = now;
+    nextSpawnAtRef.current = now + 350;
+    gameRunningRef.current = true;
+    setGameRunning(true);
+    appLog.info("Game session started", {
+      startAt: now,
+      firstSpawnAt: nextSpawnAtRef.current,
+      durationMs: GAME_DURATION_MS,
     });
-    const nextState = reduceWhackAMoleGame(idleState, {
-      type: WHACK_A_MOLE_ACTIONS.START,
-      now: performance.now(),
-      seed: idleState.seed,
-      config: idleState.config,
-    });
-    whackAMoleStateRef.current = nextState;
-    setWhackAMoleState(nextState);
   }
 
   function beginCalibration() {
@@ -9237,23 +6444,7 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
-    beginRestartedProgressionSession(
-      getModeByFullscreenId("missile-command"),
-      activeLaunchContextRef.current,
-    );
-    const nextGame =
-      activeLaunchContextRef.current.challenge === "daily"
-        ? createMissileCommandDailyGame(
-            viewportMetrics.width,
-            viewportMetrics.height,
-            {
-              dayKey: activeLaunchContextRef.current.dayKey,
-            },
-          )
-        : createMissileCommandGame(
-            viewportMetrics.width,
-            viewportMetrics.height,
-          );
+    const nextGame = createMissileCommandGame(viewportMetrics.width, viewportMetrics.height);
     fullscreenMissileCommandLastTickRef.current = 0;
     fullscreenMissileCommandStateRef.current = nextGame;
     setFullscreenMissileCommandState(nextGame);
@@ -9264,7 +6455,6 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
-    beginRestartedProgressionSession(getModeByFullscreenId("brick-dodger"));
     const nextGame = createBrickDodgerGame(viewportMetrics.width, viewportMetrics.height);
     fullscreenBrickDodgerLastTickRef.current = 0;
     fullscreenBrickDodgerStateRef.current = nextGame;
@@ -9276,26 +6466,10 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
-    beginRestartedProgressionSession(
-      getModeByFullscreenId("hand-bounce"),
-      activeLaunchContextRef.current,
+    const nextGame = createFullscreenHandBounceGame(
+      viewportMetrics.width,
+      viewportMetrics.height,
     );
-    const currentGame = fullscreenHandBounceStateRef.current;
-    const nextGame = currentGame?.layout
-      ? restartFullscreenHandBounceCampaign(currentGame)
-      : activeLaunchContextRef.current.challenge === "daily"
-        ? createFullscreenHandBounceDailyGame(
-            viewportMetrics.width,
-            viewportMetrics.height,
-            {
-              dayKey: activeLaunchContextRef.current.dayKey,
-              date: activeLaunchContextRef.current.dayKey,
-            },
-          )
-        : createFullscreenHandBounceGame(
-            viewportMetrics.width,
-            viewportMetrics.height,
-          );
     fullscreenHandBounceLastTickRef.current = 0;
     fullscreenHandBounceStateRef.current = nextGame;
     setFullscreenHandBounceState(nextGame);
@@ -9306,84 +6480,10 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
-    beginRestartedProgressionSession(getModeByFullscreenId("finger-pong"));
     const nextGame = createFingerPongGame(viewportMetrics.width, viewportMetrics.height);
     fullscreenFingerPongLastTickRef.current = 0;
     fullscreenFingerPongStateRef.current = nextGame;
     setFullscreenFingerPongState(nextGame);
-  }
-
-  function restartFullscreenBreakoutGame() {
-    const current = fullscreenBreakoutStateRef.current;
-    if (!current) {
-      return;
-    }
-    beginRestartedProgressionSession(
-      getModeByFullscreenId(fullscreenGridModeRef.current),
-    );
-    const nextGame = restartBreakoutGame(current);
-    fullscreenBreakoutLastTickRef.current = 0;
-    fullscreenBreakoutStateRef.current = nextGame;
-    setFullscreenBreakoutState(nextGame);
-  }
-
-  function restartFullscreenBreakoutCoopGame() {
-    const viewportMetrics = fullscreenBreakoutCoopViewportRef.current;
-    if (!viewportMetrics) {
-      return;
-    }
-    beginRestartedProgressionSession(getModeByFullscreenId("breakout-coop"));
-    const nextGame = createBreakoutCoopGame(
-      viewportMetrics.width,
-      viewportMetrics.height,
-    );
-    fullscreenBreakoutCoopLastTickRef.current = 0;
-    fullscreenBreakoutCoopPrimaryPinchLatchRef.current = false;
-    fullscreenBreakoutCoopSecondaryPinchLatchRef.current = false;
-    fullscreenBreakoutCoopStateRef.current = nextGame;
-    setFullscreenBreakoutCoopState(nextGame);
-  }
-
-  function restartFullscreenInvadersGame() {
-    const viewportMetrics = fullscreenBreakoutViewportRef.current;
-    if (!viewportMetrics) {
-      return;
-    }
-    beginRestartedProgressionSession(getModeByFullscreenId("invaders"));
-    const nextGame = createSpaceInvadersGame(
-      viewportMetrics.width,
-      viewportMetrics.height,
-    );
-    fullscreenInvadersLastTickRef.current = 0;
-    fullscreenInvadersStateRef.current = nextGame;
-    setFullscreenInvadersState(nextGame);
-  }
-
-  function restartFullscreenFlappyGame() {
-    const viewportMetrics = fullscreenFlappyViewportRef.current;
-    if (!viewportMetrics) {
-      return;
-    }
-    beginRestartedProgressionSession(
-      getModeByFullscreenId("flappy"),
-      activeLaunchContextRef.current,
-    );
-    const nextGame =
-      activeLaunchContextRef.current.challenge === "daily"
-        ? createFlappyDailyChallengeGame(
-            viewportMetrics.width,
-            viewportMetrics.height,
-            {
-              dayKey: activeLaunchContextRef.current.dayKey,
-            },
-          )
-        : createFlappyGame(
-            viewportMetrics.width,
-            viewportMetrics.height,
-          );
-    fullscreenFlappyLastTickRef.current = 0;
-    fullscreenFlappyStateRef.current = nextGame;
-    setFullscreenFlappyState(nextGame);
   }
 
   function restartFullscreenSkyPatrolGame() {
@@ -9391,249 +6491,15 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
-    beginRestartedProgressionSession(
-      getModeByFullscreenId("sky-patrol"),
-      activeLaunchContextRef.current,
-    );
-    const nextGame = fullscreenSkyPatrolStateRef.current?.layout
-      ? restartSkyPatrolGame(fullscreenSkyPatrolStateRef.current)
-      : activeLaunchContextRef.current.challenge === "daily"
-        ? createSkyPatrolDailyGame(
-            viewportMetrics.width,
-            viewportMetrics.height,
-            { dayKey: activeLaunchContextRef.current.dayKey },
-          )
-        : createSkyPatrolGame(viewportMetrics.width, viewportMetrics.height);
+    const nextGame = createSkyPatrolGame(viewportMetrics.width, viewportMetrics.height);
     fullscreenSkyPatrolLastTickRef.current = 0;
     publishFullscreenSkyPatrolState(nextGame);
-  }
-
-  function restartCurrentExperience() {
-    switch (experienceModeIdRef.current) {
-      case "whack-a-mole":
-        restartWhackAMoleSession();
-        break;
-      case "spatial-memory":
-        startSpatialGestureMemoryRound();
-        break;
-      case "sky-patrol":
-        restartFullscreenSkyPatrolGame();
-        break;
-      case "slice-air":
-        restartFullscreenFruitNinjaGame();
-        break;
-      case "missile-command":
-        restartFullscreenMissileCommandGame();
-        break;
-      case "brick-dodger":
-        restartFullscreenBrickDodgerGame();
-        break;
-      case "hand-bounce":
-        restartFullscreenHandBounceGame();
-        break;
-      case "breakout":
-        restartFullscreenBreakoutGame();
-        break;
-      case "breakout-coop":
-        restartFullscreenBreakoutCoopGame();
-        break;
-      case "finger-pong":
-        restartFullscreenFingerPongGame();
-        break;
-      case "tic-tac-toe":
-        restartFullscreenTicTacToeGame();
-        break;
-      case "invaders":
-        restartFullscreenInvadersGame();
-        break;
-      case "flappy":
-        restartFullscreenFlappyGame();
-        break;
-      default:
-        navigateToProductHome();
-    }
-  }
-
-  function getCurrentExperienceHud() {
-    const item = (id, label, value, emphasis = "normal") => ({
-      id,
-      label,
-      value,
-      emphasis,
-    });
-    switch (experienceModeId) {
-      case "whack-a-mole":
-        {
-          const summary = getWhackAMoleSummary(whackAMoleState);
-        return {
-          status:
-            whackAMoleState.phase === WHACK_A_MOLE_PHASES.IDLE
-              ? "Ready when you are"
-              : whackAMoleState.announcement,
-          items: [
-            item("score", "Score", summary.score, "strong"),
-            item("time", "Time", `${summary.timeLeft}s`),
-            item(
-              "streak",
-              "Best streak",
-              `×${summary.bestStreak}`,
-            ),
-          ],
-        };
-        }
-      case "spatial-memory":
-        return {
-          status: spatialMemoryState.message,
-          items: [
-            item("round", "Round", spatialMemoryState.round, "strong"),
-            item(
-              "step",
-              "Step",
-              `${Math.min(
-                spatialMemoryState.currentStepIndex + 1,
-                spatialMemoryState.sequenceLength,
-              )}/${spatialMemoryState.sequenceLength}`,
-            ),
-          ],
-        };
-      case "sky-patrol":
-        return {
-          status: fullscreenSkyPatrolHud?.message,
-          items: [
-            item("score", "Score", fullscreenSkyPatrolHud?.score ?? 0, "strong"),
-            item(
-              "mission",
-              "Mission",
-              `${fullscreenSkyPatrolHud?.mission ?? 1}/${
-                fullscreenSkyPatrolHud?.totalMissions ?? 1
-              }`,
-            ),
-            item("accuracy", "Accuracy", `${fullscreenSkyPatrolHud?.accuracy ?? 0}%`),
-            item("combo", "Combo", fullscreenSkyPatrolHud?.comboCount ?? 0),
-          ],
-        };
-      case "slice-air":
-        return {
-          status: fullscreenFruitNinjaHudUi.status,
-          items: [
-            ...fullscreenFruitNinjaHudUi.items.map((hudItem) =>
-              item(
-                hudItem.id,
-                hudItem.label,
-                hudItem.value,
-                hudItem.id === "score" ? "strong" : "normal",
-              ),
-            ),
-          ],
-        };
-      case "missile-command":
-        return {
-          status: fullscreenMissileCommandState?.message,
-          items: [
-            item("score", "Score", fullscreenMissileCommandState?.score ?? 0, "strong"),
-            item(
-              "cities",
-              "Cities",
-              fullscreenMissileCommandState?.structures?.filter(
-                ({ kind, alive }) => kind === "city" && alive,
-              ).length ?? 0,
-            ),
-          ],
-        };
-      case "brick-dodger":
-        return {
-          status: fullscreenBrickDodgerState?.message,
-          items: [
-            item("score", "Score", fullscreenBrickDodgerState?.score ?? 0, "strong"),
-            item("lives", "Lives", fullscreenBrickDodgerState?.lives ?? 0),
-          ],
-        };
-      case "breakout":
-        return {
-          status: fullscreenBreakoutState?.message,
-          items: [
-            item("score", "Score", fullscreenBreakoutState?.score ?? 0, "strong"),
-            item("level", "Level", fullscreenBreakoutState?.level ?? 1),
-            item("lives", "Lives", fullscreenBreakoutState?.lives ?? 0),
-          ],
-        };
-      case "breakout-coop":
-        return {
-          status: fullscreenBreakoutCoopState?.message,
-          items: [
-            item("score", "Score", fullscreenBreakoutCoopState?.score ?? 0, "strong"),
-            item("lives", "Lives", fullscreenBreakoutCoopState?.lives ?? 0),
-          ],
-        };
-      case "finger-pong":
-        return {
-          status: fullscreenFingerPongState?.message,
-          items: [
-            item("player", "You", fullscreenFingerPongState?.score ?? 0, "strong"),
-            item("opponent", "Opponent", fullscreenFingerPongState?.opponentScore ?? 0),
-          ],
-        };
-      case "hand-bounce":
-        return {
-          status: fullscreenHandBounceState?.message,
-          items: fullscreenHandBounceHudUi.items.map((hudItem, index) =>
-            item(
-              hudItem.id,
-              hudItem.label,
-              hudItem.value,
-              index === 0 ? "strong" : "default",
-            ),
-          ),
-        };
-      case "invaders":
-        return {
-          status: fullscreenInvadersState?.message,
-          items: [
-            item("score", "Score", fullscreenInvadersState?.score ?? 0, "strong"),
-            item("wave", "Wave", fullscreenInvadersState?.wave ?? 1),
-            item("lives", "Lives", fullscreenInvadersState?.lives ?? 0),
-            item(
-              "remaining",
-              "Remaining",
-              fullscreenInvadersState?.enemies?.filter(({ alive }) => alive).length ?? 0,
-            ),
-          ],
-        };
-      case "flappy":
-        return {
-          status: fullscreenFlappyState?.message,
-          items: [
-            item("score", "Gates", fullscreenFlappyState?.score ?? 0, "strong"),
-            item(
-              "center",
-              "Center streak",
-              fullscreenFlappyState?.stats?.centerStreak ?? 0,
-            ),
-            item(
-              "level",
-              "Level",
-              fullscreenFlappyState?.difficulty?.level ?? 1,
-            ),
-          ],
-        };
-      case "tic-tac-toe":
-        return {
-          status: fullscreenTicTacToeState?.message,
-          items: [
-            item("wins", "Wins", fullscreenTicTacToeState?.playerWins ?? 0, "strong"),
-            item("draws", "Draws", fullscreenTicTacToeState?.draws ?? 0),
-          ],
-        };
-      default:
-        return { status: "", items: [] };
-    }
   }
 
   function getFullscreenRestartControlStatesFromRefs() {
     return {
       handBounce: fullscreenHandBounceStateRef.current,
       brickDodger: fullscreenBrickDodgerStateRef.current,
-      breakout: fullscreenBreakoutStateRef.current,
       fingerPong: fullscreenFingerPongStateRef.current,
       fruitNinja: fullscreenFruitNinjaStateRef.current,
       skyPatrol: fullscreenSkyPatrolHudRef.current,
@@ -9657,10 +6523,6 @@ export default function App() {
         return true;
       case "brick-dodger":
         restartFullscreenBrickDodgerGame();
-        return true;
-      case "breakout":
-      case FIND_YOUR_GRIND_BREAKOUT_MODE_ID:
-        restartFullscreenBreakoutGame();
         return true;
       case "finger-pong":
         restartFullscreenFingerPongGame();
@@ -9715,7 +6577,6 @@ export default function App() {
   function restartFullscreenTicTacToeGame() {
     const existingGame = fullscreenTicTacToeStateRef.current;
     if (existingGame?.layout) {
-      beginRestartedProgressionSession(getModeByFullscreenId("tic-tac-toe"));
       const nextGame = restartTicTacToeRound(existingGame);
       fullscreenTicTacToeLastTickRef.current = 0;
       fullscreenTicTacToeStateRef.current = nextGame;
@@ -9727,7 +6588,6 @@ export default function App() {
     if (!viewportMetrics) {
       return;
     }
-    beginRestartedProgressionSession(getModeByFullscreenId("tic-tac-toe"));
     const nextGame = createTicTacToeGame(viewportMetrics.width, viewportMetrics.height);
     fullscreenTicTacToeLastTickRef.current = 0;
     fullscreenTicTacToeStateRef.current = nextGame;
@@ -9740,7 +6600,7 @@ export default function App() {
       isCalibrating: isCalibratingRef.current,
       isArcCalibrating: isArcCalibratingRef.current,
       phase: phaseRef.current,
-      whackPhase: whackAMoleStateRef.current?.phase,
+      gameRunning: gameRunningRef.current,
     });
     const excludeInsideSelector = getPinchClickExcludeSelector({
       phase: phaseRef.current,
@@ -9836,14 +6696,108 @@ export default function App() {
       return;
     }
 
-    appLog.debug("Pinch click did not resolve to an active control", {
-      phase: phaseRef.current,
-      timestamp,
-    });
+    if (phaseRef.current !== PHASES.GAME || !gameRunningRef.current) {
+      appLog.debug("Pinch click ignored because game is not actively running");
+      return;
+    }
+
+    const activeMole = activeMoleRef.current;
+    if (!activeMole) {
+      appLog.debug("Pinch click ignored because there is no active mole");
+      return;
+    }
+
+    const hitZone = hitZonesRef.current[activeMole.holeIndex];
+    if (!hitZone) {
+      appLog.warn("Pinch click ignored because hit zone was not found", {
+        activeMole,
+      });
+      return;
+    }
+
+    if (isPointInCircle(cursorRef.current, hitZone)) {
+      appLog.info("Mole hit registered", {
+        holeIndex: activeMole.holeIndex,
+        cursor: cursorRef.current,
+        hitZone,
+      });
+      activeMoleRef.current = null;
+      setActiveMoleIndex(null);
+      setScore((value) => value + 1);
+      nextSpawnAtRef.current = timestamp + 100;
+    } else {
+      appLog.debug("Pinch click missed active mole", {
+        holeIndex: activeMole.holeIndex,
+        cursor: cursorRef.current,
+        hitZone,
+      });
+    }
+  }
+
+  function updateGame(timestamp) {
+    if (!gameRunningRef.current) {
+      return;
+    }
+
+    const elapsed = timestamp - gameStartTimeRef.current;
+    const remainingMs = GAME_DURATION_MS - elapsed;
+    const nextTimeLeft = Math.max(0, Math.ceil(remainingMs / 1000));
+
+    if (nextTimeLeft !== timeLeftRef.current) {
+      timeLeftRef.current = nextTimeLeft;
+      setTimeLeft(nextTimeLeft);
+      appLog.debug("Game timer tick", {
+        timestamp,
+        remainingMs,
+        nextTimeLeft,
+      });
+    }
+
+    if (remainingMs <= 0) {
+      appLog.info("Game timer expired");
+      stopGameSession();
+      return;
+    }
+
+    if (activeMoleRef.current && timestamp >= activeMoleRef.current.expiresAt) {
+      appLog.debug("Active mole expired", {
+        activeMole: activeMoleRef.current,
+        timestamp,
+      });
+      activeMoleRef.current = null;
+      setActiveMoleIndex(null);
+    }
+
+    if (!activeMoleRef.current && timestamp >= nextSpawnAtRef.current) {
+      const count = holesRef.current.length;
+      if (count > 0) {
+        const nextIndex = pickRandomHole(count, lastHoleIndexRef.current);
+        if (nextIndex >= 0) {
+          lastHoleIndexRef.current = nextIndex;
+          activeMoleRef.current = {
+            holeIndex: nextIndex,
+            expiresAt: timestamp + MOLE_VISIBLE_MS,
+          };
+          setActiveMoleIndex(nextIndex);
+          appLog.info("Spawned new mole", {
+            holeIndex: nextIndex,
+            expiresAt: timestamp + MOLE_VISIBLE_MS,
+          });
+        }
+      }
+      nextSpawnAtRef.current = timestamp + randomSpawnDelay();
+      appLog.debug("Scheduled next mole spawn", {
+        nextSpawnAt: nextSpawnAtRef.current,
+      });
+    }
   }
 
   function computeCameraRenderMetrics(
-    objectFit = getCameraObjectFitForPhase(phaseRef.current),
+    objectFit =
+      phaseRef.current === PHASES.FULLSCREEN_CAMERA &&
+      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE
+        ? "cover"
+        : getCameraObjectFitForPhase(phaseRef.current),
   ) {
     const video = videoRef.current;
     const canvas = overlayCanvasRef.current;
@@ -9884,15 +6838,6 @@ export default function App() {
       vMin: sourceNormalized.yMin,
       vMax: sourceNormalized.yMax,
     };
-    const directNormalized = {
-      uMin: sourceNormalized.xMin,
-      uMax: sourceNormalized.xMax,
-      vMin: sourceNormalized.yMin,
-      vMax: sourceNormalized.yMax,
-    };
-    const displayNormalized = preferencesRef.current.mirrorCamera
-      ? mirroredNormalized
-      : directNormalized;
 
     return {
       canvas: {
@@ -9919,7 +6864,6 @@ export default function App() {
       },
       sourceNormalized,
       mirroredNormalized,
-      displayNormalized,
     };
   }
 
@@ -9957,17 +6901,17 @@ export default function App() {
       return accumulator;
     }, {});
 
-    const visibleDisplayBounds = renderMetrics
+    const visibleMirroredBounds = renderMetrics
       ? {
-          uMin: roundMetric(renderMetrics.displayNormalized.uMin),
-          uMax: roundMetric(renderMetrics.displayNormalized.uMax),
-          vMin: roundMetric(renderMetrics.displayNormalized.vMin),
-          vMax: roundMetric(renderMetrics.displayNormalized.vMax),
+          uMin: roundMetric(renderMetrics.mirroredNormalized.uMin),
+          uMax: roundMetric(renderMetrics.mirroredNormalized.uMax),
+          vMin: roundMetric(renderMetrics.mirroredNormalized.vMin),
+          vMax: roundMetric(renderMetrics.mirroredNormalized.vMax),
           uSpan: roundMetric(
-            renderMetrics.displayNormalized.uMax - renderMetrics.displayNormalized.uMin,
+            renderMetrics.mirroredNormalized.uMax - renderMetrics.mirroredNormalized.uMin,
           ),
           vSpan: roundMetric(
-            renderMetrics.displayNormalized.vMax - renderMetrics.displayNormalized.vMin,
+            renderMetrics.mirroredNormalized.vMax - renderMetrics.mirroredNormalized.vMin,
           ),
         }
       : null;
@@ -10000,7 +6944,7 @@ export default function App() {
         ),
       },
       fingerExtents,
-      visibleDisplayBounds,
+      visibleMirroredBounds,
       lastVisibleBounds:
         extentState.lastVisibleBounds && Number.isFinite(extentState.lastVisibleBounds.uMin)
           ? {
@@ -10346,10 +7290,7 @@ export default function App() {
     if (!ctx) {
       return;
     }
-    const activeHand = selectPreferredHand(
-      hands,
-      preferencesRef.current.dominantHand,
-    );
+    const activeHand = Array.isArray(hands) ? hands[0] ?? null : null;
     const landmarks = Array.isArray(activeHand?.landmarks) ? activeHand.landmarks : [];
     if (landmarks.length === 0) {
       return;
@@ -10566,7 +7507,11 @@ export default function App() {
   function getFullscreenIndexOverlayPoints(hands) {
     const renderMetrics = computeCameraRenderMetrics("contain");
     const safeHands = Array.isArray(hands) ? hands : [];
-    return safeHands
+    const eligibleHands =
+      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE
+        ? safeHands.filter((hand) => hasVerifiedFullscreenMenuHand(hand))
+        : safeHands;
+    return eligibleHands
       .map((hand, handIndex) => {
         const indexTip = hand?.fingerTips?.index ?? hand?.indexTip ?? null;
         const projectedPoint = projectCameraPointToCanvas(indexTip, renderMetrics);
@@ -10586,11 +7531,15 @@ export default function App() {
   function getFullscreenTipOverlayPoints(hands) {
     const renderMetrics = computeCameraRenderMetrics("contain");
     const safeHands = Array.isArray(hands) ? hands : [];
+    const eligibleHands =
+      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE
+        ? safeHands.filter((hand) => hasVerifiedFullscreenMenuHand(hand))
+        : safeHands;
     const trackedFingerNames = getFullscreenTrackedFingerNames(
       fullscreenGridModeRef.current,
       EXTENT_FINGER_NAMES,
     );
-    return safeHands.flatMap((hand, handIndex) => {
+    return eligibleHands.flatMap((hand, handIndex) => {
       const handId = hand?.id ?? hand?.label ?? `hand-${handIndex}`;
       return trackedFingerNames.map((fingerName) => {
         const tip = hand?.fingerTips?.[fingerName] ?? hand?.[`${fingerName}Tip`] ?? null;
@@ -10615,42 +7564,9 @@ export default function App() {
       return null;
     }
 
-    const activePointer = getActiveFullscreenPointer(viewportMetrics);
-    if (activePointer.active && activePointer.source !== "tracking") {
-      const ballRadius =
-        fullscreenHandBounceStateRef.current?.layout?.ballRadius ?? 32;
-      const width = clampValue(
-        ballRadius * 3.35,
-        ballRadius * 2.15,
-        viewportMetrics.width * 0.34,
-      );
-      const height = clampValue(
-        ballRadius * 1.08,
-        ballRadius * 0.9,
-        ballRadius * 1.55,
-      );
-      return {
-        x: clampValue(
-          activePointer.x,
-          width / 2 + 6,
-          viewportMetrics.width - width / 2 - 6,
-        ),
-        y: clampValue(
-          activePointer.y,
-          height / 2 + ballRadius * 0.42,
-          viewportMetrics.height - height / 2 - ballRadius * 0.24,
-        ),
-        width,
-        height,
-      };
-    }
-
     const renderMetrics = computeCameraRenderMetrics("contain");
     const primaryHand = Array.isArray(fullscreenHandsRef.current)
-      ? selectPreferredHand(
-          fullscreenHandsRef.current,
-          preferencesRef.current.dominantHand,
-        )
+      ? fullscreenHandsRef.current[0] ?? null
       : null;
     if (!renderMetrics || !primaryHand) {
       return null;
@@ -10746,6 +7662,13 @@ export default function App() {
     const tipPoints = getFullscreenTipOverlayPoints(hands);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    if (fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE) {
+      return {
+        indexPoints,
+        tipPoints,
+      };
+    }
+
     if (shouldShowFullscreenNeonHandOutline(fullscreenGridModeRef.current)) {
       drawNeonActiveHandOutline(hands);
       return {
@@ -10773,10 +7696,13 @@ export default function App() {
     }
 
     if (shouldShowFullscreenHandSkeleton(fullscreenGridModeRef.current)) {
+      const isFullscreenLandingSkeleton = fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE;
       drawCameraOverlayHands(hands, {
         showSkeleton: true,
-        showPointerRing: true,
-        showHandLabels: true,
+        objectFit: isFullscreenLandingSkeleton ? "cover" : undefined,
+        highlightIndexOnly: isFullscreenLandingSkeleton,
+        showPointerRing: !isFullscreenLandingSkeleton,
+        showHandLabels: !isFullscreenLandingSkeleton,
       });
       return {
         indexPoints,
@@ -10813,72 +7739,112 @@ export default function App() {
   }
 
   function getVerifiedFullscreenHoldControlInput(viewportMetrics) {
-    const renderMetrics = computeCameraRenderMetrics("contain");
-    return getVerifiedFullscreenHandPointerInput(
+    const renderMetrics = computeCameraRenderMetrics(
+      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE ? "cover" : "contain",
+    );
+    return getVerifiedFullscreenMenuHandPointerInput(
       fullscreenHandsRef.current,
       viewportMetrics,
       (point) => projectCameraPointToCanvas(point, renderMetrics),
     );
   }
 
-  function getActiveFullscreenPointer(viewportMetrics) {
+  function getFullscreenLandingHandSkeleton(viewportMetrics) {
+    const renderMetrics = computeCameraRenderMetrics("cover");
+    return createFullscreenLandingHandSkeleton(
+      fullscreenHandsRef.current,
+      viewportMetrics,
+      (point) => projectCameraPointToCanvas(point, renderMetrics),
+    );
+  }
+
+  function updateFullscreenModeLandingSimulation(timestamp) {
+    if (
+      phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current !== FULLSCREEN_LANDING_MODE ||
+      !fullscreenModeLandingStateRef.current
+    ) {
+      fullscreenModeLandingLastTickRef.current = timestamp;
+      return;
+    }
+
+    const viewportMetrics = fullscreenModeLandingViewportRef.current;
     if (!viewportMetrics) {
-      return {
-        active: false,
-        actionActive: false,
-        actionStarted: false,
-        source: "none",
-        x: 0,
-        y: 0,
-      };
+      fullscreenModeLandingLastTickRef.current = timestamp;
+      return;
+    }
+
+    const previousTimestamp = fullscreenModeLandingLastTickRef.current || timestamp;
+    const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
+    fullscreenModeLandingLastTickRef.current = timestamp;
+    const holdInput = getVerifiedFullscreenHoldControlInput(viewportMetrics);
+    const appActive =
+      fullscreenLandingAppActiveRef.current &&
+      (typeof document === "undefined" || document.visibilityState !== "hidden");
+    const pointerActive = appActive && handDetectedRef.current && holdInput.pointerActive;
+    const scrollTop = Math.max(
+      0,
+      Number.isFinite(fullscreenModeLandingScrollTopRef.current)
+        ? fullscreenModeLandingScrollTopRef.current
+        : 0,
+    );
+    const nextState = stepFullscreenModeLanding(fullscreenModeLandingStateRef.current, deltaSeconds, {
+      appActive,
+      handVerified: holdInput.handVerified,
+      pointerActive,
+      pointerX: pointerActive ? holdInput.pointerX : 0,
+      pointerY: pointerActive ? holdInput.pointerY : 0,
+      hitPointerX: pointerActive ? holdInput.pointerX : 0,
+      hitPointerY: pointerActive ? holdInput.pointerY + scrollTop : 0,
+    });
+    const nextStateWithSkeleton = {
+      ...nextState,
+      skeleton: getFullscreenLandingHandSkeleton(viewportMetrics),
+    };
+    fullscreenModeLandingStateRef.current = nextStateWithSkeleton;
+    setFullscreenModeLandingState(nextStateWithSkeleton);
+
+    if (nextStateWithSkeleton.selectedModeId === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID) {
+      returnFromFullscreenCameraScreen();
+      return;
     }
 
     if (
-      handDetectedRef.current &&
-      Number.isFinite(cursorRef.current?.x) &&
-      Number.isFinite(cursorRef.current?.y)
+      nextStateWithSkeleton.selectedModeId &&
+      nextStateWithSkeleton.selectedModeId !== fullscreenGridModeRef.current
     ) {
-      return {
-        active: true,
-        actionActive: Boolean(pinchStateRef.current),
-        actionStarted: false,
-        source: "tracking",
-        x: clampValue(
-          cursorRef.current.x - viewportMetrics.left,
-          0,
-          viewportMetrics.width,
-        ),
-        y: clampValue(
-          cursorRef.current.y - viewportMetrics.top,
-          0,
-          viewportMetrics.height,
-        ),
-      };
+      setFullscreenGridMode(nextStateWithSkeleton.selectedModeId);
+    }
+  }
+
+  function handleFullscreenModeLandingBoxClick(event, modeId) {
+    event.preventDefault();
+    event.stopPropagation();
+    const nextState = selectFullscreenModeLandingMode(fullscreenModeLandingStateRef.current, modeId);
+    fullscreenModeLandingStateRef.current = nextState;
+    setFullscreenModeLandingState(nextState);
+
+    if (nextState.selectedModeId === FULLSCREEN_CAMERA_BACK_TO_INPUT_TEST_ID) {
+      returnFromFullscreenCameraScreen();
+      return;
     }
 
-    const fallback = fallbackPointerRef.current;
-    const localX = fallback.x - viewportMetrics.left;
-    const localY = fallback.y - viewportMetrics.top;
-    const withinViewport =
-      !trackingRequestedRef.current &&
-      fallback.active &&
-      localX >= 0 &&
-      localX <= viewportMetrics.width &&
-      localY >= 0 &&
-      localY <= viewportMetrics.height;
-    return {
-      active: withinViewport,
-      actionActive: withinViewport && fallback.pressed,
-      actionStarted: withinViewport && fallback.justPressed,
-      source: withinViewport ? fallback.pointerType || "pointer" : "none",
-      x: withinViewport ? localX : 0,
-      y: withinViewport ? localY : 0,
-    };
+    if (nextState.selectedModeId && nextState.selectedModeId !== fullscreenGridModeRef.current) {
+      setFullscreenGridMode(nextState.selectedModeId);
+    }
+  }
+
+  function handleFullscreenModeLandingScrollOffsetChange(scrollTop) {
+    fullscreenModeLandingScrollTopRef.current = Math.max(
+      0,
+      Number.isFinite(scrollTop) ? scrollTop : 0,
+    );
   }
 
   function updateFullscreenExitControlSimulation(timestamp) {
     if (
       phaseRef.current !== PHASES.FULLSCREEN_CAMERA ||
+      fullscreenGridModeRef.current === FULLSCREEN_LANDING_MODE ||
       !fullscreenExitControlStateRef.current
     ) {
       fullscreenExitControlLastTickRef.current = timestamp;
@@ -10900,7 +7866,6 @@ export default function App() {
     const previousState = fullscreenExitControlStateRef.current;
     const nextState = stepFullscreenExitControl(previousState, deltaSeconds, {
       handVerified: holdInput.handVerified,
-      holdDurationMs: preferencesRef.current.dwellDurationMs,
       pointerActive,
       pointerX: pointerActive ? holdInput.pointerX : 0,
       pointerY: pointerActive ? holdInput.pointerY : 0,
@@ -10945,7 +7910,6 @@ export default function App() {
       deltaSeconds,
       {
         handVerified: holdInput.handVerified,
-        holdDurationMs: preferencesRef.current.dwellDurationMs,
         pointerActive,
         pointerX: pointerActive ? holdInput.pointerX : 0,
         pointerY: pointerActive ? holdInput.pointerY : 0,
@@ -11012,8 +7976,10 @@ export default function App() {
 
     const fallbackPaddleX =
       fullscreenBreakoutStateRef.current?.paddle?.x ?? viewportMetrics.width / 2;
-    const pointer = getActiveFullscreenPointer(viewportMetrics);
-    const pointerX = pointer.active ? pointer.x : fallbackPaddleX;
+    const pointerX =
+      handDetectedRef.current && Number.isFinite(cursorRef.current?.x)
+        ? cursorRef.current.x - viewportMetrics.left
+        : fallbackPaddleX;
     const nextState = stepBreakoutGame(
       fullscreenBreakoutStateRef.current,
       deltaSeconds,
@@ -11023,18 +7989,15 @@ export default function App() {
     setFullscreenBreakoutState(nextState);
   }
 
-  function getFullscreenBreakoutCoopInput(primaryPointer) {
+  function getFullscreenBreakoutCoopInput() {
     const hands = Array.isArray(fullscreenHandsRef.current) ? fullscreenHandsRef.current : [];
     const secondaryHand = selectBreakoutCoopSupportHand(
       hands,
       fullscreenPrimaryHandIdRef.current,
     );
-    const pinchThresholds = getPinchThresholds(
-      preferencesRef.current.pinchThreshold,
-    );
     const secondaryPinching =
       secondaryHand && Number.isFinite(secondaryHand.pinchDistance)
-        ? secondaryHand.pinchDistance < pinchThresholds.start
+        ? secondaryHand.pinchDistance < PINCH_START_THRESHOLD
         : false;
 
     let secondaryAbilityRequested = false;
@@ -11044,12 +8007,12 @@ export default function App() {
     } else if (
       !secondaryHand ||
       !Number.isFinite(secondaryHand.pinchDistance) ||
-      secondaryHand.pinchDistance > pinchThresholds.end
+      secondaryHand.pinchDistance > PINCH_END_THRESHOLD
     ) {
       fullscreenBreakoutCoopSecondaryPinchLatchRef.current = false;
     }
 
-    const primaryPinching = Boolean(primaryPointer?.actionActive);
+    const primaryPinching = handDetectedRef.current && pinchStateRef.current;
     let primaryPinchRising = false;
     if (primaryPinching && !fullscreenBreakoutCoopPrimaryPinchLatchRef.current) {
       primaryPinchRising = true;
@@ -11086,9 +8049,11 @@ export default function App() {
 
     const fallbackPaddleX =
       fullscreenBreakoutCoopStateRef.current?.paddle?.x ?? viewportMetrics.width / 2;
-    const pointer = getActiveFullscreenPointer(viewportMetrics);
-    const pointerX = pointer.active ? pointer.x : fallbackPaddleX;
-    const coopInput = getFullscreenBreakoutCoopInput(pointer);
+    const pointerX =
+      handDetectedRef.current && Number.isFinite(cursorRef.current?.x)
+        ? cursorRef.current.x - viewportMetrics.left
+        : fallbackPaddleX;
+    const coopInput = getFullscreenBreakoutCoopInput();
     const nextState = stepBreakoutCoopGame(
       fullscreenBreakoutCoopStateRef.current,
       deltaSeconds,
@@ -11122,8 +8087,10 @@ export default function App() {
 
     const fallbackPlayerX =
       fullscreenBrickDodgerStateRef.current?.player?.x ?? viewportMetrics.width / 2;
-    const pointer = getActiveFullscreenPointer(viewportMetrics);
-    const pointerX = pointer.active ? pointer.x : fallbackPlayerX;
+    const pointerX =
+      handDetectedRef.current && Number.isFinite(cursorRef.current?.x)
+        ? cursorRef.current.x - viewportMetrics.left
+        : fallbackPlayerX;
     const nextState = stepBrickDodgerGame(
       fullscreenBrickDodgerStateRef.current,
       deltaSeconds,
@@ -11155,8 +8122,10 @@ export default function App() {
 
     const fallbackPaddleX =
       fullscreenFingerPongStateRef.current?.player?.x ?? viewportMetrics.width / 2;
-    const pointer = getActiveFullscreenPointer(viewportMetrics);
-    const pointerX = pointer.active ? pointer.x : fallbackPaddleX;
+    const pointerX =
+      handDetectedRef.current && Number.isFinite(cursorRef.current?.x)
+        ? cursorRef.current.x - viewportMetrics.left
+        : fallbackPaddleX;
     const nextState = stepFingerPongGame(
       fullscreenFingerPongStateRef.current,
       deltaSeconds,
@@ -11186,14 +8155,16 @@ export default function App() {
     const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
     fullscreenFruitNinjaLastTickRef.current = timestamp;
 
-    const activePointer = getActiveFullscreenPointer(viewportMetrics);
-    const pointer = activePointer.active
-      ? {
-          active: true,
-          x: activePointer.x,
-          y: activePointer.y,
-        }
-      : { active: false };
+    const pointer =
+      handDetectedRef.current &&
+      Number.isFinite(cursorRef.current?.x) &&
+      Number.isFinite(cursorRef.current?.y)
+        ? {
+            active: true,
+            x: clampValue(cursorRef.current.x - viewportMetrics.left, 0, viewportMetrics.width),
+            y: clampValue(cursorRef.current.y - viewportMetrics.top, 0, viewportMetrics.height),
+          }
+        : { active: false };
     const nextState = stepFruitNinjaGame(
       fullscreenFruitNinjaStateRef.current,
       deltaSeconds,
@@ -11224,93 +8195,24 @@ export default function App() {
     const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
     fullscreenSkyPatrolLastTickRef.current = timestamp;
 
-    const pointer = getActiveFullscreenPointer(viewportMetrics);
     const nextState = stepSkyPatrolGame(
       fullscreenSkyPatrolStateRef.current,
       deltaSeconds,
       {
-        pointerActive: pointer.active,
-        pointerX: pointer.active
-          ? pointer.x
+        pointerActive:
+          handDetectedRef.current &&
+          Number.isFinite(cursorRef.current?.x) &&
+          Number.isFinite(cursorRef.current?.y),
+        pointerX: handDetectedRef.current
+          ? clampValue(cursorRef.current?.x - viewportMetrics.left, 0, viewportMetrics.width)
           : fullscreenSkyPatrolStateRef.current.ship.x,
-        pointerY: pointer.active
-          ? pointer.y
+        pointerY: handDetectedRef.current
+          ? clampValue(cursorRef.current?.y - viewportMetrics.top, 0, viewportMetrics.height)
           : fullscreenSkyPatrolStateRef.current.ship.y,
-        fireRequested: pointer.actionActive,
+        fireRequested: handDetectedRef.current && pinchStateRef.current,
       },
     );
     publishFullscreenSkyPatrolState(nextState);
-  }
-
-  function publishFullscreenWfcWorldState(nextState) {
-    if (!nextState) {
-      return;
-    }
-    fullscreenWfcWorldStateRef.current = nextState;
-    setFullscreenWfcWorldState(nextState);
-  }
-
-  function handleFullscreenWfcWorldSelectTile(tileId) {
-    publishFullscreenWfcWorldState(
-      selectWfcWorldTile(fullscreenWfcWorldStateRef.current, tileId),
-    );
-  }
-
-  function handleFullscreenWfcWorldGenerate() {
-    publishFullscreenWfcWorldState(
-      startWfcWorldCollapse(fullscreenWfcWorldStateRef.current),
-    );
-  }
-
-  function handleFullscreenWfcWorldClear() {
-    publishFullscreenWfcWorldState(
-      clearWfcWorld(fullscreenWfcWorldStateRef.current),
-    );
-  }
-
-  function handleFullscreenWfcWorldSave(snapshot) {
-    const current = fullscreenWfcWorldStateRef.current;
-    if (!current || !snapshot) {
-      return;
-    }
-    publishFullscreenWfcWorldState({
-      ...current,
-      snapshot: {
-        id: snapshot.id,
-        name: snapshot.name,
-        revision: snapshot.revision,
-      },
-      message: `${snapshot.name}, revision ${snapshot.revision}, saved locally.`,
-    });
-  }
-
-  function handleFullscreenWfcWorldRestore(restoredGame) {
-    if (!restoredGame) {
-      return;
-    }
-    fullscreenWfcWorldLastTickRef.current = 0;
-    publishFullscreenWfcWorldState(restoredGame);
-    setFullscreenWfcProjectOpen(false);
-  }
-
-  function handleFullscreenWfcWorldChange(nextGame) {
-    if (!nextGame) {
-      return;
-    }
-    fullscreenWfcWorldLastTickRef.current = 0;
-    publishFullscreenWfcWorldState(nextGame);
-  }
-
-  function handleFullscreenWfcWorldDelete(snapshot) {
-    const current = fullscreenWfcWorldStateRef.current;
-    if (!current || current.snapshot?.id !== snapshot?.id) {
-      return;
-    }
-    publishFullscreenWfcWorldState({
-      ...current,
-      snapshot: null,
-      message: `${snapshot.name} was removed from saved projects. Your open canvas is unchanged.`,
-    });
   }
 
   function getFullscreenWfcWorldMousePoint(event) {
@@ -11405,7 +8307,8 @@ export default function App() {
         pinchStarted: false,
       };
     }
-    publishFullscreenWfcWorldState(nextState);
+    fullscreenWfcWorldStateRef.current = nextState;
+    setFullscreenWfcWorldState(nextState);
   }
 
   function updateFullscreenInvadersSimulation(timestamp) {
@@ -11430,13 +8333,15 @@ export default function App() {
 
     const fallbackShipX =
       fullscreenInvadersStateRef.current?.ship?.x ?? viewportMetrics.width / 2;
-    const pointer = getActiveFullscreenPointer(viewportMetrics);
-    const pointerX = pointer.active ? pointer.x : fallbackShipX;
+    const pointerX =
+      handDetectedRef.current && Number.isFinite(cursorRef.current?.x)
+        ? cursorRef.current.x - viewportMetrics.left
+        : fallbackShipX;
     const nextState = stepSpaceInvadersGame(
       fullscreenInvadersStateRef.current,
       deltaSeconds,
       pointerX,
-      pointer.actionActive,
+      handDetectedRef.current && pinchStateRef.current,
     );
     fullscreenInvadersStateRef.current = nextState;
     setFullscreenInvadersState(nextState);
@@ -11517,12 +8422,15 @@ export default function App() {
     const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
     fullscreenTicTacToeLastTickRef.current = timestamp;
 
-    const pointer = getActiveFullscreenPointer(viewportMetrics);
+    const pointerActive =
+      handDetectedRef.current &&
+      Number.isFinite(cursorRef.current?.x) &&
+      Number.isFinite(cursorRef.current?.y);
     const nextState = stepTicTacToeGame(fullscreenTicTacToeStateRef.current, deltaSeconds, {
-      pointerActive: pointer.active,
-      pointerX: pointer.active ? pointer.x : 0,
-      pointerY: pointer.active ? pointer.y : 0,
-      pinchActive: pointer.actionActive,
+      pointerActive,
+      pointerX: pointerActive ? cursorRef.current.x - viewportMetrics.left : 0,
+      pointerY: pointerActive ? cursorRef.current.y - viewportMetrics.top : 0,
+      pinchActive: handDetectedRef.current && pinchStateRef.current,
     });
     fullscreenTicTacToeStateRef.current = nextState;
     setFullscreenTicTacToeState(nextState);
@@ -11530,6 +8438,7 @@ export default function App() {
 
   function updateFullscreenOverlayGames(timestamp) {
     runFullscreenOverlayGameUpdates(timestamp, {
+      updateFullscreenModeLandingSimulation,
       updateFullscreenExitControlSimulation,
       updateFullscreenRestartControlSimulation,
       updateFullscreenHandBounceSimulation,
@@ -11545,76 +8454,6 @@ export default function App() {
       updateFullscreenTicTacToeSimulation,
     });
     updateFullscreenFruitNinjaSimulation(timestamp);
-  }
-
-  function runAppSimulationFrame(timestamp) {
-    const currentLifecycle = experienceLifecycleRef.current;
-    const previousLifecycleTimestamp =
-      lifecycleLastTickRef.current || timestamp;
-    const lifecycleDeltaMs = Math.max(
-      0,
-      timestamp - previousLifecycleTimestamp,
-    );
-    lifecycleLastTickRef.current = timestamp;
-
-    if (
-      currentLifecycle?.phase === EXPERIENCE_PHASES.COUNTDOWN &&
-      document.visibilityState !== "hidden"
-    ) {
-      dispatchExperienceLifecycle({
-        type: EXPERIENCE_LIFECYCLE_EVENTS.TICK,
-        deltaMs: lifecycleDeltaMs,
-      });
-    }
-
-    const latestLifecycle = experienceLifecycleRef.current;
-    const simulationBlocked =
-      document.visibilityState === "hidden" ||
-      (latestLifecycle &&
-        latestLifecycle.phase !== EXPERIENCE_PHASES.RUNNING);
-    if (simulationBlocked) {
-      if (fallbackPointerRef.current.justPressed) {
-        fallbackPointerRef.current = {
-          ...fallbackPointerRef.current,
-          justPressed: false,
-        };
-      }
-      simulationTimingRef.current.pause(timestamp);
-      return;
-    }
-
-    simulationTimingRef.current.resume(timestamp);
-    if (simulationEpochRef.current === null) {
-      simulationEpochRef.current = timestamp;
-    }
-    simulationTimingRef.current.advance(
-      timestamp,
-      (_stepSeconds, step) => {
-        const stepTimestamp =
-          simulationEpochRef.current + step.simulatedElapsedMs;
-        updateSandboxPhysics(
-          stepTimestamp,
-          cursorRef.current,
-          handDetectedRef.current,
-          pinchStateRef.current,
-        );
-        updateFlightSimulation(stepTimestamp);
-        updateRunnerSimulation(stepTimestamp);
-        updateFullscreenOverlayGames(stepTimestamp);
-      },
-    );
-
-    if (
-      !trackingRequestedRef.current &&
-      fallbackPointerRef.current.justPressed
-    ) {
-      handlePinchClick(timestamp);
-      fallbackPointerRef.current = {
-        ...fallbackPointerRef.current,
-        justPressed: false,
-      };
-    }
-
   }
 
   function updateFrameTiming(timestamp) {
@@ -11703,7 +8542,6 @@ export default function App() {
       detected: true,
       score: Number.isFinite(pose.score) ? pose.score : 0,
       keypointsCount: pose.keypoints.length,
-      keypoints: pose.keypoints,
       handsCount: fingerSummary.handsCount,
       fingerCount: fingerSummary.fingerCount,
       fingertipCount: fingerSummary.fingertipCount,
@@ -11762,6 +8600,11 @@ export default function App() {
         }
         drawCameraOverlay(null);
         updateFlightControlFromTips(null, timestamp, frameId);
+        updateSandboxPhysics(timestamp, cursorRef.current, false, false);
+        updateFlightSimulation(timestamp);
+        updateRunnerSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
+        updateGame(timestamp);
         return;
       }
 
@@ -11791,15 +8634,14 @@ export default function App() {
           "Lazy arc capture paused: all five fingertips are not visible. Return your hand to continue capture.",
         );
       }
-      publishTrackingInteractionSample({
-        handDetected: false,
-        framing: assessTrackingHandFraming(null),
-        pinchActive: false,
-        timestamp,
-      });
       updateCalibrationInputTestHoverState(cursorRef.current, false, frameId);
       drawCameraOverlay(null);
       updateFlightControlFromTips(null, timestamp, frameId);
+      updateSandboxPhysics(timestamp, cursorRef.current, false, false);
+      updateFlightSimulation(timestamp);
+      updateRunnerSimulation(timestamp);
+      updateFullscreenOverlayGames(timestamp);
+      updateGame(timestamp);
       return;
     }
 
@@ -11812,7 +8654,7 @@ export default function App() {
     handGraceFrameCounterRef.current = 0;
 
     const renderMetrics = computeCameraRenderMetrics();
-    const visibleBounds = renderMetrics?.displayNormalized ?? null;
+    const visibleBounds = renderMetrics?.mirroredNormalized ?? null;
     const thumbTipRawU = Number.isFinite(hand.thumbTip?.uRaw) ? hand.thumbTip.uRaw : hand.thumbTip?.u;
     const thumbTipRawV = Number.isFinite(hand.thumbTip?.vRaw) ? hand.thumbTip.vRaw : hand.thumbTip?.v;
     const indexTipRawU = Number.isFinite(hand.indexTip?.uRaw) ? hand.indexTip.uRaw : hand.indexTip?.u;
@@ -11848,18 +8690,11 @@ export default function App() {
             ? { u: hand.indexTip.u, v: hand.indexTip.v }
             : null;
     const usesIndexPointer =
-      phaseRef.current === PHASES.RUNNER ||
-      phaseRef.current === PHASES.FULLSCREEN_CAMERA ||
-      phaseRef.current === PHASES.TRACKING_SETUP;
-    const baseMappedPointerTip =
+      phaseRef.current === PHASES.RUNNER || phaseRef.current === PHASES.FULLSCREEN_CAMERA;
+    const mappedPointerTip =
       usesIndexPointer && mappedIndexTip
         ? mappedIndexTip
         : mappedThumbTip;
-    const mappedPointerTip = expandPointerRangeForSeatedPlay(
-      baseMappedPointerTip,
-      preferencesRef.current.seatedMode &&
-        phaseRef.current !== PHASES.CALIBRATION,
-    );
     const pointerSource = usesIndexPointer && mappedIndexTip ? "index" : "thumb";
     const pointerRawU = pointerSource === "index" ? indexTipRawU : thumbTipRawU;
     const pointerRawV = pointerSource === "index" ? indexTipRawV : thumbTipRawV;
@@ -11959,13 +8794,10 @@ export default function App() {
     setRawCursor(rawPoint);
 
     const prev = cursorRef.current;
-    const cursorAlpha = getCursorSmoothingAlpha(
-      preferencesRef.current.cursorSmoothing,
-    );
     const smoothed = clampPoint(
       {
-        x: cursorAlpha * rawPoint.x + (1 - cursorAlpha) * prev.x,
-        y: cursorAlpha * rawPoint.y + (1 - cursorAlpha) * prev.y,
+        x: CURSOR_ALPHA * rawPoint.x + (1 - CURSOR_ALPHA) * prev.x,
+        y: CURSOR_ALPHA * rawPoint.y + (1 - CURSOR_ALPHA) * prev.y,
       },
       viewportRef.current.width,
       viewportRef.current.height,
@@ -12017,13 +8849,10 @@ export default function App() {
       }
     }
 
-    const pinchThresholds = getPinchThresholds(
-      preferencesRef.current.pinchThreshold,
-    );
     let nextPinch = pinchStateRef.current;
-    if (!nextPinch && hand.pinchDistance < pinchThresholds.start) {
+    if (!nextPinch && hand.pinchDistance < PINCH_START_THRESHOLD) {
       nextPinch = true;
-    } else if (nextPinch && hand.pinchDistance > pinchThresholds.end) {
+    } else if (nextPinch && hand.pinchDistance > PINCH_END_THRESHOLD) {
       nextPinch = false;
     }
 
@@ -12082,15 +8911,13 @@ export default function App() {
       }
     }
 
-    publishTrackingInteractionSample({
-      handDetected: true,
-      framing: assessTrackingHandFraming(hand),
-      pinchActive: nextPinch,
-      pointerU: smoothed.x / Math.max(1, viewportRef.current.width),
-      pointerV: smoothed.y / Math.max(1, viewportRef.current.height),
-      timestamp,
-    });
+    const sandboxGrabActive = pinchStateRef.current;
+    updateSandboxPhysics(timestamp, smoothed, true, sandboxGrabActive);
     drawCameraOverlay(hand);
+    updateFlightSimulation(timestamp);
+    updateRunnerSimulation(timestamp);
+    updateFullscreenOverlayGames(timestamp);
+    updateGame(timestamp);
   }
 
   function appendLabEventsToLog(events) {
@@ -12252,7 +9079,6 @@ export default function App() {
       hands,
       timestamp,
       confidenceThreshold: labConfidenceThresholdRef.current,
-      pinchThreshold: preferencesRef.current.pinchThreshold,
       personalizationEnabled: labPersonalizationEnabledRef.current,
       personalizer: personalizationRef.current,
     });
@@ -12263,97 +9089,17 @@ export default function App() {
       if (phaseRef.current === PHASES.SPATIAL_GESTURE_MEMORY) {
         for (const event of output.events) {
           if (event?.confidence >= labConfidenceThresholdRef.current) {
-            dispatchSpatialMemoryExperience({
-              type: SPATIAL_MEMORY_ACTIONS.GESTURE_INPUT,
-              gestureId: event.gestureId,
-              confidence: event.confidence,
-              source: "camera",
-              now: timestamp,
-              frameId: output.frameId,
-            });
+            handleSpatialMemoryEvent(event, timestamp);
           }
         }
       }
     }
+    if (phaseRef.current === PHASES.SPATIAL_GESTURE_MEMORY) {
+      updateSpatialMemoryTimeout(timestamp);
+    }
     updateLabTrainingSession(timestamp, output);
   }
 
-
-  function dispatchSpatialMemoryExperience(action) {
-    const previousExperience =
-      spatialMemoryExperienceRef.current ??
-      createSpatialMemoryExperience();
-    const nextExperience = reduceSpatialMemoryExperience(
-      previousExperience,
-      action,
-    );
-    if (nextExperience === previousExperience) {
-      return previousExperience;
-    }
-
-    spatialMemoryExperienceRef.current = nextExperience;
-    setSpatialMemoryExperience(nextExperience);
-
-    const previousLegacy =
-      spatialMemoryRef.current ?? createInitialSpatialMemoryState();
-    let nextLegacy = toSpatialMemoryLegacyState(
-      nextExperience,
-      previousLegacy,
-    );
-    const enteredResult =
-      previousExperience.phase !== SPATIAL_MEMORY_PHASES.RESULT &&
-      nextExperience.phase === SPATIAL_MEMORY_PHASES.RESULT;
-    if (enteredResult) {
-      const succeeded =
-        nextExperience.result?.outcome === "success";
-      const totalRounds = (previousLegacy.totalRounds ?? 0) + 1;
-      const completedRounds =
-        (previousLegacy.completedRounds ?? 0) + (succeeded ? 1 : 0);
-      const score = nextExperience.scores?.combinedScore ?? 0;
-      const highScore = Math.max(previousLegacy.highScore ?? 0, score);
-      const bestRound = succeeded
-        ? Math.max(previousLegacy.bestRound ?? 1, nextExperience.round)
-        : previousLegacy.bestRound ?? 1;
-      const elapsedMs =
-        Number.isFinite(nextExperience.phaseStartedAt) &&
-        Number.isFinite(nextExperience.observeStartedAt)
-          ? Math.max(
-              0,
-              nextExperience.phaseStartedAt -
-                nextExperience.observeStartedAt,
-            )
-          : 0;
-      nextLegacy = {
-        ...nextLegacy,
-        totalRounds,
-        completedRounds,
-        highScore,
-        bestRound,
-        successRate: completedRounds / Math.max(1, totalRounds),
-        elapsedSeconds: elapsedMs / 1000,
-        smoothness:
-          1 -
-          Math.min(
-            1,
-            (nextExperience.mistakesUsed ?? 0) /
-              Math.max(
-                1,
-                (nextExperience.mistakeAllowance ?? 0) + 1,
-              ),
-          ),
-        difficultyLevel: previousLegacy.difficultyLevel ?? 1,
-      };
-      saveSpatialMemoryStats({
-        highScore,
-        bestRound,
-        totalRounds,
-        completedRounds,
-      });
-    }
-    spatialMemoryRef.current = nextLegacy;
-    setSpatialMemoryState(nextLegacy);
-    return nextExperience;
-  }
 
   function startSpatialGestureMemoryRound() {
     const previous = spatialMemoryRef.current ?? createInitialSpatialMemoryState();
@@ -12364,40 +9110,205 @@ export default function App() {
     const difficultyLevel = Math.max(1, Math.min(6, nextRound + adaptiveBoost + adaptivePenalty));
     const sequence = buildSpatialSequence(nextRound, difficultyLevel);
     const now = performance.now();
+    const expected = sequence[0] ?? null;
+    const globalTimeLimitMs = Math.max(4200, SGM_GLOBAL_BASE_TIME_MS - (difficultyLevel - 1) * 650);
 
-    beginRestartedProgressionSession(getModeById("spatial-memory"), {
+    setSpatialMemoryState((prev) => ({
+      ...prev,
+      active: true,
+      status: "playing",
       round: nextRound,
-      difficultyLevel,
-    });
-    const preparedLegacy = {
-      ...previous,
-      difficultyLevel,
-    };
-    spatialMemoryRef.current = preparedLegacy;
-    setSpatialMemoryState(preparedLegacy);
-    dispatchSpatialMemoryExperience({
-      type: SPATIAL_MEMORY_ACTIONS.START_ROUND,
       sequence,
-      round: nextRound,
-      now,
-      teachingStepDurationMs: 1_500,
-      mistakeAllowance: difficultyLevel >= 5 ? 1 : 2,
-      minimumConfidence: labConfidenceThresholdRef.current,
-    });
+      sequenceLength: sequence.length,
+      currentStepIndex: 0,
+      stepProgressIds: [],
+      expectedStep: expected,
+      expectedLabel: formatSgmStepLabel(expected),
+      stepDeadline: now + SGM_STEP_TIMEOUT_MS,
+      roundStartAt: now,
+      elapsedSeconds: 0,
+      message: `Repeat ${sequence.length} gestures in order. Total time limit: ${(globalTimeLimitMs / 1000).toFixed(1)}s.`,
+      lastActionLabel: "—",
+      accuracy: 1,
+      smoothness: 0,
+      difficultyLevel,
+      globalTimeLimitMs,
+      recentStepDurations: [],
+      attempts: 0,
+      correctSteps: 0,
+    }));
   }
 
   function resetSpatialGestureMemory() {
     const nextStats = createInitialSpatialMemoryStats();
     saveSpatialMemoryStats(nextStats);
-    const nextExperience = createSpatialMemoryExperience();
-    const nextLegacy = {
+    setSpatialMemoryState({
       ...createInitialSpatialMemoryState(),
       ...nextStats,
-    };
-    spatialMemoryExperienceRef.current = nextExperience;
-    spatialMemoryRef.current = nextLegacy;
-    setSpatialMemoryExperience(nextExperience);
-    setSpatialMemoryState(nextLegacy);
+    });
+  }
+
+  function handleSpatialMemoryEvent(event, timestamp) {
+    setSpatialMemoryState((prev) => {
+      if (!prev.active || prev.status !== "playing") {
+        return prev;
+      }
+      const expected = prev.sequence[prev.currentStepIndex] ?? null;
+      const expectedIds = Array.isArray(expected) ? expected : [expected];
+      const isExpected = expectedIds.includes(event.gestureId);
+      const attempts = (prev.attempts ?? 0) + 1;
+      const elapsedFromRoundStart = Math.max(0, timestamp - prev.roundStartAt);
+      const stepDuration = prev.currentStepIndex === 0
+        ? elapsedFromRoundStart
+        : Math.max(0, elapsedFromRoundStart - prev.recentStepDurations.reduce((sum, value) => sum + value, 0));
+
+      if (!isExpected) {
+        const totalRounds = (prev.totalRounds ?? 0) + 1;
+        saveSpatialMemoryStats({
+          highScore: prev.highScore ?? 0,
+          bestRound: prev.bestRound ?? 1,
+          totalRounds,
+          completedRounds: prev.completedRounds ?? 0,
+        });
+        const accuracy = prev.correctSteps / attempts;
+        return {
+          ...prev,
+          status: "failed",
+          active: false,
+          attempts,
+          accuracy,
+          totalRounds,
+          successRate: (prev.completedRounds ?? 0) / Math.max(1, totalRounds),
+          elapsedSeconds: elapsedFromRoundStart / 1000,
+          lastActionLabel: `${GESTURE_LABEL_BY_ID[event.gestureId] ?? event.gestureId} (wrong)`,
+          message: `Wrong gesture. Expected ${formatSgmStepLabel(expected)}.`,
+        };
+      }
+
+      const currentProgress = Array.isArray(prev.stepProgressIds) ? prev.stepProgressIds : [];
+      const nextProgressIds = currentProgress.includes(event.gestureId)
+        ? currentProgress
+        : [...currentProgress, event.gestureId];
+      if (nextProgressIds.length < expectedIds.length) {
+        const remaining = expectedIds.filter((gestureId) => !nextProgressIds.includes(gestureId));
+        return {
+          ...prev,
+          attempts,
+          stepProgressIds: nextProgressIds,
+          lastActionLabel: `${GESTURE_LABEL_BY_ID[event.gestureId] ?? event.gestureId} (partial)`,
+          message: `Combo step in progress. Still need ${formatSgmStepLabel(remaining)}.`,
+        };
+      }
+
+      const nextStepIndex = prev.currentStepIndex + 1;
+      const nextDurations = [...prev.recentStepDurations, stepDuration];
+      const correctSteps = (prev.correctSteps ?? 0) + 1;
+      const accuracy = correctSteps / attempts;
+      const avgDuration = nextDurations.reduce((sum, value) => sum + value, 0) / Math.max(1, nextDurations.length);
+      const smoothness = 1 - Math.min(1, avgDuration / SGM_STEP_TIMEOUT_MS);
+
+      if (nextStepIndex >= prev.sequence.length) {
+        const elapsedSeconds = elapsedFromRoundStart / 1000;
+        const speedScore = Math.max(0.25, 1 - elapsedFromRoundStart / Math.max(1, prev.globalTimeLimitMs));
+        const score = prev.score + correctSteps * 100 + accuracy * 90 + smoothness * 70 + speedScore * 110;
+        const totalRounds = (prev.totalRounds ?? 0) + 1;
+        const completedRounds = (prev.completedRounds ?? 0) + 1;
+        const highScore = Math.max(prev.highScore ?? 0, score);
+        const bestRound = Math.max(prev.bestRound ?? 1, prev.round);
+        saveSpatialMemoryStats({ highScore, bestRound, totalRounds, completedRounds });
+        return {
+          ...prev,
+          active: false,
+          status: "completed",
+          attempts,
+          correctSteps,
+          accuracy,
+          smoothness,
+          elapsedSeconds,
+          score,
+          highScore,
+          bestRound,
+          totalRounds,
+          completedRounds,
+          successRate: completedRounds / Math.max(1, totalRounds),
+          lastActionLabel: GESTURE_LABEL_BY_ID[event.gestureId] ?? event.gestureId,
+          message: `Round complete! Great memory + control.`,
+          stepProgressIds: [],
+          expectedStep: null,
+          expectedLabel: "Round complete",
+        };
+      }
+
+      const nextExpected = prev.sequence[nextStepIndex] ?? null;
+      return {
+        ...prev,
+        attempts,
+        correctSteps,
+        accuracy,
+        smoothness,
+        currentStepIndex: nextStepIndex,
+        stepProgressIds: [],
+        expectedStep: nextExpected,
+        expectedLabel: formatSgmStepLabel(nextExpected),
+        lastActionLabel: GESTURE_LABEL_BY_ID[event.gestureId] ?? event.gestureId,
+        stepDeadline: timestamp + SGM_STEP_TIMEOUT_MS,
+        elapsedSeconds: elapsedFromRoundStart / 1000,
+        message: "Nice. Keep going.",
+        recentStepDurations: nextDurations,
+      };
+    });
+  }
+
+  function updateSpatialMemoryTimeout(timestamp) {
+    setSpatialMemoryState((prev) => {
+      if (!prev.active || prev.status !== "playing") {
+        return prev;
+      }
+      const elapsed = Math.max(0, timestamp - prev.roundStartAt);
+      if (elapsed > prev.globalTimeLimitMs) {
+        const totalRounds = (prev.totalRounds ?? 0) + 1;
+        saveSpatialMemoryStats({
+          highScore: prev.highScore ?? 0,
+          bestRound: prev.bestRound ?? 1,
+          totalRounds,
+          completedRounds: prev.completedRounds ?? 0,
+        });
+        return {
+          ...prev,
+          active: false,
+          status: "failed",
+          totalRounds,
+          successRate: (prev.completedRounds ?? 0) / Math.max(1, totalRounds),
+          message: "Round failed: global speed limit exceeded.",
+          elapsedSeconds: elapsed / 1000,
+        };
+      }
+      if (timestamp <= prev.stepDeadline) {
+        if (Math.abs(prev.elapsedSeconds - elapsed / 1000) < 0.02) {
+          return prev;
+        }
+        return {
+          ...prev,
+          elapsedSeconds: elapsed / 1000,
+        };
+      }
+      const totalRounds = (prev.totalRounds ?? 0) + 1;
+      saveSpatialMemoryStats({
+        highScore: prev.highScore ?? 0,
+        bestRound: prev.bestRound ?? 1,
+        totalRounds,
+        completedRounds: prev.completedRounds ?? 0,
+      });
+      return {
+        ...prev,
+        active: false,
+        status: "failed",
+        totalRounds,
+        successRate: (prev.completedRounds ?? 0) / Math.max(1, totalRounds),
+        elapsedSeconds: elapsed / 1000,
+        message: `Timeout on step ${prev.currentStepIndex + 1}.`,
+      };
+    });
   }
 
   function startLabGestureRecording(gestureId) {
@@ -12510,50 +9421,6 @@ export default function App() {
   }
 
   useEffect(() => {
-    let animationFrameId = 0;
-    let cancelled = false;
-    let previousRenderTimestamp = null;
-    simulationTimingRef.current.reset();
-    simulationEpochRef.current = null;
-    lifecycleLastTickRef.current = 0;
-
-    const simulate = (timestamp) => {
-      if (cancelled || !mountedRef.current) {
-        return;
-      }
-      if (previousRenderTimestamp !== null) {
-        const qualityUpdate = updateDynamicQuality(
-          dynamicQualityControllerRef.current,
-          {
-            frameTimeMs: timestamp - previousRenderTimestamp,
-            timestampMs: timestamp,
-          },
-        );
-        dynamicQualityControllerRef.current = qualityUpdate.state;
-        if (qualityUpdate.changed) {
-          setDynamicQualityLevel(qualityUpdate.level);
-          appLog.info("Adaptive visual quality changed", {
-            previousLevel: qualityUpdate.previousLevel,
-            level: qualityUpdate.level,
-            reason: qualityUpdate.reason,
-          });
-        }
-      }
-      previousRenderTimestamp = timestamp;
-      runAppSimulationFrame(timestamp);
-      animationFrameId = requestAnimationFrame(simulate);
-    };
-    animationFrameId = requestAnimationFrame(simulate);
-
-    return () => {
-      cancelled = true;
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
-    };
-  }, [appLog, phase]);
-
-  useEffect(() => {
     const poseOnlyTrackingPhase =
       phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB;
     const trackingReady = cameraReady && (poseOnlyTrackingPhase ? poseModelReady : modelReady);
@@ -12586,15 +9453,6 @@ export default function App() {
       const poseOnlyFrame =
         phaseRef.current === PHASES.BODY_POSE || phaseRef.current === PHASES.OFF_AXIS_LAB;
       runTrackingKeepAlive(timestamp, { allowDetectorRecovery: !poseOnlyFrame });
-      const inferenceIntervalMs =
-        dynamicQualityBudgetRef.current.inferenceIntervalMs;
-      if (
-        lastInferenceStartedAtRef.current > 0 &&
-        timestamp - lastInferenceStartedAtRef.current <
-          inferenceIntervalMs
-      ) {
-        return;
-      }
 
       if (poseOnlyFrame) {
         const video = videoRef.current;
@@ -12632,21 +9490,13 @@ export default function App() {
             });
             return;
           }
-          const labeledHands = assignStableHandLabels(detectedHands, {
+          const stableHands = assignStableHandLabels(detectedHands, {
             memory: handLabelMemoryRef.current,
             timestamp,
             pose,
-          }).slice(0, TRACKING_DEFAULT_HAND_LIMIT);
-          const stableHands = adaptHandsForCamera(
-            labeledHands,
-            preferencesRef.current.mirrorCamera,
-          );
-          const displayPose = adaptPoseForCamera(
-            pose,
-            preferencesRef.current.mirrorCamera,
-          );
+          }).slice(0, TRACKING_MAX_HANDS);
           if (!cancelled && mountedRef.current) {
-            processPoseFrame(displayPose, timestamp, stableHands);
+            processPoseFrame(pose, timestamp, stableHands);
           }
         } catch (error) {
           appLog.error("Pose frame inference failed", { error });
@@ -12665,13 +9515,16 @@ export default function App() {
           });
         }
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
+        updateFlightSimulation(timestamp);
+        updateRunnerSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
+        updateGame(timestamp);
         return;
       }
       inferenceBusySkipCounterRef.current = 0;
 
       if (recoveringDetectorRef.current) {
         fullscreenHandsRef.current = [];
-        setFullscreenDetectedHandCount(0);
         fullscreenPrimaryHandIdRef.current = null;
         recoveryFrameSkipCounterRef.current += 1;
         if (recoveryFrameSkipCounterRef.current % 30 === 0) {
@@ -12680,6 +9533,10 @@ export default function App() {
           });
         }
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
+        updateFlightSimulation(timestamp);
+        updateRunnerSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
+        updateGame(timestamp);
         return;
       }
       recoveryFrameSkipCounterRef.current = 0;
@@ -12688,7 +9545,6 @@ export default function App() {
       const video = videoRef.current;
       if (!detector || !video || video.readyState < 2) {
         fullscreenHandsRef.current = [];
-        setFullscreenDetectedHandCount(0);
         fullscreenPrimaryHandIdRef.current = null;
         appLog.debug("Skipping frame due to missing detector/video readiness", {
           hasDetector: Boolean(detector),
@@ -12696,6 +9552,10 @@ export default function App() {
           readyState: video?.readyState ?? null,
         });
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
+        updateFlightSimulation(timestamp);
+        updateRunnerSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
+        updateGame(timestamp);
         return;
       }
 
@@ -12774,40 +9634,21 @@ export default function App() {
         if (!cancelled && mountedRef.current) {
           const fullscreenTrackedHandLimit =
             phaseRef.current === PHASES.FULLSCREEN_CAMERA
-              ? getFullscreenTrackedHandLimit(
-                  fullscreenGridModeRef.current,
-                  TRACKING_DEFAULT_HAND_LIMIT,
-                )
-              : TRACKING_DEFAULT_HAND_LIMIT;
-          const labeledHands = assignStableHandLabels(detectedHands, {
+              ? getFullscreenTrackedHandLimit(fullscreenGridModeRef.current, TRACKING_MAX_HANDS)
+              : TRACKING_MAX_HANDS;
+          const stableHands = assignStableHandLabels(detectedHands, {
             memory: handLabelMemoryRef.current,
             timestamp,
             pose: minorityReportPose,
           }).slice(0, fullscreenTrackedHandLimit);
-          const stableHands = adaptHandsForCamera(
-            labeledHands,
-            preferencesRef.current.mirrorCamera,
-          );
           fullscreenHandsRef.current = stableHands;
-          if (phaseRef.current === PHASES.FULLSCREEN_CAMERA) {
-            setFullscreenDetectedHandCount(stableHands.length);
-          }
-          const primaryHand = selectPreferredHand(
-            stableHands,
-            preferencesRef.current.dominantHand,
-          );
+          const primaryHand = stableHands[0] ?? null;
           fullscreenPrimaryHandIdRef.current = primaryHand?.id ?? primaryHand?.label ?? null;
           processTrackingFrame(primaryHand, timestamp);
           if (phaseRef.current === PHASES.FULLSCREEN_CAMERA) {
             const overlayPoints = drawFullscreenOverlay(stableHands);
             setFullscreenIndexPoints(overlayPoints.indexPoints);
             setFullscreenTipPoints(overlayPoints.tipPoints);
-            setFullscreenSkeletonHands(
-              FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridModeRef.current)
-                ? stableHands
-                : [],
-            );
-            scheduleFullscreenBodyPoseDetection(timestamp);
           }
           processMinorityReportFrame(stableHands, timestamp);
           if (phaseRef.current === PHASES.GESTURE_ANALYTICS_LAB) {
@@ -12831,6 +9672,10 @@ export default function App() {
       } catch (error) {
         appLog.error("Frame inference failed", { error });
         updateFlightControlFromTips(null, timestamp, frameCounterRef.current);
+        updateFlightSimulation(timestamp);
+        updateRunnerSimulation(timestamp);
+        updateFullscreenOverlayGames(timestamp);
+        updateGame(timestamp);
       } finally {
         completeTrackingInference(inferenceToken);
       }
@@ -12864,10 +9709,7 @@ export default function App() {
           opacity,
         }}
       >
-        {getFullscreenRingLayersForHand(
-          motionVisualizerRingLayers,
-          point.label,
-        ).map((layer) => (
+        {getFullscreenRingLayersForHand(FULLSCREEN_RING_LAYERS, point.label).map((layer) => (
           <div
             key={`${keyPrefix}-${point.id}-${layer.color}`}
             className="fullscreen-camera-ring-layer"
@@ -12888,10 +9730,7 @@ export default function App() {
     }
 
     const elapsed = Math.max(0, fullscreenPulseNow - burst.startTime);
-    const progress = Math.min(
-      1,
-      elapsed / motionVisualizerPulseDurationMs,
-    );
+    const progress = Math.min(1, elapsed / FULLSCREEN_PULSE_RING_DURATION_MS);
     if (progress <= 0 || progress >= 1) {
       return null;
     }
@@ -13044,9 +9883,7 @@ export default function App() {
       const borderWidth = Math.min(strokeWidth, outerDiameter / 2);
       const contentDiameter = Math.max(0, outerDiameter - borderWidth * 2);
       const color =
-        motionVisualizerPalette.colors[
-          bandIndex % motionVisualizerPalette.colors.length
-        ];
+        FULLSCREEN_TIP_RIPPLE_COLORS[bandIndex % FULLSCREEN_TIP_RIPPLE_COLORS.length];
       bands.push({
         contentDiameter,
         outerDiameter,
@@ -13131,22 +9968,10 @@ export default function App() {
     if (!fullscreenCameraViewport) {
       return;
     }
-    beginRestartedProgressionSession(
-      getModeByFullscreenId("fruit-ninja"),
-      activeLaunchContextRef.current,
+    const nextGame = createFruitNinjaGame(
+      fullscreenCameraViewport.width,
+      fullscreenCameraViewport.height,
     );
-    const nextGame = fullscreenFruitNinjaStateRef.current?.layout
-      ? restartFruitNinjaGame(fullscreenFruitNinjaStateRef.current)
-      : activeLaunchContextRef.current.challenge === "daily"
-        ? createFruitNinjaDailyGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
-            activeLaunchContextRef.current.dayKey,
-          )
-        : createFruitNinjaGame(
-            fullscreenCameraViewport.width,
-            fullscreenCameraViewport.height,
-          );
     fullscreenFruitNinjaLastTickRef.current = 0;
     fullscreenFruitNinjaStateRef.current = nextGame;
     setFullscreenFruitNinjaState(nextGame);
@@ -13154,13 +9979,10 @@ export default function App() {
 
   function renderFullscreenFruitTarget(target) {
     const size = target.radius * 2;
-    const targetUi = getFruitNinjaTargetUi(target);
     return (
       <div
-        aria-label={targetUi.label}
         key={target.id}
-        className={targetUi.className}
-        role="img"
+        className={`fullscreen-camera-fruit-target ${target.kind === "bomb" ? "bomb" : "fruit"}`}
         style={{
           left: `${target.x - target.radius}px`,
           top: `${target.y - target.radius}px`,
@@ -13180,21 +10002,6 @@ export default function App() {
             background: target.kind === "bomb" ? target.accent : target.accent,
           }}
         />
-        {targetUi.kind === "bomb" ? (
-          <span
-            aria-hidden="true"
-            className="fullscreen-camera-fruit-bomb-fuse"
-            style={{ "--fruit-bomb-fuse": targetUi.fuseProgress }}
-          />
-        ) : targetUi.variant !== "standard" ? (
-          <span className="fullscreen-camera-fruit-special-mark">
-            {targetUi.variant === "golden"
-              ? "★"
-              : targetUi.variant === "frost"
-                ? "❄"
-                : "◆"}
-          </span>
-        ) : null}
       </div>
     );
   }
@@ -13230,282 +10037,29 @@ export default function App() {
       thickStrokeWidth: FULLSCREEN_TIP_RIPPLE_TOUCHING_STROKE_WIDTH_PX,
     },
   );
-  const activeExperienceMode = experienceModeId
-    ? getModeById(experienceModeId)
-    : null;
-  const activeFlightCourse = getStarFlightCourse(flightHud.courseId);
-  const flightCourseResult = getStarFlightCourseResult(flightHud);
-  const isArcadeRunLeg = Boolean(
-    activeLaunchContextRef.current?.arcadeRunRequest ||
-      arcadeRunLaunchRequestRef.current,
-  );
-  const experienceOverlay = experienceLifecycle && activeExperienceMode ? (
-    <Suspense fallback={null}>
-      <ExperienceOverlay
-        exitLabel={
-          isArcadeRunLeg ? "Return to Arcade Run" : undefined
-        }
-        hud={getCurrentExperienceHud()}
-        instructions={`${activeExperienceMode.objective ?? activeExperienceMode.summary} ${
-          activeExperienceMode.controlHint ?? ""
-        }`.trim()}
-        lifecycle={experienceLifecycle}
-        modeLabel={activeExperienceMode.label}
-        onExit={exitCurrentExperience}
-        onPause={(reason) => {
-          if (experienceModeIdRef.current === "whack-a-mole") {
-            applyWhackAMoleAction({
-              type: WHACK_A_MOLE_ACTIONS.PAUSE,
-              now: performance.now(),
-            });
-          }
-          dispatchExperienceLifecycle({
-            type: EXPERIENCE_LIFECYCLE_EVENTS.PAUSE,
-            reason,
-          });
-        }}
-        onRestart={restartCurrentExperience}
-        onResume={(reason) => {
-          if (
-            reason === EXPERIENCE_PAUSE_REASONS.TRACKING_LOSS &&
-            trackingRecoveryStatus.shouldPause
-          ) {
-            return;
-          }
-          const transition = dispatchExperienceLifecycle({
-            type: EXPERIENCE_LIFECYCLE_EVENTS.RESUME,
-            reason,
-          });
-          if (
-            experienceModeIdRef.current === "whack-a-mole" &&
-            transition?.state?.phase !== EXPERIENCE_PHASES.PAUSED
-          ) {
-            applyWhackAMoleAction({
-              type: WHACK_A_MOLE_ACTIONS.RESUME,
-              now: performance.now(),
-            });
-          }
-        }}
-        trackingRecovery={trackingRecoveryStatus}
-        resultOptions={{
-          allowRestart: !isArcadeRunLeg,
-          exitLabel: isArcadeRunLeg
-            ? "Continue Arcade Run"
-            : undefined,
-          metricDefinitions: {
-            accuracyPercent: {
-              label: "Accuracy",
-              format: (value) => `${Math.round(value)}%`,
-            },
-            smoothnessPercent: {
-              label: "Smoothness",
-              format: (value) => `${Math.round(value)}%`,
-            },
-            clearTimeMs: {
-              label: "Clear time",
-              format: (value) => `${(value / 1000).toFixed(1)}s`,
-            },
-            survivalMs: {
-              label: "Survival",
-              format: formatExperienceDuration,
-            },
-            averageHitTimeMs: {
-              label: "Average reaction",
-              format: (value) => `${Math.round(value)} ms`,
-            },
-            fastestHitMs: {
-              label: "Fastest hit",
-              format: (value) => `${Math.round(value)} ms`,
-            },
-            bestStreak: {
-              label: "Best streak",
-              format: (value) => `×${Math.round(value)}`,
-            },
-            goldHits: {
-              label: "Gold hits",
-            },
-            decoyHits: {
-              label: "Decoys hit",
-            },
-            decoysAvoided: {
-              label: "Decoys avoided",
-            },
-          },
-        }}
-      />
-    </Suspense>
-  ) : null;
-
-  if (isProductHomePhase) {
-    return (
-      <ProductHome
-        cameraActive={productCameraActive}
-        capabilities={deviceCapabilities}
-        initialArea={productHomeArea}
-        readiness={{ status: productTrackingStatus }}
-        progression={gameProgression}
-        latestResult={latestGameResult}
-        recentModeIds={preferences.recentModeIds}
-        favoriteModeIds={preferences.favoriteModeIds}
-        onSelectMode={selectProductMode}
-        onOpenSetup={() => openProductTrackingSetup()}
-        onOpenSettings={() => openProductSettings()}
-        onStopCamera={stopProductCamera}
-        onSelectArea={(area) => {
-          setProductHomeArea(area);
-          updateProductPath(getProductHomePathForArea(area));
-        }}
-        onToggleFavorite={(modeId) =>
-          setPreferences((current) => toggleFavoriteMode(current, modeId))
-        }
-      />
-    );
-  }
-
-  if (isProductTrackingSetupPhase) {
-    return (
-      <Suspense
-        fallback={<LazyExperienceFallback label="Opening tracking setup…" />}
-      >
-        <TrackingSetup
-          readiness={trackingReadiness}
-          interactionCheck={trackingInteractionCheck}
-          capabilities={deviceCapabilities}
-          recommendation={capabilityRecommendation}
-          qualityBudget={dynamicQualityBudget}
-          mirrorCamera={preferences.mirrorCamera}
-          videoRef={videoRef}
-          devices={cameraDevices}
-          onBack={() => navigateToProductHome()}
-          onStart={beginProductTrackingSetup}
-          onRetry={retryProductTrackingSetup}
-          onStop={stopProductCamera}
-          onDeviceChange={(deviceId) => {
-            setRequestedCameraDeviceId(deviceId);
-            setTrackingReadiness((current) => ({
-              ...current,
-              selectedDeviceId: deviceId,
-            }));
-          }}
-          onContinueWithoutCamera={continueWithoutProductTracking}
-          onContinue={continueFromProductTrackingSetup}
-        />
-      </Suspense>
-    );
-  }
-
-  if (isProductSettingsPhase) {
-    return (
-      <Suspense
-        fallback={<LazyExperienceFallback label="Opening settings…" />}
-      >
-        <SettingsPanel
-          preferences={preferences}
-          capabilities={deviceCapabilities}
-          qualityBudget={dynamicQualityBudget}
-          trackingFps={fps}
-          cameraActive={cameraReady}
-          onChange={updateProductPreferences}
-          onBack={() => navigateToProductHome()}
-          onReset={() => setPreferences(normalizeUserPreferences())}
-          onDeleteLocalData={deleteAllLocalProductData}
-          onStopCamera={stopProductCamera}
-          onPreviewSound={(cue) => {
-            audioFeedbackRef.current.unlock();
-            audioFeedbackRef.current.play(cue);
-          }}
-        />
-      </Suspense>
-    );
-  }
-
-  if (phase === PHASES.ARCADE_RUN) {
-    return (
-      <Suspense
-        fallback={<LazyExperienceFallback label="Building your Arcade Run…" />}
-      >
-        <ArcadeRunExperience
-          cameraActive={productCameraActive}
-          capabilityOptions={arcadeRunCapabilityOptions}
-          dailyDate={activeLaunchContextRef.current?.dayKey}
-          incomingLegResult={arcadeRunIncomingResult}
-          initialRunKind={
-            activeLaunchContextRef.current?.challenge === "daily"
-              ? "daily"
-              : "mix"
-          }
-          modes={arcadeRunModes}
-          onExit={() => navigateToProductHome()}
-          onLaunchMode={handleArcadeRunLaunch}
-          onLegResultConsumed={() => {
-            setArcadeRunIncomingResult(null);
-            arcadeRunLaunchRequestRef.current = null;
-          }}
-          onRunComplete={handleArcadeRunComplete}
-          onStopCamera={stopProductCamera}
-          onSessionChange={handleArcadeRunSessionChange}
-          returningLegRequest={arcadeRunLaunchRequestRef.current}
-          storage={window.localStorage}
-        />
-      </Suspense>
-    );
-  }
-
-  if (phase === PHASES.GESTURE_ART_LAB) {
-    return (
-      <Suspense
-        fallback={<LazyExperienceFallback label="Opening Light Painting…" />}
-      >
-        <GestureArtLab
-          cameraActive={productCameraActive}
-          key={gestureArtSessionKey}
-          hands={gestureArtHands}
-          handDetected={handDetected}
-          onBack={navigateToProductHome}
-          onStopCamera={stopProductCamera}
-          onOpenSetup={() => {
-            setPendingModeId("gesture-art");
-            openProductTrackingSetup();
-          }}
-        />
-      </Suspense>
-    );
-  }
 
   if (isFullscreenCameraPhase) {
     return (
       <div className="app fullscreen-camera-app">
-        <div
-          className={`fullscreen-camera-stage ${
-            isMotionVisualizerMode ? "motion-visualizer-active" : ""
-          }`}
-          ref={cameraWrapRef}
-          style={motionVisualizerStageStyle}
-        >
+        <div className="fullscreen-camera-stage" ref={cameraWrapRef}>
           <WebcamBackground
             videoRef={videoRef}
             overlayCanvasRef={overlayCanvasRef}
             cameraObjectFit={cameraObjectFit}
-            videoClassName={
-              fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
-                ? "find-your-grind-underlay"
-                : ""
-            }
           />
-          {productCameraActive ? (
-            <button
-              className="fullscreen-camera-stop"
-              onClick={stopProductCamera}
-              type="button"
-            >
-              Camera on · Turn off
-            </button>
-          ) : null}
-          {fullscreenGridMode === "hex" ? (
-            <div
-              className="fullscreen-camera-hex-grid motion-visualizer-layer"
-              style={fullscreenHexGridMetrics?.style ?? undefined}
-            >
+          {isFullscreenModeLanding ? (
+            <FullscreenLandingPage
+              viewportStyle={fullscreenCameraLandingViewport?.style}
+              layout={fullscreenModeLandingLayout}
+              state={fullscreenModeLandingState}
+              holdProgress={fullscreenModeLandingHoldProgress}
+              handDetected={handDetected}
+              fps={fps}
+              onSelect={handleFullscreenModeLandingBoxClick}
+              onScrollOffsetChange={handleFullscreenModeLandingScrollOffsetChange}
+            />
+          ) : fullscreenGridMode === "hex" ? (
+            <div className="fullscreen-camera-hex-grid" style={fullscreenHexGridMetrics?.style ?? undefined}>
               {fullscreenHexGridMetrics?.cells?.map((cell) => (
                 <div
                   key={`fullscreen-hex-cell-${cell.key}`}
@@ -13537,7 +10091,7 @@ export default function App() {
             </div>
           ) : fullscreenGridMode === "voronoi" ? (
             <svg
-              className="fullscreen-camera-voronoi motion-visualizer-layer"
+              className="fullscreen-camera-voronoi"
               style={fullscreenVoronoiMetrics?.style ?? undefined}
               viewBox={`0 0 ${fullscreenVoronoiMetrics?.width ?? 0} ${fullscreenVoronoiMetrics?.height ?? 0}`}
               preserveAspectRatio="none"
@@ -13553,7 +10107,7 @@ export default function App() {
             </svg>
           ) : fullscreenGridMode === "rings" ? (
             <div
-              className="fullscreen-camera-rings motion-visualizer-layer"
+              className="fullscreen-camera-rings"
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               {fullscreenRingTrail.map((snapshot, snapshotIndex) => {
@@ -13561,12 +10115,7 @@ export default function App() {
                 if (age < FULLSCREEN_RING_TRAIL_SAMPLE_INTERVAL_MS) {
                   return null;
                 }
-                const progress =
-                  1 -
-                  Math.min(
-                    1,
-                    age / motionVisualizerTrailDurationMs,
-                  );
+                const progress = 1 - Math.min(1, age / FULLSCREEN_RING_TRAIL_DURATION_MS);
                 if (progress <= 0) {
                   return null;
                 }
@@ -13584,7 +10133,7 @@ export default function App() {
             </div>
           ) : fullscreenGridMode === "pulse" ? (
             <div
-              className="fullscreen-camera-rings motion-visualizer-layer"
+              className="fullscreen-camera-rings"
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               {fullscreenPulseBursts.map((burst) =>
@@ -13596,7 +10145,7 @@ export default function App() {
             </div>
           ) : fullscreenGridMode === "tip-ripples" ? (
             <div
-              className="fullscreen-camera-rings motion-visualizer-layer"
+              className="fullscreen-camera-rings"
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               {fullscreenTipPoints.map((point) =>
@@ -13612,7 +10161,7 @@ export default function App() {
             </div>
           ) : fullscreenGridMode === "static" ? (
             <div
-              className="fullscreen-camera-rings motion-visualizer-layer"
+              className="fullscreen-camera-rings"
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               {fullscreenIndexPoints.map((point) =>
@@ -13638,22 +10187,6 @@ export default function App() {
                   }}
                 />
               ))}
-              {fullscreenBrickDodgerTelegraphs.map((telegraph) => (
-                <div
-                  aria-label={telegraph.label || undefined}
-                  className={`fullscreen-camera-brick-dodger-lane-signal ${telegraph.urgency}`}
-                  key={`brick-dodger-telegraph-${telegraph.laneIndex}`}
-                  style={{
-                    left: `${
-                      telegraph.centerX -
-                      (fullscreenBrickDodgerState?.layout?.laneWidth ?? 0) / 2
-                    }px`,
-                    width: `${fullscreenBrickDodgerState?.layout?.laneWidth ?? 0}px`,
-                  }}
-                >
-                  {telegraph.label ? <span>{telegraph.label}</span> : null}
-                </div>
-              ))}
               {fullscreenBrickDodgerState?.hazards?.map((hazard) => (
                 <div
                   key={hazard.id}
@@ -13666,24 +10199,18 @@ export default function App() {
                   }}
                 />
               ))}
-              {fullscreenBrickDodgerState?.bonuses?.map((bonus) => {
-                const pickupUi = getBrickDodgerPickupUi(bonus);
-                return (
-                  <div
-                    aria-label={pickupUi.label}
-                    key={bonus.id}
-                    className={`fullscreen-camera-brick-dodger-bonus ${pickupUi.className}`}
-                    style={{
-                      left: `${bonus.x - bonus.size / 2}px`,
-                      top: `${bonus.y - bonus.size / 2}px`,
-                      width: `${bonus.size}px`,
-                      height: `${bonus.size}px`,
-                    }}
-                  >
-                    <span aria-hidden="true">{pickupUi.icon}</span>
-                  </div>
-                );
-              })}
+              {fullscreenBrickDodgerState?.bonuses?.map((bonus) => (
+                <div
+                  key={bonus.id}
+                  className="fullscreen-camera-brick-dodger-bonus"
+                  style={{
+                    left: `${bonus.x - bonus.size / 2}px`,
+                    top: `${bonus.y - bonus.size / 2}px`,
+                    width: `${bonus.size}px`,
+                    height: `${bonus.size}px`,
+                  }}
+                />
+              ))}
               {fullscreenBrickDodgerState?.player ? (
                 <div
                   className={`fullscreen-camera-brick-dodger-player ${
@@ -13700,77 +10227,21 @@ export default function App() {
               <div className="fullscreen-camera-brick-dodger-scoreboard">
                 <span>Score {fullscreenBrickDodgerState?.score ?? 0}</span>
                 <span>Shields {fullscreenBrickDodgerState?.lives ?? 0}</span>
-                <span>
-                  Stage {fullscreenBrickDodgerStageUi.stage}:{" "}
-                  {fullscreenBrickDodgerStageUi.name}
-                </span>
-                <span>Threat {fullscreenBrickDodgerStageUi.threatLabel}</span>
-                {fullscreenBrickDodgerMultiplierUi.visible ? (
-                  <span className={fullscreenBrickDodgerMultiplierUi.className}>
-                    {fullscreenBrickDodgerMultiplierUi.label}
-                  </span>
-                ) : null}
+                <span>Time {Math.floor((fullscreenBrickDodgerState?.survivalMs ?? 0) / 1000)}s</span>
+                <span>Streak {fullscreenBrickDodgerState?.bonusStreak ?? 0}</span>
               </div>
-              <div className="fullscreen-camera-brick-dodger-stage-meter">
-                <span
-                  style={{
-                    width: `${Math.round(
-                      fullscreenBrickDodgerStageUi.progress * 100,
-                    )}%`,
-                  }}
-                />
-              </div>
-              {fullscreenBrickDodgerSlowTimeUi.active ? (
-                <div className="fullscreen-camera-brick-dodger-slow-time">
-                  <strong>Slow time</strong>
-                  <span>
-                    {Math.ceil(
-                      fullscreenBrickDodgerSlowTimeUi.remainingMs / 1000,
-                    )}
-                    s
-                  </span>
-                </div>
-              ) : null}
               <div className="fullscreen-camera-brick-dodger-legend">
                 <span>Bonus +{BRICK_DODGER_BONUS_SCORE}</span>
-                <span>Skim hazards to build a near-miss multiplier</span>
-                <span>Collect shields and slow-time pickups</span>
+                <span>Survive for score over time</span>
+                <span>Adjacent lanes hold the risky pickups</span>
               </div>
-              {isFullscreenBrickDodgerMode &&
-              fullscreenBrickDodgerState?.message &&
-              !fullscreenBrickDodgerStageRecapUi.visible &&
-              !fullscreenBrickDodgerResultUi.visible ? (
+              {isFullscreenBrickDodgerMode && fullscreenBrickDodgerState?.message ? (
                 <div
                   className={`fullscreen-camera-brick-dodger-banner ${
                     fullscreenBrickDodgerState.status === "gameover" ? "game-over" : ""
                   }`}
                 >
                   {fullscreenBrickDodgerState.message}
-                </div>
-              ) : null}
-              {fullscreenBrickDodgerStageRecapUi.visible ? (
-                <div className="fullscreen-camera-brick-dodger-recap">
-                  <strong>{fullscreenBrickDodgerStageRecapUi.title}</strong>
-                  <span>{fullscreenBrickDodgerStageRecapUi.subtitle}</span>
-                  <div>
-                    {fullscreenBrickDodgerStageRecapUi.stats.map((stat) => (
-                      <span key={stat.label}>
-                        {stat.label} {stat.value}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              {fullscreenBrickDodgerResultUi.visible ? (
-                <div className="fullscreen-camera-brick-dodger-recap game-over">
-                  <strong>{fullscreenBrickDodgerResultUi.title}</strong>
-                  <div>
-                    {fullscreenBrickDodgerResultUi.stats.map((stat) => (
-                      <span key={stat.label}>
-                        {stat.label} {stat.value}
-                      </span>
-                    ))}
-                  </div>
                 </div>
               ) : null}
             </div>
@@ -13881,7 +10352,7 @@ export default function App() {
                   ? "find-your-grind"
                   : ""
               }`}
-              style={fullscreenBreakoutViewport?.style ?? undefined}
+              style={fullscreenCameraViewport?.style ?? undefined}
             >
               {fullscreenBreakoutState?.bricks
                 ?.filter((brick) => !brick.destroyed)
@@ -13935,8 +10406,6 @@ export default function App() {
               )}
               <div className="fullscreen-camera-breakout-scoreboard">
                 <span>Score {fullscreenBreakoutState?.score ?? 0}</span>
-                <span>Level {fullscreenBreakoutState?.level ?? 1}</span>
-                <span>Lives {fullscreenBreakoutState?.lives ?? 0}</span>
                 <span>
                   Bricks {fullscreenBreakoutState?.bricks?.filter((brick) => !brick.destroyed).length ?? 0}
                 </span>
@@ -13954,14 +10423,7 @@ export default function App() {
                 </div>
               ) : null}
               {isFullscreenBreakoutMode && fullscreenBreakoutState.status === "cleared" ? (
-                <div className="fullscreen-camera-breakout-banner">
-                  Level cleared · Choose Next Level
-                </div>
-              ) : null}
-              {isFullscreenBreakoutMode && fullscreenBreakoutState.status === "gameover" ? (
-                <div className="fullscreen-camera-breakout-banner">
-                  Game over · Score {fullscreenBreakoutState.score}
-                </div>
+                <div className="fullscreen-camera-breakout-banner">All bricks cleared</div>
               ) : null}
             </div>
           ) : fullscreenGridMode === "finger-pong" ? (
@@ -13998,23 +10460,15 @@ export default function App() {
                 }}
               />
               <div className="fullscreen-camera-finger-pong-scoreboard">
-                <span>You {fullscreenFingerPongMatchUi.playerScore}</span>
-                <span>
-                  Opponent {fullscreenFingerPongMatchUi.opponentScore}
-                </span>
-                <span>Rally {fullscreenFingerPongMatchUi.rallyCount}</span>
-                <span>Best {fullscreenFingerPongMatchUi.bestRally}</span>
-                {fullscreenFingerPongMatchUi.pressureLabel ? (
-                  <strong className="pressure">
-                    {fullscreenFingerPongMatchUi.pressureLabel}
-                  </strong>
-                ) : null}
+                <span>Score {fullscreenFingerPongState?.score ?? 0}</span>
+                <span>Rally {fullscreenFingerPongState?.rallyCount ?? 0}</span>
+                <span>Best {fullscreenFingerPongState?.bestRally ?? 0}</span>
+                <span>Misses {fullscreenFingerPongState?.opponentScore ?? 0}</span>
               </div>
               <div className="fullscreen-camera-finger-pong-legend">
-                <span>{fullscreenFingerPongMatchUi.serverLabel}</span>
-                <span>Move sideways to steer</span>
+                <span>Horizontal fingertip steers</span>
                 <span>Edge hits bend returns</span>
-                <span>{fullscreenFingerPongMatchUi.rulesLabel}</span>
+                <span>First to {FINGER_PONG_MAX_SCORE}</span>
               </div>
               {isFullscreenFingerPongMode &&
               fullscreenFingerPongState?.status === "countdown" &&
@@ -14024,7 +10478,7 @@ export default function App() {
                 </div>
               ) : null}
               {isFullscreenFingerPongMode &&
-              ["won", "lost"].includes(fullscreenFingerPongState?.status) ? (
+              fullscreenFingerPongState?.status === "won" ? (
                 <div className="fullscreen-camera-finger-pong-banner">
                   {fullscreenFingerPongState.message}
                 </div>
@@ -14333,21 +10787,6 @@ export default function App() {
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               <div className="fullscreen-camera-hand-bounce-backdrop" />
-              {fullscreenHandBounceTargetUi.visible ? (
-                <div
-                  className="fullscreen-camera-hand-bounce-target"
-                  role={fullscreenHandBounceTargetUi.role}
-                  aria-label={fullscreenHandBounceTargetUi.ariaLabel}
-                  style={{
-                    left: `${fullscreenHandBounceTargetUi.x}px`,
-                    top: `${fullscreenHandBounceTargetUi.y}px`,
-                    width: `${fullscreenHandBounceTargetUi.width}px`,
-                    height: `${fullscreenHandBounceTargetUi.height}px`,
-                  }}
-                >
-                  <span>{fullscreenHandBounceTargetUi.label}</span>
-                </div>
-              ) : null}
               {fullscreenHandBounceState?.ball ? (
                 <div
                   className="fullscreen-camera-hand-bounce-ball-shadow"
@@ -14392,127 +10831,29 @@ export default function App() {
                   }}
                 />
               ) : null}
-              <section
-                className={`fullscreen-camera-hand-bounce-stage ${
-                  fullscreenHandBounceStageUi.urgent ? "urgent" : ""
-                }`}
-                aria-label={`Stage ${fullscreenHandBounceStageUi.stage}: ${fullscreenHandBounceStageUi.name}`}
-              >
-                <div className="fullscreen-camera-hand-bounce-stage-heading">
-                  <span>
-                    Stage {fullscreenHandBounceStageUi.stage}/
-                    {fullscreenHandBounceStageUi.totalStages}
-                  </span>
-                  <strong>{fullscreenHandBounceStageUi.name}</strong>
-                  <time>{fullscreenHandBounceStageUi.timeLabel}</time>
-                </div>
-                <p>{fullscreenHandBounceStageUi.goalText}</p>
-                <div className="fullscreen-camera-hand-bounce-goals">
-                  {fullscreenHandBounceStageUi.goals.map((goal) => (
-                    <span className={goal.complete ? "complete" : ""} key={goal.id}>
-                      {goal.label} {goal.text}
-                    </span>
-                  ))}
-                </div>
-                <div
-                  className="fullscreen-camera-hand-bounce-stage-progress"
-                  role="progressbar"
-                  aria-label={`${fullscreenHandBounceStageUi.name} goal progress`}
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                  aria-valuenow={Math.round(
-                    fullscreenHandBounceStageUi.completionRatio * 100,
+              <div className="fullscreen-camera-hand-bounce-scoreboard">
+                <span>Saves {fullscreenHandBounceState?.score ?? 0}</span>
+                <span>Best {fullscreenHandBounceState?.bestScore ?? 0}</span>
+                <span>
+                  Speed{" "}
+                  {Math.round(
+                    Math.hypot(
+                      fullscreenHandBounceState?.ball?.vx ?? 0,
+                      fullscreenHandBounceState?.ball?.vy ?? 0,
+                    ),
                   )}
-                >
-                  <span
-                    style={{
-                      width: `${fullscreenHandBounceStageUi.completionRatio * 100}%`,
-                    }}
-                  />
-                </div>
-              </section>
-              <div
-                className="fullscreen-camera-hand-bounce-scoreboard"
-                aria-label={fullscreenHandBounceHudUi.ariaLabel}
-              >
-                {fullscreenHandBounceHudUi.items.map((hudItem) => (
-                  <span key={hudItem.id}>
-                    <small>{hudItem.label}</small>
-                    <strong>{hudItem.value}</strong>
-                  </span>
-                ))}
+                </span>
               </div>
-              <div
-                className={`fullscreen-camera-hand-bounce-power ${
-                  fullscreenHandBouncePowerUi.active ? "active" : ""
-                }`}
-                aria-label={fullscreenHandBouncePowerUi.ariaLabel}
-              >
-                <div>
-                  <strong>{fullscreenHandBouncePowerUi.label}</strong>
-                  <span>{fullscreenHandBouncePowerUi.detail}</span>
-                </div>
-                <div className="fullscreen-camera-hand-bounce-power-track">
-                  <span
-                    style={{
-                      width: `${fullscreenHandBouncePowerUi.progress * 100}%`,
-                    }}
-                  />
-                </div>
+              <div className="fullscreen-camera-hand-bounce-legend">
+                <span>No pinch needed</span>
+                <span>Use your palm to volley</span>
+                <span>Miss the bottom and the round ends</span>
               </div>
-              {(fullscreenHandBounceState?.stage ?? 1) === 1 &&
-              (fullscreenHandBounceState?.saveCount ?? 0) < 2 ? (
-                <div
-                  className="fullscreen-camera-hand-bounce-legend"
-                  aria-label={fullscreenHandBounceLegendUi.ariaLabel}
-                >
-                  {fullscreenHandBounceLegendUi.items.map((legendItem) => (
-                    <span key={legendItem.id}>
-                      <strong>{legendItem.label}</strong>
-                      {legendItem.detail}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-              {fullscreenHandBounceCheckpointUi.visible ? (
-                <div
-                  className="fullscreen-camera-hand-bounce-checkpoint"
-                  role={fullscreenHandBounceCheckpointUi.liveRole}
-                >
-                  <strong>{fullscreenHandBounceCheckpointUi.title}</strong>
-                  <div>
-                    {fullscreenHandBounceCheckpointUi.stats.map((stat) => (
-                      <span key={stat.label}>
-                        {stat.label} <b>{stat.value}</b>
-                      </span>
-                    ))}
-                  </div>
-                  <small>{fullscreenHandBounceCheckpointUi.nextStageText}</small>
-                </div>
-              ) : null}
-              {fullscreenHandBounceResultUi.visible ? (
-                <div className="fullscreen-camera-hand-bounce-result" role="status">
-                  <strong>{fullscreenHandBounceResultUi.title}</strong>
-                  <p>{fullscreenHandBounceResultUi.summary}</p>
-                  {fullscreenHandBounceResultUi.newPersonalBest ? (
-                    <span className="personal-best">New personal best</span>
-                  ) : null}
-                  <div>
-                    {fullscreenHandBounceResultUi.stats.map((stat) => (
-                      <span key={stat.label}>
-                        <small>{stat.label}</small>
-                        <b>{stat.value}</b>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
               {fullscreenHandBounceState?.message ? (
                 <div
                   className={`fullscreen-camera-hand-bounce-banner ${
                     fullscreenHandBounceState.status === "gameover" ? "game-over" : ""
                   }`}
-                  aria-live="polite"
                 >
                   {fullscreenHandBounceState.message}
                 </div>
@@ -14520,7 +10861,7 @@ export default function App() {
             </div>
           ) : fullscreenGridMode === "fruit-ninja" ? (
             <div
-              className={getFruitNinjaSceneClassName(fullscreenFruitNinjaState)}
+              className="fullscreen-camera-fruit-ninja"
               style={fullscreenCameraViewport?.style ?? undefined}
             >
               <div className="fullscreen-camera-fruit-blade-trail">
@@ -14558,21 +10899,6 @@ export default function App() {
               {fullscreenFruitNinjaState?.targets?.map((target) =>
                 renderFullscreenFruitTarget(target),
               )}
-              {fullscreenFruitNinjaBombWarnings.map((warning) => (
-                <div
-                  aria-label={`${warning.label}${
-                    warning.secondsUntilArmed
-                      ? ` in ${warning.secondsUntilArmed} seconds`
-                      : ""
-                  }`}
-                  className={warning.className}
-                  key={`bomb-warning-${warning.id}`}
-                  role="status"
-                  style={{ left: `${warning.x}px` }}
-                >
-                  <span aria-hidden="true">!</span>
-                </div>
-              ))}
               {fullscreenFruitNinjaState?.particles?.map((particle) => (
                 <div
                   key={particle.id}
@@ -14601,134 +10927,21 @@ export default function App() {
                 </div>
               ))}
               <div className="fullscreen-camera-fruit-scoreboard">
-                {fullscreenFruitNinjaHudUi.items.map((item) => (
-                  <span className={item.id} key={item.id}>
-                    <small>{item.label}</small>
-                    <strong>{item.value}</strong>
-                  </span>
-                ))}
+                <span>Score {fullscreenFruitNinjaState?.score ?? 0}</span>
+                <span>Lives {fullscreenFruitNinjaState?.lives ?? FRUIT_NINJA_GAME_OVER_LIVES}</span>
+                <span>Combo x{Math.max(1, fullscreenFruitNinjaState?.comboCount ?? 0)}</span>
               </div>
               <div className="fullscreen-camera-fruit-legend">
-                {fullscreenFruitNinjaLegendItems.map((item) => (
-                  <span className={item.id} key={item.id}>
-                    {item.label}
-                  </span>
-                ))}
+                <span>Fruit +{FRUIT_NINJA_BASE_SCORE}</span>
+                <span>Combo +{FRUIT_NINJA_COMBO_BONUS}</span>
+                <span>Bomb -{FRUIT_NINJA_BOMB_PENALTY}</span>
               </div>
-              <div
-                aria-label={`Round progress ${Math.round(
-                  fullscreenFruitNinjaRoundUi.progress * 100,
-                )}%`}
-                className={`fullscreen-camera-fruit-round-meter ${fullscreenFruitNinjaRoundUi.urgency}`}
-                role="progressbar"
-                aria-valuemax="100"
-                aria-valuemin="0"
-                aria-valuenow={Math.round(
-                  fullscreenFruitNinjaRoundUi.progress * 100,
-                )}
-              >
-                <span
-                  style={{
-                    "--fruit-round-progress":
-                      fullscreenFruitNinjaRoundUi.progress,
-                  }}
-                />
+              <div className="fullscreen-camera-fruit-banner">
+                {fullscreenFruitNinjaState?.message}
               </div>
-              <div className="fullscreen-camera-fruit-powers">
-                <span
-                  className={`fever ${
-                    fullscreenFruitNinjaPowerUi.fever.active ? "active" : ""
-                  }`}
-                  style={{
-                    "--fruit-power-progress":
-                      fullscreenFruitNinjaPowerUi.fever.active
-                        ? fullscreenFruitNinjaPowerUi.fever.remaining
-                        : fullscreenFruitNinjaPowerUi.fever.charge,
-                  }}
-                >
-                  {fullscreenFruitNinjaPowerUi.fever.label}
-                </span>
-                <span
-                  className={`slow-time ${
-                    fullscreenFruitNinjaPowerUi.slowTime.active ? "active" : ""
-                  }`}
-                  style={{
-                    "--fruit-power-progress":
-                      fullscreenFruitNinjaPowerUi.slowTime.remaining,
-                  }}
-                >
-                  {fullscreenFruitNinjaPowerUi.slowTime.label}
-                </span>
-                <span className="shields">
-                  {fullscreenFruitNinjaPowerUi.shields.charges.map(
-                    (charged, index) => (
-                      <i
-                        aria-hidden="true"
-                        className={charged ? "charged" : ""}
-                        key={`fruit-shield-${index}`}
-                      />
-                    ),
-                  )}
-                  <span className="sr-only">
-                    {fullscreenFruitNinjaPowerUi.shields.label}
-                  </span>
-                </span>
-              </div>
-              {fullscreenFruitNinjaComboUi.active ? (
-                <div
-                  className={`fullscreen-camera-fruit-combo ${fullscreenFruitNinjaComboUi.tier}`}
-                  style={{
-                    "--fruit-combo-window":
-                      fullscreenFruitNinjaComboUi.windowProgress,
-                  }}
-                >
-                  <strong>{fullscreenFruitNinjaComboUi.label}</strong>
-                  <small>Best {fullscreenFruitNinjaComboUi.bestCombo}</small>
-                </div>
-              ) : null}
-              {fullscreenFruitNinjaPrecisionUi.visible ? (
-                <div className={fullscreenFruitNinjaPrecisionUi.className}>
-                  <strong>{fullscreenFruitNinjaPrecisionUi.label}</strong>
-                  {fullscreenFruitNinjaPrecisionUi.bonus > 0 ? (
-                    <span>+{fullscreenFruitNinjaPrecisionUi.bonus}</span>
-                  ) : null}
-                </div>
-              ) : null}
-              {fullscreenFruitNinjaRoundUi.announcementVisible ? (
-                <div
-                  aria-live="polite"
-                  className="fullscreen-camera-fruit-wave-banner"
-                  role="status"
-                >
-                  {fullscreenFruitNinjaRoundUi.announcement}
-                </div>
-              ) : (
-                <div className="fullscreen-camera-fruit-banner">
-                  {fullscreenFruitNinjaState?.message}
-                </div>
-              )}
               {isFullscreenFruitNinjaMode &&
-              fullscreenFruitNinjaRecapUi.visible ? (
-                <div className="fullscreen-camera-fruit-gameover">
-                  <span>{fullscreenFruitNinjaRecapUi.title}</span>
-                  <strong>{fullscreenFruitNinjaRecapUi.score}</strong>
-                  <em>Grade {fullscreenFruitNinjaRecapUi.grade}</em>
-                  <div>
-                    {fullscreenFruitNinjaRecapUi.stats.map((stat) => (
-                      <small key={stat.id}>
-                        {stat.label} <b>{stat.value}</b>
-                      </small>
-                    ))}
-                  </div>
-                  {fullscreenFruitNinjaRecapUi.medals.length ? (
-                    <p>
-                      {fullscreenFruitNinjaRecapUi.medals
-                        .map((medal) => medal.label)
-                        .join(" · ")}
-                    </p>
-                  ) : null}
-                  <small>{fullscreenFruitNinjaRecapUi.restartText}</small>
-                </div>
+              fullscreenFruitNinjaState?.status === "gameover" ? (
+                <div className="fullscreen-camera-fruit-gameover">Round Over</div>
               ) : null}
             </div>
           ) : fullscreenGridMode === "sky-patrol" ? (
@@ -14777,64 +10990,6 @@ export default function App() {
                     )}
                   </span>
                 ))}
-              </div>
-              <div
-                className={`fullscreen-camera-sky-patrol-mission ${fullscreenSkyPatrolMissionUi.phase}`}
-              >
-                <span>
-                  Mission {fullscreenSkyPatrolMissionUi.mission}/
-                  {fullscreenSkyPatrolMissionUi.totalMissions}
-                </span>
-                <strong>{fullscreenSkyPatrolMissionUi.name}</strong>
-                <small>{fullscreenSkyPatrolMissionUi.goalText}</small>
-                <span
-                  aria-label={`${fullscreenSkyPatrolMissionUi.progress} of ${fullscreenSkyPatrolMissionUi.goal}`}
-                  className="fullscreen-camera-sky-patrol-mission-track"
-                  role="progressbar"
-                  aria-valuemax={fullscreenSkyPatrolMissionUi.goal || 1}
-                  aria-valuemin="0"
-                  aria-valuenow={fullscreenSkyPatrolMissionUi.progress}
-                >
-                  <i
-                    style={{
-                      "--sky-mission-progress":
-                        fullscreenSkyPatrolMissionUi.progressRatio,
-                    }}
-                  />
-                </span>
-              </div>
-              {fullscreenSkyPatrolComboUi.visible ? (
-                <div className="fullscreen-camera-sky-patrol-combo">
-                  <strong>{fullscreenSkyPatrolComboUi.label}</strong>
-                  <span>{fullscreenSkyPatrolComboUi.multiplier}x score</span>
-                </div>
-              ) : null}
-              <div
-                aria-label="Sky Patrol power status"
-                className="fullscreen-camera-sky-patrol-powers"
-              >
-                <span
-                  className={
-                    (fullscreenSkyPatrolHud?.shieldCharges ?? 0) > 0
-                      ? "ready"
-                      : ""
-                  }
-                >
-                  Shield {fullscreenSkyPatrolHud?.shieldCharges ?? 0}
-                </span>
-                <span
-                  className={
-                    (fullscreenSkyPatrolHud?.wingmanActiveMs ?? 0) > 0
-                      ? "active"
-                      : (fullscreenSkyPatrolHud?.wingmanCharges ?? 0) > 0
-                        ? "ready"
-                        : ""
-                  }
-                >
-                  {(fullscreenSkyPatrolHud?.wingmanActiveMs ?? 0) > 0
-                    ? "Wingmen active"
-                    : `Wingmen ${fullscreenSkyPatrolHud?.wingmanCharges ?? 0}`}
-                </span>
               </div>
               <div
                 className={`fullscreen-camera-sky-patrol-gun-meter ${fullscreenSkyPatrolGunCooldownUi.state}`}
@@ -14904,106 +11059,26 @@ export default function App() {
                     {fullscreenSkyPatrolGameOverUi.restartText}
                   </span>
                 </div>
-              ) : fullscreenSkyPatrolCheckpointUi.visible ? (
-                <div
-                  aria-live="polite"
-                  className="fullscreen-camera-sky-patrol-banner checkpoint"
-                  role="status"
-                >
-                  <span className="fullscreen-camera-sky-patrol-start-title">
-                    {fullscreenSkyPatrolCheckpointUi.title}
-                  </span>
-                  <span className="fullscreen-camera-sky-patrol-checkpoint-stats">
-                    {fullscreenSkyPatrolCheckpointUi.stats.map((stat) => (
-                      <small key={stat.label}>
-                        {stat.label} <strong>{stat.value}</strong>
-                      </small>
-                    ))}
-                  </span>
-                  <span>{fullscreenSkyPatrolCheckpointUi.nextMissionText}</span>
-                </div>
-              ) : fullscreenSkyPatrolOnboardingUi.visible ||
-                fullscreenSkyPatrolStartPromptUi.visible ? (
+              ) : fullscreenSkyPatrolStartPromptUi.visible ? (
                 <div className="fullscreen-camera-sky-patrol-banner start-prompt">
                   <span className="fullscreen-camera-sky-patrol-start-title">
-                    {fullscreenSkyPatrolOnboardingUi.visible
-                      ? fullscreenSkyPatrolOnboardingUi.title
-                      : fullscreenSkyPatrolStartPromptUi.title}
+                    {fullscreenSkyPatrolStartPromptUi.title}
                   </span>
                   <span className="fullscreen-camera-sky-patrol-start-detail">
-                    {fullscreenSkyPatrolOnboardingUi.visible
-                      ? fullscreenSkyPatrolOnboardingUi.objective
-                      : fullscreenSkyPatrolStartPromptUi.detail}
+                    {fullscreenSkyPatrolStartPromptUi.detail}
                   </span>
-                  {fullscreenSkyPatrolOnboardingUi.safetyLabel ? (
-                    <small>{fullscreenSkyPatrolOnboardingUi.safetyLabel}</small>
-                  ) : null}
                 </div>
               ) : null}
             </div>
           ) : fullscreenGridMode === WFC_WORLD_MODE_ID ? (
-            <Suspense
-              fallback={
-                <LazyExperienceFallback label="Building World Painter…" />
-              }
-            >
-              <>
-                <WfcWorldRenderer
-                  game={fullscreenWfcWorldState}
-                  style={fullscreenCameraViewport?.style ?? undefined}
-                  onMouseDown={handleFullscreenWfcWorldMouseDown}
-                  onMouseMove={handleFullscreenWfcWorldMouseMove}
-                  onMouseUp={stopFullscreenWfcWorldMouseInput}
-                  onMouseLeave={stopFullscreenWfcWorldMouseInput}
-                  onSelectTile={handleFullscreenWfcWorldSelectTile}
-                  onGenerate={handleFullscreenWfcWorldGenerate}
-                  onClear={handleFullscreenWfcWorldClear}
-                />
-                <div
-                  className={`fullscreen-camera-wfc-project-dock ${
-                    fullscreenWfcProjectOpen ? "open" : ""
-                  }`}
-                  style={fullscreenCameraViewport?.style ?? undefined}
-                >
-                  <button
-                    aria-expanded={fullscreenWfcProjectOpen}
-                    className="fullscreen-camera-wfc-project-trigger"
-                    onClick={() =>
-                      setFullscreenWfcProjectOpen((current) => !current)
-                    }
-                    type="button"
-                  >
-                    <span>
-                      {fullscreenWfcProjectOpen ? "Close project" : "World project"}
-                    </span>
-                    <strong>
-                      {fullscreenWfcWorldGoalUi.progress.overallPercent}%
-                    </strong>
-                  </button>
-                  {fullscreenWfcProjectOpen ? (
-                    <div
-                      aria-label="Fingerprint Worlds project tools"
-                      className="fullscreen-camera-wfc-project-surface"
-                      role="dialog"
-                    >
-                      <Suspense
-                        fallback={
-                          <LazyExperienceFallback label="Opening project library…" />
-                        }
-                      >
-                        <WfcWorldProjectPanel
-                          game={fullscreenWfcWorldState}
-                          onDelete={handleFullscreenWfcWorldDelete}
-                          onRestore={handleFullscreenWfcWorldRestore}
-                          onSave={handleFullscreenWfcWorldSave}
-                          onWorldChange={handleFullscreenWfcWorldChange}
-                        />
-                      </Suspense>
-                    </div>
-                  ) : null}
-                </div>
-              </>
-            </Suspense>
+            <WfcWorldRenderer
+              game={fullscreenWfcWorldState}
+              style={fullscreenCameraViewport?.style ?? undefined}
+              onMouseDown={handleFullscreenWfcWorldMouseDown}
+              onMouseMove={handleFullscreenWfcWorldMouseMove}
+              onMouseUp={stopFullscreenWfcWorldMouseInput}
+              onMouseLeave={stopFullscreenWfcWorldMouseInput}
+            />
           ) : fullscreenGridMode === "invaders" ? (
             <div
               className="fullscreen-camera-invaders"
@@ -15047,61 +11122,9 @@ export default function App() {
                   }}
                 />
               ))}
-              {fullscreenInvadersState?.shields?.map((shield) => (
-                <div
-                  aria-hidden="true"
-                  className="fullscreen-camera-invaders-shield"
-                  key={shield.id}
-                  style={{
-                    "--shield-health": Math.max(
-                      0,
-                      Math.min(1, shield.hp / Math.max(1, shield.maxHp)),
-                    ),
-                    left: `${shield.x}px`,
-                    top: `${shield.y}px`,
-                    width: `${shield.width}px`,
-                    height: `${shield.height}px`,
-                  }}
-                />
-              ))}
-              {fullscreenInvadersState?.ufo ? (
-                <div
-                  aria-hidden="true"
-                  className="fullscreen-camera-invaders-ufo"
-                  style={{
-                    left: `${fullscreenInvadersState.ufo.x}px`,
-                    top: `${fullscreenInvadersState.ufo.y}px`,
-                    width: `${fullscreenInvadersState.ufo.width}px`,
-                    height: `${fullscreenInvadersState.ufo.height}px`,
-                  }}
-                />
-              ) : null}
-              {fullscreenInvadersState?.powerUps?.map((powerUp) => (
-                <div
-                  aria-label={
-                    powerUp.type === "shield-repair"
-                      ? "Falling shield repair"
-                      : "Falling rapid-fire power-up"
-                  }
-                  className={`fullscreen-camera-invaders-power-up ${powerUp.type}`}
-                  key={powerUp.id}
-                  style={{
-                    left: `${powerUp.x}px`,
-                    top: `${powerUp.y}px`,
-                    width: `${powerUp.width}px`,
-                    height: `${powerUp.height}px`,
-                  }}
-                >
-                  {powerUp.type === "shield-repair" ? "＋" : "⚡"}
-                </div>
-              ))}
               {fullscreenInvadersState?.ship && (
                 <div
-                  className={`fullscreen-camera-invaders-ship ${
-                    (fullscreenInvadersState.shipInvulnerableMs ?? 0) > 0
-                      ? "invulnerable"
-                      : ""
-                  }`}
+                  className="fullscreen-camera-invaders-ship"
                   style={{
                     left: `${fullscreenInvadersState.ship.x - fullscreenInvadersState.ship.width / 2}px`,
                     top: `${fullscreenInvadersState.ship.y - fullscreenInvadersState.ship.height / 2}px`,
@@ -15112,21 +11135,15 @@ export default function App() {
               )}
               <div className="fullscreen-camera-invaders-scoreboard">
                 <span>Score {fullscreenInvadersState?.score ?? 0}</span>
-                <span>Wave {fullscreenInvadersState?.wave ?? 1}</span>
-                <span>Lives {fullscreenInvadersState?.lives ?? 0}</span>
                 <span>
                   Enemies {fullscreenInvadersState?.enemies?.filter((enemy) => enemy.alive).length ?? 0}
                 </span>
-                <span>{fullscreenInvadersState?.formation?.name ?? "Classic Formation"}</span>
+                <span>Status {fullscreenInvadersState?.status ?? "idle"}</span>
               </div>
               <div className="fullscreen-camera-invaders-legend">
                 <span>Enemy +{SPACE_INVADERS_ENEMY_SCORE}</span>
-                <span>Pinch fires · Shields absorb shots</span>
-                {fullscreenInvadersState?.activePowerUp ? (
-                  <span>Rapid fire active</span>
-                ) : (
-                  <span>Hit the UFO for a power-up</span>
-                )}
+                <span>Pinch fires</span>
+                <span>Pinch after loss restarts</span>
               </div>
               {isFullscreenInvadersMode &&
               shouldShowFullscreenInvadersBanner(fullscreenInvadersState) ? (
@@ -15167,10 +11184,7 @@ export default function App() {
                 </div>
               ))}
               <div
-                className={`fullscreen-camera-flappy-bird ${
-                  fullscreenFlappyState?.inputFeedback?.active ? "pinch-pulse" : ""
-                }`}
-                key={`flappy-bird-${fullscreenFlappyState?.inputFeedback?.pulse ?? 0}`}
+                className="fullscreen-camera-flappy-bird"
                 style={{
                   left: `${(fullscreenFlappyState?.bird?.x ?? 0) - (fullscreenFlappyState?.bird?.radius ?? 0)}px`,
                   top: `${(fullscreenFlappyState?.bird?.y ?? 0) - (fullscreenFlappyState?.bird?.radius ?? 0)}px`,
@@ -15184,18 +11198,12 @@ export default function App() {
                 style={{ height: `${fullscreenFlappyState?.layout?.groundHeight ?? 0}px` }}
               />
               <div className="fullscreen-camera-flappy-scoreboard">
-                <span>Gates {fullscreenFlappyState?.score ?? 0}</span>
-                <span>Level {fullscreenFlappyState?.difficulty?.level ?? 1}</span>
-                <span>
-                  Center streak {fullscreenFlappyState?.stats?.centerStreak ?? 0}
-                </span>
-                {fullscreenFlappyState?.challenge?.mode === "daily" ? (
-                  <span>Daily {fullscreenFlappyState.challenge.dayKey}</span>
-                ) : null}
+                <span>Score {fullscreenFlappyState?.score ?? 0}</span>
+                <span>Status {fullscreenFlappyState?.status ?? "ready"}</span>
               </div>
               <div className="fullscreen-camera-flappy-legend">
                 <span>Pinch = flap</span>
-                <span>Center the gap for a bonus</span>
+                <span>Pass a gap = +1</span>
               </div>
               {isFullscreenFlappyMode && fullscreenFlappyState?.message ? (
                 <div className="fullscreen-camera-flappy-banner">
@@ -15398,56 +11406,6 @@ export default function App() {
                   </span>
                 ))}
               </div>
-              <div className="fullscreen-camera-missile-wave-status">
-                <span>
-                  Wave {fullscreenMissileWaveUi.wave}/
-                  {fullscreenMissileWaveUi.totalWaves}
-                </span>
-                <strong>{fullscreenMissileWaveUi.name}</strong>
-                <span>
-                  {fullscreenMissileWaveUi.threatsRemaining} threats left
-                </span>
-                <div aria-label="Wave progress">
-                  <span
-                    style={{
-                      width: `${Math.round(
-                        fullscreenMissileWaveUi.progress * 100,
-                      )}%`,
-                    }}
-                  />
-                </div>
-              </div>
-              <div
-                className={`fullscreen-camera-missile-resources ${fullscreenMissileResourceUi.state}`}
-              >
-                <div>
-                  <span>
-                    Ammo {fullscreenMissileResourceUi.ammo}/
-                    {fullscreenMissileResourceUi.maxAmmo}
-                  </span>
-                  <i>
-                    <span
-                      style={{
-                        width: `${Math.round(
-                          fullscreenMissileResourceUi.ammoRatio * 100,
-                        )}%`,
-                      }}
-                    />
-                  </i>
-                </div>
-                <div>
-                  <span>Energy {fullscreenMissileResourceUi.energy}%</span>
-                  <i>
-                    <span
-                      style={{
-                        width: `${Math.round(
-                          fullscreenMissileResourceUi.energyRatio * 100,
-                        )}%`,
-                      }}
-                    />
-                  </i>
-                </div>
-              </div>
               <div className="fullscreen-camera-missile-legend compact">
                 {fullscreenMissileLegendItems.map((item) => (
                   <span key={item.id} className="fullscreen-camera-missile-legend-chip">
@@ -15472,24 +11430,6 @@ export default function App() {
                   </span>
                 </div>
               ) : null}
-              {isFullscreenMissileCommandMode &&
-              fullscreenMissileIntermissionUi.visible ? (
-                <div className="fullscreen-camera-missile-banner intermission">
-                  <span className="fullscreen-camera-missile-banner-title">
-                    {fullscreenMissileIntermissionUi.title}
-                  </span>
-                  <span>
-                    Next: wave {fullscreenMissileIntermissionUi.nextWave}
-                  </span>
-                  <span className="fullscreen-camera-missile-game-over-stats">
-                    {fullscreenMissileIntermissionUi.stats.map((stat) => (
-                      <span key={stat.label}>
-                        {stat.label} {stat.value}
-                      </span>
-                    ))}
-                  </span>
-                </div>
-              ) : null}
               {isFullscreenMissileCommandMode && fullscreenMissileGameOverUi.visible ? (
                 <div className="fullscreen-camera-missile-banner game-over">
                   <span className="fullscreen-camera-missile-game-over-title">
@@ -15502,13 +11442,6 @@ export default function App() {
                       </span>
                     ))}
                   </span>
-                  {fullscreenMissileGameOverUi.medals?.length ? (
-                    <span className="fullscreen-camera-missile-medals">
-                      {fullscreenMissileGameOverUi.medals.map((medal) => (
-                        <span key={medal.id}>{medal.label}</span>
-                      ))}
-                    </span>
-                  ) : null}
                   <span className="fullscreen-camera-missile-game-over-restart">
                     {fullscreenMissileGameOverUi.restartText}
                   </span>
@@ -15516,12 +11449,7 @@ export default function App() {
               ) : null}
             </div>
           ) : (
-            <div
-              className={`fullscreen-camera-grid ${
-                isMotionVisualizerMode ? "motion-visualizer-layer" : ""
-              }`}
-              style={fullscreenCameraGridMetrics?.style ?? undefined}
-            >
+            <div className="fullscreen-camera-grid" style={fullscreenCameraGridMetrics?.style ?? undefined}>
               {fullscreenCameraGridMetrics?.outerRing?.map((cell) => (
                 <div
                   key={`fullscreen-grid-outer-${cell.key}`}
@@ -15546,121 +11474,11 @@ export default function App() {
             </div>
           )}
 
-          {isMotionVisualizerMode ? (
-            <Suspense
-              fallback={
-                <div
-                  className="motion-visualizer-controls-loading"
-                  role="status"
-                >
-                  Opening remix controls…
-                </div>
-              }
-            >
-              <MotionVisualizerControls
-                collapsed={motionVisualizerControlsCollapsed}
-                onApplyPreset={applySelectedMotionVisualizerPreset}
-                onChange={updateMotionVisualizerSettings}
-                onCollapseChange={setMotionVisualizerControlsCollapsed}
-                onDeletePreset={deleteSelectedMotionVisualizerPreset}
-                onExport={exportMotionVisualizerArtwork}
-                onSavePreset={saveCurrentMotionVisualizerPreset}
-                onToggleFavorite={
-                  toggleCurrentMotionVisualizerFavorite
-                }
-                settings={motionVisualizerState}
-                statusMessage={motionVisualizerStatus}
-              />
-            </Suspense>
-          ) : null}
-
-          {FULLSCREEN_BODY_SKELETON_MODES.has(fullscreenGridMode) &&
-          (fullscreenBodySkeletonOverlay?.people.length ||
-            fullscreenHandSkeletonOverlay?.hands.length) ? (
-            <svg
-              className="fullscreen-body-skeleton-overlay"
-              style={fullscreenCameraViewport?.style ?? undefined}
-              viewBox={`0 0 ${fullscreenCameraViewport?.width ?? 0} ${fullscreenCameraViewport?.height ?? 0}`}
-              preserveAspectRatio="none"
-            >
-              {fullscreenBodySkeletonOverlay?.people.map((person, personIndex) => (
-                <g
-                  key={person.id}
-                  className={`fullscreen-body-skeleton-person person-${personIndex + 1}`}
-                >
-                  {person.bones.map((bone) => (
-                    <line
-                      key={`${person.id}-${bone.startName}-${bone.endName}`}
-                      className="fullscreen-body-skeleton-bone"
-                      x1={bone.x1}
-                      y1={bone.y1}
-                      x2={bone.x2}
-                      y2={bone.y2}
-                    />
-                  ))}
-                  {person.keypoints.map((point) => (
-                    <circle
-                      key={`${person.id}-${point.name}`}
-                      className={`fullscreen-body-skeleton-joint ${point.group}`}
-                      cx={point.x}
-                      cy={point.y}
-                      r={point.group === "eyes" ? 4 : 5}
-                    />
-                  ))}
-                  {person.anchor ? (
-                    <text
-                      className="fullscreen-body-skeleton-label"
-                      x={person.anchor.x + 9}
-                      y={Math.max(16, person.anchor.y - 12)}
-                    >
-                      {person.label}
-                    </text>
-                  ) : null}
-                </g>
-              ))}
-              {fullscreenHandSkeletonOverlay?.hands.map((hand, handIndex) => (
-                <g
-                  key={hand.id}
-                  className={`fullscreen-hand-skeleton-hand hand-${handIndex + 1}`}
-                >
-                  {hand.bones.map((bone) => (
-                    <line
-                      key={`${hand.id}-${bone.startIndex}-${bone.endIndex}`}
-                      className="fullscreen-hand-skeleton-bone"
-                      x1={bone.x1}
-                      y1={bone.y1}
-                      x2={bone.x2}
-                      y2={bone.y2}
-                    />
-                  ))}
-                  {hand.joints.map((joint) => (
-                    <circle
-                      key={`${hand.id}-${joint.index}`}
-                      className={`fullscreen-hand-skeleton-joint ${joint.isTip ? "tip" : ""}`}
-                      cx={joint.x}
-                      cy={joint.y}
-                      r={joint.isTip ? 4.3 : 2.7}
-                    />
-                  ))}
-                </g>
-              ))}
-            </svg>
-          ) : null}
-
-          {!experienceLifecycle &&
-          fullscreenRestartControlLabel &&
-          fullscreenRestartControlState?.layout ? (
-            <button
-              aria-label={fullscreenRestartControlLabel}
+          {fullscreenRestartControlLabel && fullscreenRestartControlState?.layout ? (
+            <div
               className={`fullscreen-camera-restart-box ${
                 fullscreenRestartControlState.handVerified ? "" : "disabled"
               } ${fullscreenRestartControlState.holdActive ? "active" : ""}`}
-              onClick={() => {
-                if (runFullscreenRestartControlActionFromRefs()) {
-                  fullscreenRestartControlStateRef.current = null;
-                  setFullscreenRestartControlState(null);
-                }
-              }}
               style={{
                 left: `${
                   (fullscreenCameraViewport?.left ?? 0) + fullscreenRestartControlState.layout.left
@@ -15671,7 +11489,6 @@ export default function App() {
                 width: `${fullscreenRestartControlState.layout.boxWidth}px`,
                 height: `${fullscreenRestartControlState.layout.boxHeight}px`,
               }}
-              type="button"
             >
               <span className="fullscreen-camera-restart-title">
                 {fullscreenRestartControlLabel}
@@ -15680,25 +11497,23 @@ export default function App() {
                 {fullscreenRestartControlState.handVerified &&
                 fullscreenRestartControlState.holdActive
                   ? fullscreenRestartControlCountdown
-                  : (preferences.dwellDurationMs / 1000).toFixed(2)}
+                  : (FULLSCREEN_MODE_LANDING_HOLD_MS / 1000).toFixed(2)}
               </span>
               <span className="fullscreen-camera-restart-hint">
                 {!fullscreenRestartControlState.handVerified
-                  ? "Show index finger or click"
+                  ? "Show 5 tips"
                   : fullscreenRestartControlState.holdActive
                   ? "Keep holding"
-                  : "Hold or click to restart"}
+                  : "Hold to restart"}
               </span>
-            </button>
+            </div>
           ) : null}
 
-          {!experienceLifecycle && fullscreenExitControlState?.layout ? (
-            <button
-              aria-label="Return Home"
+          {!isFullscreenModeLanding && fullscreenExitControlState?.layout ? (
+            <div
               className={`fullscreen-camera-exit-box ${
                 fullscreenExitControlState.handVerified ? "" : "disabled"
               } ${fullscreenExitControlState.holdActive ? "active" : ""}`}
-              onClick={() => navigateToProductHome()}
               style={{
                 left: `${
                   (fullscreenCameraViewport?.left ?? 0) + fullscreenExitControlState.layout.left
@@ -15709,75 +11524,70 @@ export default function App() {
                 width: `${fullscreenExitControlState.layout.boxWidth}px`,
                 height: `${fullscreenExitControlState.layout.boxHeight}px`,
               }}
-              type="button"
             >
-              <span className="fullscreen-camera-exit-title">Home</span>
+              <span className="fullscreen-camera-exit-title">Exit</span>
               <span className="fullscreen-camera-exit-countdown">
                 {fullscreenExitControlState.handVerified && fullscreenExitControlState.holdActive
                   ? fullscreenExitControlCountdown
-                  : (preferences.dwellDurationMs / 1000).toFixed(2)}
+                  : (FULLSCREEN_MODE_LANDING_HOLD_MS / 1000).toFixed(2)}
               </span>
               <span className="fullscreen-camera-exit-hint">
                 {!fullscreenExitControlState.handVerified
-                  ? "Show index finger or click"
+                  ? "Show 5 tips"
                   : fullscreenExitControlState.holdActive
                   ? "Keep holding"
-                  : "Hold or click"}
+                  : "Hold to exit"}
               </span>
-            </button>
+            </div>
           ) : null}
 
           <div className="fullscreen-camera-hud">
-            {!experienceLifecycle ? (
+            {!isFullscreenModeLanding ? (
               <div className="fullscreen-camera-hud-bottom">
-                <span
-                  className={`tracking-indicator fullscreen-camera-status ${
-                    fullscreenDetectedHandCount > 0 ||
-                    (isMotionVisualizerMode && !trackingRequested)
-                      ? "ok"
-                      : "warn"
-                  }`}
-                >
-                  {isMotionVisualizerMode && !trackingRequested
-                    ? "Pointer ready"
-                    : fullscreenDetectedHandCount > 0
-                      ? "Tracking ready"
-                      : "Show your hand"}
-                  {debugEnabled
-                    ? ` · Hands ${fullscreenDetectedHandCount} · Bodies ${fullscreenDetectedBodyCount} · Inference ${fps.toFixed(1)} FPS`
-                    : ""}
+                <span className={`tracking-indicator fullscreen-camera-status ${handDetected ? "ok" : "warn"}`}>
+                  {handDetected ? "Hand detected" : "Hand not detected"} | FPS: {fps.toFixed(1)}
                 </span>
                 <div className="fullscreen-camera-meta fullscreen-camera-actions">
                   <span className="fullscreen-camera-note">
-                    {fullscreenExperienceMode?.controlHint ?? "Move to interact"} · Esc returns
-                    home
+                    {fullscreenGridMode === "breakout-coop"
+                      ? `Breakout Co-op keeps index-finger steering on the paddle, uses support-hand pinch for a ${Math.round(BREAKOUT_COOP_SHIELD_DURATION_MS / 1000)} second shield pulse, and prism bricks split the ball while the shield recharges over about ${Math.round(BREAKOUT_COOP_SHIELD_COOLDOWN_MS / 1000)} seconds.`
+                      : fullscreenGridMode === "hand-bounce"
+                      ? "Hand Bounce turns your tracked palm into a bounce surface. The ball uses gravity-driven motion, rebounds off the side walls, and you only need to keep your hand under it."
+                      : fullscreenGridMode === "brick-dodger"
+                      ? "Brick Dodger uses the existing smoothed index-fingertip X position only. Drift across the full webcam overlay to dodge falling hazards, chase adjacent bonus pickups, and stretch the run as the descent speed ramps up."
+                      : fullscreenGridMode === FIND_YOUR_GRIND_BREAKOUT_MODE_ID
+                      ? "Find Your Grind Breakout uses small logo-colored bricks to spell the wordmark inside the blue frame, while the index fingertip steers the paddle like classic Breakout."
+                      : fullscreenGridMode === "breakout"
+                      ? `Index fingertip steers the paddle left and right. Bricks use the Rings palette, the launch countdown is ${BREAKOUT_COUNTDOWN_MS / 1000} seconds, and each capsule adds one extra ball.`
+                      : fullscreenGridMode === "finger-pong"
+                      ? `Finger Pong keeps the full webcam visible behind a one-player rally. Your bottom paddle follows smoothed horizontal fingertip motion, the opening countdown is ${FINGER_PONG_COUNTDOWN_MS / 1000} seconds, and off-center contacts steer the return angle while rallies gently speed up.`
+                      : fullscreenGridMode === "tic-tac-toe"
+                      ? "Tic Tac Toe locks the fullscreen camera to a single tracked hand, reuses the Minority Report hand-outline overlay, lays out New Board, O Rail, the board, and X Rail from left to right, clears the board after a 1.00 second index-fingertip hold, and gives O a random opening before switching to optimal play."
+                      : fullscreenGridMode === "fruit-ninja"
+                      ? "Fast index-fingertip swipes become blade trails. Slice bright fruit for combos, avoid dark bombs, and restart after three mistakes."
+                      : fullscreenGridMode === "sky-patrol"
+                      ? "Index fingertip steers a fighter across a vertically scrolling 16-bit coastline. Pinch fires twin cannons, air fighters weave in from above, ground emplacements ride the terrain below, and pinching after a loss relaunches the sortie."
+                      : fullscreenGridMode === WFC_WORLD_MODE_ID
+                      ? "Fingerprint Worlds lets you seed a fantasy map with pinched terrain rules, then Wave Function Collapse fills the rest while obeying the adjacency constraints."
+                      : fullscreenGridMode === "invaders"
+                      ? "Index fingertip steers the ship with the existing fullscreen smoothing. Pinch fires on a short cooldown, enemies descend in arcade sweeps, and pinch restarts the wave after a loss."
+                      : fullscreenGridMode === "missile-command"
+                      ? `Index fingertip aims. Pinch launches interceptors from the nearest surviving base, blasts stop threats in an area, and the pace ramps over time after the ${MISSILE_COMMAND_COUNTDOWN_MS / 1000}-second opening countdown.`
+                      : fullscreenGridMode === "flappy"
+                      ? "Flappy overlay uses pinch rising edges only. Each distinct pinch flaps once, holding a pinch does not retrigger, and pinching after a crash restarts the round."
+                      : "Camera fits the window without cropping. Press `Esc` to close."}
                   </span>
                 </div>
               </div>
             ) : null}
-            {activeTrackingErrorPresentation ? (
-              <div className="fullscreen-camera-errors" role="alert">
-                <div className="error-text">
-                  <strong>{activeTrackingErrorPresentation.title}</strong>
-                  <span>{activeTrackingErrorPresentation.message}</span>
-                </div>
-                <div className="button-row">
-                  <button type="button" onClick={retryActiveTrackingError}>
-                    {activeTrackingErrorPresentation.primaryAction}
-                  </button>
-                  <button
-                    className="secondary"
-                    type="button"
-                    onClick={() => navigateToProductHome()}
-                  >
-                    Return Home
-                  </button>
-                </div>
+            {(cameraError || modelError) && (
+              <div className="fullscreen-camera-errors">
+                {cameraError && <p className="error-text">{cameraError}</p>}
+                {modelError && <p className="error-text">{modelError}</p>}
               </div>
-            ) : null}
+            )}
           </div>
         </div>
-        {experienceOverlay}
       </div>
     );
   }
@@ -15785,61 +11595,52 @@ export default function App() {
   if (isMinorityReportLabPhase) {
     return (
       <div className="app fullscreen-camera-app minority-report-app">
-        <Suspense
-          fallback={<LazyExperienceFallback label="Opening Gesture HUD…" />}
-        >
-          <MinorityReportLab
-            immersive
-            cameraAspectRatio={cameraAspectRatio}
-            cameraObjectFit={cameraObjectFit}
-            cameraOverlayRef={overlayCanvasRef}
-            cameraStageRef={cameraWrapRef}
-            cameraVideoRef={videoRef}
-            cameraActive={productCameraActive}
-            trackingErrorPresentation={activeTrackingErrorPresentation}
-            fps={fps}
-            engineOutput={labEngineOutput}
-            eventLog={labEventLog}
-            detectionStatus={{
-              handsCount: labEngineOutput.hands.length,
-              inferenceBusy: inferenceBusyRef.current,
-              handDetected,
-            }}
-            confidenceThreshold={labConfidenceThreshold}
-            showSkeleton={labShowSkeleton}
-            showTrails={labShowTrails}
-            personalizationEnabled={labPersonalizationEnabled}
-            onConfidenceThresholdChange={setLabConfidenceThreshold}
-            onShowSkeletonChange={setLabShowSkeleton}
-            onShowTrailsChange={setLabShowTrails}
-            onPersonalizationEnabledChange={setLabPersonalizationEnabled}
-            trainingState={labTrainingState}
-            sampleCounts={labSampleCounts}
-            onRecordGesture={startLabGestureRecording}
-            onDeleteLastSample={deleteLastLabSample}
-            onClearSamples={clearLabSamples}
-            onExportSamples={exportLabSamples}
-            onImportSamples={importLabSamples}
-            onClearEventLog={clearLabEventLog}
-            onBack={returnFromMinorityReportLab}
-            onReset={startMinorityReportLab}
-            onRetryTracking={retryActiveTrackingError}
-            onStopCamera={stopProductCamera}
-          />
-        </Suspense>
+        <MinorityReportLab
+          immersive
+          cameraAspectRatio={cameraAspectRatio}
+          cameraObjectFit={cameraObjectFit}
+          cameraOverlayRef={overlayCanvasRef}
+          cameraStageRef={cameraWrapRef}
+          cameraVideoRef={videoRef}
+          cameraError={cameraError}
+          modelError={modelError}
+          fps={fps}
+          engineOutput={labEngineOutput}
+          eventLog={labEventLog}
+          detectionStatus={{
+            handsCount: labEngineOutput.hands.length,
+            inferenceBusy: inferenceBusyRef.current,
+            handDetected,
+          }}
+          confidenceThreshold={labConfidenceThreshold}
+          showSkeleton={labShowSkeleton}
+          showTrails={labShowTrails}
+          personalizationEnabled={labPersonalizationEnabled}
+          onConfidenceThresholdChange={setLabConfidenceThreshold}
+          onShowSkeletonChange={setLabShowSkeleton}
+          onShowTrailsChange={setLabShowTrails}
+          onPersonalizationEnabledChange={setLabPersonalizationEnabled}
+          trainingState={labTrainingState}
+          sampleCounts={labSampleCounts}
+          onRecordGesture={startLabGestureRecording}
+          onDeleteLastSample={deleteLastLabSample}
+          onClearSamples={clearLabSamples}
+          onExportSamples={exportLabSamples}
+          onImportSamples={importLabSamples}
+          onClearEventLog={clearLabEventLog}
+          onBack={returnFromMinorityReportLab}
+          onReset={startMinorityReportLab}
+        />
       </div>
     );
   }
 
+  const navigationLocked = !cameraReady || !modelReady || isCalibrating || isArcCalibrating;
+  const offAxisNavigationLocked = !cameraReady || isCalibrating || isArcCalibrating;
+  const showWorkspaceNav = shouldShowWorkspaceNav(phase);
   const contentGridClassName = `content-grid ${
     isCalibrationLayoutPhase && !isBodyPosePhase ? "calibration-layout" : ""
-  } ${isBodyPosePhase ? "body-layout" : ""} ${
-    hideInactiveCameraPane ? "single-pane-layout" : ""
-  } ${showLeftPaneResizer ? "resizable-layout" : ""} ${
-    preferences.cameraPreview === "expanded"
-      ? "camera-preview-expanded"
-      : ""
-  }`;
+  } ${isBodyPosePhase ? "body-layout" : ""} ${showLeftPaneResizer ? "resizable-layout" : ""}`;
   const contentGridStyle = showLeftPaneResizer
     ? {
         "--left-pane-resizer-width": `${RESIZABLE_LEFT_PANE_HANDLE_WIDTH_PX}px`,
@@ -15852,21 +11653,66 @@ export default function App() {
     ? Math.round(getMeasuredLeftPaneWidth())
     : undefined;
   const leftPaneResizerValueMax = showLeftPaneResizer ? Math.round(getMaxLeftPaneWidth()) : undefined;
-  const activeMode = getModeByPhase(phase);
   const activePhaseName =
-    phase === PHASES.CALIBRATION ? "Advanced Input Test" : activeMode?.label ?? "Motion Arcade";
+    phase === PHASES.CALIBRATION
+      ? "Calibration Input Test"
+      : phase === PHASES.SANDBOX
+      ? "Pinch Sandbox"
+      : phase === PHASES.FLIGHT
+      ? "Star Flight"
+      : phase === PHASES.RUNNER
+      ? "Track Runner"
+      : phase === PHASES.BODY_POSE
+      ? "Body Pose Lab"
+      : phase === PHASES.OFF_AXIS_LAB
+      ? "Off-Axis Forest Walk"
+      : phase === PHASES.CONVEYOR
+      ? "Conveyor Toss"
+      : phase === PHASES.ROULETTE
+      ? "Roulette Table"
+      : phase === PHASES.MINORITY_REPORT_LAB
+      ? "Minority Report Lab"
+      : phase === PHASES.SPATIAL_GESTURE_MEMORY
+      ? "Spatial Gesture Memory"
+      : phase === PHASES.GESTURE_ANALYTICS_LAB
+      ? "Gesture Analytics Lab"
+      : phase === PHASES.GESTURE_ART_LAB
+      ? "Gesture Art Lab"
+      : phase === PHASES.GESTURE_CONTROL_OS
+      ? "Gesture Control OS"
+      : "Whack-a-Mole";
   const activePhaseSummary =
     phase === PHASES.CALIBRATION
-      ? "Optional calibration and live input diagnostics."
-      : activeMode?.objective ?? activeMode?.summary ?? "Move naturally and explore.";
+      ? "Start here for setup, camera checks, and quick access to every mode."
+      : phase === PHASES.SANDBOX
+      ? "A focused pinch-and-drag test area for verifying direct manipulation."
+      : phase === PHASES.FLIGHT
+      ? "Five-finger steering playground with quick reset controls."
+      : phase === PHASES.RUNNER
+      ? "Track-switching runner with streamlined access back to the hub."
+      : phase === PHASES.BODY_POSE
+      ? "Whole-body tracking mode with pose-specific readiness details."
+      : phase === PHASES.OFF_AXIS_LAB
+      ? "Head-pose forest scene that uses pose-only tracking instead of hand readiness."
+      : phase === PHASES.CONVEYOR
+      ? "Throwing sandbox kept separate from the main navigation clusters."
+      : phase === PHASES.ROULETTE
+      ? "Table game entry kept distinct from the motion experiment labs."
+      : phase === PHASES.MINORITY_REPORT_LAB
+      ? "Multi-hand interaction lab with training and event logging tools."
+      : phase === PHASES.SPATIAL_GESTURE_MEMORY
+      ? "Memory challenge with next-round and reset actions kept up front."
+      : phase === PHASES.GESTURE_ANALYTICS_LAB
+      ? "Analysis workspace for reviewing live gesture features and performance."
+      : phase === PHASES.GESTURE_ART_LAB
+      ? "Creative canvas mode with a cleaner way to move between labs and games."
+      : phase === PHASES.GESTURE_CONTROL_OS
+      ? "Desktop simulation mode grouped under labs instead of ad hoc buttons."
+      : "Core game mode with calibration and alternate experiences available from the sidebar.";
 
   const currentModeActions =
     phase === PHASES.CALIBRATION
       ? [
-          {
-            label: "Home",
-            onClick: navigateToProductHome,
-          },
           {
             label: isCalibrating ? "Restart Calibration" : "Start Calibration",
             onClick: beginCalibration,
@@ -15885,10 +11731,34 @@ export default function App() {
             onClick: () => resetCalibrationInputTests("manual_button"),
             secondary: true,
           },
+          {
+            label: "Open Pinch Sandbox",
+            onClick: openSandboxScreen,
+            secondary: true,
+            disabled: navigationLocked,
+          },
+          {
+            label: "Open Fullscreen Camera",
+            onClick: openFullscreenCameraScreen,
+            secondary: true,
+            disabled: navigationLocked,
+          },
+          {
+            label: "Open Circle of Fifths Page",
+            onClick: openCircleOfFifthsPage,
+            secondary: true,
+            disabled: navigationLocked,
+          },
+          {
+            label: "Open Off-Axis Forest Walk",
+            onClick: startOffAxisLab,
+            secondary: true,
+            disabled: offAxisNavigationLocked,
+          },
         ]
       : isSandboxPhase
       ? [
-          { label: "Home", onClick: navigateToProductHome },
+          { label: "Back to Input Test", onClick: returnToCalibrationInputTest },
           {
             label: "Reset Blocks",
             onClick: () => resetSandboxBlocks("manual_button"),
@@ -15897,7 +11767,7 @@ export default function App() {
         ]
       : phase === PHASES.FLIGHT
       ? [
-          { label: "Home", onClick: navigateToProductHome },
+          { label: "Back to Input Test", onClick: returnFromFlightSession },
           {
             label: "Re-center Hand Pose",
             onClick: () => resetFlightNeutral("manual_button"),
@@ -15911,7 +11781,7 @@ export default function App() {
         ]
       : phase === PHASES.RUNNER
       ? [
-          { label: "Home", onClick: navigateToProductHome },
+          { label: "Back to Input Test", onClick: returnFromRunnerSession },
           {
             label: "Reset Runner",
             onClick: () => resetRunnerSession("manual_button"),
@@ -15920,107 +11790,190 @@ export default function App() {
         ]
       : phase === PHASES.BODY_POSE
       ? [
-          { label: "Home", onClick: navigateToProductHome },
+          { label: "Back to Input Test", onClick: returnFromBodyPoseLab },
           { label: "Restart Body Pose Lab", onClick: startBodyPoseLab, secondary: true },
         ]
       : phase === PHASES.OFF_AXIS_LAB
       ? [
-          { label: "Home", onClick: navigateToProductHome },
+          { label: "Back to Input Test", onClick: returnFromOffAxisLab },
           { label: "Restart Forest Walk", onClick: startOffAxisLab, secondary: true },
         ]
       : phase === PHASES.CONVEYOR
       ? [
-          { label: "Home", onClick: navigateToProductHome },
+          { label: "Back to Input Test", onClick: returnFromConveyorSession },
           { label: "Restart Conveyor Toss", onClick: startConveyorSession, secondary: true },
         ]
       : phase === PHASES.ROULETTE
-      ? [{ label: "Home", onClick: navigateToProductHome }]
+      ? [{ label: "Back to Input Test", onClick: returnFromRouletteSession }]
       : phase === PHASES.MINORITY_REPORT_LAB
       ? [
-          { label: "Home", onClick: navigateToProductHome },
+          { label: "Back to Input Test", onClick: returnFromMinorityReportLab },
           { label: "Reset Lab Session", onClick: startMinorityReportLab, secondary: true },
         ]
       : phase === PHASES.SPATIAL_GESTURE_MEMORY
       ? [
-          { label: "Home", onClick: navigateToProductHome },
+          { label: "Back to Input Test", onClick: returnFromSpatialGestureMemorySession },
           { label: "Next Round", onClick: startSpatialGestureMemoryRound, secondary: true },
           { label: "Reset Spatial Memory", onClick: resetSpatialGestureMemory, secondary: true },
         ]
       : phase === PHASES.GESTURE_ANALYTICS_LAB
       ? [
-          { label: "Home", onClick: navigateToProductHome },
+          { label: "Back to Input Test", onClick: returnFromGestureAnalyticsLab },
           { label: "Reset Analytics Lab", onClick: startGestureAnalyticsLab, secondary: true },
         ]
       : phase === PHASES.GESTURE_ART_LAB
       ? [
-          { label: "Home", onClick: navigateToProductHome },
+          { label: "Back to Input Test", onClick: returnFromGestureArtLab },
           { label: "Restart Gesture Art Lab", onClick: startGestureArtLab, secondary: true },
         ]
       : phase === PHASES.GESTURE_CONTROL_OS
       ? [
-          { label: "Home", onClick: navigateToProductHome },
+          { label: "Back to Input Test", onClick: returnFromGestureControlOS },
           { label: "Restart Gesture Control OS", onClick: startGestureControlOS, secondary: true },
         ]
-      : phase === PHASES.GAME
-      ? [{ label: "Home", onClick: navigateToProductHome }]
       : [
-          { label: "Home", onClick: navigateToProductHome },
+          {
+            label: gameRunning ? "Restart Game" : "Start Game",
+            onClick: startGameSession,
+            disabled: !hasSavedCalibration,
+          },
           { label: "Recalibrate", onClick: handleRecalibrate, secondary: true },
         ];
 
+  const navigationSections = [
+    {
+      title: "Core",
+      description: "Setup and shared spaces live together at the top of the sidebar.",
+      items: [
+        {
+          label: "Input Test",
+          onClick: returnToCalibrationInputTest,
+          active: phase === PHASES.CALIBRATION,
+        },
+        {
+          label: "Pinch Sandbox",
+          onClick: openSandboxScreen,
+          active: phase === PHASES.SANDBOX,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Fullscreen Camera",
+          onClick: openFullscreenCameraScreen,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Whack-a-Mole",
+          onClick: startGameSession,
+          active: phase === PHASES.GAME,
+          disabled: navigationLocked || !hasSavedCalibration,
+        },
+      ],
+    },
+    {
+      title: "Games",
+      description: "Game modes are grouped separately from labs so the page reads faster.",
+      items: [
+        {
+          label: "Runner",
+          onClick: startRunnerSession,
+          active: phase === PHASES.RUNNER,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Flight",
+          onClick: startFlightSession,
+          active: phase === PHASES.FLIGHT,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Conveyor Toss",
+          onClick: startConveyorSession,
+          active: phase === PHASES.CONVEYOR,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Roulette",
+          onClick: startRouletteSession,
+          active: phase === PHASES.ROULETTE,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Spatial Memory",
+          onClick: startSpatialGestureMemorySession,
+          active: phase === PHASES.SPATIAL_GESTURE_MEMORY,
+          disabled: navigationLocked,
+        },
+      ],
+    },
+    {
+      title: "Labs",
+      description: "Experimental workspaces now sit in one consistent navigation group.",
+      items: [
+        {
+          label: "Body Pose",
+          onClick: startBodyPoseLab,
+          active: phase === PHASES.BODY_POSE,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Off-Axis Forest Walk",
+          onClick: startOffAxisLab,
+          active: phase === PHASES.OFF_AXIS_LAB,
+          disabled: offAxisNavigationLocked,
+        },
+        {
+          label: "Minority Report",
+          onClick: startMinorityReportLab,
+          active: phase === PHASES.MINORITY_REPORT_LAB,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Gesture Analytics",
+          onClick: startGestureAnalyticsLab,
+          active: phase === PHASES.GESTURE_ANALYTICS_LAB,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Gesture Art",
+          onClick: startGestureArtLab,
+          active: phase === PHASES.GESTURE_ART_LAB,
+          disabled: navigationLocked,
+        },
+        {
+          label: "Gesture Control OS",
+          onClick: startGestureControlOS,
+          active: phase === PHASES.GESTURE_CONTROL_OS,
+          disabled: navigationLocked,
+        },
+      ],
+    },
+  ];
+
   return (
     <div className="app">
-      {experienceOverlay}
       <header className="top-bar">
-        <button className="app-brand-button" onClick={navigateToProductHome} type="button">
-          <span aria-hidden="true" className="app-brand-mark">
-            M
-          </span>
-          <span>
-            <strong>Motion Arcade</strong>
-            <small>Home</small>
-          </span>
-        </button>
-        <div className="phase-pill" aria-label={`Current experience: ${activePhaseName}`}>
-          {activePhaseName}
+        <div className="top-bar-title-group">
+          <h1>Finger Tracking Game</h1>
+          <p className="top-bar-subtitle">
+            Cleaner navigation with one home for setup, games, and labs.
+          </p>
         </div>
-        <div className="top-bar-actions">
-          <button
-            className={`tracking-indicator tracking-status-button ${
-              handDetected ? "ok" : "warn"
-            }`}
-            onClick={openProductTrackingSetup}
-            type="button"
-          >
-            {phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB
-              ? handDetected
-                ? "Pose ready"
-                : "Show your face"
-              : handDetected
-              ? "Tracking ready"
-              : "Show your hand"}
-          </button>
-          {productCameraActive ? (
-            <button
-              className="top-bar-settings"
-              onClick={stopProductCamera}
-              type="button"
-            >
-              Camera off
-            </button>
-          ) : null}
-          <button className="top-bar-settings" onClick={openProductSettings} type="button">
-            Settings
-          </button>
+        <div className="phase-pill">{activePhaseName}</div>
+        <div className={`tracking-indicator ${handDetected ? "ok" : "warn"}`}>
+          {phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB
+            ? handDetected
+              ? "Pose detected"
+              : "Pose not detected"
+            : handDetected
+            ? "Hand detected"
+            : "Hand not detected"}{" "}
+          | FPS: {fps.toFixed(1)}
         </div>
       </header>
 
       <div className={contentGridClassName} ref={contentGridRef} style={contentGridStyle}>
-        {!hideInactiveCameraPane ? (
-          <section className="card camera-card" ref={cameraPaneRef}>
-          <div
-            className={`camera-preview-panel preview-${preferences.cameraPreview}`}
-          >
+        <section className="card camera-card" ref={cameraPaneRef}>
+          <div className="camera-preview-panel">
             <h2>{cameraPanelTitle}</h2>
             {showInlineCameraPreview ? (
               <div
@@ -16042,105 +11995,160 @@ export default function App() {
           </div>
 
           <div className="camera-support-panel">
-            <div className="experience-brief">
-              <p>{activePhaseSummary}</p>
-              <strong>
-                {activeMode?.controlHint ??
-                  (phase === PHASES.CALIBRATION
-                    ? "Point at a target, then pinch to select it."
-                    : "Move naturally to interact.")}
-              </strong>
-            </div>
+            <p className="help-text">Hold one hand up.</p>
+            <p className="help-text">
+              {phase === PHASES.RUNNER
+                ? "Use your INDEX tip to steer the runner."
+                : phase === PHASES.BODY_POSE
+                ? "Body mode: keep head, shoulders, elbows, and wrists in view."
+                : phase === PHASES.OFF_AXIS_LAB
+                ? "Forest walk mode: keep your nose and both eyes visible, then lean to look around trees."
+                : phase === PHASES.MINORITY_REPORT_LAB
+                ? "In lab mode, thumb tips drive pointers."
+                : phase === PHASES.GESTURE_ART_LAB
+                ? "Index fingertip controls the primary art attractor in real time."
+                : phase === PHASES.GESTURE_CONTROL_OS
+                ? "Pinch focuses and moves windows while the gesture engine manages desktop actions."
+                : "Use your THUMB tip as the pointer."}
+            </p>
+            <p className="help-text">
+              {phase === PHASES.RUNNER
+                ? "Pinch is disabled in runner mode."
+                : phase === PHASES.BODY_POSE
+                ? "No pinch input needed; pose keypoints are highlighted directly."
+                : phase === PHASES.OFF_AXIS_LAB
+                ? "No pinch input needed; head movement shifts the off-axis forest path."
+                : phase === PHASES.MINORITY_REPORT_LAB
+                ? "Pinch to grab/release. Swipes/push/circle and two-hand gestures trigger lab actions."
+                : phase === PHASES.CONVEYOR
+                ? "Pinch to grab spheres, then release to throw. Faster flicks add speed."
+                : phase === PHASES.GESTURE_ART_LAB
+                ? "One hand draws, two hands warp, circle clears, and push toggles freeze."
+                : phase === PHASES.GESTURE_CONTROL_OS
+                ? "Pinch drags windows, swipes switch desktops, and open-palm hold opens the window menu."
+                : 'Pinch (thumb + index) to "click".'}
+            </p>
 
-            <div className="status-row" aria-live="polite">
-              <span>Camera {cameraReady ? "ready" : "waiting"}</span>
-              <span>Tracking {modelReady ? "ready" : "loading"}</span>
+            <div className="status-row">
+              <span>Camera: {cameraReady ? "ready" : "waiting"}</span>
+              <span>Model: {modelReady ? "ready" : "loading"}</span>
               {(phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB) && (
-                <span>Pose {poseModelReady ? "ready" : "loading"}</span>
+                <span>Pose model: {poseModelReady ? "ready" : "loading"}</span>
+              )}
+              <span>Runtime: {activeRuntime}</span>
+              <span>Backend: {activeBackend}</span>
+              {phase !== PHASES.BODY_POSE && phase !== PHASES.OFF_AXIS_LAB && (
+                <span>Pinch: {pinchActive ? "active" : "idle"}</span>
               )}
             </div>
 
-            {activeTrackingErrorPresentation ? (
-              <div className="camera-support-error" role="alert">
-                <div className="error-text">
-                  <strong>{activeTrackingErrorPresentation.title}</strong>
-                  <span>{activeTrackingErrorPresentation.message}</span>
+            {cameraError && <p className="error-text">{cameraError}</p>}
+            {modelError && <p className="error-text">{modelError}</p>}
+            {(phase === PHASES.BODY_POSE || phase === PHASES.OFF_AXIS_LAB) && poseModelError && (
+              <p className="error-text">{poseModelError}</p>
+            )}
+
+            {showWorkspaceNav && (
+              <div className="workspace-nav">
+                <div className="workspace-summary">
+                  <span className="workspace-summary-label">Current workspace</span>
+                  <h3>{activePhaseName}</h3>
+                  <p className="small-text">{activePhaseSummary}</p>
+                  <p className="small-text">{calibrationMessage}</p>
+                  <p className="small-text">
+                    {phase === PHASES.CALIBRATION
+                      ? isArcCalibrating
+                        ? `Lazy Arc Confidence: ${Math.round(arcCalibrationProgress * 100)}% (${arcCalibrationSamples} valid frames)`
+                        : `Captured points: ${calibrationPairsCount}/${calibrationTargets.length}${
+                            isCalibrating
+                              ? ` | Sampling: ${calibrationSampleFrames}/${CALIBRATION_SAMPLE_FRAMES}`
+                              : ""
+                          }`
+                      : phase === PHASES.SANDBOX
+                      ? "Pinch over a block to grab it. Keep pinching to drag, then release to fling."
+                      : phase === PHASES.FLIGHT
+                      ? `Steering uses all five fingertips. Neutral baseline: ${
+                          flightHud.baselineReady
+                            ? "locked"
+                            : `${flightHud.baselineSamples}/${FLIGHT_BASELINE_SAMPLE_TARGET}`
+                        }.`
+                      : phase === PHASES.BODY_POSE
+                      ? "Body pose mode tracks head, eyes, shoulders, arms, torso, and webcam overlays."
+                      : phase === PHASES.OFF_AXIS_LAB
+                      ? "Off-axis mode uses your nose and both eyes to drive a layered forest scene while holding the last transform through short pose dropouts."
+                      : phase === PHASES.CONVEYOR
+                      ? "Pinch to grab a sphere, then release to throw. Faster flicks add launch speed."
+                      : phase === PHASES.MINORITY_REPORT_LAB
+                      ? "One-hand pinch grabs panels, two-hand pinch transforms the stage, and gestures log events."
+                      : phase === PHASES.GESTURE_ART_LAB
+                      ? "Index attractor, pinch thickness, openness palette, wrist hue, and two-hand warp stay active."
+                      : phase === PHASES.GESTURE_CONTROL_OS
+                      ? "Pinch drags windows, swipes switch desktops, and open-palm hold opens contextual menu actions."
+                      : "4x4 track control: move hand across the camera view to pick any converging track."}
+                  </p>
                 </div>
-                <div className="button-row">
-                  <button type="button" onClick={retryActiveTrackingError}>
-                    {activeTrackingErrorPresentation.primaryAction}
-                  </button>
-                  <button
-                    className="secondary"
-                    type="button"
-                    onClick={stopProductCamera}
-                  >
-                    Turn camera off
-                  </button>
+
+                <div className="workspace-actions">
+                  <h3>Mode actions</h3>
+                  <div className="workspace-action-grid">
+                    {currentModeActions.map((action) => (
+                      <button
+                        key={action.label}
+                        className={action.secondary ? "secondary" : ""}
+                        type="button"
+                        onClick={action.onClick}
+                        disabled={action.disabled}
+                      >
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {navigationSections.map((section) => (
+                  <section key={section.title} className="workspace-nav-section">
+                    <div className="workspace-nav-section-heading">
+                      <h3>{section.title}</h3>
+                      <p className="small-text">{section.description}</p>
+                    </div>
+                    <div className="workspace-nav-grid">
+                      {section.items.map((item) => (
+                        <button
+                          key={item.label}
+                          className={item.active ? "nav-button active" : "nav-button secondary"}
+                          type="button"
+                          onClick={item.onClick}
+                          disabled={item.disabled || item.active}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ))}
               </div>
-            ) : null}
+            )}
 
-            {phase === PHASES.CALIBRATION && calibrationMessage ? (
-              <p className="small-text" aria-live="polite">
-                {calibrationMessage}
-              </p>
-            ) : null}
-
-            <nav className="experience-actions" aria-label={`${activePhaseName} actions`}>
-              {currentModeActions.map((action) => (
-                <button
-                  key={action.label}
-                  className={action.secondary ? "secondary" : ""}
-                  type="button"
-                  onClick={action.onClick}
-                  disabled={action.disabled}
-                >
-                  {action.label}
-                </button>
-              ))}
-            </nav>
-
-            <details className="advanced-controls">
-              <summary>Advanced tracking details</summary>
-              <dl className="tracking-details">
-                <div>
-                  <dt>Runtime</dt>
-                  <dd>{activeRuntime}</dd>
-                </div>
-                <div>
-                  <dt>Backend</dt>
-                  <dd>{activeBackend}</dd>
-                </div>
-                <div>
-                  <dt>Inference</dt>
-                  <dd>{fps.toFixed(1)} FPS</dd>
-                </div>
-                <div>
-                  <dt>Pinch</dt>
-                  <dd>{pinchActive ? "active" : "idle"}</dd>
-                </div>
-              </dl>
-              <label className="debug-toggle">
-                <input
-                  type="checkbox"
-                  checked={debugEnabled}
-                  onChange={(event) => setDebugEnabled(event.target.checked)}
-                />
-                Show debug overlay
-              </label>
+            <label className="debug-toggle">
+              <input
+                type="checkbox"
+                checked={debugEnabled}
+                onChange={(event) => setDebugEnabled(event.target.checked)}
+              />
+              Debug overlay
+            </label>
+            <div className="button-row">
               <button
                 className="secondary"
                 type="button"
                 disabled={!modelReady}
                 onClick={() => logTrackingExtentsSnapshot("manual_button")}
               >
-                Log tracking extents
+                Log Tracking Extents
               </button>
-            </details>
+            </div>
           </div>
-          </section>
-        ) : null}
+        </section>
 
         {showLeftPaneResizer && (
           <div
@@ -16158,8 +12166,7 @@ export default function App() {
           />
         )}
 
-        <Suspense fallback={<LazyExperienceFallback />}>
-          {phase === PHASES.CALIBRATION ? (
+        {phase === PHASES.CALIBRATION ? (
           <section className="card panel calibration-panel">
             <h2>Calibration Input Test</h2>
             <p className="small-text">
@@ -16250,165 +12257,31 @@ export default function App() {
           </section>
         ) : phase === PHASES.FLIGHT ? (
           <section className="card panel flight-panel">
-            <div className="flight-heading">
-              <div>
-                <span className="flight-eyebrow">Flight Lab</span>
-                <h2>Star Flight</h2>
-                <p>
-                  Thread the gates with small hand movements. Pinch to boost
-                  once your neutral pose is locked.
-                </p>
-              </div>
-              <div
-                aria-label="Choose a flight course"
-                className="flight-course-picker"
-                role="group"
-              >
-                {STAR_FLIGHT_COURSES.map((course) => (
-                  <button
-                    aria-pressed={course.id === activeFlightCourse.id}
-                    className={
-                      course.id === activeFlightCourse.id ? "active" : ""
-                    }
-                    key={course.id}
-                    onClick={() =>
-                      resetFlightSession("course_selected", course.id)
-                    }
-                    type="button"
-                  >
-                    <strong>{course.label}</strong>
-                    <span>{course.description}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <h2>Star Flight</h2>
+            <p className="small-text">
+              Third-person flight at constant speed. Move all five fingertips to steer.
+            </p>
+            <p className="small-text">
+              Shift hand left/right for yaw, up/down for pitch, and rotate hand for roll.
+            </p>
 
-            <div
-              className={`flight-stage flight-course-${flightHud.courseStatus}`}
-              ref={flightStageRef}
-            >
+            <div className="flight-stage" ref={flightStageRef}>
               <canvas className="flight-canvas" ref={flightCanvasRef} />
-              <div
-                aria-label={`${activeFlightCourse.label} flight status`}
-                className="flight-hud"
-              >
-                <strong>{activeFlightCourse.label}</strong>
+              <div className="flight-hud">
+                <span>Yaw: {(flightHud.yaw * 100).toFixed(0)}%</span>
+                <span>Pitch: {(flightHud.pitch * 100).toFixed(0)}%</span>
+                <span>Roll: {(flightHud.roll * 100).toFixed(0)}%</span>
+                <span>Control: {(flightHud.confidence * 100).toFixed(0)}%</span>
                 <span>
-                  {activeFlightCourse.gateCount
-                    ? `Gate ${Math.min(
-                        activeFlightCourse.gateCount,
-                        flightHud.gatesAttempted + 1,
-                      )}/${activeFlightCourse.gateCount}`
-                    : `${flightHud.gatesHit} gates hit`}
+                  Neutral:{" "}
+                  {flightHud.baselineReady
+                    ? "locked"
+                    : `${flightHud.baselineSamples}/${FLIGHT_BASELINE_SAMPLE_TARGET}`}
                 </span>
-                <span>Score {flightHud.score}</span>
-                <span>
-                  Streak {flightHud.streak > 0 ? `×${flightHud.streak}` : "—"}
-                </span>
-                <span>{(flightHud.elapsedMs / 1_000).toFixed(1)}s</span>
-                <span className={flightHud.boostActive ? "boost-active" : ""}>
-                  {flightHud.boostActive ? "Boosting" : "Pinch to boost"}
-                </span>
+                <span>Distance: {flightHud.distance.toFixed(0)} u</span>
               </div>
-
-              {!flightHud.baselineReady &&
-              flightHud.courseStatus === "active" ? (
-                <div
-                  aria-live="polite"
-                  className="flight-neutral-prompt"
-                  role="status"
-                >
-                  <strong>Set your neutral pose</strong>
-                  <span>
-                    Hold all five fingertips steady ·{" "}
-                    {flightHud.baselineSamples}/{FLIGHT_BASELINE_SAMPLE_TARGET}
-                  </span>
-                </div>
-              ) : null}
-
-              {flightHud.gatesAttempted > 0 &&
-              flightHud.courseStatus === "active" ? (
-                <div
-                  aria-live="polite"
-                  className={`flight-gate-feedback ${flightHud.lastGateRating}`}
-                  role="status"
-                >
-                  {flightHud.lastGateMessage}
-                </div>
-              ) : null}
-
-              {flightHud.courseStatus === "complete" ? (
-                <aside
-                  aria-label={`${activeFlightCourse.label} results`}
-                  className="flight-results"
-                >
-                  <span className="flight-results-eyebrow">Course complete</span>
-                  <h3>{flightCourseResult?.medal}</h3>
-                  <p>
-                    {flightHud.gatesHit} of {flightHud.gatesAttempted} gates ·{" "}
-                    {flightCourseResult?.accuracyPercent ?? 0}% accuracy
-                  </p>
-                  <dl>
-                    <div>
-                      <dt>Score</dt>
-                      <dd>{flightHud.score}</dd>
-                    </div>
-                    <div>
-                      <dt>Time</dt>
-                      <dd>{(flightHud.elapsedMs / 1_000).toFixed(1)}s</dd>
-                    </div>
-                    <div>
-                      <dt>Best streak</dt>
-                      <dd>×{flightHud.bestStreak}</dd>
-                    </div>
-                    <div>
-                      <dt>Missed</dt>
-                      <dd>{flightHud.gatesMissed}</dd>
-                    </div>
-                  </dl>
-                  <div className="flight-results-actions">
-                    <button
-                      onClick={() =>
-                        resetFlightSession(
-                          "course_restarted",
-                          activeFlightCourse.id,
-                        )
-                      }
-                      type="button"
-                    >
-                      Fly again
-                    </button>
-                    <button
-                      onClick={() =>
-                        resetFlightSession(
-                          "free_flight_selected",
-                          STAR_FLIGHT_COURSE_IDS.FREE,
-                        )
-                      }
-                      type="button"
-                    >
-                      Free Flight
-                    </button>
-                  </div>
-                </aside>
-              ) : null}
             </div>
 
-            <details className="flight-control-details">
-              <summary>Live steering details</summary>
-              <div>
-                <span>Yaw {(flightHud.yaw * 100).toFixed(0)}%</span>
-                <span>Pitch {(flightHud.pitch * 100).toFixed(0)}%</span>
-                <span>Roll {(flightHud.roll * 100).toFixed(0)}%</span>
-                <span>Tracking {(flightHud.confidence * 100).toFixed(0)}%</span>
-                <span>Distance {flightHud.distance.toFixed(0)} u</span>
-              </div>
-              <p>
-                Shift left or right to yaw, move up or down to pitch, and
-                rotate your hand to roll. Resetting or changing courses
-                recaptures a comfortable neutral pose.
-              </p>
-            </details>
           </section>
         ) : phase === PHASES.RUNNER ? (
           <section className="card panel runner-panel">
@@ -16435,13 +12308,13 @@ export default function App() {
           <ConveyorSphereGame
             cursor={cursor}
             pinchActive={pinchActive}
-            onBack={navigateToProductHome}
+            onBack={returnFromConveyorSession}
           />
         ) : phase === PHASES.ROULETTE ? (
           <RouletteFingerGame
             cursor={cursor}
             pinchActive={pinchActive}
-            onBack={navigateToProductHome}
+            onBack={returnFromRouletteSession}
           />
         ) : phase === PHASES.BODY_POSE ? (
           <BodyPoseLab poseStatus={poseStatus} />
@@ -16454,8 +12327,6 @@ export default function App() {
             cameraOverlayRef={overlayCanvasRef}
             cameraStageRef={cameraWrapRef}
             cameraVideoRef={videoRef}
-            cameraActive={productCameraActive}
-            trackingErrorPresentation={activeTrackingErrorPresentation}
             fps={fps}
             engineOutput={labEngineOutput}
             eventLog={labEventLog}
@@ -16480,14 +12351,10 @@ export default function App() {
             onExportSamples={exportLabSamples}
             onImportSamples={importLabSamples}
             onClearEventLog={clearLabEventLog}
-            onRetryTracking={retryActiveTrackingError}
-            onStopCamera={stopProductCamera}
           />
         ) : phase === PHASES.SPATIAL_GESTURE_MEMORY ? (
           <SpatialGestureMemory
             state={spatialMemoryState}
-            experienceState={spatialMemoryExperience}
-            onExperienceAction={dispatchSpatialMemoryExperience}
             onStart={startSpatialGestureMemoryRound}
             onReset={resetSpatialGestureMemory}
           />
@@ -16497,6 +12364,13 @@ export default function App() {
             liveHands={analyticsHands}
             liveTimestamp={analyticsTimestamp}
             fps={fps}
+          />
+        ) : phase === PHASES.GESTURE_ART_LAB ? (
+          <GestureArtLab
+            key={gestureArtSessionKey}
+            hands={gestureArtHands}
+            fps={fps}
+            handDetected={handDetected}
           />
         ) : phase === PHASES.GESTURE_CONTROL_OS ? (
           <GestureControlOS
@@ -16527,22 +12401,52 @@ export default function App() {
             onClearEventLog={clearLabEventLog}
           />
         ) : (
-          <WhackAMoleExperience
-            daily={activeLaunchContextRef.current?.challenge === "daily"}
-            dailyDate={activeLaunchContextRef.current?.dayKey}
-            exitLabel={
-              isArcadeRunLeg ? "Return to Arcade Run" : "Exit"
-            }
-            onAction={handleWhackAMoleAction}
-            onExit={exitCurrentExperience}
-            resultExitLabel={
-              isArcadeRunLeg ? "Continue Arcade Run" : "Back to games"
-            }
-            seed={whackAMoleState.seed}
-            state={whackAMoleState}
-          />
-          )}
-        </Suspense>
+          <section className="card panel">
+            <h2>Whack-a-Mole</h2>
+            <div className="stats-grid">
+              <div>
+                <strong>Score</strong>
+                <span>{score}</span>
+              </div>
+              <div>
+                <strong>Time</strong>
+                <span>{timeLeft}s</span>
+              </div>
+              <div>
+                <strong>Tracking</strong>
+                <span>{handDetected ? "yes" : "no"}</span>
+              </div>
+            </div>
+
+
+            <div className="game-board" ref={boardRef}>
+              {holes.map((hole) => (
+                <div
+                  key={hole.index}
+                  className="hole"
+                  style={{
+                    left: `${hole.x}px`,
+                    top: `${hole.y}px`,
+                    width: `${hole.r * 2.5}px`,
+                    height: `${hole.r * 1.6}px`,
+                  }}
+                />
+              ))}
+
+              {activeMoleIndex !== null && holes[activeMoleIndex] && (
+                <div
+                  className="mole"
+                  style={{
+                    left: `${holes[activeMoleIndex].x}px`,
+                    top: `${holes[activeMoleIndex].y - holes[activeMoleIndex].r * 0.45}px`,
+                    width: `${holes[activeMoleIndex].r * 1.5}px`,
+                    height: `${holes[activeMoleIndex].r * 1.5}px`,
+                  }}
+                />
+              )}
+            </div>
+          </section>
+        )}
       </div>
 
       {phase !== PHASES.MINORITY_REPORT_LAB &&

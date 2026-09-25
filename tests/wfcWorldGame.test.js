@@ -3,32 +3,18 @@ import assert from "node:assert/strict";
 
 import { createFullscreenExitControlLayout } from "../src/fullscreenExitControl.js";
 import {
-  applyWfcWorldTemplate,
   clearWfcWorld,
-  completeWfcWorldNow,
   createWfcWorldGame,
-  createWfcWorldSeed,
   createWfcWorldStepInput,
   getWfcWorldCellCenter,
   getWfcWorldControlAtPoint,
-  getWfcWorldGoalModel,
-  getWfcWorldProgress,
-  getWfcWorldQualitySummary,
-  getWfcWorldResult,
   mapPointerToWfcCell,
-  normalizeWfcWorldSeed,
   selectWfcWorldTile,
-  setWfcWorldSeed,
   startWfcWorldCollapse,
   stepWfcWorldGame,
-  WFC_WORLD_PALETTE_ACCESSIBILITY,
 } from "../src/wfc/wfcWorldGame.js";
 import { getWfcGrid, isWfcGridValid } from "../src/wfc/wfcSolver.js";
 import { FINGERPRINT_WORLD_ADJACENCY } from "../src/wfc/wfcTiles.js";
-import {
-  WFC_WORLD_BLANK_TEMPLATE_ID,
-  WFC_WORLD_STARTER_TEMPLATES,
-} from "../src/wfc/wfcWorldTemplates.js";
 
 function constantRng(value) {
   return () => value;
@@ -45,9 +31,6 @@ test("createWfcWorldGame creates a 39 by 24 finger-controlled world layout", () 
   assert.equal(game.layout.rows, 24);
   assert.equal(game.selectedTileId, "grass");
   assert.equal(game.phase, "seeding");
-  assert.match(game.seed, /^[a-z]+-[a-z]+-\d{3}$/);
-  assert.equal(game.templateId, WFC_WORLD_BLANK_TEMPLATE_ID);
-  assert.equal(game.randomCursor, 0);
   assert.ok(game.layout.grid.cellSize > 0);
   assert.equal(game.layout.grid.cellShape, "hex");
   assert.ok(game.layout.grid.cellWidth < game.layout.grid.cellHeight);
@@ -57,120 +40,6 @@ test("createWfcWorldGame creates a 39 by 24 finger-controlled world layout", () 
   assert.deepEqual(game.layout.controls.map((control) => control.id), ["generate", "clear"]);
   assert.ok(game.layout.controls.every((control) => control.height >= 88));
   assert.ok(game.layout.controls.every((control) => control.top + control.height <= game.layout.height));
-});
-
-test("world seeds are readable, bounded, and reproducible", () => {
-  const generated = createWfcWorldSeed(constantRng(0.5));
-
-  assert.equal(generated, "moss-meadow-550");
-  assert.equal(normalizeWfcWorldSeed("  Cloud   Ridge  "), "Cloud Ridge");
-  assert.equal(normalizeWfcWorldSeed(""), "quiet-meadow-001");
-  assert.equal(normalizeWfcWorldSeed("x".repeat(80)).length, 48);
-});
-
-test("matching seeds and templates resolve identically across frame cadences", () => {
-  const options = {
-    seed: "shared-river-247",
-    templateId: "river-crossing",
-  };
-  const oneFrame = stepWfcWorldGame(
-    startWfcWorldCollapse(createWfcWorldGame(1280, 720, options)),
-    10,
-    {},
-  );
-  let manyFrames = startWfcWorldCollapse(
-    createWfcWorldGame(1280, 720, options),
-  );
-  for (
-    let frame = 0;
-    frame < 200 && manyFrames.phase === "collapsing";
-    frame += 1
-  ) {
-    manyFrames = stepWfcWorldGame(manyFrames, 0.05, {});
-  }
-  const anotherSeed = completeWfcWorldNow(
-    startWfcWorldCollapse(
-      createWfcWorldGame(1280, 720, {
-        ...options,
-        seed: "shared-river-248",
-      }),
-    ),
-  );
-
-  assert.equal(oneFrame.phase, "complete");
-  assert.equal(manyFrames.phase, "complete");
-  assert.deepEqual(getWfcGrid(manyFrames.wfc), getWfcGrid(oneFrame.wfc));
-  assert.notDeepEqual(
-    getWfcGrid(anotherSeed.wfc),
-    getWfcGrid(oneFrame.wfc),
-  );
-  assert.ok(oneFrame.randomCursor > 0);
-});
-
-test("starter templates provide valid, meaningful authored rules", () => {
-  const blank = createWfcWorldGame(1280, 720, {
-    seed: "template-proof-101",
-  });
-
-  assert.equal(WFC_WORLD_STARTER_TEMPLATES.length, 4);
-  for (const template of WFC_WORLD_STARTER_TEMPLATES) {
-    const prepared = applyWfcWorldTemplate(blank, template.id);
-    const complete = completeWfcWorldNow(
-      startWfcWorldCollapse(prepared),
-    );
-    const grid = getWfcGrid(complete.wfc);
-
-    assert.equal(prepared.templateId, template.id);
-    assert.deepEqual(prepared.constraints, template.constraints);
-    assert.equal(prepared.selectedTileId, template.defaultTileId);
-    assert.equal(complete.phase, "complete");
-    assert.equal(isWfcGridValid(grid), true);
-    for (const constraint of template.constraints) {
-      assert.equal(
-        grid[constraint.row][constraint.col],
-        constraint.tileId,
-      );
-    }
-  }
-});
-
-test("changing a seed keeps authored rules and resets only generated choices", () => {
-  const prepared = applyWfcWorldTemplate(
-    createWfcWorldGame(1280, 720, { seed: "first-seed" }),
-    "highland-keep",
-  );
-  const complete = completeWfcWorldNow(
-    startWfcWorldCollapse(prepared),
-  );
-  const reseeded = setWfcWorldSeed(complete, "second-seed");
-
-  assert.equal(reseeded.phase, "seeding");
-  assert.equal(reseeded.seed, "second-seed");
-  assert.equal(reseeded.randomCursor, 0);
-  assert.equal(reseeded.templateId, "highland-keep");
-  assert.deepEqual(reseeded.constraints, prepared.constraints);
-  assert.equal(
-    getWfcGrid(reseeded.wfc).filter((row) => row.some(Boolean)).length > 0,
-    true,
-  );
-  assert.equal(
-    getWfcGrid(reseeded.wfc).flat().filter(Boolean).length <
-      reseeded.layout.cols * reseeded.layout.rows,
-    true,
-  );
-});
-
-test("terrain palette metadata communicates meaning without relying on color", () => {
-  const game = createWfcWorldGame(1280, 720);
-
-  assert.equal(Object.keys(WFC_WORLD_PALETTE_ACCESSIBILITY).length, 6);
-  for (const [index, tile] of game.layout.palette.entries()) {
-    assert.match(tile.ariaLabel, /\S/);
-    assert.match(tile.accessibility.description, /\S/);
-    assert.match(tile.accessibility.pattern, /\S/);
-    assert.equal(tile.accessibility.symbol, tile.icon);
-    assert.equal(tile.accessibility.shortcut, String(index + 1));
-  }
 });
 
 test("createWfcWorldGame lets terrain cells render underneath the exit box", () => {
@@ -407,41 +276,6 @@ test("stepWfcWorldGame animates collapse into a valid complete world", () => {
   assert.equal(complete.phase, "complete");
   assert.equal(grid[2][2], "castle");
   assert.equal(isWfcGridValid(grid, FINGERPRINT_WORLD_ADJACENCY), true);
-});
-
-test("goal, progress, quality, and result models make world completion finite", () => {
-  const game = createWfcWorldGame(1280, 720);
-  const seeded = selectWfcWorldTile(game, "castle");
-  const withCastle = stepWfcWorldGame(
-    seeded,
-    1 / 60,
-    { pointerActive: true, ...cellCenter(seeded, 2, 2), pinchActive: true },
-    constantRng(0.5),
-  );
-  const collapsing = startWfcWorldCollapse(withCastle);
-  const complete = stepWfcWorldGame(collapsing, 5, {}, constantRng(0.37));
-
-  assert.equal(getWfcWorldProgress(game).stage, "seed");
-  assert.equal(getWfcWorldProgress(collapsing).stage, "grow");
-  assert.equal(getWfcWorldResult(collapsing), null);
-
-  const progress = getWfcWorldProgress(complete);
-  const goal = getWfcWorldGoalModel(complete);
-  const quality = getWfcWorldQualitySummary(complete);
-  const result = getWfcWorldResult(complete);
-
-  assert.equal(progress.stage, "complete");
-  assert.equal(progress.overallPercent, 100);
-  assert.equal(goal.status, "complete");
-  assert.equal(goal.milestones.find((milestone) => milestone.id === "grow").complete, true);
-  assert.equal(quality.complete, true);
-  assert.equal(quality.valid, true);
-  assert.equal(quality.resolvedCells, 39 * 24);
-  assert.ok(quality.score >= 40 && quality.score <= 100);
-  assert.equal(result.outcome, "complete");
-  assert.equal(result.score, quality.score);
-  assert.equal(result.metrics.length, 4);
-  assert.match(result.summary, /terrain type/);
 });
 
 test("clear and control hit testing support booth-friendly fallback buttons", () => {

@@ -19,48 +19,6 @@ function objectOrEmpty(value) {
 export function getSkyPatrolHudItems(hud = {}) {
   hud = objectOrEmpty(hud);
   const gunStatus = hud.gunStatus ?? "ready";
-  const fireValue =
-    gunStatus === "cooldown"
-      ? "Cooldown"
-      : gunStatus === "recharging"
-        ? "Charging"
-        : hud.fireReady
-          ? "Ready"
-          : "Reload";
-  if (Number.isFinite(hud.mission)) {
-    return [
-      {
-        id: "score",
-        label: "Score",
-        value: hud.score ?? 0,
-      },
-      {
-        id: "lives",
-        label: "Lives",
-        value: hud.lives ?? 0,
-      },
-      {
-        id: "mission",
-        label: "Mission",
-        value: `${hud.mission}/${hud.totalMissions ?? 1}`,
-      },
-      {
-        id: "goal",
-        label: hud.missionName ?? "Goal",
-        value: `${hud.missionProgress ?? 0}/${hud.missionGoal ?? "—"}`,
-      },
-      {
-        id: "combo",
-        label: "Combo",
-        value: `${Math.max(0, hud.comboCount ?? 0)}x`,
-      },
-      {
-        id: "fire",
-        label: "Fire",
-        value: fireValue,
-      },
-    ];
-  }
   return [
     {
       id: "score",
@@ -85,7 +43,14 @@ export function getSkyPatrolHudItems(hud = {}) {
     {
       id: "fire",
       label: "Fire",
-      value: fireValue,
+      value:
+        gunStatus === "cooldown"
+          ? "Cooldown"
+          : gunStatus === "recharging"
+          ? "Charging"
+          : hud.fireReady
+          ? "Ready"
+          : "Reload",
     },
   ];
 }
@@ -152,176 +117,21 @@ export function getSkyPatrolIncomingIndicators(state = {}) {
 
 export function getSkyPatrolThreatUi(entity = {}) {
   entity = objectOrEmpty(entity);
-  if (entity.kind === "ace") {
-    return {
-      role: "boss",
-      shape: "air-boss",
-      archetype: "Storm ace",
-    };
-  }
-  if (entity.kind === "bomber") {
-    return {
-      role: "air",
-      shape: "air-heavy",
-      archetype: "Bomber",
-    };
-  }
-  if (entity.kind === "interceptor") {
-    return {
-      role: "air",
-      shape: "air-dart",
-      archetype: "Interceptor",
-    };
-  }
   if (entity.kind === "fighter") {
     return {
       role: "air",
       shape: "air-chevron",
-      archetype: "Fighter",
     };
   }
   if (entity.kind === "depot") {
     return {
       role: "ground",
       shape: "ground-depot",
-      archetype: "Depot",
     };
   }
   return {
     role: "ground",
     shape: "ground-emplacement",
-    archetype: "Turret",
-  };
-}
-
-export function getSkyPatrolMissionUi(state = {}) {
-  state = objectOrEmpty(state);
-  const missionConfig = objectOrEmpty(state.missionConfig);
-  const mission = Math.max(1, state.mission ?? 1);
-  const totalMissions = Math.max(mission, state.totalMissions ?? mission);
-  const goal = Math.max(0, missionConfig.targetGoal ?? state.missionGoal ?? 0);
-  const progress = clamp(state.missionProgress ?? 0, 0, Math.max(goal, 0));
-
-  return {
-    mission,
-    totalMissions,
-    name: missionConfig.name ?? state.missionName ?? `Mission ${mission}`,
-    goalText: missionConfig.goalText ?? state.missionGoalText ?? "",
-    progress,
-    goal,
-    progressRatio: goal > 0 ? Number((progress / goal).toFixed(3)) : 0,
-    boss: Boolean(missionConfig.boss ?? state.bossMission),
-    phase:
-      state.status === "checkpoint"
-        ? "checkpoint"
-        : state.status === "gameover"
-          ? state.outcome === "victory"
-            ? "complete"
-            : "failed"
-          : "active",
-  };
-}
-
-export function getSkyPatrolCheckpointUi(state = {}) {
-  state = objectOrEmpty(state);
-  if (state.status !== "checkpoint") {
-    return {
-      visible: false,
-      title: "",
-      stats: [],
-      nextMissionText: "",
-    };
-  }
-  const recap = objectOrEmpty(state.lastMissionRecap);
-  return {
-    visible: true,
-    title: recap.clean ? "Clean checkpoint" : "Checkpoint reached",
-    stats: [
-      { label: "Mission", value: recap.name ?? `Mission ${state.mission ?? 1}` },
-      { label: "Score earned", value: recap.scoreEarned ?? 0 },
-      { label: "Accuracy", value: `${recap.accuracy ?? 0}%` },
-      { label: "Bonus", value: recap.checkpointBonus ?? 0 },
-    ],
-    nextMissionText: `Mission ${Math.min(
-      state.totalMissions ?? (state.mission ?? 1) + 1,
-      (state.mission ?? 1) + 1,
-    )} incoming`,
-  };
-}
-
-export function getSkyPatrolTelegraphUi(telegraph = {}) {
-  telegraph = objectOrEmpty(telegraph);
-  const durationMs = Math.max(1, telegraph.durationMs ?? 1);
-  return {
-    id: telegraph.id ?? "",
-    label: telegraph.label ?? "Incoming",
-    kind: telegraph.kind ?? "fighter",
-    x: telegraph.x ?? 0,
-    urgency: Number(clamp((telegraph.ageMs ?? 0) / durationMs, 0, 1).toFixed(3)),
-    boss: telegraph.kind === "ace",
-  };
-}
-
-export function getSkyPatrolPowerUpUi(powerUp = {}) {
-  powerUp = objectOrEmpty(powerUp);
-  const definitions = {
-    shield: {
-      label: "Shield",
-      icon: "shield",
-      detail: "Blocks one hit",
-      color: "#72ddf7",
-    },
-    repair: {
-      label: "Repair",
-      icon: "repair",
-      detail: "Restores one life",
-      color: "#9ff28c",
-    },
-    overdrive: {
-      label: "Overdrive",
-      icon: "overdrive",
-      detail: "Faster fire and slower heat",
-      color: "#ffd166",
-    },
-    wingman: {
-      label: "Wingman",
-      icon: "wingman",
-      detail: "Adds a center cannon",
-      color: "#d8b4fe",
-    },
-  };
-  const type = definitions[powerUp.type] ? powerUp.type : "wingman";
-  return {
-    type,
-    ...definitions[type],
-  };
-}
-
-export function getSkyPatrolComboUi(state = {}) {
-  state = objectOrEmpty(state);
-  const count = Math.max(0, state.comboCount ?? 0);
-  return {
-    visible: count >= 2,
-    count,
-    label: count >= 2 ? `${count}x strike chain` : "",
-    multiplier: Number((1 + Math.min(Math.max(0, count - 1), 10) * 0.08).toFixed(2)),
-    remainingMs: Math.max(0, state.comboExpiresMs ?? 0),
-  };
-}
-
-export function getSkyPatrolOnboardingUi(state = {}) {
-  state = objectOrEmpty(state);
-  const startSafetyMs = Math.max(0, state.startSafetyMs ?? 0);
-  const mission = getSkyPatrolMissionUi(state);
-  return {
-    visible: state.status === "playing" && startSafetyMs > 0,
-    title: mission.name,
-    objective: mission.goalText,
-    safetyLabel:
-      startSafetyMs > 0
-        ? `Threat fire delayed ${(Math.ceil(startSafetyMs / 100) / 10).toFixed(1)}s`
-        : "",
-    controls: ["Move your hand to strafe", "Pinch to fire"],
   };
 }
 
@@ -354,28 +164,6 @@ export function getSkyPatrolGameOverUi(hud = {}) {
     };
   }
 
-  const result = hud.result;
-  if (result && typeof result === "object") {
-    const victory = result.outcome === "victory";
-    return {
-      visible: true,
-      title: victory ? "Patrol complete" : "Squadron down",
-      outcome: result.outcome,
-      stats: [
-        { label: "Score", value: result.score ?? hud.score ?? 0 },
-        {
-          label: "Missions",
-          value: `${result.missionsCleared ?? 0}/${result.totalMissions ?? 0}`,
-        },
-        { label: "Targets", value: result.targetsDestroyed ?? 0 },
-        { label: "Accuracy", value: `${result.accuracy ?? 0}%` },
-        { label: "Best combo", value: `${result.bestCombo ?? 0}x` },
-        { label: "Power-ups", value: result.powerUpsCollected ?? 0 },
-      ],
-      restartText: victory ? "Hold Fly Again" : "Hold Restart Sortie",
-    };
-  }
-
   return {
     visible: true,
     title: "Squadron down",
@@ -395,46 +183,36 @@ export function getSkyPatrolLegendUi(hud = {}) {
       ? hud.legendFaded
       : elapsedMs >= SKY_PATROL_LEGEND_FADE_MS;
 
-  const items = [
-    {
-      id: "fighter",
-      label: "Fighter",
-      value: `+${SKY_PATROL_FIGHTER_SCORE}`,
-      role: "air",
-    },
-    {
-      id: "turret",
-      label: "Turret",
-      value: `+${SKY_PATROL_TURRET_SCORE}`,
-      role: "ground",
-    },
-    {
-      id: "depot",
-      label: "Depot",
-      value: `+${SKY_PATROL_DEPOT_SCORE}`,
-      role: "ground",
-    },
-    {
-      id: "fire",
-      label: "Pinch",
-      value: "Fire",
-      role: "control",
-    },
-  ];
-  if (Number.isFinite(hud.mission)) {
-    items.push({
-      id: "wingman",
-      label: "Overheat",
-      value: "Call wingmen",
-      role: "control",
-    });
-  }
-
   return {
     visible: hud.status !== "gameover",
     compact: true,
     faded,
-    items,
+    items: [
+      {
+        id: "fighter",
+        label: "Fighter",
+        value: `+${SKY_PATROL_FIGHTER_SCORE}`,
+        role: "air",
+      },
+      {
+        id: "turret",
+        label: "Turret",
+        value: `+${SKY_PATROL_TURRET_SCORE}`,
+        role: "ground",
+      },
+      {
+        id: "depot",
+        label: "Depot",
+        value: `+${SKY_PATROL_DEPOT_SCORE}`,
+        role: "ground",
+      },
+      {
+        id: "fire",
+        label: "Pinch",
+        value: "Fire",
+        role: "control",
+      },
+    ],
   };
 }
 
@@ -522,7 +300,7 @@ export function getSkyPatrolDepthCue(entity = {}, layout = {}) {
 
 export function getSkyPatrolProjectileUi(shot = {}) {
   shot = objectOrEmpty(shot);
-  if (shot.kind === "player" || shot.kind === "wingman") {
+  if (shot.kind === "player") {
     return {
       shape: "player-bolt",
       fill: "#fff2a8",
@@ -559,14 +337,11 @@ export function getSkyPatrolStartPromptUi(hud = {}) {
     hud.status === "playing" &&
     (typeof hud.startPromptVisible === "boolean"
       ? hud.startPromptVisible
-      : (hud.startSafetyMs ?? 0) > 0 || elapsedMs < SKY_PATROL_START_PROMPT_MS);
+      : elapsedMs < SKY_PATROL_START_PROMPT_MS);
 
   return {
     visible,
-    title: hud.missionName ?? "Sky Patrol",
-    detail:
-      hud.missionGoalText
-        ? `${hud.missionGoalText}. Move to strafe; pinch to fire.`
-        : "Move to strafe. Pinch to fire twin cannons.",
+    title: "Sky Patrol",
+    detail: "Move to strafe. Pinch to fire twin cannons.",
   };
 }

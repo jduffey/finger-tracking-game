@@ -8,17 +8,14 @@ import {
   getMissileCommandCountdownUi,
   getMissileCommandExplosionUi,
   getMissileCommandGameOverUi,
-  getMissileCommandIntermissionUi,
   getMissileCommandInterceptorUi,
   getMissileCommandLegendItems,
   getMissileCommandLaunchPreview,
   getMissileCommandSceneClassName,
-  getMissileCommandResourceUi,
   getMissileCommandStructureUi,
   getMissileCommandTargetWarnings,
   getMissileCommandThreatUi,
   getMissileCommandTacticalMetrics,
-  getMissileCommandWaveUi,
 } from "../src/missileCommandUi.js";
 
 function createPlayingMissileCommandGame() {
@@ -238,113 +235,4 @@ test("Missile Command projectile and structure UI uses shape language", () => {
   assert.equal(baseUi.className.includes("shape-triangle"), true);
   assert.equal(threatUi.headClassName.includes("shape-diamond"), true);
   assert.equal(interceptorUi.headClassName.includes("shape-circle"), true);
-});
-
-test("resource UI makes ammo, energy, and fire readiness explicit", () => {
-  const game = createPlayingMissileCommandGame();
-  const ready = getMissileCommandResourceUi(game);
-  assert.equal(ready.canFire, true);
-  assert.equal(ready.state, "ready");
-  assert.equal(ready.ammoRatio, 1);
-  assert.equal(ready.energyRatio, 1);
-
-  const empty = getMissileCommandResourceUi({ ...game, ammo: 0 });
-  assert.equal(empty.canFire, false);
-  assert.equal(empty.state, "empty");
-  assert.equal(
-    getMissileCommandCrosshairUi(
-      { ...game, ammo: 0 },
-      { x: 200, y: 200 },
-      true,
-    ).state,
-    "no-ammo",
-  );
-
-  const charging = getMissileCommandResourceUi({ ...game, energy: 5 });
-  assert.equal(charging.state, "charging");
-  assert.equal(
-    getMissileCommandCrosshairUi(
-      { ...game, energy: 5 },
-      { x: 200, y: 200 },
-      true,
-    ).state,
-    "recharging",
-  );
-});
-
-test("wave UI reports finite progress, special threats, and calm intermissions", () => {
-  const game = {
-    ...createPlayingMissileCommandGame(),
-    wave: 2,
-    totalWaves: 5,
-    waveThreatLimit: 9,
-    waveThreatsResolved: 4,
-    threats: [
-      { id: "threat-1", type: "standard" },
-      { id: "threat-2", type: "fast" },
-    ],
-  };
-  const wave = getMissileCommandWaveUi(game);
-  assert.equal(wave.wave, 2);
-  assert.equal(wave.totalWaves, 5);
-  assert.equal(wave.threatsRemaining, 5);
-  assert.equal(wave.progress, 0.444);
-  assert.equal(wave.specialThreats, 1);
-  assert.equal(wave.phase, "defending");
-
-  const intermission = getMissileCommandIntermissionUi({
-    ...game,
-    status: "intermission",
-    intermissionMs: 1200,
-    lastWaveRecap: {
-      wave: 2,
-      name: "Crosswind",
-      threatsStopped: 8,
-      citiesSurviving: 3,
-      cityBonus: 1500,
-      perfectBonus: 750,
-      perfect: true,
-    },
-  });
-  assert.equal(intermission.visible, true);
-  assert.equal(intermission.title, "Perfect wave");
-  assert.equal(intermission.remainingMs, 1200);
-  assert.equal(intermission.stats[2].value, 1500);
-});
-
-test("special threat UI exposes armor and speed variants", () => {
-  const ui = getMissileCommandThreatUi({
-    type: "armored",
-    hitPoints: 2,
-    startX: 100,
-    startY: 0,
-    targetX: 100,
-    targetY: 600,
-    x: 100,
-    y: 180,
-  });
-  assert.equal(ui.type, "armored");
-  assert.equal(ui.hitPoints, 2);
-  assert.equal(ui.headClassName.includes("armored"), true);
-});
-
-test("victory game-over UI presents campaign results and earned medals", () => {
-  const game = {
-    ...createPlayingMissileCommandGame(),
-    status: "game_over",
-    outcome: "victory",
-    result: {
-      outcome: "victory",
-      score: 9000,
-      wavesCleared: 5,
-      totalWaves: 5,
-      citiesSurviving: 3,
-      accuracy: 84,
-      medals: [{ id: "perfect-defense", label: "Perfect Defense" }],
-    },
-  };
-  const ui = getMissileCommandGameOverUi(game);
-  assert.equal(ui.title, "Defense complete");
-  assert.deepEqual(ui.stats[1], { label: "Waves", value: "5/5" });
-  assert.equal(ui.medals[0].id, "perfect-defense");
 });

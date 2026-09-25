@@ -3,11 +3,11 @@ import "@tensorflow/tfjs-backend-webgl";
 import "@tensorflow/tfjs-backend-cpu";
 import * as handPoseDetection from "@tensorflow-models/hand-pose-detection";
 import { createScopedLogger } from "./logger.js";
-import { MEDIAPIPE_HANDS_SOLUTION_PATH } from "./trackingAssetConfig.js";
 
 const HAND_MODEL = handPoseDetection.SupportedModels.MediaPipeHands;
 const trackingLog = createScopedLogger("handTracking");
 const INVALID_VALUE_LOG_INTERVAL = 30;
+const MEDIAPIPE_SOLUTION_PATH = "https://cdn.jsdelivr.net/npm/@mediapipe/hands";
 const DEFAULT_RUNTIME = "tfjs";
 const DEFAULT_MODEL_TYPE = "full";
 const DEFAULT_MAX_HANDS = 1;
@@ -36,7 +36,7 @@ export async function initHandTracking(options = {}) {
     runtime,
     modelType,
     maxHands,
-    ...(runtime === "mediapipe" ? { solutionPath: MEDIAPIPE_HANDS_SOLUTION_PATH } : {}),
+    ...(runtime === "mediapipe" ? { solutionPath: MEDIAPIPE_SOLUTION_PATH } : {}),
   };
 
   trackingLog.info("Initializing hand tracking detector", {

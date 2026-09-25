@@ -1,7 +1,7 @@
 const LOG_ENDPOINT = "/__debug-log";
-const FLUSH_INTERVAL_MS = 500;
-const MAX_BATCH_SIZE = 60;
-const MAX_QUEUE_SIZE = 1000;
+const FLUSH_INTERVAL_MS = 250;
+const MAX_BATCH_SIZE = 80;
+const MAX_QUEUE_SIZE = 5000;
 const MAX_DEPTH = 4;
 const MAX_ARRAY_ITEMS = 30;
 const MAX_OBJECT_KEYS = 50;
@@ -9,13 +9,6 @@ const MAX_STRING_LENGTH = 4000;
 
 const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 const isDevRuntime = Boolean(import.meta?.env?.DEV);
-const debugLoggingEnabled =
-  isDevRuntime &&
-  (import.meta?.env?.VITE_VERBOSE_LOGS === "true" ||
-    (typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("debugLogs") === "1"));
-const REDACTED_FIELD_PATTERN =
-  /(frame|pixel|image|srcobject|landmarks?|featurevectors?)/i;
 
 let initialized = false;
 let sequence = 0;
@@ -42,10 +35,9 @@ export function initializeLogging() {
   patchConsole();
   bindGlobalErrorHandlers();
 
-  emit("INFO", "logger", "Diagnostic logging initialized", {
+  emit("INFO", "logger", "Verbose logging initialized", {
     sessionId,
     endpoint: isDevRuntime ? LOG_ENDPOINT : null,
-    debugLoggingEnabled,
     userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "unknown",
   });
 }
@@ -68,9 +60,6 @@ export function createScopedLogger(scope) {
 }
 
 function emit(level, scope, message, data) {
-  if (!shouldRecordLogLevel(level)) {
-    return;
-  }
   const entry = {
     ts: new Date().toISOString(),
     sessionId,
@@ -107,11 +96,7 @@ function emit(level, scope, message, data) {
 }
 
 function shouldMirrorToConsole(level) {
-  return (isDevRuntime && level !== "DEBUG") || debugLoggingEnabled || level === "WARN" || level === "ERROR";
-}
-
-export function shouldRecordLogLevel(level, { debug = debugLoggingEnabled } = {}) {
-  return level !== "DEBUG" || debug;
+  return isDevRuntime || level === "WARN" || level === "ERROR";
 }
 
 function enqueue(entry) {
@@ -182,7 +167,7 @@ function patchConsole() {
   for (const method of methods) {
     const nativeMethod = nativeConsole[method];
     console[method] = (...args) => {
-      if (!internalConsoleWrite && (method !== "debug" || debugLoggingEnabled)) {
+      if (!internalConsoleWrite) {
         enqueue({
           ts: new Date().toISOString(),
           sessionId,
@@ -231,10 +216,6 @@ function bindGlobalErrorHandlers() {
     });
     navigator.sendBeacon(LOG_ENDPOINT, payload);
   });
-}
-
-export function sanitizeLogData(value) {
-  return sanitize(value);
 }
 
 function sanitize(value, depth = 0, seen = new WeakSet()) {
@@ -289,9 +270,7 @@ function sanitize(value, depth = 0, seen = new WeakSet()) {
     const output = {};
     const keys = Object.keys(value).slice(0, MAX_OBJECT_KEYS);
     for (const key of keys) {
-      output[key] = REDACTED_FIELD_PATTERN.test(key)
-        ? "[redacted local camera data]"
-        : sanitize(value[key], depth + 1, seen);
+      output[key] = sanitize(value[key], depth + 1, seen);
     }
     return output;
   }

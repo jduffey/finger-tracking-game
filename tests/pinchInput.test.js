@@ -22,12 +22,12 @@ test("getPinchClickExcludeSelector always excludes the left camera pane buttons"
   );
 });
 
-test("probability controls share the same semantic pinch-click path", () => {
+test("getPinchClickExcludeSelector also excludes roulette controls during roulette mode", () => {
   assert.equal(
     getPinchClickExcludeSelector({
       phase: "ROULETTE",
     }),
-    ".camera-card",
+    ".camera-card, .roulette-panel",
   );
 });
 

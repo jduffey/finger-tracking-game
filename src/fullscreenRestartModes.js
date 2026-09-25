@@ -5,16 +5,7 @@ export function getFullscreenRestartControlLabel(mode, states = {}) {
     case "brick-dodger":
       return states.brickDodger?.status === "gameover" ? "Restart Run" : null;
     case "finger-pong":
-      return states.fingerPong?.status === "won" || states.fingerPong?.status === "lost"
-        ? "Restart Rally"
-        : null;
-    case "breakout":
-    case "find-your-grind-breakout":
-      return states.breakout?.status === "cleared"
-        ? "Next Level"
-        : states.breakout?.status === "gameover"
-          ? "Restart Breakout"
-          : null;
+      return states.fingerPong?.status === "won" ? "Restart Rally" : null;
     case "fruit-ninja":
       return states.fruitNinja?.status === "gameover" ? "Restart Round" : null;
     case "sky-patrol":
